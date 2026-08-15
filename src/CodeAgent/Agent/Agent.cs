@@ -441,10 +441,19 @@ public sealed class Agent
     {
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
-        Console.Write("\r" + new string(' ', 50) + "\r");
+        if (TurnThinkingSeconds >= 1 || _streamTokens > 0)
+        {
+            // 常驻指示行：模型工作期间的最终状态（思考秒数 + ↑ tokens），不再清空，回答在其下方继续
+            var tok = _streamTokens >= 1000 ? $"{_streamTokens / 1000.0:F1}K" : _streamTokens.ToString();
+            Console.WriteLine("\r" + $"⠦ 思考中… {TurnThinkingSeconds:F0}s · ↑ {tok} tokens".PadRight(50));
+        }
+        else
+        {
+            Console.Write("\r" + new string(' ', 50) + "\r");
+        }
     }
 
-    /// <summary>输出缓冲的思考内容（暗色）与思考用时（计时器保持常驻，思考结束才落盘显示）。</summary>
+    /// <summary>输出缓冲的思考内容（暗色）；思考用时已由常驻指示行显示。</summary>
     private void FlushReasoning()
     {
         if (_reasoningBuf.Length == 0)
@@ -454,7 +463,6 @@ public sealed class Agent
         Console.Write(_reasoningBuf.ToString());
         SafeColor.Reset();
         Console.WriteLine();
-        Console.WriteLine($"⏱ 思考用时 {TurnThinkingSeconds:F1}s");
         _reasoningBuf.Clear();
     }
 
