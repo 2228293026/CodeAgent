@@ -223,23 +223,14 @@ public static class InputLine
             var sb = new StringBuilder();
             sb.AppendLine();
             sb.AppendLine(Fit(Header()));
-            if (menuItems.Count == 0)
-            {
-                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
-            }
-            else
-            {
-                for (int i = 0; i < Math.Min(menuItems.Count, MenuMaxRows); i++)
-                    sb.AppendLine(Fit($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}"));
-                if (menuItems.Count > MenuMaxRows)
-                    sb.AppendLine("  ... (more)");
-            }
+            // 紧凑展示：一行列出全部命令名（避免 14 行大块渲染导致卡顿）
+            sb.AppendLine(Fit("  " + string.Join(" ", Commands.Select(c => c.Name))));
             sb.AppendLine();
             sb.Append(promptPlain + buf);
             Console.Write(sb.ToString());
         }
 
-        // 过滤变化时单行显示匹配结果（滚动式，避免每次按键整块重打导致卡顿）
+        // 过滤变化时单行显示带编号的匹配结果（可直接按数字执行）
         void PrintFilterScroll()
         {
             var sb = new StringBuilder();
@@ -249,10 +240,9 @@ public static class InputLine
             }
             else
             {
-                var names = string.Join(" ", menuItems.Take(6).Select(m => m.Name));
-                if (menuItems.Count > 6)
-                    names += " …";
-                sb.AppendLine(Fit($"  [{buf}] {menuItems.Count} 项匹配: {names}"));
+                var parts = menuItems.Take(6).Select((m, i) => $"{i + 1}) {m.Name}");
+                var more = menuItems.Count > 6 ? $" …(共 {menuItems.Count} 项)" : "";
+                sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
             }
             sb.AppendLine();
             sb.Append(promptPlain + buf);
