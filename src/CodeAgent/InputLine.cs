@@ -114,14 +114,7 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.Tab:
-                    var completion = TryComplete(buf.ToString());
-                    if (completion is not null)
-                    {
-                        buf.Clear();
-                        buf.Append(completion);
-                        cursor = buf.Length;
-                        Redraw(prompt, buf, cursor);
-                    }
+                    HandleTab(prompt, buf, ref cursor);
                     break;
 
                 case ConsoleKey.Escape:
@@ -167,24 +160,36 @@ public static class InputLine
         }
     }
 
-    private static string? TryComplete(string line)
+    /// <summary>Tab 补全：唯一匹配直接补全；多个匹配列出候选命令；无匹配给提示。</summary>
+    private static void HandleTab(string prompt, StringBuilder buf, ref int cursor)
     {
+        var line = buf.ToString();
         if (!line.StartsWith('/'))
-            return null;
+            return;
         var matches = Commands.Where(c => c.StartsWith(line, StringComparison.OrdinalIgnoreCase)).ToList();
+
         if (matches.Count == 1)
-            return matches[0];
-        if (matches.Count > 1)
         {
-            var prefix = matches[0];
-            foreach (var m in matches.Skip(1))
-            {
-                while (!m.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && prefix.Length > 0)
-                    prefix = prefix[..^1];
-            }
-            return prefix.Length > line.Length ? prefix : null;
+            buf.Clear();
+            buf.Append(matches[0]);
+            cursor = buf.Length;
+            Redraw(prompt, buf, cursor);
         }
-        return null;
+        else if (matches.Count > 1)
+        {
+            Console.WriteLine();
+            Console.WriteLine("  可用命令:");
+            foreach (var m in matches)
+                Console.Write($"  {m}");
+            Console.WriteLine();
+            Redraw(prompt, buf, cursor);
+        }
+        else
+        {
+            Console.WriteLine();
+            Console.WriteLine("  （没有匹配的命令，输入 /help 查看全部）");
+            Redraw(prompt, buf, cursor);
+        }
     }
 
     private static void Remember(string line)

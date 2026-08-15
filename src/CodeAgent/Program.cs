@@ -258,19 +258,20 @@ internal static class Program
         _activeTurn = cts;
 
         // ESC 监听：运行期间按 ESC 取消本轮（stdin 被重定向时 KeyAvailable 不可用，自动降级）
+        var stop = false;
         var watcher = Task.Run(() =>
         {
             try
             {
-                while (!cts.IsCancellationRequested)
+                while (!stop && !cts.IsCancellationRequested)
                 {
-                    if (Console.KeyAvailable)
+                    if (!stop && Console.KeyAvailable)
                     {
                         var key = Console.ReadKey(intercept: true);
-                        if (key.Key == ConsoleKey.Escape)
+                        if (!stop && key.Key == ConsoleKey.Escape)
                             cts.Cancel();
                     }
-                    Thread.Sleep(40);
+                    Thread.Sleep(20);
                 }
             }
             catch
@@ -290,7 +291,9 @@ internal static class Program
         finally
         {
             _activeTurn = null;
-            cts.Cancel(); // 停止 ESC 监听任务
+            cts.Cancel();
+            stop = true; // 让监听立即退出，避免吞掉接下来的用户输入（回车/字符）
+            try { watcher.Wait(TimeSpan.FromMilliseconds(300)); } catch { /* 忽略 */ }
         }
     }
 
@@ -548,8 +551,12 @@ internal static class Program
                 PrintReplHelp();
                 break;
 
+            case "/":
+                PrintReplHelp();
+                break;
+
             default:
-                Console.WriteLine($"未知命令: {cmd}（输入 /help 查看）");
+                Console.WriteLine($"未知命令: {cmd}（输入 /help 查看命令，Tab 可补全）");
                 break;
         }
     }
