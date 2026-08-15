@@ -505,7 +505,21 @@ internal static class Program
             case "/load":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    Console.WriteLine("用法: /load <会话名>");
+                    // 无参数：列出已保存的命名会话
+                    var dir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
+                    var files = Directory.Exists(dir)
+                        ? Directory.GetFiles(dir, "*.json").Select(Path.GetFileNameWithoutExtension).ToList()
+                        : [];
+                    if (files.Count == 0)
+                    {
+                        Console.WriteLine("没有已保存的会话（用 /save <会话名> 保存当前对话）。");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"已保存的会话（{files.Count} 个）:");
+                        foreach (var f in files)
+                            Console.WriteLine($"  {f}");
+                    }
                 }
                 else
                 {
