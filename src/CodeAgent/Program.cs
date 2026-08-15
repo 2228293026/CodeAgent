@@ -294,25 +294,26 @@ internal static class Program
         }
     }
 
-    /// <summary>回合结束后打印摘要行（轮数/工具/时长/tokens/缓存比例）。</summary>
+    /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）。</summary>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {100.0 * agent.TurnCachedTokens / agent.TurnInputTokens:F0}% cached" : "";
+        var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
-            $"{FormatTime(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{cache} ──");
+            $"{FormatTime(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache} ──");
     }
 
     private static string FormatTime(TimeSpan t) =>
         t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F1}s";
 
-    /// <summary>状态栏：模式 · 模型 · 目录 · token 用量 · 思考强度（每轮提示符前显示）。</summary>
+    /// <summary>状态栏：模式 · 模型 · 目录 · 消息数 · token 用量 · 思考强度（每轮提示符前显示）。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort)
     {
         var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{agent.TotalInputTokens:N0}/{agent.TotalOutputTokens:N0} tok{think}");
+            $"{agent.MessageCount} msgs · {agent.TotalInputTokens:N0}/{agent.TotalOutputTokens:N0} tok{think}");
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>

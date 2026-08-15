@@ -74,6 +74,7 @@ public sealed class Agent
     public long TurnOutputTokens { get; private set; }
     public long TurnCachedTokens { get; private set; }
     public int LastTurnStartCount { get; private set; }
+    public int MessageCount => _messages.Count;
 
     /// <summary>切换 Provider（/model 命令用）。</summary>
     public void SetProvider(IAgentProvider provider) => _provider = provider;
@@ -234,6 +235,7 @@ public sealed class Agent
         TurnInputTokens = 0;
         TurnOutputTokens = 0;
         TurnCachedTokens = 0;
+        TurnThinkingSeconds = 0;
         LastTurnStartCount = _messages.Count; // 记录本轮起点（ESC 撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
@@ -388,9 +390,40 @@ public sealed class Agent
         return all.Where(t => set.Contains(t.Name)).ToList();
     }
 
-    private void ShowSpinner() => Console.Write("\r⏳ 思考中…");
+    private System.Threading.CancellationTokenSource? _spinnerCts;
+    private readonly System.Diagnostics.Stopwatch _spinnerSw = new();
 
-    private void ClearSpinner() => Console.Write("\r" + new string(' ', 24) + "\r");
+    /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
+    public double TurnThinkingSeconds { get; private set; }
+
+    /// <summary>思考计时器：实时刷新「⏳ 思考中… X.Xs」（首个输出到达前屏幕无其他输出，安全）。</summary>
+    private void ShowSpinner()
+    {
+        _spinnerSw.Restart();
+        _spinnerCts = new System.Threading.CancellationTokenSource();
+        var cts = _spinnerCts;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!cts.IsCancellationRequested)
+                {
+                    lock (ConsoleLock)
+                        Console.Write($"\r⏳ 思考中… {_spinnerSw.Elapsed.TotalSeconds:F1}s");
+                    await Task.Delay(200, cts.Token);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch { /* 忽略 */ }
+        });
+    }
+
+    private void ClearSpinner()
+    {
+        _spinnerCts?.Cancel();
+        TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
+        Console.Write("\r" + new string(' ', 40) + "\r");
+    }
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
     private static string SummarizeCall(string name, string argsJson)
