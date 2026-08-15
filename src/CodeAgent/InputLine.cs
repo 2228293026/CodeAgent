@@ -91,6 +91,8 @@ public static class InputLine
         var lastFilter = "";
         var menuShown = 0;   // 可见项数
         var menuOffset = 0;  // 可见窗口在列表中的起点
+        var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
+        var menuEverPainted = false; // 菜单块是否已建立（首次在输入行下方建立，之后原地刷新）
 
         Console.Write(prompt);
 
@@ -133,9 +135,19 @@ public static class InputLine
             menuShown = Math.Min(menuItems.Count, MenuMaxRows);
             if (menuOffset > menuItems.Count - menuShown)
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
-            // 整块拼接后单次写入（避免逐行 Write 卡顿）
+            var above = menuShown + 3; // header + 项 + more/空态行 + 空行
+            var first = !menuEverPainted;
             var sb = new StringBuilder();
-            sb.Append('\n');
+            if (first)
+            {
+                // 首次：在输入行下方建立菜单块（此后输入行固定在块底部）
+                sb.Append('\n');
+            }
+            else
+            {
+                // 刷新：回到块顶部，在原地重绘（输入行不移动）
+                sb.Append($"\x1b[{above}A\x1b[1G");
+            }
             sb.AppendLine(Fit(Header()));
             if (menuItems.Count == 0)
             {
@@ -150,24 +162,29 @@ public static class InputLine
                 }
                 sb.AppendLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
             }
-            sb.AppendLine();
+            sb.AppendLine(); // 空行；末尾换行后光标已在输入行
+            sb.Append("\x1b[1G");
             sb.Append(promptPlain + buf);
+            sb.Append("\x1b[K");
+            menuEverPainted = true;
+            menuRows = above;
             Console.Write(sb.ToString());
         }
 
-        // 擦除菜单块（从输入行上方开始向上擦，回到输入行）——单次写入
+        // 擦除已绘制的菜单块（menuRows 行），回到输入行——单次写入
         void EraseMenuAnsi()
         {
-            var above = MenuAbove();
+            var rows = menuRows;
             var sb = new StringBuilder();
-            sb.Append($"\x1b[{above}A");
-            for (int i = 0; i < above; i++)
+            sb.Append($"\x1b[{rows}A");
+            for (int i = 0; i < rows; i++)
             {
                 sb.Append("\x1b[K\x1b[1B");
             }
             sb.Append("\x1b[1G");
             sb.Append(promptPlain + buf);
             sb.Append("\x1b[K");
+            menuRows = 0;
             Console.Write(sb.ToString());
         }
 
@@ -287,7 +304,10 @@ public static class InputLine
             menuItems.Clear();
             menuIndex = -1;
             if (ansiOk)
+            {
                 EraseMenuAnsi();
+                menuEverPainted = false; // 下次打开重新在输入行下方建立块
+            }
         }
 
         void MoveSelection(int newIndex)
