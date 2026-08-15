@@ -197,6 +197,15 @@ internal static class Program
         // 交互式 REPL
         PrintBanner(config, opts, agent);
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
+
+        // 清掉上一会话遗留的输入缓冲（否则新会话一启动就被旧按键触发菜单/命令，显得"诡异"）
+        try
+        {
+            while (Console.KeyAvailable)
+                Console.ReadKey(intercept: true);
+        }
+        catch { /* 管道/重定向环境忽略 */ }
+
         while (true)
         {
             PrintStatusBar(opts, agent, config.ThinkingEffort);
