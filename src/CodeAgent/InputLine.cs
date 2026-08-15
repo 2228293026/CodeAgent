@@ -159,8 +159,9 @@ public static class InputLine
                 for (int i = 0; i < menuShown; i++)
                 {
                     var k = menuOffset + i;
-                    // 窗口相对编号（i+1），数字键 1-9 选择对应可见项
-                    sb.AppendLine(Fit($"  {(k == menuIndex ? ">" : " ")} {i + 1}) {menuItems[k].Name,-16} {menuItems[k].Desc}"));
+                    var line = Fit($"  {i + 1}) {menuItems[k].Name,-16} {menuItems[k].Desc}");
+                    // 选中项：反显高亮（\x1b[7m），缩进不变，不用 > 标记
+                    sb.AppendLine(k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line);
                 }
                 sb.AppendLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
             }
@@ -193,8 +194,11 @@ public static class InputLine
         {
             if (newIndex < menuOffset || newIndex >= menuOffset + menuShown)
             {
-                // 窗口滚动：擦除并重打
-                EraseMenuAnsi(menuRows);
+                // 窗口滚动：显式更新偏移，原地重绘整个块（行高不变，直接覆盖旧内容）
+                menuOffset = newIndex < menuOffset
+                    ? newIndex
+                    : Math.Max(0, newIndex - menuShown + 1);
+                menuOffset = Math.Min(menuOffset, Math.Max(0, menuItems.Count - menuShown));
                 PrintListAnsi();
                 return;
             }
@@ -209,7 +213,7 @@ public static class InputLine
             }
             var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
             sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
-            sb.Append(Fit($"> {newIndex - menuOffset + 1}) {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}"));
+            sb.Append("\x1b[7m" + Fit($"  {newIndex - menuOffset + 1}) {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}") + "\x1b[0m");
             sb.Append($"\x1b[{up2}B\x1b[1G");
             sb.Append(promptPlain + buf);
             sb.Append("\x1b[K");
