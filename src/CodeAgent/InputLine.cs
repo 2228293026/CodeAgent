@@ -80,6 +80,12 @@ public static class InputLine
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
 
+        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」
+        string InputText() =>
+            idx < session.Count
+                ? $"{promptPlain} (历史 {idx + 1}/{session.Count}){buf}"
+                : promptPlain + buf;
+
         var winW = TryWindowWidth();
         var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
         string Fit(string s)
@@ -113,12 +119,12 @@ public static class InputLine
             if (ansiOk)
             {
                 // 支持 ANSI：\x1b[K 清到行尾（单次写入，避免逐次 Write 卡顿）
-                Console.Write("\r" + promptPlain + buf + "\x1b[K");
+                Console.Write("\r" + InputText() + "\x1b[K");
             }
             else
             {
-                Console.Write("\r" + promptPlain + buf + new string(' ', 4));
-                Console.Write("\r" + promptPlain + buf);
+                Console.Write("\r" + InputText() + new string(' ', 4));
+                Console.Write("\r" + InputText());
             }
         }
 
@@ -127,7 +133,7 @@ public static class InputLine
             if (menuOpen && ansiOk)
             {
                 // 单次写入：回到行首 + 清到行尾 + 重写输入
-                Console.Write("\x1b[1G\x1b[K" + promptPlain + buf);
+                Console.Write("\x1b[1G\x1b[K" + InputText());
                 return;
             }
             ScrollInput();
@@ -165,7 +171,7 @@ public static class InputLine
             }
             sb.AppendLine(); // 空行；末尾换行后光标已在输入行
             sb.Append("\x1b[1G");
-            sb.Append(promptPlain + buf);
+            sb.Append(InputText());
             sb.Append("\x1b[K");
             menuRows = above;
             Console.Write(sb.ToString());
@@ -181,7 +187,7 @@ public static class InputLine
                 sb.Append("\x1b[K\x1b[1B");
             }
             sb.Append("\x1b[1G");
-            sb.Append(promptPlain + buf);
+            sb.Append(InputText());
             sb.Append("\x1b[K");
             menuRows = 0;
             Console.Write(sb.ToString());
@@ -212,7 +218,7 @@ public static class InputLine
             sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
             sb.Append("\x1b[7m" + Fit($"  {newIndex - menuOffset + 1}) {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}") + "\x1b[0m");
             sb.Append($"\x1b[{up2}B\x1b[1G");
-            sb.Append(promptPlain + buf);
+            sb.Append(InputText());
             sb.Append("\x1b[K");
             Console.Write(sb.ToString());
         }
@@ -227,7 +233,7 @@ public static class InputLine
             // 紧凑展示：一行列出全部命令名（避免 14 行大块渲染导致卡顿）
             sb.AppendLine(Fit("  " + string.Join(" ", Commands.Select(c => c.Name))));
             sb.AppendLine();
-            sb.Append(promptPlain + buf);
+            sb.Append(InputText());
             Console.Write(sb.ToString());
         }
 
@@ -246,7 +252,7 @@ public static class InputLine
                 sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
             }
             sb.AppendLine();
-            sb.Append(promptPlain + buf);
+            sb.Append(InputText());
             Console.Write(sb.ToString());
         }
 
@@ -258,7 +264,7 @@ public static class InputLine
             var sb = new StringBuilder();
             sb.AppendLine();
             sb.AppendLine(Fit($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
-            sb.Append(promptPlain + buf);
+            sb.Append(InputText());
             Console.Write(sb.ToString());
         }
 
@@ -532,7 +538,7 @@ public static class InputLine
                         if (!ansiOk)
                         {
                             Console.WriteLine("  (menu closed)");
-                            Console.Write(promptPlain + buf);
+                            Console.Write(InputText());
                         }
                     }
                     else if (buf.Length > 0)
