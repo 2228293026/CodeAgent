@@ -75,6 +75,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "showToolCalls": true          // 终端实时显示工具调用过程
   "renderMarkdown": true         // 模型回复 Markdown 渲染（代码块/标题等）
   "tuiAnsi": true                // 菜单 ANSI 原地渲染（老式终端乱码时设 false）
+  "thinkingEffort": "off"        // 模型思考强度 off/low/medium/high（推理模型生效）
 }
 ```
 
@@ -122,7 +123,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/models` `/mode` `/exit`。
+REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/models` `/thinking` `/mode` `/exit`。
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 

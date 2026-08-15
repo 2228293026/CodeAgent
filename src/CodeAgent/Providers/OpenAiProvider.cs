@@ -52,6 +52,7 @@ public sealed class OpenAiProvider : IAgentProvider
     public async Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort,
         CancellationToken ct)
     {
         var payload = new JsonObject
@@ -63,6 +64,8 @@ public sealed class OpenAiProvider : IAgentProvider
             ["temperature"] = _temperature,
             ["max_tokens"] = _maxTokens,
         };
+        if (thinkingEffort != "off")
+            payload["reasoning_effort"] = thinkingEffort; // OpenAI o 系列 / OpenRouter 推理模型
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -138,6 +141,7 @@ public sealed class OpenAiProvider : IAgentProvider
     public async Task<ProviderResponse> ChatStreamAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort,
         Action<string>? onText,
         CancellationToken ct)
     {
@@ -152,6 +156,8 @@ public sealed class OpenAiProvider : IAgentProvider
             ["stream"] = true,
             ["stream_options"] = new JsonObject { ["include_usage"] = true },
         };
+        if (thinkingEffort != "off")
+            payload["reasoning_effort"] = thinkingEffort; // OpenAI o 系列 / OpenRouter 推理模型
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);

@@ -39,6 +39,7 @@ public sealed class AnthropicProvider : IAgentProvider
     public async Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort,
         CancellationToken ct)
     {
         var system = new StringBuilder();
@@ -54,6 +55,11 @@ public sealed class AnthropicProvider : IAgentProvider
             ["messages"] = BuildMessages(messages),
             ["tools"] = BuildTools(tools),
         };
+        if (thinkingEffort != "off")
+        {
+            var budget = thinkingEffort switch { "low" => 1024, "high" => 16384, _ => 4096 };
+            payload["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = budget };
+        }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);
@@ -137,6 +143,7 @@ public sealed class AnthropicProvider : IAgentProvider
     public async Task<ProviderResponse> ChatStreamAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort,
         Action<string>? onText,
         CancellationToken ct)
     {
@@ -154,6 +161,11 @@ public sealed class AnthropicProvider : IAgentProvider
             ["tools"] = BuildTools(tools),
             ["stream"] = true,
         };
+        if (thinkingEffort != "off")
+        {
+            var budget = thinkingEffort switch { "low" => 1024, "high" => 16384, _ => 4096 };
+            payload["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = budget };
+        }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);

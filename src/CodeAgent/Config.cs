@@ -81,6 +81,9 @@ public sealed class AgentConfig
     /// <summary>是否用 ANSI 转义做菜单原地渲染（方向键高亮移动，默认开）；老式终端乱码时设为 false 退回滚动式。</summary>
     public bool TuiAnsi { get; set; } = true;
 
+    /// <summary>模型思考强度（reasoning effort）：off / low / medium / high，默认 off（不启用）。</summary>
+    public string ThinkingEffort { get; set; } = "off";
+
     /// <summary>自定义工作模式列表（/mode 可切换，配合内置模式）。</summary>
     public List<AgentModeConfig> Modes { get; set; } = new();
 

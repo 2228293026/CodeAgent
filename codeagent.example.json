@@ -49,6 +49,7 @@
   "showToolCalls": true,
   "renderMarkdown": true,
   "tuiAnsi": true,
+  "thinkingEffort": "off",
   "modes": [
     {
       "name": "fix",

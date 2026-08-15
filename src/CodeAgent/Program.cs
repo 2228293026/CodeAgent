@@ -189,7 +189,7 @@ internal static class Program
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
         while (true)
         {
-            PrintStatusBar(opts, agent);
+            PrintStatusBar(opts, agent, config.ThinkingEffort);
             var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi);
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
@@ -299,12 +299,13 @@ internal static class Program
         }
     }
 
-    /// <summary>状态栏：模式 · 模型 · 目录 · token 用量（每轮提示符前显示）。</summary>
-    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent)
+    /// <summary>状态栏：模式 · 模型 · 目录 · token 用量 · 思考强度（每轮提示符前显示）。</summary>
+    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort)
     {
+        var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{agent.TotalInputTokens:N0}/{agent.TotalOutputTokens:N0} tok");
+            $"{agent.TotalInputTokens:N0}/{agent.TotalOutputTokens:N0} tok{think}");
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
@@ -573,6 +574,27 @@ internal static class Program
                 PrintModelsAsync(providerInst, opts.Model).GetAwaiter().GetResult();
                 break;
 
+            case "/thinking":
+                if (string.IsNullOrWhiteSpace(rest))
+                {
+                    Console.WriteLine($"思考强度: {config.ThinkingEffort}（可选: off / low / medium / high）");
+                    Console.WriteLine("提示: 仅对支持推理参数的模型生效（OpenAI o 系列 / OpenRouter reasoning，Anthropic thinking）");
+                }
+                else
+                {
+                    var v = rest.Trim().ToLowerInvariant();
+                    if (v is "off" or "low" or "medium" or "high")
+                    {
+                        config.ThinkingEffort = v;
+                        Console.WriteLine($"思考强度已设为: {v}（将应用于后续请求）");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"无效值: {rest}（可选: off / low / medium / high）");
+                    }
+                }
+                break;
+
             case "/help":
                 PrintReplHelp();
                 break;
@@ -614,6 +636,7 @@ internal static class Program
               /tools           列出可用工具
               /providers       显示已配置的 Provider
               /models          列出当前 Provider 的可用模型
+              /thinking        查看或设置思考强度（off/low/medium/high）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /exit, /quit     退出
             用法:

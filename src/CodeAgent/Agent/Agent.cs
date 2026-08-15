@@ -283,14 +283,14 @@ public sealed class Agent
             if (!_ctx.Config.StreamOutput)
             {
                 var resp = await CallWithRetryAsync(
-                    () => _provider.ChatAsync(_messages, ToolsForMode(), ct), ct);
+                    () => _provider.ChatAsync(_messages, ToolsForMode(), _ctx.Config.ThinkingEffort, ct), ct);
                 ClearSpinner();
                 return resp;
             }
 
             // 流式：文本增量实时打印到控制台，首次增量到达时先清掉思考指示器
             var result = await CallWithRetryAsync(
-                () => _provider.ChatStreamAsync(_messages, ToolsForMode(), delta =>
+                () => _provider.ChatStreamAsync(_messages, ToolsForMode(), _ctx.Config.ThinkingEffort, delta =>
                 {
                     if (!_streamedThisCall)
                     {
@@ -620,7 +620,7 @@ public sealed class Agent
         try
         {
             Console.WriteLine("📝 上下文超限，正在压缩历史…");
-            var resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], ct), ct);
+            var resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], _ctx.Config.ThinkingEffort, ct), ct);
             var summary = resp.Text?.Trim();
             if (string.IsNullOrWhiteSpace(summary))
                 return false;

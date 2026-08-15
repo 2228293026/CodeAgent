@@ -13,6 +13,7 @@ public interface IAgentProvider
     Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort,
         CancellationToken ct);
 
     /// <summary>
@@ -22,6 +23,7 @@ public interface IAgentProvider
     Task<ProviderResponse> ChatStreamAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort,
         Action<string>? onText,
         CancellationToken ct);
 
