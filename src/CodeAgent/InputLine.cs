@@ -3,9 +3,9 @@ using System.Text;
 namespace CodeAgent;
 
 /// <summary>
-/// 终端输入行：支持 ↑/↓ 历史、TAB 命令补全（列出候选）、退格、Ctrl+L 清屏。
-/// 采用保守的重绘方式：光标始终保持在行尾、不依赖 SetCursorPosition，
-/// 重绘时去除提示符前导换行（避免每次按键产生额外空行），保证各终端稳定。
+/// 终端输入行：支持 ↑/↓ 历史、斜杠命令菜单（输入 / 自动弹出，方向键选择，回车执行）、
+/// TAB 补全、退格、Ctrl+L 清屏。重绘保持在当前行、光标行尾固定，不依赖脆弱的换行重绘；
+/// 菜单行使用 SetCursorPosition + 纯 ASCII 内容，保证各终端稳定。
 /// stdin 被重定向（管道/文件）时自动回退为 Console.ReadLine，保证脚本兼容。
 /// </summary>
 public static class InputLine
@@ -13,16 +13,34 @@ public static class InputLine
     private static readonly string HistoryFile =
         Path.Combine(Environment.CurrentDirectory, ".codeagent", "history.txt");
 
-    /// <summary>可 TAB 补全的 REPL 命令。</summary>
-    public static readonly string[] Commands =
+    /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。说明保持 ASCII 以兼容光标定位。</summary>
+    public static readonly (string Name, string Desc)[] Commands =
     [
-        "/help", "/clear", "/cls", "/model", "/config", "/session", "/setup",
-        "/undo", "/diff", "/save", "/load", "/export", "/stats", "/retry",
-        "/tools", "/providers", "/models", "/mode", "/exit", "/quit",
+        ("/help", "Show help"),
+        ("/clear", "Clear conversation history"),
+        ("/cls", "Clear screen (or Ctrl+L)"),
+        ("/model", "View or switch model"),
+        ("/config", "Show config"),
+        ("/session", "Show session log path"),
+        ("/setup", "Run provider setup wizard"),
+        ("/undo", "Undo last file change"),
+        ("/diff", "Show diff of last change"),
+        ("/save", "Save session snapshot"),
+        ("/load", "Load a saved session"),
+        ("/export", "Export session to Markdown"),
+        ("/stats", "Show token usage stats"),
+        ("/retry", "Re-run last request"),
+        ("/tools", "List available tools"),
+        ("/providers", "List configured providers"),
+        ("/models", "List available models"),
+        ("/mode", "View or switch work mode"),
+        ("/exit", "Exit (also /quit)"),
+        ("/quit", "Exit"),
     ];
 
     private static readonly List<string> History = LoadHistory();
     private const int MaxHistory = 100;
+    private const int MenuMaxRows = 10;
 
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。</summary>
     public static string? Read(string prompt)
@@ -41,13 +59,127 @@ public static class InputLine
         var session = new List<string>(History);
         var idx = session.Count;
 
+        var promptPlain = prompt.TrimStart('\n');
         Console.Write(prompt);
+        var inputRow = Console.CursorTop;
+
+        var menuOpen = false;
+        var menuItems = new List<(string Name, string Desc)>();
+        var menuIndex = 0;
+        var menuTop = 0;
+
+        // —— 绘制助手（局部函数） ——
+        void RedrawInput()
+        {
+            try
+            {
+                Console.SetCursorPosition(0, inputRow);
+                Console.Write(promptPlain + buf + new string(' ', 4));
+                Console.SetCursorPosition(0, inputRow);
+                Console.Write(promptPlain + buf);
+            }
+            catch { /* 终端异常时忽略 */ }
+        }
+
+        void PaintMenu()
+        {
+            try
+            {
+                var shown = Math.Min(menuItems.Count, Math.Min(MenuMaxRows, Math.Max(1, Console.WindowHeight - menuTop - 1)));
+                for (int i = 0; i < shown; i++)
+                {
+                    var (name, desc) = menuItems[i];
+                    var line = $"  {(i == menuIndex ? ">" : " ")} {name,-16} {desc}";
+                    Console.SetCursorPosition(0, menuTop + i);
+                    if (i == menuIndex)
+                    {
+                        Console.BackgroundColor = ConsoleColor.DarkGray;
+                        Console.ForegroundColor = ConsoleColor.White;
+                    }
+                    Console.Write(line.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.ResetColor();
+                }
+                if (menuItems.Count > shown)
+                {
+                    Console.SetCursorPosition(0, menuTop + shown);
+                    Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
+                    Console.SetCursorPosition(0, menuTop + shown);
+                    Console.Write("  ... (more)");
+                }
+                Console.SetCursorPosition(0, inputRow);
+                Console.Write(promptPlain + buf);
+            }
+            catch { /* 终端异常时忽略 */ }
+        }
+
+        void CloseMenu()
+        {
+            if (!menuOpen)
+                return;
+            try
+            {
+                var shown = Math.Min(menuItems.Count, Math.Min(MenuMaxRows, Math.Max(1, Console.WindowHeight - menuTop - 1)));
+                for (int i = 0; i < shown; i++)
+                {
+                    Console.SetCursorPosition(0, menuTop + i);
+                    Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
+                }
+                Console.SetCursorPosition(0, inputRow);
+                Console.Write(promptPlain + buf + new string(' ', 4));
+                Console.SetCursorPosition(0, inputRow);
+                Console.Write(promptPlain + buf);
+            }
+            catch { /* 终端异常时忽略 */ }
+            menuOpen = false;
+            menuItems.Clear();
+        }
+
+        void RefreshMenu()
+        {
+            menuItems = Commands
+                .Where(c => c.Name.StartsWith(buf.ToString(), StringComparison.OrdinalIgnoreCase))
+                .Select(c => c)
+                .ToList();
+            if (menuIndex >= menuItems.Count)
+                menuIndex = Math.Max(0, menuItems.Count - 1);
+            if (menuItems.Count == 0)
+            {
+                CloseMenu();
+                return;
+            }
+            PaintMenu();
+        }
+
+        void OpenMenu()
+        {
+            if (menuOpen)
+                return;
+            menuOpen = true;
+            menuTop = inputRow + 1;
+            menuIndex = 0;
+            RefreshMenu();
+        }
+
+        // —— 主输入循环 ——
         while (true)
         {
             var key = Console.ReadKey(intercept: true);
+
+            // 输入不再以 / 开头 → 关闭菜单
+            if (menuOpen && !buf.ToString().StartsWith('/'))
+                CloseMenu();
+
             switch (key.Key)
             {
                 case ConsoleKey.Enter:
+                    if (menuOpen && menuItems.Count > 0)
+                    {
+                        var sel = menuItems[Math.Min(menuIndex, menuItems.Count - 1)].Name;
+                        CloseMenu();
+                        Console.WriteLine();
+                        Remember(sel);
+                        return sel;
+                    }
                     Console.WriteLine();
                     var line = buf.ToString();
                     Remember(line);
@@ -57,45 +189,82 @@ public static class InputLine
                     if (buf.Length > 0)
                     {
                         buf.Length--;
-                        Redraw(prompt, buf);
+                        RedrawInput();
+                        if (menuOpen)
+                            RefreshMenu();
                     }
                     break;
 
                 case ConsoleKey.UpArrow:
-                    if (idx > 0)
+                    if (menuOpen && menuItems.Count > 0)
+                    {
+                        menuIndex = (menuIndex - 1 + menuItems.Count) % menuItems.Count;
+                        PaintMenu();
+                    }
+                    else if (idx > 0)
                     {
                         idx--;
                         SetBuf(session, buf, idx);
-                        Redraw(prompt, buf);
+                        RedrawInput();
+                        if (menuOpen)
+                            RefreshMenu();
                     }
                     break;
 
                 case ConsoleKey.DownArrow:
-                    if (idx < session.Count)
+                    if (menuOpen && menuItems.Count > 0)
+                    {
+                        menuIndex = (menuIndex + 1) % menuItems.Count;
+                        PaintMenu();
+                    }
+                    else if (idx < session.Count)
                     {
                         idx++;
                         SetBuf(session, buf, idx);
-                        Redraw(prompt, buf);
+                        RedrawInput();
+                        if (menuOpen)
+                            RefreshMenu();
                     }
                     break;
 
                 case ConsoleKey.Tab:
-                    HandleTab(prompt, buf);
+                    if (!menuOpen && buf.ToString().StartsWith('/'))
+                        OpenMenu();
+                    else if (menuOpen && menuItems.Count > 1)
+                    {
+                        menuIndex = (menuIndex + 1) % menuItems.Count;
+                        PaintMenu();
+                    }
                     break;
 
                 case ConsoleKey.Escape:
-                    break; // 输入中按 ESC 无操作
+                    if (menuOpen)
+                        CloseMenu();
+                    break;
 
                 case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
                     try { Console.Clear(); } catch { /* 忽略 */ }
-                    Redraw(prompt, buf);
+                    inputRow = 0;
+                    RedrawInput();
+                    if (menuOpen)
+                    {
+                        menuTop = inputRow + 1;
+                        RefreshMenu();
+                    }
                     break;
 
                 default:
                     if (key.KeyChar != '\0' && key.KeyChar != '\u0003')
                     {
                         buf.Append(key.KeyChar);
-                        Redraw(prompt, buf);
+                        RedrawInput();
+                        if (buf.ToString().StartsWith('/'))
+                        {
+                            if (!menuOpen)
+                                OpenMenu();
+                            else
+                                RefreshMenu();
+                        }
                     }
                     break;
             }
@@ -107,55 +276,6 @@ public static class InputLine
         buf.Clear();
         if (idx < session.Count)
             buf.Append(session[idx]);
-    }
-
-    /// <summary>
-    /// 保守重绘：清掉当前行后重写「提示符+输入」。提示符去掉前导换行，
-    /// 保持在当前行内重绘；光标固定在行尾，不依赖 SetCursorPosition。
-    /// </summary>
-    private static void Redraw(string prompt, StringBuilder buf)
-    {
-        try
-        {
-            var text = prompt.TrimStart('\n') + buf;
-            Console.Write("\r" + text + new string(' ', Math.Max(1, Console.WindowWidth - text.Length)));
-            Console.Write("\r" + text);
-        }
-        catch
-        {
-            Console.Write("\r" + prompt.TrimStart('\n') + buf);
-        }
-    }
-
-    /// <summary>Tab 补全：唯一匹配直接补全；多个匹配列出候选命令；无匹配给提示。</summary>
-    private static void HandleTab(string prompt, StringBuilder buf)
-    {
-        var line = buf.ToString();
-        if (!line.StartsWith('/'))
-            return;
-        var matches = Commands.Where(c => c.StartsWith(line, StringComparison.OrdinalIgnoreCase)).ToList();
-
-        if (matches.Count == 1)
-        {
-            buf.Clear();
-            buf.Append(matches[0]);
-            Redraw(prompt, buf);
-        }
-        else if (matches.Count > 1)
-        {
-            Console.WriteLine();
-            Console.WriteLine("  可用命令:");
-            foreach (var m in matches)
-                Console.Write($"  {m}");
-            Console.WriteLine();
-            Redraw(prompt, buf);
-        }
-        else
-        {
-            Console.WriteLine();
-            Console.WriteLine("  （没有匹配的命令，输入 /help 查看全部）");
-            Redraw(prompt, buf);
-        }
     }
 
     private static void Remember(string line)
