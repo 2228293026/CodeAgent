@@ -388,7 +388,7 @@ internal static class Program
     private static void HandleCommand(
         string line,
         AgentConfig config,
-        string configPath,
+        string? configPath,
         ref ProviderOptions opts,
         AgentClass agent,
         ref IAgentProvider providerInst,
