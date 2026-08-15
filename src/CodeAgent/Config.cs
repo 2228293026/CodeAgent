@@ -84,6 +84,9 @@ public sealed class AgentConfig
     /// <summary>模型思考强度（reasoning effort）：off / low / medium / high，默认 off（不启用）。</summary>
     public string ThinkingEffort { get; set; } = "off";
 
+    /// <summary>启动时的默认工作模式（/mode 可切换），默认 code。</summary>
+    public string DefaultMode { get; set; } = "code";
+
     /// <summary>自定义工作模式列表（/mode 可切换，配合内置模式）。</summary>
     public List<AgentModeConfig> Modes { get; set; } = new();
 

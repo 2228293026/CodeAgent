@@ -50,6 +50,7 @@
   "renderMarkdown": true,
   "tuiAnsi": false,
   "thinkingEffort": "off",
+  "defaultMode": "code",
   "modes": [
     {
       "name": "fix",

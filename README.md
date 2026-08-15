@@ -76,6 +76,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "renderMarkdown": true         // 模型回复 Markdown 渲染（代码块/标题等）
   "tuiAnsi": false               // 菜单滚动式渲染（默认，兼容性最好）；支持 ANSI 的终端可设 true 用原地高亮
   "thinkingEffort": "off"        // 模型思考强度 off/low/medium/high（推理模型生效）
+  "defaultMode": "code"          // 启动时的默认工作模式（/mode 可切换）
 }
 ```
 

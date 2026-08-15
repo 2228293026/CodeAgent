@@ -159,6 +159,9 @@ internal static class Program
 
         var agent = new AgentClass(config, providerInst, tools);
 
+        // 应用配置的默认工作模式（如 "defaultMode": "debug"）
+        agent.SetMode(Modes.Find(config.DefaultMode, config));
+
         // 列出可用模型模式
         if (listModels)
         {
@@ -429,7 +432,12 @@ internal static class Program
                     {
                         providerInst = ProviderFactory.Create(config);
                         agent.SetProvider(providerInst);
-                        Console.WriteLine($"已切换模型: {opts.Model}");
+                        // 同步回配置并持久化，重启后仍然生效
+                        if (config.Providers.TryGetValue(config.Provider, out var po))
+                            po.Model = opts.Model;
+                        var savePath = string.IsNullOrWhiteSpace(configPath) ? "codeagent.json" : configPath;
+                        AgentConfig.Save(config, savePath);
+                        Console.WriteLine($"已切换模型: {opts.Model}，已保存到 {savePath}");
                     }
                     catch (Exception ex)
                     {
