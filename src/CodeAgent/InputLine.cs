@@ -3,8 +3,10 @@ using System.Text;
 namespace CodeAgent;
 
 /// <summary>
-/// 终端输入行：支持 ↑/↓ 历史、TAB 命令补全、行内编辑（方向键/Home/End/退格）、Ctrl+L 清屏。
-/// stdin 被重定向（管道/文件）时自动回退为 Console.ReadLine，保证脚本与非交互场景兼容。
+/// 终端输入行：支持 ↑/↓ 历史、TAB 命令补全（列出候选）、退格、Ctrl+L 清屏。
+/// 采用保守的重绘方式：光标始终保持在行尾、不依赖 SetCursorPosition，
+/// 重绘时去除提示符前导换行（避免每次按键产生额外空行），保证各终端稳定。
+/// stdin 被重定向（管道/文件）时自动回退为 Console.ReadLine，保证脚本兼容。
 /// </summary>
 public static class InputLine
 {
@@ -16,7 +18,7 @@ public static class InputLine
     [
         "/help", "/clear", "/cls", "/model", "/config", "/session", "/setup",
         "/undo", "/diff", "/save", "/load", "/export", "/stats", "/retry",
-        "/tools", "/providers", "/mode", "/exit", "/quit",
+        "/tools", "/providers", "/models", "/mode", "/exit", "/quit",
     ];
 
     private static readonly List<string> History = LoadHistory();
@@ -38,7 +40,6 @@ public static class InputLine
         var buf = new StringBuilder();
         var session = new List<string>(History);
         var idx = session.Count;
-        var cursor = 0;
 
         Console.Write(prompt);
         while (true)
@@ -53,54 +54,19 @@ public static class InputLine
                     return line;
 
                 case ConsoleKey.Backspace:
-                    if (cursor > 0)
+                    if (buf.Length > 0)
                     {
-                        buf.Remove(cursor - 1, 1);
-                        cursor--;
-                        Redraw(prompt, buf, cursor);
+                        buf.Length--;
+                        Redraw(prompt, buf);
                     }
-                    break;
-
-                case ConsoleKey.Delete:
-                    if (cursor < buf.Length)
-                    {
-                        buf.Remove(cursor, 1);
-                        Redraw(prompt, buf, cursor);
-                    }
-                    break;
-
-                case ConsoleKey.LeftArrow:
-                    if (cursor > 0)
-                    {
-                        cursor--;
-                        Console.SetCursorPosition(Math.Max(0, Console.CursorLeft - 1), Console.CursorTop);
-                    }
-                    break;
-
-                case ConsoleKey.RightArrow:
-                    if (cursor < buf.Length)
-                    {
-                        cursor++;
-                        Console.SetCursorPosition(Console.CursorLeft + 1, Console.CursorTop);
-                    }
-                    break;
-
-                case ConsoleKey.Home:
-                    cursor = 0;
-                    Redraw(prompt, buf, cursor);
-                    break;
-
-                case ConsoleKey.End:
-                    cursor = buf.Length;
-                    Redraw(prompt, buf, cursor);
                     break;
 
                 case ConsoleKey.UpArrow:
                     if (idx > 0)
                     {
                         idx--;
-                        SetBuffer(session, ref buf, ref cursor, idx);
-                        Redraw(prompt, buf, cursor);
+                        SetBuf(session, buf, idx);
+                        Redraw(prompt, buf);
                     }
                     break;
 
@@ -108,13 +74,13 @@ public static class InputLine
                     if (idx < session.Count)
                     {
                         idx++;
-                        SetBuffer(session, ref buf, ref cursor, idx);
-                        Redraw(prompt, buf, cursor);
+                        SetBuf(session, buf, idx);
+                        Redraw(prompt, buf);
                     }
                     break;
 
                 case ConsoleKey.Tab:
-                    HandleTab(prompt, buf, ref cursor);
+                    HandleTab(prompt, buf);
                     break;
 
                 case ConsoleKey.Escape:
@@ -122,46 +88,47 @@ public static class InputLine
 
                 case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
                     try { Console.Clear(); } catch { /* 忽略 */ }
-                    Redraw(prompt, buf, cursor);
+                    Redraw(prompt, buf);
                     break;
 
                 default:
                     if (key.KeyChar != '\0' && key.KeyChar != '\u0003')
                     {
-                        buf.Insert(cursor, key.KeyChar);
-                        cursor++;
-                        Redraw(prompt, buf, cursor);
+                        buf.Append(key.KeyChar);
+                        Redraw(prompt, buf);
                     }
                     break;
             }
         }
     }
 
-    private static void SetBuffer(List<string> session, ref StringBuilder buf, ref int cursor, int idx)
+    private static void SetBuf(List<string> session, StringBuilder buf, int idx)
     {
         buf.Clear();
         if (idx < session.Count)
             buf.Append(session[idx]);
-        cursor = buf.Length;
     }
 
-    private static void Redraw(string prompt, StringBuilder buf, int cursor)
+    /// <summary>
+    /// 保守重绘：清掉当前行后重写「提示符+输入」。提示符去掉前导换行，
+    /// 保持在当前行内重绘；光标固定在行尾，不依赖 SetCursorPosition。
+    /// </summary>
+    private static void Redraw(string prompt, StringBuilder buf)
     {
         try
         {
-            Console.Write("\r" + new string(' ', Math.Max(0, Console.WindowWidth - 1)));
-            Console.Write("\r" + prompt + buf);
-            var left = Console.CursorLeft - (buf.Length - cursor);
-            Console.SetCursorPosition(Math.Max(0, left), Console.CursorTop);
+            var text = prompt.TrimStart('\n') + buf;
+            Console.Write("\r" + text + new string(' ', Math.Max(1, Console.WindowWidth - text.Length)));
+            Console.Write("\r" + text);
         }
         catch
         {
-            // 重绘失败时尽量保持可输入
+            Console.Write("\r" + prompt.TrimStart('\n') + buf);
         }
     }
 
     /// <summary>Tab 补全：唯一匹配直接补全；多个匹配列出候选命令；无匹配给提示。</summary>
-    private static void HandleTab(string prompt, StringBuilder buf, ref int cursor)
+    private static void HandleTab(string prompt, StringBuilder buf)
     {
         var line = buf.ToString();
         if (!line.StartsWith('/'))
@@ -172,8 +139,7 @@ public static class InputLine
         {
             buf.Clear();
             buf.Append(matches[0]);
-            cursor = buf.Length;
-            Redraw(prompt, buf, cursor);
+            Redraw(prompt, buf);
         }
         else if (matches.Count > 1)
         {
@@ -182,13 +148,13 @@ public static class InputLine
             foreach (var m in matches)
                 Console.Write($"  {m}");
             Console.WriteLine();
-            Redraw(prompt, buf, cursor);
+            Redraw(prompt, buf);
         }
         else
         {
             Console.WriteLine();
             Console.WriteLine("  （没有匹配的命令，输入 /help 查看全部）");
-            Redraw(prompt, buf, cursor);
+            Redraw(prompt, buf);
         }
     }
 

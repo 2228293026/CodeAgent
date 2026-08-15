@@ -303,7 +303,11 @@ internal static class Program
         var model = opts.Model;
         var slash = model.LastIndexOf('/');
         if (slash >= 0)
-            model = model[(slash + 1)..];
+        {
+            var last = model[(slash + 1)..];
+            // 末段过短（如 "free"）不具辨识度时显示完整模型名
+            model = last.Length >= 5 ? last : model;
+        }
         var dir = new DirectoryInfo(Environment.CurrentDirectory).Name;
         return $"\n[{agent.CurrentMode.Name}|{model}] {dir}> ";
     }
