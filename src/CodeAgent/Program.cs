@@ -339,15 +339,18 @@ internal static class Program
         }
     }
 
-    /// <summary>显示当前对话历史（跳过系统提示，内容截断）。</summary>
+    /// <summary>显示当前对话历史（系统提示不计入条数，内容截断）。</summary>
     private static void PrintConversation(AgentClass agent)
     {
-        var msgs = agent.Messages;
+        var msgs = agent.Messages.Where(m => m.Role != MessageRole.System).ToList();
+        if (msgs.Count == 0)
+        {
+            Console.WriteLine("对话历史为空（还没有对话消息，直接输入内容开始对话）。");
+            return;
+        }
         Console.WriteLine($"对话历史（{msgs.Count} 条）:");
         foreach (var m in msgs)
         {
-            if (m.Role == MessageRole.System)
-                continue;
             var role = m.Role switch
             {
                 MessageRole.User => "用户",
