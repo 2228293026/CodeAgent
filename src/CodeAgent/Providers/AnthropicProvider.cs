@@ -126,6 +126,7 @@ public sealed class AnthropicProvider : IAgentProvider
 
         int? inTok = root?["usage"]?["input_tokens"]?.GetValue<int>();
         int? outTok = root?["usage"]?["output_tokens"]?.GetValue<int>();
+        int? cachedTok = root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
 
         return new ProviderResponse
         {
@@ -133,6 +134,7 @@ public sealed class AnthropicProvider : IAgentProvider
             ToolCalls = toolCalls,
             InputTokens = inTok,
             OutputTokens = outTok,
+            CachedTokens = cachedTok,
         };
     }
 
@@ -208,6 +210,7 @@ public sealed class AnthropicProvider : IAgentProvider
         var evt = "";
         int? inputTokens = null;
         int? outputTokens = null;
+        int? cachedTokens = null;
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
@@ -285,6 +288,7 @@ public sealed class AnthropicProvider : IAgentProvider
 
                 case "message_start":
                     inputTokens = root?["message"]?["usage"]?["input_tokens"]?.GetValue<int>();
+                    cachedTokens = root?["message"]?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
                     break;
 
                 case "message_delta":
@@ -319,6 +323,7 @@ public sealed class AnthropicProvider : IAgentProvider
             ToolCalls = toolCalls,
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
+            CachedTokens = cachedTokens,
         };
     }
 

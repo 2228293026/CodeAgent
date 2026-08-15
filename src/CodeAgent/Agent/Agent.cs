@@ -67,6 +67,13 @@ public sealed class Agent
     public long TotalInputTokens { get; private set; }
     public long TotalOutputTokens { get; private set; }
 
+    // 单轮统计（回合结束后用于摘要行）
+    public int TurnRounds { get; private set; }
+    public int TurnToolCalls { get; private set; }
+    public long TurnInputTokens { get; private set; }
+    public long TurnOutputTokens { get; private set; }
+    public long TurnCachedTokens { get; private set; }
+
     /// <summary>切换 Provider（/model 命令用）。</summary>
     public void SetProvider(IAgentProvider provider) => _provider = provider;
 
@@ -212,6 +219,11 @@ public sealed class Agent
         StreamedLastRun = false;
         LastPrompt = userPrompt;
         _renderer = new ConsoleRenderer(_ctx.Config.RenderMarkdown);
+        TurnRounds = 0;
+        TurnToolCalls = 0;
+        TurnInputTokens = 0;
+        TurnOutputTokens = 0;
+        TurnCachedTokens = 0;
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
 
@@ -221,6 +233,13 @@ public sealed class Agent
             if (_streamedThisCall)
                 _renderer?.Flush();
             ProviderCalls++;
+            TurnRounds++;
+            if (resp.InputTokens is int inTokT)
+                TurnInputTokens += inTokT;
+            if (resp.OutputTokens is int outTokT)
+                TurnOutputTokens += outTokT;
+            if (resp.CachedTokens is int cTokT)
+                TurnCachedTokens += cTokT;
             if (resp.InputTokens is int inTok)
                 TotalInputTokens += inTok;
             if (resp.OutputTokens is int outTok)
@@ -461,6 +480,7 @@ public sealed class Agent
             };
         }
 
+        TurnToolCalls++;
         var summary = SummarizeCall(tc.Name, tc.ArgumentsJson);
         var showLog = _ctx.Config.ShowToolCalls;
 

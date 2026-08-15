@@ -49,6 +49,7 @@ public sealed class ProviderResponse
     public IReadOnlyList<ToolCall> ToolCalls { get; init; } = [];
     public int? InputTokens { get; init; }
     public int? OutputTokens { get; init; }
+    public int? CachedTokens { get; init; }
 }
 
 /// <summary>暴露给模型的工具规范（JSON Schema 形式的参数）。</summary>

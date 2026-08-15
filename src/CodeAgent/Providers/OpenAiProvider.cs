@@ -125,6 +125,7 @@ public sealed class OpenAiProvider : IAgentProvider
 
         int? inTok = root?["usage"]?["prompt_tokens"]?.GetValue<int>();
         int? outTok = root?["usage"]?["completion_tokens"]?.GetValue<int>();
+        int? cachedTok = root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]?.GetValue<int>();
 
         return new ProviderResponse
         {
@@ -132,6 +133,7 @@ public sealed class OpenAiProvider : IAgentProvider
             ToolCalls = toolCalls,
             InputTokens = inTok,
             OutputTokens = outTok,
+            CachedTokens = cachedTok,
         };
     }
 
@@ -190,7 +192,7 @@ public sealed class OpenAiProvider : IAgentProvider
 
         var text = new StringBuilder();
         var toolAccum = new Dictionary<int, StreamToolAccum>();
-        int? inTok = null, outTok = null;
+        int? inTok = null, outTok = null, cachedTok = null;
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
@@ -224,6 +226,8 @@ public sealed class OpenAiProvider : IAgentProvider
                     inTok = u["prompt_tokens"]!.GetValue<int>();
                 if (u["completion_tokens"] is not null)
                     outTok = u["completion_tokens"]!.GetValue<int>();
+                if (u["prompt_tokens_details"]?["cached_tokens"] is not null)
+                    cachedTok = u["prompt_tokens_details"]!["cached_tokens"]!.GetValue<int>();
             }
 
             if (delta is null)
@@ -290,6 +294,7 @@ public sealed class OpenAiProvider : IAgentProvider
             ToolCalls = toolCalls,
             InputTokens = inTok,
             OutputTokens = outTok,
+            CachedTokens = cachedTok,
         };
     }
 

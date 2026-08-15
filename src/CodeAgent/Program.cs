@@ -216,8 +216,11 @@ internal static class Program
 
             try
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var result = await RunTurnAsync(t => agent.RunAsync(line, t));
+                sw.Stop();
                 PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
+                PrintTurnSummary(agent, sw.Elapsed);
             }
             catch (ProviderException ex)
             {
@@ -274,6 +277,18 @@ internal static class Program
             _activeTurn = null;
         }
     }
+
+    /// <summary>回合结束后打印摘要行（轮数/工具/时长/tokens/缓存比例）。</summary>
+    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
+    {
+        var cache = agent.TurnInputTokens > 0 ? $" {100.0 * agent.TurnCachedTokens / agent.TurnInputTokens:F0}% cached" : "";
+        Console.WriteLine(
+            $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
+            $"{FormatTime(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{cache} ──");
+    }
+
+    private static string FormatTime(TimeSpan t) =>
+        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F1}s";
 
     /// <summary>状态栏：模式 · 模型 · 目录 · token 用量 · 思考强度（每轮提示符前显示）。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort)
