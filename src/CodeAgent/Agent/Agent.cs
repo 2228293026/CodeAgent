@@ -298,6 +298,17 @@ public sealed class Agent
                         _streamedThisCall = true;
                     }
                     _renderer?.Append(delta);
+                }, reason =>
+                {
+                    // 思考内容：以暗色实时显示（DeepSeek-R1 / Claude extended thinking）
+                    if (!_streamedThisCall)
+                    {
+                        ClearSpinner();
+                        _streamedThisCall = true;
+                    }
+                    SafeColor.Foreground(ConsoleColor.DarkGray);
+                    Console.Write(reason);
+                    SafeColor.Reset();
                 }, ct), ct);
 
             if (!_streamedThisCall)

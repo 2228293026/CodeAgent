@@ -25,6 +25,7 @@ public interface IAgentProvider
         IReadOnlyList<ToolSpec> tools,
         string thinkingEffort,
         Action<string>? onText,
+        Action<string>? onReasoning,
         CancellationToken ct);
 
     /// <summary>列出当前 Provider 可用的模型 ID（--models / /models 用）。</summary>

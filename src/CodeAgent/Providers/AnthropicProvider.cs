@@ -145,6 +145,7 @@ public sealed class AnthropicProvider : IAgentProvider
         IReadOnlyList<ToolSpec> tools,
         string thinkingEffort,
         Action<string>? onText,
+        Action<string>? onReasoning,
         CancellationToken ct)
     {
         var system = new StringBuilder();
@@ -257,7 +258,14 @@ public sealed class AnthropicProvider : IAgentProvider
                     var delta = root?["delta"];
                     var dtype = delta?["type"]?.GetValue<string>();
                     var index = root?["index"]?.GetValue<int>() ?? 0;
-                    if (dtype == "text_delta")
+                    if (dtype == "thinking_delta")
+                    {
+                        // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示
+                        var t = delta?["thinking"]?.GetValue<string>() ?? "";
+                        if (t.Length > 0)
+                            onReasoning?.Invoke(t);
+                    }
+                    else if (dtype == "text_delta")
                     {
                         var t = delta?["text"]?.GetValue<string>() ?? "";
                         if (t.Length > 0)

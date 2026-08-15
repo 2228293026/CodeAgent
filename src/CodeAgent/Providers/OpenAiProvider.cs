@@ -143,6 +143,7 @@ public sealed class OpenAiProvider : IAgentProvider
         IReadOnlyList<ToolSpec> tools,
         string thinkingEffort,
         Action<string>? onText,
+        Action<string>? onReasoning,
         CancellationToken ct)
     {
         var payload = new JsonObject
@@ -227,6 +228,15 @@ public sealed class OpenAiProvider : IAgentProvider
 
             if (delta is null)
                 continue;
+
+            // 思考内容（DeepSeek-R1 用 reasoning_content，OpenRouter 用 reasoning）
+            var reasoning = delta["reasoning_content"] ?? delta["reasoning"];
+            if (reasoning is not null)
+            {
+                var r = reasoning.GetValue<string>() ?? "";
+                if (r.Length > 0)
+                    onReasoning?.Invoke(r);
+            }
 
             var content = delta["content"];
             if (content is not null)
