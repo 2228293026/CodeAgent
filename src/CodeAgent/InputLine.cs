@@ -164,7 +164,6 @@ public static class InputLine
             sb.Append("\x1b[1G");
             sb.Append(promptPlain + buf);
             sb.Append("\x1b[K");
-            menuEverPainted = true;
             menuRows = above;
             Console.Write(sb.ToString());
         }
