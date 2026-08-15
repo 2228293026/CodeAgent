@@ -159,7 +159,8 @@ public static class InputLine
                 for (int i = 0; i < menuShown; i++)
                 {
                     var k = menuOffset + i;
-                    sb.AppendLine(Fit($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
+                    // 窗口相对编号（i+1），数字键 1-9 选择对应可见项
+                    sb.AppendLine(Fit($"  {(k == menuIndex ? ">" : " ")} {i + 1}) {menuItems[k].Name,-16} {menuItems[k].Desc}"));
                 }
                 sb.AppendLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
             }
@@ -203,12 +204,12 @@ public static class InputLine
             {
                 var up = MenuAbove() - 1 - (oldIndex - menuOffset);
                 sb.Append($"\x1b[{up}A\x1b[1G\x1b[K");
-                sb.Append(Fit($"  {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
+                sb.Append(Fit($"  {oldIndex - menuOffset + 1}) {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
                 sb.Append($"\x1b[{up}B");
             }
             var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
             sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
-            sb.Append(Fit($"  > {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}"));
+            sb.Append(Fit($"> {newIndex - menuOffset + 1}) {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}"));
             sb.Append($"\x1b[{up2}B\x1b[1G");
             sb.Append(promptPlain + buf);
             sb.Append("\x1b[K");
@@ -485,7 +486,8 @@ public static class InputLine
                         var n = key.Key - ConsoleKey.D1 + 1;
                         if (n <= menuItems.Count)
                         {
-                            var sel = menuItems[n - 1].Name;
+                            var idx = Math.Min(menuOffset + n - 1, menuItems.Count - 1); // 窗口编号 -> 列表下标
+                            var sel = menuItems[idx].Name;
                             CloseMenu();
                             Console.WriteLine();
                             var submit = modePicker ? $"/mode {sel}" : sel;
