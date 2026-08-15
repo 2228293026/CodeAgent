@@ -172,10 +172,9 @@ public static class InputLine
             Console.Write(sb.ToString());
         }
 
-        // 擦除已绘制的菜单块（menuRows 行），回到输入行——单次写入
-        void EraseMenuAnsi()
+        // 擦除菜单块（rows 行），回到输入行——单次写入
+        void EraseMenuAnsi(int rows)
         {
-            var rows = menuRows;
             var sb = new StringBuilder();
             sb.Append($"\x1b[{rows}A");
             for (int i = 0; i < rows; i++)
@@ -194,7 +193,7 @@ public static class InputLine
             if (newIndex < menuOffset || newIndex >= menuOffset + menuShown)
             {
                 // 窗口滚动：擦除并重打
-                EraseMenuAnsi();
+                EraseMenuAnsi(menuRows);
                 PrintListAnsi();
                 return;
             }
@@ -288,7 +287,9 @@ public static class InputLine
                     menuIndex = menuItems.Count - 1;
                 if (ansiOk)
                 {
-                    EraseMenuAnsi();
+                    // 擦除已绘制 + 新块需要的高度（过滤变宽时避免覆盖上方内容）
+                    var newAbove = Math.Min(menuItems.Count, MenuMaxRows) + 3;
+                    EraseMenuAnsi(Math.Max(menuRows, newAbove));
                     PrintListAnsi();
                 }
                 else if (!menuListShown)
@@ -330,7 +331,7 @@ public static class InputLine
             modePicker = false; // 必须重置，否则后续 / 命令菜单永远打不开
             if (ansiOk)
             {
-                EraseMenuAnsi();
+                EraseMenuAnsi(menuRows);
                 menuEverPainted = false; // 下次打开重新在输入行下方建立块
             }
             menuListShown = false;
