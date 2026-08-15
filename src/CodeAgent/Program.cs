@@ -799,6 +799,7 @@ internal static class Program
               /tools           列出可用工具
               /providers       显示已配置的 Provider
               /models          列出当前 Provider 的可用模型
+              /history         显示当前对话历史
               /thinking        查看或设置思考强度（off/low/medium/high）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /exit, /quit     退出
