@@ -302,6 +302,7 @@ internal static class Program
         Console.WriteLine("── CodeAgent ─────────────────────────────────────────────");
         Console.WriteLine($"  Provider : {config.Provider} ({opts.Type})");
         Console.WriteLine($"  Model    : {opts.Model}");
+        Console.WriteLine($"  Mode     : {agent.CurrentMode.Name}");
         Console.WriteLine($"  BaseUrl  : {opts.BaseUrl}");
         Console.WriteLine($"  Workspace: {Environment.CurrentDirectory}");
         if (agent.SessionPath is not null)
@@ -460,6 +461,20 @@ internal static class Program
                     Console.WriteLine($"  {kv.Key} ({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}");
                 break;
 
+            case "/mode":
+                if (string.IsNullOrWhiteSpace(rest))
+                {
+                    Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");
+                    Console.WriteLine(Modes.ListText());
+                }
+                else
+                {
+                    var mode = Modes.Find(rest);
+                    agent.SetMode(mode);
+                    Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
+                }
+                break;
+
             case "/help":
                 PrintReplHelp();
                 break;
@@ -495,6 +510,7 @@ internal static class Program
               /retry           重新执行上一条请求
               /tools           列出可用工具
               /providers       显示已配置的 Provider
+              /mode [名称]     查看或切换工作模式（code/plan/explain/review）
               /exit, /quit     退出
             用法:
               codeagent "帮我给项目写个 README"    一次性任务

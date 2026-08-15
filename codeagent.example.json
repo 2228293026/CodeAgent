@@ -46,5 +46,6 @@
   "shell": "",
   "saveSessions": true,
   "streamOutput": true,
-  "showToolCalls": true
+  "showToolCalls": true,
+  "renderMarkdown": true
 }

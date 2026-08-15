@@ -64,6 +64,9 @@ public sealed class AgentConfig
     /// <summary>是否在终端实时显示工具调用过程（动作、耗时，默认开启）。</summary>
     public bool ShowToolCalls { get; set; } = true;
 
+    /// <summary>是否对模型回复做 Markdown 渲染（代码块/行内代码/加粗/标题，默认开启）。</summary>
+    public bool RenderMarkdown { get; set; } = true;
+
     /// <summary>系统提示词。</summary>
     public string SystemPrompt { get; set; } = DefaultSystemPrompt;
 

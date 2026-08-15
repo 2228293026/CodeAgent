@@ -12,6 +12,8 @@
 - 🖥️ 工具调用可视化：执行工具时实时显示动作与耗时，`run_command` 附带输出预览（`"showToolCalls": false` 可关闭）
 - 🔁 自动重试：429 / 5xx / 连接失败自动指数退避重试（最多 2 次），流式已输出文本则不重试
 - 🧠 上下文自动摘要：历史超限时先用 LLM 压缩最早对话，失败才回退丢弃旧消息
+- 🎭 多工作模式：`/mode` 切换 code / plan / explain / review，只读模式自动隐藏并拦截写工具
+- 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
 - 🔧 内置 8 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `stop`
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
@@ -70,6 +72,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "saveSessions": true           // 是否记录会话日志
   "streamOutput": true           // 流式输出模型回复（逐字打印）
   "showToolCalls": true          // 终端实时显示工具调用过程
+  "renderMarkdown": true         // 模型回复 Markdown 渲染（代码块/标题等）
 }
 ```
 
@@ -103,7 +106,9 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/exit`。
+REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/mode` `/exit`。
+
+工作模式：`/mode` 查看，`/mode plan` 切换。`plan` / `explain` / `review` 为只读模式（只能读取/搜索，自动隐藏并拦截写工具与命令），`code` 为默认全功能模式。
 
 `/undo` 会撤销最近一次 `write_file` / `edit_file` 对文件的修改：新建的文件被删除，覆盖的文件恢复原内容（最多记住最近 50 次修改）。
 

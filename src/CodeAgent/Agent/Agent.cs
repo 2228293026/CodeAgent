@@ -57,6 +57,11 @@ public sealed class Agent
     /// <summary>最近一次用户请求文本（/retry 用）。</summary>
     public string? LastPrompt { get; private set; }
 
+    /// <summary>当前工作模式。</summary>
+    public AgentMode CurrentMode { get; private set; } = Modes.All[0];
+
+    private ConsoleRenderer? _renderer;
+
     /// <summary>本轮会话的 Provider 调用次数与 token 用量统计（/stats 用）。</summary>
     public int ProviderCalls { get; private set; }
     public long TotalInputTokens { get; private set; }
@@ -69,7 +74,15 @@ public sealed class Agent
     public void Reset()
     {
         _messages.Clear();
-        _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = _ctx.Config.SystemPrompt });
+        _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = CurrentMode.SystemPrompt });
+    }
+
+    /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
+    public void SetMode(AgentMode mode)
+    {
+        CurrentMode = mode;
+        if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
+            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = mode.SystemPrompt };
     }
 
     public void Close()
@@ -198,12 +211,15 @@ public sealed class Agent
         _ctx.StopRequested = false;
         StreamedLastRun = false;
         LastPrompt = userPrompt;
+        _renderer = new ConsoleRenderer(_ctx.Config.RenderMarkdown);
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
 
         for (int i = 0; i < _ctx.Config.MaxToolIterations; i++)
         {
             var resp = await CallProviderAsync(ct);
+            if (_streamedThisCall)
+                _renderer?.Flush();
             ProviderCalls++;
             if (resp.InputTokens is int inTok)
                 TotalInputTokens += inTok;
@@ -267,21 +283,21 @@ public sealed class Agent
             if (!_ctx.Config.StreamOutput)
             {
                 var resp = await CallWithRetryAsync(
-                    () => _provider.ChatAsync(_messages, _tools.ToToolSpecs(), ct), ct);
+                    () => _provider.ChatAsync(_messages, ToolsForMode(), ct), ct);
                 ClearSpinner();
                 return resp;
             }
 
             // 流式：文本增量实时打印到控制台，首次增量到达时先清掉思考指示器
             var result = await CallWithRetryAsync(
-                () => _provider.ChatStreamAsync(_messages, _tools.ToToolSpecs(), delta =>
+                () => _provider.ChatStreamAsync(_messages, ToolsForMode(), delta =>
                 {
                     if (!_streamedThisCall)
                     {
                         ClearSpinner();
                         _streamedThisCall = true;
                     }
-                    Console.Write(delta);
+                    _renderer?.Append(delta);
                 }, ct), ct);
 
             if (!_streamedThisCall)
@@ -320,6 +336,16 @@ public sealed class Agent
 
     private static string DescribeFailure(ProviderException ex) =>
         ex.StatusCode is int code ? $"HTTP {code}" : "网络错误";
+
+    /// <summary>当前模式下暴露给模型的工具（按模式过滤）。</summary>
+    private IReadOnlyList<ToolSpec> ToolsForMode()
+    {
+        var all = _tools.ToToolSpecs();
+        if (CurrentMode.AllowedTools is not { } allowed)
+            return all;
+        var set = new HashSet<string>(allowed, StringComparer.OrdinalIgnoreCase);
+        return all.Where(t => set.Contains(t.Name)).ToList();
+    }
 
     private void ShowSpinner() => Console.Write("\r⏳ 思考中…");
 
@@ -411,6 +437,19 @@ public sealed class Agent
 
     private async Task<ProviderMessage> ExecuteToolCallAsync(ToolCall tc, CancellationToken ct)
     {
+        // 模式限制：只读模式下拦截写操作（防御性，正常情况模型看不到这些工具）
+        if (CurrentMode.AllowedTools is { } allowed && !allowed.Contains(tc.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            return new ProviderMessage
+            {
+                Role = MessageRole.Tool,
+                ToolCallId = tc.Id,
+                ToolName = tc.Name,
+                Content = $"工具 {tc.Name} 在当前模式（{CurrentMode.Name}）下不可用。",
+                IsError = true,
+            };
+        }
+
         var summary = SummarizeCall(tc.Name, tc.ArgumentsJson);
         var showLog = _ctx.Config.ShowToolCalls;
 
