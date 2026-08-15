@@ -510,7 +510,7 @@ internal static class Program
               /retry           重新执行上一条请求
               /tools           列出可用工具
               /providers       显示已配置的 Provider
-              /mode [名称]     查看或切换工作模式（内置 7 种 + 自定义）
+              /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /exit, /quit     退出
             用法:
               codeagent "帮我给项目写个 README"    一次性任务

@@ -33,6 +33,14 @@ public static class Modes
             "opportunities. Rules: NEVER modify files and NEVER run commands; use only the read/search tools; " +
             "end with the stop tool when done. Output a prioritized findings list.",
             ReadOnlyTools),
+        new("debug",
+            "调试模式：先复现 bug，定位根因，最小修复并验证",
+            "You are CodeAgent in DEBUG mode. Debug the reported issue: reproduce the problem first, gather " +
+            "diagnostics (logs, state, stack traces), find the root cause, apply a minimal fix, then verify " +
+            "with the build/tests. Rules: reproduce before fixing; investigate with read/grep/run_command; " +
+            "keep fixes minimal and explain the root cause; report verification results honestly, including " +
+            "failures; end with the stop tool.",
+            null),
         new("refactor",
             "重构模式：小步重构代码，保持行为不变并运行验证",
             "You are CodeAgent in REFACTOR mode. Refactor code to improve structure, readability and performance " +
