@@ -79,8 +79,8 @@ public static class InputLine
         {
             Console.WriteLine();
             Console.WriteLine(modePicker
-                ? "  Modes (up/down select, Enter switch, Esc close):"
-                : "  Commands (up/down select, Enter run, Esc close):");
+                ? "  Modes (1-9 switch, up/down select, Esc close):"
+                : "  Commands (1-9 run, up/down select, Enter run, Esc close):");
             if (menuItems.Count == 0)
             {
                 Console.WriteLine("  (no matching item)");
@@ -96,11 +96,12 @@ public static class InputLine
             Console.Write(promptPlain + buf);
         }
 
-        // 选中行：方向键/Tab 时只打印一行，避免整块菜单刷屏
+        // 选中行：方向键/Tab 时换行打印，避免与提示符同行，也避免整块菜单刷屏
         void PrintSelection()
         {
             if (menuIndex >= 0 && menuIndex < menuItems.Count)
             {
+                Console.WriteLine(); // 先换行，确保选中行从新的一行开始
                 Console.WriteLine($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}");
                 Console.Write(promptPlain + buf);
             }
