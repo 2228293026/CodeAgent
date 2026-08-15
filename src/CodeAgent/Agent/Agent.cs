@@ -243,6 +243,8 @@ public sealed class Agent
         TurnCachedTokens = 0;
         TurnThinkingSeconds = 0;
         LastTurnFailed = false;
+        if (!_sessionSw.IsRunning)
+            _sessionSw.Start(); // 整个对话的累计计时
         LastTurnStartCount = _messages.Count; // 记录本轮起点（ESC 撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
@@ -404,14 +406,15 @@ public sealed class Agent
 
     private System.Threading.CancellationTokenSource? _spinnerCts;
     private readonly System.Diagnostics.Stopwatch _spinnerSw = new();
+    private readonly System.Diagnostics.Stopwatch _sessionSw = new(); // 整个对话的累计用时
     private readonly System.Text.StringBuilder _reasoningBuf = new();
-    private long _streamTokens; // 已流式生成的 token 估算（字符数/4），供 spinner 显示 ↑
+    private long _streamTokens; // 当前调用已流式生成的 token 估算（字符数/4）
     private static readonly string[] SpinnerFrames = ["⠦", "⠸", "⠼", "⠴", "⠦", "⠇"];
 
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
 
-    /// <summary>思考计时器：动画帧 + 已耗时 + ↑ 已生成 tokens（首个输出到达前屏幕无其他输出，安全）。</summary>
+    /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens（首个输出到达前屏幕无其他输出，安全）。</summary>
     private void ShowSpinner()
     {
         _spinnerSw.Restart();
@@ -426,9 +429,10 @@ public sealed class Agent
                 while (!cts.IsCancellationRequested)
                 {
                     var f = SpinnerFrames[frame++ % SpinnerFrames.Length];
-                    var tok = _streamTokens >= 1000 ? $"{_streamTokens / 1000.0:F1}K" : _streamTokens.ToString();
+                    var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
+                    var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
                     lock (ConsoleLock)
-                        Console.Write($"\r{f} 思考中… {_spinnerSw.Elapsed.TotalSeconds:F0}s · ↑ {tok} tokens");
+                        Console.Write($"\r{f} 思考中… {SessionTimeText(_sessionSw.Elapsed)} · ↑ {tok} tokens");
                     await Task.Delay(120, cts.Token);
                 }
             }
@@ -437,15 +441,20 @@ public sealed class Agent
         });
     }
 
+    /// <summary>会话总时长文本（如 2m 5s / 22s）。</summary>
+    private static string SessionTimeText(TimeSpan t) =>
+        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F0}s";
+
     private void ClearSpinner()
     {
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
         if (TurnThinkingSeconds >= 1 || _streamTokens > 0)
         {
-            // 常驻指示行：模型工作期间的最终状态（思考秒数 + ↑ tokens），不再清空，回答在其下方继续
-            var tok = _streamTokens >= 1000 ? $"{_streamTokens / 1000.0:F1}K" : _streamTokens.ToString();
-            Console.WriteLine("\r" + $"⠦ 思考中… {TurnThinkingSeconds:F0}s · ↑ {tok} tokens".PadRight(50));
+            // 常驻指示行：整个对话的累计时间 + 累计 tokens
+            var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
+            var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
+            Console.WriteLine("\r" + $"⠦ 思考中… {SessionTimeText(_sessionSw.Elapsed)} · ↑ {tok} tokens".PadRight(50));
         }
         else
         {
