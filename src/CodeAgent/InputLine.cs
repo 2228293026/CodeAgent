@@ -471,10 +471,22 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.Tab:
-                    if (!menuOpen && SlashLike(buf.ToString()))
+                    if (menuOpen && menuItems.Count == 1)
+                    {
+                        // 唯一匹配：Tab 补全为完整命令（/think + Tab → /thinking）
+                        buf.Clear();
+                        buf.Append(menuItems[0].Name);
+                        draft = null;
+                        CloseMenu();
+                        RedrawInput();
+                    }
+                    else if (!menuOpen && SlashLike(buf.ToString()))
+                    {
                         OpenMenu(false);
+                    }
                     else if (menuOpen && menuItems.Count > 1)
                     {
+                        // 多个匹配：循环选择
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
                     }
                     break;
