@@ -102,7 +102,7 @@ public static class InputLine
         int MenuAbove() => menuShown + 3; // header + 项 + more 行 + 空行
 
         string Header() => modePicker
-            ? "  Modes (1-9 switch, up/down select, Esc close):"
+            ? "  Modes (up/down select, Enter switch, Esc close):"
             : "  Commands (1-9 run, up/down select, Enter run, Esc close):";
 
         void ScrollInput()
@@ -493,8 +493,8 @@ public static class InputLine
 
                 case ConsoleKey.D1 or ConsoleKey.D2 or ConsoleKey.D3 or ConsoleKey.D4 or ConsoleKey.D5
                     or ConsoleKey.D6 or ConsoleKey.D7 or ConsoleKey.D8 or ConsoleKey.D9:
-                    // 数字键直接选中执行（菜单编号 1-9）
-                    if (menuOpen && menuItems.Count > 0)
+                    // 命令菜单：数字键直接执行（1-9）；模式菜单不拦截数字（关闭并按普通输入，避免误触发切换）
+                    if (menuOpen && !modePicker && menuItems.Count > 0)
                     {
                         var n = key.Key - ConsoleKey.D1 + 1;
                         if (n <= menuItems.Count)
@@ -503,10 +503,18 @@ public static class InputLine
                             var sel = menuItems[selIdx].Name;
                             CloseMenu();
                             Console.WriteLine();
-                            var submit = modePicker ? $"/mode {sel}" : sel;
-                            Remember(submit);
-                            return submit;
+                            Remember(sel);
+                            return sel;
                         }
+                        break;
+                    }
+                    if (menuOpen && modePicker)
+                        CloseMenu(); // 模式菜单：数字按普通输入处理
+                    if (key.KeyChar != '\0' && !char.IsControl(key.KeyChar))
+                    {
+                        buf.Append(key.KeyChar);
+                        draft = null;
+                        RedrawInput();
                     }
                     break;
 
