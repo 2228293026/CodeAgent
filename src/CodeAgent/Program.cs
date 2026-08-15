@@ -186,9 +186,10 @@ internal static class Program
 
         // 交互式 REPL
         PrintBanner(config, opts, agent);
+        var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
         while (true)
         {
-            var line = InputLine.Read(PromptFor(opts, agent));
+            var line = InputLine.Read(PromptFor(opts, agent), modeTuples);
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
             line = line.Trim();
@@ -538,6 +539,7 @@ internal static class Program
                 {
                     Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");
                     Console.WriteLine(Modes.ListText(config));
+                    Console.WriteLine("（提示: 按 Alt+M 可弹出模式菜单快速切换）");
                 }
                 else
                 {

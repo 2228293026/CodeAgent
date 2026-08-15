@@ -42,8 +42,8 @@ public static class InputLine
     private const int MaxHistory = 100;
     private const int MenuMaxRows = 10;
 
-    /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。</summary>
-    public static string? Read(string prompt)
+    /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式选择菜单。</summary>
+    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null)
     {
         if (Console.IsInputRedirected)
         {
@@ -64,6 +64,7 @@ public static class InputLine
         var inputRow = Console.CursorTop;
 
         var menuOpen = false;
+        var modePicker = false;
         var menuItems = new List<(string Name, string Desc)>();
         var menuIndex = 0;
         var menuTop = 0;
@@ -150,14 +151,18 @@ public static class InputLine
             PaintMenu();
         }
 
-        void OpenMenu()
+        void OpenMenu(bool picker)
         {
             if (menuOpen)
                 return;
             menuOpen = true;
+            modePicker = picker;
             menuTop = inputRow + 1;
             menuIndex = 0;
-            RefreshMenu();
+            if (picker)
+                PaintMenu();
+            else
+                RefreshMenu();
         }
 
         // —— 主输入循环 ——
@@ -165,8 +170,8 @@ public static class InputLine
         {
             var key = Console.ReadKey(intercept: true);
 
-            // 输入不再以 / 开头 → 关闭菜单
-            if (menuOpen && !buf.ToString().StartsWith('/'))
+            // 命令菜单：输入不再以 / 开头 → 关闭；模式选择器不受输入影响
+            if (menuOpen && !modePicker && !buf.ToString().StartsWith('/'))
                 CloseMenu();
 
             switch (key.Key)
@@ -177,8 +182,9 @@ public static class InputLine
                         var sel = menuItems[Math.Min(menuIndex, menuItems.Count - 1)].Name;
                         CloseMenu();
                         Console.WriteLine();
-                        Remember(sel);
-                        return sel;
+                        var submit = modePicker ? $"/mode {sel}" : sel;
+                        Remember(submit);
+                        return submit;
                     }
                     Console.WriteLine();
                     var line = buf.ToString();
@@ -186,11 +192,13 @@ public static class InputLine
                     return line;
 
                 case ConsoleKey.Backspace:
+                    if (menuOpen && modePicker)
+                        CloseMenu();
                     if (buf.Length > 0)
                     {
                         buf.Length--;
                         RedrawInput();
-                        if (menuOpen)
+                        if (menuOpen && !modePicker)
                             RefreshMenu();
                     }
                     break;
@@ -229,7 +237,7 @@ public static class InputLine
 
                 case ConsoleKey.Tab:
                     if (!menuOpen && buf.ToString().StartsWith('/'))
-                        OpenMenu();
+                        OpenMenu(false);
                     else if (menuOpen && menuItems.Count > 1)
                     {
                         menuIndex = (menuIndex + 1) % menuItems.Count;
@@ -253,15 +261,22 @@ public static class InputLine
                     }
                     break;
 
+                case ConsoleKey.M when (key.Modifiers & ConsoleModifiers.Alt) != 0 && modes is { Count: > 0 }:
+                    menuItems = [.. modes];
+                    OpenMenu(true); // Alt+M：弹出模式选择菜单
+                    break;
+
                 default:
                     if (key.KeyChar != '\0' && key.KeyChar != '\u0003')
                     {
+                        if (menuOpen && modePicker)
+                            CloseMenu();
                         buf.Append(key.KeyChar);
                         RedrawInput();
-                        if (buf.ToString().StartsWith('/'))
+                        if (!modePicker && buf.ToString().StartsWith('/'))
                         {
                             if (!menuOpen)
-                                OpenMenu();
+                                OpenMenu(false);
                             else
                                 RefreshMenu();
                         }
