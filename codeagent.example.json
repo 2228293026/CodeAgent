@@ -48,6 +48,7 @@
   "streamOutput": true,
   "showToolCalls": true,
   "renderMarkdown": true,
+  "tuiAnsi": true,
   "modes": [
     {
       "name": "fix",

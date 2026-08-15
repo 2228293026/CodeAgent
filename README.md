@@ -74,6 +74,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "streamOutput": true           // 流式输出模型回复（逐字打印）
   "showToolCalls": true          // 终端实时显示工具调用过程
   "renderMarkdown": true         // 模型回复 Markdown 渲染（代码块/标题等）
+  "tuiAnsi": true                // 菜单 ANSI 原地渲染（老式终端乱码时设 false）
 }
 ```
 
@@ -133,7 +134,7 @@ REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `
 
 运行中按 `Ctrl+C` 或 `Esc` 可**优雅取消当前轮**（中断后历史会自动回滚为合法状态，可继续对话）；空闲时按 `Ctrl+C` 退出程序。
 
-交互输入：输入 `/`（兼容全角 `／`）自动弹出**命令菜单**（编号列表，**数字键 1-9 直接执行**，`↑`/`↓` 逐项选择且只打印当前项、回车执行、`Esc` 关闭、继续输入即过滤）；**快捷键**：`Alt+M`（或 `Ctrl+Shift+M`）模式菜单、`Alt+U` 撤销、`Alt+D` 查看 diff、`Alt+N` 新建会话、`Ctrl+L` 清屏（部分终端吞 Alt 时用 Ctrl+Shift 组合）；无菜单时 `↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`）。每轮提示符上方显示**状态栏**：`⏵ 模式 · 模型 · 目录 · token 用量`。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
+交互输入：输入 `/`（兼容全角 `／`）自动弹出**命令菜单**（**ANSI 原地渲染**：`↑`/`↓` 让 `>` 在列表内原地移动、回车执行、`Esc` 关闭、继续输入即过滤；**数字键 1-9 直接执行**；老式终端乱码时设 `"tuiAnsi": false` 退回滚动式）；**快捷键**：`Alt+M`（或 `Ctrl+Shift+M`）模式菜单、`Alt+U` 撤销、`Alt+D` 查看 diff、`Alt+N` 新建会话、`Ctrl+L` 清屏（部分终端吞 Alt 时用 Ctrl+Shift 组合）；无菜单时 `↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`）。每轮提示符上方显示**状态栏**：`⏵ 模式 · 模型 · 目录 · token 用量`。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
 
 ## 工具一览
 

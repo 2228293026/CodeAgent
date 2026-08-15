@@ -190,7 +190,7 @@ internal static class Program
         while (true)
         {
             PrintStatusBar(opts, agent);
-            var line = InputLine.Read(PromptFor(opts, agent), modeTuples);
+            var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi);
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
             line = line.Trim();
