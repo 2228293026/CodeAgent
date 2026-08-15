@@ -608,6 +608,12 @@ internal static class Program
               --setup              交互式配置供应商并生成 codeagent.json
               --models             列出当前 Provider 的可用模型
               -v, --version        显示版本号
+            快捷键:
+              Alt+M / Ctrl+Shift+M   模式切换菜单
+              Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）
+              Alt+D / Ctrl+Shift+D   查看最近修改的 diff（/diff）
+              Alt+N / Ctrl+Shift+N   新建会话（/clear）
+              Ctrl+L                 清屏
             """);
     }
 

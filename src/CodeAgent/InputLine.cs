@@ -261,13 +261,31 @@ public static class InputLine
                     }
                     break;
 
-                case ConsoleKey.M when (key.Modifiers & ConsoleModifiers.Alt) != 0 && modes is { Count: > 0 }:
+                case ConsoleKey.M when IsShortcut(key) && modes is { Count: > 0 }:
                     menuItems = [.. modes];
-                    OpenMenu(true); // Alt+M：弹出模式选择菜单
+                    OpenMenu(true); // Alt+M / Ctrl+Shift+M：模式选择菜单
                     break;
 
+                case ConsoleKey.U when IsShortcut(key):
+                    CloseMenu();
+                    Console.WriteLine();
+                    Remember("/undo");
+                    return "/undo"; // Alt+U / Ctrl+Shift+U：撤销最近一次修改
+
+                case ConsoleKey.D when IsShortcut(key):
+                    CloseMenu();
+                    Console.WriteLine();
+                    Remember("/diff");
+                    return "/diff"; // Alt+D / Ctrl+Shift+D：查看最近修改的 diff
+
+                case ConsoleKey.N when IsShortcut(key):
+                    CloseMenu();
+                    Console.WriteLine();
+                    Remember("/clear");
+                    return "/clear"; // Alt+N / Ctrl+Shift+N：新建会话（清空历史）
+
                 default:
-                    if (key.KeyChar != '\0' && key.KeyChar != '\u0003')
+                    if (key.KeyChar != '\0' && key.KeyChar != '\u0003' && !char.IsControl(key.KeyChar))
                     {
                         if (menuOpen && modePicker)
                             CloseMenu();
@@ -291,6 +309,14 @@ public static class InputLine
         buf.Clear();
         if (idx < session.Count)
             buf.Append(session[idx]);
+    }
+
+    /// <summary>快捷键判定：Alt+键 或 Ctrl+Shift+键（部分终端会吞 Alt，提供 Ctrl+Shift 兜底）。</summary>
+    private static bool IsShortcut(ConsoleKeyInfo key)
+    {
+        var m = key.Modifiers;
+        return (m & ConsoleModifiers.Alt) != 0 ||
+               ((m & ConsoleModifiers.Control) != 0 && (m & ConsoleModifiers.Shift) != 0);
     }
 
     private static void Remember(string line)
