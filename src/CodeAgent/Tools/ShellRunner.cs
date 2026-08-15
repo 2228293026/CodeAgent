@@ -98,7 +98,7 @@ public static class ShellRunner
         };
     }
 
-    /// <summary>常见 Git Bash / MSYS2 安装路径。</summary>
+    /// <summary>查找 Git Bash：常见路径 → PATH 上的 git.exe 反推安装根 → where.exe 解析。</summary>
     private static string? FindGitBash()
     {
         var pf = Environment.GetEnvironmentVariable("ProgramFiles");
@@ -107,10 +107,43 @@ public static class ShellRunner
             Path.Combine(pf ?? "", "Git", "bin", "bash.exe"),
             Path.Combine(pf ?? "", "Git", "usr", "bin", "bash.exe"),
             @"C:\Program Files\Git\bin\bash.exe",
+            @"C:\Program Files\Git\usr\bin\bash.exe",
             @"C:\msys64\usr\bin\bash.exe",
             @"C:\msys32\usr\bin\bash.exe",
         };
-        return candidates.FirstOrDefault(File.Exists) ?? FindOnPath("bash.exe");
+        var hit = candidates.FirstOrDefault(File.Exists);
+        if (hit is not null)
+            return hit;
+
+        // Git for Windows / Scoop 只把 cmd 加入 PATH：由 git.exe 反推安装根目录（如 D:\Program Files\Git）
+        var git = FindOnPath("git.exe");
+        if (git is not null)
+        {
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(git)); // ...\Git\cmd -> ...\Git
+            var b = Path.Combine(root ?? "", "usr", "bin", "bash.exe");
+            if (File.Exists(b))
+                return b;
+        }
+
+        // 最后用 where.exe 让 Windows 在 PATH 里解析 bash
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("where.exe", "bash")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (p is not null)
+            {
+                var first = p.StandardOutput.ReadLine()?.Trim();
+                if (!string.IsNullOrEmpty(first) && File.Exists(first))
+                    return first;
+            }
+        }
+        catch { /* 忽略 */ }
+
+        return FindOnPath("bash.exe") ?? FindOnPath("bash");
     }
 
     /// <summary>在 PATH 中查找 pwsh（PowerShell 7）；找不到返回 null。</summary>
