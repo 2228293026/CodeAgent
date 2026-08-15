@@ -84,8 +84,9 @@ public static class ShellRunner
         {
             return shell.ToLowerInvariant() switch
             {
-                "powershell" => ("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command {QuotePwsh(command)}"),
-                "pwsh" => ("pwsh", $"-NoProfile -ExecutionPolicy Bypass -Command {QuotePwsh(command)}"),
+                // 注意：不能把命令包进 & '...'——PowerShell 会把整串当命令名查找导致 CommandNotFound
+                "powershell" => ("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command {command}"),
+                "pwsh" => ("pwsh", $"-NoProfile -ExecutionPolicy Bypass -Command {command}"),
                 "bash" => (FindGitBash() ?? "bash.exe", $"-lc {QuoteBash(command)}"),
                 _ => ("cmd.exe", $"/d /c {command}"),
             };
@@ -109,7 +110,7 @@ public static class ShellRunner
             @"C:\msys64\usr\bin\bash.exe",
             @"C:\msys32\usr\bin\bash.exe",
         };
-        return candidates.FirstOrDefault(File.Exists);
+        return candidates.FirstOrDefault(File.Exists) ?? FindOnPath("bash.exe");
     }
 
     /// <summary>在 PATH 中查找 pwsh（PowerShell 7）；找不到返回 null。</summary>
@@ -137,8 +138,6 @@ public static class ShellRunner
     }
 
     private static string QuoteBash(string s) => "'" + s.Replace("'", "'\\''") + "'";
-
-    private static string QuotePwsh(string s) => "& '" + s.Replace("'", "''") + "'";
 
     private static async Task<string> ReadWithCap(StreamReader reader, int cap, CancellationToken ct)
     {
