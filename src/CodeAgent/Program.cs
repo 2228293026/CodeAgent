@@ -259,29 +259,8 @@ internal static class Program
         using var cts = new CancellationTokenSource();
         _activeTurn = cts;
 
-        // ESC 监听：运行期间按 ESC 取消本轮（stdin 被重定向时 KeyAvailable 不可用，自动降级）
-        var stop = false;
-        var watcher = Task.Run(() =>
-        {
-            try
-            {
-                while (!stop && !cts.IsCancellationRequested)
-                {
-                    if (!stop && Console.KeyAvailable)
-                    {
-                        var key = Console.ReadKey(intercept: true);
-                        if (!stop && key.Key == ConsoleKey.Escape)
-                            cts.Cancel();
-                    }
-                    Thread.Sleep(20);
-                }
-            }
-            catch
-            {
-                // 非交互终端（管道/重定向）忽略
-            }
-        });
-
+        // 注意：这里不能再跑后台 ReadKey 监听（比如 ESC 取消）——ReadKey 会消费用户按键，
+        // 回合期间/结束时竞态会吞掉用户输入。取消只走 Ctrl+C（CancelKeyPress 不碰输入流）。
         try
         {
             return await action(cts.Token);
@@ -293,9 +272,6 @@ internal static class Program
         finally
         {
             _activeTurn = null;
-            cts.Cancel();
-            stop = true; // 让监听立即退出，避免吞掉接下来的用户输入（回车/字符）
-            try { watcher.Wait(TimeSpan.FromMilliseconds(300)); } catch { /* 忽略 */ }
         }
     }
 
