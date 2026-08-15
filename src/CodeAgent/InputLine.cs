@@ -50,6 +50,12 @@ public static class InputLine
     private static void AnsiCol1() => Ansi("1G");
     private static void AnsiErase() => Ansi("K");
 
+    /// <summary>读取终端宽度；失败返回 0（未知）。</summary>
+    private static int TryWindowWidth()
+    {
+        try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
+    }
+
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true)
     {
@@ -67,6 +73,14 @@ public static class InputLine
         var session = new List<string>(History);
         var idx = session.Count;
         var promptPlain = prompt.TrimStart('\n');
+
+        var winW = TryWindowWidth();
+        var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
+        string Fit(string s)
+        {
+            var max = Math.Max(10, winW - 4);
+            return s.Length > max ? s[..max] + "…" : s;
+        }
 
         var menuOpen = false;
         var modePicker = false;
@@ -94,7 +108,7 @@ public static class InputLine
 
         void RedrawInput()
         {
-            if (menuOpen && ansi)
+            if (menuOpen && ansiOk)
             {
                 AnsiCol1();
                 AnsiErase();
@@ -111,13 +125,13 @@ public static class InputLine
             if (menuOffset > menuItems.Count - menuShown)
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
             Console.WriteLine();
-            Console.WriteLine(Header());
+            Console.WriteLine(Fit(Header()));
             for (int i = 0; i < menuShown; i++)
             {
                 var k = menuOffset + i;
-                Console.WriteLine($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}");
+                Console.WriteLine(Fit($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
             }
-            Console.WriteLine(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : "");
+            Console.WriteLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
             Console.WriteLine();
             Console.Write(promptPlain + buf);
         }
@@ -152,14 +166,14 @@ public static class InputLine
                 AnsiUp(up);
                 AnsiCol1();
                 AnsiErase();
-                Console.Write($"  {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}");
+                Console.Write(Fit($"  {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
                 AnsiDown(up);
             }
             var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
             AnsiUp(up2);
             AnsiCol1();
             AnsiErase();
-            Console.Write($"  > {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}");
+            Console.Write(Fit($"  > {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}"));
             AnsiDown(up2);
             AnsiCol1();
             Console.Write(promptPlain + buf);
@@ -170,12 +184,12 @@ public static class InputLine
         void PrintListScroll()
         {
             Console.WriteLine();
-            Console.WriteLine(Header());
+            Console.WriteLine(Fit(Header()));
             if (menuItems.Count == 0)
                 Console.WriteLine("  (no matching item)");
             else
                 for (int i = 0; i < Math.Min(menuItems.Count, MenuMaxRows); i++)
-                    Console.WriteLine($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}");
+                    Console.WriteLine(Fit($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}"));
             if (menuItems.Count > MenuMaxRows)
                 Console.WriteLine("  ... (more)");
             Console.WriteLine();
@@ -188,13 +202,13 @@ public static class InputLine
                 return;
             menuIndex = newIndex;
             Console.WriteLine();
-            Console.WriteLine($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}");
+            Console.WriteLine(Fit($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
             Console.Write(promptPlain + buf);
         }
 
         void PrintMenu()
         {
-            if (ansi)
+            if (ansiOk)
                 PrintListAnsi();
             else
                 PrintListScroll();
@@ -211,7 +225,7 @@ public static class InputLine
                 .ToList();
             if (menuIndex >= menuItems.Count)
                 menuIndex = menuItems.Count - 1;
-            if (ansi)
+            if (ansiOk)
             {
                 EraseMenuAnsi();
                 PrintListAnsi();
@@ -247,7 +261,7 @@ public static class InputLine
             menuOpen = false;
             menuItems.Clear();
             menuIndex = -1;
-            if (ansi)
+            if (ansiOk)
                 EraseMenuAnsi();
         }
 
@@ -257,7 +271,7 @@ public static class InputLine
                 return;
             var oldIndex = menuIndex;
             menuIndex = newIndex;
-            if (ansi)
+            if (ansiOk)
                 MoveSelectionAnsi(oldIndex, newIndex);
             else
                 MoveSelectionScroll(newIndex);
@@ -376,7 +390,7 @@ public static class InputLine
                     if (menuOpen)
                     {
                         CloseMenu();
-                        if (!ansi)
+                        if (!ansiOk)
                         {
                             Console.WriteLine("  (menu closed)");
                             Console.Write(promptPlain + buf);
