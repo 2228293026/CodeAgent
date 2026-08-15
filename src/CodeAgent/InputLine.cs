@@ -220,35 +220,43 @@ public static class InputLine
         void PrintListScroll()
         {
             menuListShown = true;
-            Console.WriteLine();
-            Console.WriteLine(Fit(Header()));
+            var sb = new StringBuilder();
+            sb.AppendLine();
+            sb.AppendLine(Fit(Header()));
             if (menuItems.Count == 0)
-                Console.WriteLine("  (no matching item)");
+            {
+                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
+            }
             else
+            {
                 for (int i = 0; i < Math.Min(menuItems.Count, MenuMaxRows); i++)
-                    Console.WriteLine(Fit($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}"));
-            if (menuItems.Count > MenuMaxRows)
-                Console.WriteLine("  ... (more)");
-            Console.WriteLine();
-            Console.Write(promptPlain + buf);
+                    sb.AppendLine(Fit($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}"));
+                if (menuItems.Count > MenuMaxRows)
+                    sb.AppendLine("  ... (more)");
+            }
+            sb.AppendLine();
+            sb.Append(promptPlain + buf);
+            Console.Write(sb.ToString());
         }
 
         // 过滤变化时单行显示匹配结果（滚动式，避免每次按键整块重打导致卡顿）
         void PrintFilterScroll()
         {
+            var sb = new StringBuilder();
             if (menuItems.Count == 0)
             {
-                Console.WriteLine("  (no matching item, press Esc to close)");
+                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
             }
             else
             {
                 var names = string.Join(" ", menuItems.Take(6).Select(m => m.Name));
                 if (menuItems.Count > 6)
                     names += " …";
-                Console.WriteLine($"  [{buf}] {menuItems.Count} 项匹配: {names}");
+                sb.AppendLine(Fit($"  [{buf}] {menuItems.Count} 项匹配: {names}"));
             }
-            Console.WriteLine();
-            Console.Write(promptPlain + buf);
+            sb.AppendLine();
+            sb.Append(promptPlain + buf);
+            Console.Write(sb.ToString());
         }
 
         void MoveSelectionScroll(int newIndex)
@@ -256,9 +264,11 @@ public static class InputLine
             if (menuItems.Count == 0)
                 return;
             menuIndex = newIndex;
-            Console.WriteLine();
-            Console.WriteLine(Fit($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
-            Console.Write(promptPlain + buf);
+            var sb = new StringBuilder();
+            sb.AppendLine();
+            sb.AppendLine(Fit($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
+            sb.Append(promptPlain + buf);
+            Console.Write(sb.ToString());
         }
 
         void PrintMenu()
@@ -327,6 +337,7 @@ public static class InputLine
             menuOpen = false;
             menuItems.Clear();
             menuIndex = -1;
+            modePicker = false; // 必须重置，否则后续 / 命令菜单永远打不开
             if (ansiOk)
             {
                 EraseMenuAnsi();
