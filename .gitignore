@@ -1,0 +1,7 @@
+bin/
+obj/
+.codeagent/
+*.user
+.vs/
+# 本地配置可能含 API Key，不入库（参考 codeagent.example.json）
+codeagent.json

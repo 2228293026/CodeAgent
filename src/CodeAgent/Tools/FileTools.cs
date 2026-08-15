@@ -1,0 +1,255 @@
+using System.Text;
+using System.Text.Json.Nodes;
+
+namespace CodeAgent.Tools;
+
+/// <summary>读取文件内容（带行号，支持 offset/limit）。</summary>
+public sealed class ReadFileTool : ITool
+{
+    public string Name => "read_file";
+    public string Description => "读取文件内容（带行号）。用 offset/limit 只读需要的部分，避免一次性读取大文件。";
+    public JsonObject Parameters { get; } = new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["path"] = new JsonObject { ["type"] = "string", ["description"] = "文件路径，相对工作区根目录" },
+            ["offset"] = new JsonObject { ["type"] = "integer", ["description"] = "起始行号（1 起，默认 1）" },
+            ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（默认 300，最大 5000）" },
+        },
+        ["required"] = new JsonArray("path"),
+    };
+
+    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
+    {
+        var path = ToolArgs.GetString(args, "path");
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ToolException("缺少必填参数 path");
+
+        var full = ctx.Workspace.Resolve(path);
+        if (!File.Exists(full))
+            throw new ToolException($"文件不存在: {path}");
+
+        var info = new FileInfo(full);
+        if (info.Length > 20 * 1024 * 1024)
+            throw new ToolException($"文件过大（{info.Length / 1024 / 1024} MB），请用 offset/limit 分段读取。");
+
+        var offset = Math.Max(1, ToolArgs.GetInt(args, "offset", 1));
+        var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
+
+        var lines = await File.ReadAllLinesAsync(full, ct);
+        if (lines.Length == 0)
+            return $"(文件 {path} 为空)";
+
+        var start = Math.Min(offset - 1, lines.Length);
+        var count = Math.Min(limit, lines.Length - start);
+        var sb = new StringBuilder();
+        for (int i = 0; i < count; i++)
+            sb.AppendLine($"{start + i + 1}\t{lines[start + i]}");
+
+        var head = count < lines.Length ? $"（{path} 共 {lines.Length} 行，已显示 {start + 1}-{start + count}）\n" : "";
+        return head + sb.ToString().TrimEnd();
+    }
+}
+
+/// <summary>创建/覆盖写入文件。</summary>
+public sealed class WriteFileTool : ITool
+{
+    public string Name => "write_file";
+    public string Description => "创建新文件或整体覆盖已有文件。写完整内容，包括所有行。";
+    public JsonObject Parameters { get; } = new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["path"] = new JsonObject { ["type"] = "string", ["description"] = "目标文件路径，相对工作区根目录" },
+            ["content"] = new JsonObject { ["type"] = "string", ["description"] = "文件完整内容" },
+            ["create_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "自动创建父目录（默认 true）" },
+        },
+        ["required"] = new JsonArray("path", "content"),
+    };
+
+    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
+    {
+        var path = ToolArgs.GetString(args, "path");
+        var content = ToolArgs.GetString(args, "content");
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ToolException("缺少必填参数 path");
+
+        var full = ctx.Workspace.Resolve(path);
+        if (ToolArgs.GetBool(args, "create_dirs", true))
+        {
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+        }
+
+        // 记录撤销信息（大文件不记录，避免内存占用）
+        var hadFile = File.Exists(full);
+        string? old = null;
+        if (hadFile)
+        {
+            var info = new FileInfo(full);
+            if (info.Length <= 4 * 1024 * 1024)
+                old = await File.ReadAllTextAsync(full, ct);
+        }
+        ctx.Undo.Push(new UndoEntry
+        {
+            Kind = "write",
+            Path = full,
+            OldText = old,
+            HadFile = hadFile,
+        });
+
+        try
+        {
+            await File.WriteAllTextAsync(full, content, ct);
+        }
+        catch (IOException ex)
+        {
+            throw new ToolException($"写入失败: {ex.Message}");
+        }
+
+        var bytes = Encoding.UTF8.GetByteCount(content);
+        return $"已写入 {bytes:N0} 字节 → {path}";
+    }
+}
+
+/// <summary>在已有文件中做精确文本替换（类似补丁）。</summary>
+public sealed class EditFileTool : ITool
+{
+    public string Name => "edit_file";
+    public string Description => "在已有文件中精确替换一段文本（old_string 必须逐字匹配，含缩进与空白）。改动前必须先 read_file 确认原文。";
+    public JsonObject Parameters { get; } = new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["path"] = new JsonObject { ["type"] = "string", ["description"] = "文件路径，相对工作区根目录" },
+            ["old_string"] = new JsonObject { ["type"] = "string", ["description"] = "要替换的原文（精确匹配）" },
+            ["new_string"] = new JsonObject { ["type"] = "string", ["description"] = "替换后的文本" },
+            ["replace_all"] = new JsonObject { ["type"] = "boolean", ["description"] = "出现多次时是否全部替换（默认 false，重复会报错）" },
+        },
+        ["required"] = new JsonArray("path", "old_string", "new_string"),
+    };
+
+    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
+    {
+        var path = ToolArgs.GetString(args, "path");
+        var oldString = ToolArgs.GetString(args, "old_string");
+        var newString = ToolArgs.GetString(args, "new_string");
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ToolException("缺少必填参数 path");
+        if (string.IsNullOrEmpty(oldString))
+            throw new ToolException("缺少必填参数 old_string");
+
+        var full = ctx.Workspace.Resolve(path);
+        if (!File.Exists(full))
+            throw new ToolException($"文件不存在: {path}");
+
+        var text = await File.ReadAllTextAsync(full, ct);
+        var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
+
+        string result;
+        int count;
+        int firstIdx;
+
+        if (replaceAll)
+        {
+            count = TextUtil.CountOccurrences(text, oldString);
+            result = text.Replace(oldString, newString);
+            firstIdx = text.IndexOf(oldString, StringComparison.Ordinal);
+        }
+        else
+        {
+            firstIdx = text.IndexOf(oldString, StringComparison.Ordinal);
+            if (firstIdx < 0)
+                throw new ToolException(
+                    $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---");
+            count = TextUtil.CountOccurrences(text, oldString);
+            if (count > 1)
+                throw new ToolException(
+                    $"old_string 在文件中出现 {count} 次，请扩大上下文使其唯一，或设置 replace_all=true。");
+            result = text.Remove(firstIdx, oldString.Length).Insert(firstIdx, newString);
+        }
+
+        ctx.Undo.Push(new UndoEntry
+        {
+            Kind = "edit",
+            Path = full,
+            OldText = oldString, // 撤销时恢复目标（文件中的原文）
+            NewText = newString, // 当前文件中的新文本
+        });
+        await File.WriteAllTextAsync(full, result, ct);
+
+        var startLine = text.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
+        var before = firstIdx >= 0 ? TextUtil.TruncateLine(text.Substring(Math.Max(0, firstIdx - 60), Math.Min(120, text.Length - Math.Max(0, firstIdx))), 120) : "";
+        return $"已替换 {count} 处 → {path}（修改起始行 {startLine}）";
+    }
+}
+
+/// <summary>列出目录树。</summary>
+public sealed class ListDirectoryTool : ITool
+{
+    public string Name => "list_directory";
+    public string Description => "列出目录结构（目录带 / 后缀）。跳过构建/缓存/版本控制目录。";
+    public JsonObject Parameters { get; } = new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["path"] = new JsonObject { ["type"] = "string", ["description"] = "目录路径，默认工作区根目录" },
+            ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度（默认 2，最大 5）" },
+        },
+    };
+
+    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
+    {
+        var path = ToolArgs.GetString(args, "path");
+        var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
+
+        var root = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(path) ? null : path);
+        if (!Directory.Exists(root))
+            throw new ToolException($"目录不存在: {path}");
+
+        var sb = new StringBuilder();
+        var emitted = 0;
+        const int cap = 800;
+
+        void Walk(string dir, int level)
+        {
+            if (level > depth || emitted >= cap)
+                return;
+            var indent = new string(' ', level * 2);
+            try
+            {
+                foreach (var d in Directory.EnumerateDirectories(dir)
+                             .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                {
+                    var name = Path.GetFileName(d);
+                    if (SkipDirs.IsSkipped(name))
+                        continue;
+                    sb.AppendLine(indent + name + "/");
+                    emitted++;
+                    Walk(d, level + 1);
+                }
+                foreach (var f in Directory.EnumerateFiles(dir)
+                             .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine(indent + Path.GetFileName(f));
+                    emitted++;
+                }
+            }
+            catch (UnauthorizedAccessException) { }
+            catch (IOException) { }
+        }
+
+        await Task.Yield();
+        Walk(root, 0);
+
+        if (emitted == 0)
+            return $"(目录为空或全部被跳过: {path})";
+        var head = string.IsNullOrWhiteSpace(path) ? $"工作区根目录 {ctx.Workspace.Root}\n" : $"目录 {path}\n";
+        return head + sb.ToString().TrimEnd() + (emitted >= cap ? "\n…(条目过多，已截断)" : "");
+    }
+}

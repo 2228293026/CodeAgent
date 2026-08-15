@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>codeagent</AssemblyName>
+    <RootNamespace>CodeAgent</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>0.1.0</Version>
+    <Description>LLM 驱动的编码助手 CLI（支持 OpenAI 兼容协议与 Anthropic Claude）</Description>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,50 @@
+{
+  "provider": "openai",
+  "providers": {
+    "openai": {
+      "type": "openai",
+      "baseUrl": "https://api.openai.com/v1",
+      "model": "gpt-4o",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "maxTokens": 8192,
+      "temperature": 0.2
+    },
+    "deepseek": {
+      "type": "openai",
+      "baseUrl": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "apiKeyEnv": "DEEPSEEK_API_KEY"
+    },
+    "qwen": {
+      "type": "openai",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen3-coder-plus",
+      "apiKeyEnv": "DASHSCOPE_API_KEY"
+    },
+    "ollama": {
+      "type": "openai",
+      "baseUrl": "http://localhost:11434/v1",
+      "model": "qwen2.5-coder:7b",
+      "apiKey": "ollama"
+    },
+    "hitmargin": {
+      "type": "openai",
+      "baseUrl": "https://api.hitmargin.workers.dev/v1",
+      "model": "poolside/laguna-s-2.1:free",
+      "apiKey": "dummy"
+    },
+    "anthropic": {
+      "type": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "apiKeyEnv": "ANTHROPIC_API_KEY"
+    }
+  },
+  "maxToolIterations": 20,
+  "maxHistoryChars": 160000,
+  "allowCommands": true,
+  "confirmCommands": false,
+  "shell": "",
+  "saveSessions": true,
+  "streamOutput": true,
+  "showToolCalls": true
+}
