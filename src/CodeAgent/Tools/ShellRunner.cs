@@ -62,11 +62,11 @@ public static class ShellRunner
         return (proc.ExitCode, sb.ToString().TrimEnd());
     }
 
-    /// <summary>Windows 下自动检测 Git Bash；找不到时返回空（由调用方退回 cmd）。</summary>
+    /// <summary>Windows 下自动检测：优先 Git Bash，没有则用 PowerShell（Windows 必有）。</summary>
     public static string AutoShell()
     {
-        if (OperatingSystem.IsWindows() && FindGitBash() is not null)
-            return "bash";
+        if (OperatingSystem.IsWindows())
+            return FindGitBash() is not null ? "bash" : "powershell";
         return "";
     }
 
@@ -84,7 +84,8 @@ public static class ShellRunner
         {
             return shell.ToLowerInvariant() switch
             {
-                "powershell" or "pwsh" => ("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command {QuotePwsh(command)}"),
+                "powershell" => ("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command {QuotePwsh(command)}"),
+                "pwsh" => ("pwsh", $"-NoProfile -ExecutionPolicy Bypass -Command {QuotePwsh(command)}"),
                 "bash" => (FindGitBash() ?? "bash.exe", $"-lc {QuoteBash(command)}"),
                 _ => ("cmd.exe", $"/d /c {command}"),
             };
@@ -109,6 +110,30 @@ public static class ShellRunner
             @"C:\msys32\usr\bin\bash.exe",
         };
         return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>在 PATH 中查找 pwsh（PowerShell 7）；找不到返回 null。</summary>
+    public static string? FindPwsh() => FindOnPath("pwsh.exe") ?? FindOnPath("pwsh");
+
+    private static string? FindOnPath(string name)
+    {
+        var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        foreach (var dir in path.Split(Path.PathSeparator))
+        {
+            if (dir.Length == 0)
+                continue;
+            try
+            {
+                var full = Path.Combine(dir.Trim(), name);
+                if (File.Exists(full))
+                    return full;
+            }
+            catch
+            {
+                // 忽略无权限访问的目录
+            }
+        }
+        return null;
     }
 
     private static string QuoteBash(string s) => "'" + s.Replace("'", "'\\''") + "'";
@@ -170,6 +195,47 @@ public sealed class BashTool : ITool
             return "用户已取消命令执行。";
 
         var (_, output) = await ShellRunner.RunAsync("bash", command, cwd, timeout, ct);
+        return output;
+    }
+}
+
+/// <summary>在 PowerShell 中执行命令（优先 pwsh 7，否则 Windows PowerShell 5.1）。</summary>
+public sealed class PowerShellTool : ITool
+{
+    public string Name => "powershell";
+    public string Description => "在 PowerShell（优先 pwsh 7，否则 Windows PowerShell 5.1）中执行命令，支持管道、对象与 .NET 集成。";
+
+    public JsonObject Parameters { get; } = new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的 PowerShell 命令" },
+            ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
+            ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+        },
+        ["required"] = new JsonArray("command"),
+    };
+
+    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
+    {
+        var command = ToolArgs.GetString(args, "command");
+        if (string.IsNullOrWhiteSpace(command))
+            throw new ToolException("缺少必填参数 command");
+
+        if (!ctx.Config.AllowCommands)
+            return "命令执行被禁用（config.AllowCommands = false）。";
+
+        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 60), 1, 300);
+        var cwdArg = ToolArgs.GetString(args, "cwd");
+        var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
+
+        if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
+            return "用户已取消命令执行。";
+
+        // Windows：无 pwsh 7 时用系统自带的 Windows PowerShell 5.1；其他平台需要 pwsh
+        var shell = OperatingSystem.IsWindows() && ShellRunner.FindPwsh() is null ? "powershell" : "pwsh";
+        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct);
         return output;
     }
 }
