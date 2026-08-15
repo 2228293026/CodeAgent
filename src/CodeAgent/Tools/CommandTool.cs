@@ -10,10 +10,7 @@ public sealed class CommandTool : ITool
 {
     public string Name => "run_command";
     public string Description =>
-        "在工作区中执行 shell 命令并返回输出（stdout+stderr）与退出码。用于运行构建、测试、git 等。" +
-        (AllowCommandsEnabled ? "" : " 注意：配置中 AllowCommands=false，此工具不可用。");
-
-    private static bool AllowCommandsEnabled = true;
+        "在工作区中执行 shell 命令并返回输出（stdout+stderr）与退出码。用于运行构建、测试、git 等（受配置 allowCommands 控制）。";
 
     public JsonObject Parameters { get; } = new()
     {
@@ -26,11 +23,6 @@ public sealed class CommandTool : ITool
         },
         ["required"] = new JsonArray("command"),
     };
-
-    public CommandTool()
-    {
-        AllowCommandsEnabled = true;
-    }
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
