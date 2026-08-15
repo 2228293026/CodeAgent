@@ -40,7 +40,23 @@ public static class InputLine
 
     private static readonly List<string> History = LoadHistory();
     private const int MaxHistory = 100;
-    private const int MenuMaxRows = 10;
+    private const int MenuMaxRows = 8;
+
+    /// <summary>行补齐：优先使用终端宽度，读取失败时回退 80 列（避免菜单绘制被异常静默吞掉）。</summary>
+    private static string PadLine(string line)
+    {
+        int w;
+        try
+        {
+            w = Console.WindowWidth;
+        }
+        catch
+        {
+            w = 80;
+        }
+        w = Math.Clamp(w, 40, 200);
+        return line.PadRight(w - 1);
+    }
 
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式选择菜单。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null)
@@ -90,12 +106,12 @@ public static class InputLine
                 {
                     // 空态提示：让用户知道菜单已打开但没有匹配项
                     Console.SetCursorPosition(0, menuTop);
-                    Console.Write("  (no matching command, press Esc to close)".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.Write(PadLine("  (no matching command, press Esc to close)"));
                     Console.SetCursorPosition(0, inputRow);
                     Console.Write(promptPlain + buf);
                     return;
                 }
-                var shown = Math.Min(menuItems.Count, Math.Min(MenuMaxRows, Math.Max(1, Console.WindowHeight - menuTop - 1)));
+                var shown = Math.Min(menuItems.Count, MenuMaxRows);
                 for (int i = 0; i < shown; i++)
                 {
                     var (name, desc) = menuItems[i];
@@ -106,20 +122,24 @@ public static class InputLine
                         Console.BackgroundColor = ConsoleColor.DarkGray;
                         Console.ForegroundColor = ConsoleColor.White;
                     }
-                    Console.Write(line.PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.Write(PadLine(line));
                     Console.ResetColor();
                 }
                 if (menuItems.Count > shown)
                 {
                     Console.SetCursorPosition(0, menuTop + shown);
-                    Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
-                    Console.SetCursorPosition(0, menuTop + shown);
-                    Console.Write("  ... (more)");
+                    Console.Write(PadLine("  ... (more)"));
                 }
                 Console.SetCursorPosition(0, inputRow);
                 Console.Write(promptPlain + buf);
             }
-            catch { /* 终端异常时忽略 */ }
+            catch
+            {
+                // 兜底：无法定位光标时，直接换行打印菜单项（功能可用，只是不优雅）
+                for (int i = 0; i < Math.Min(menuItems.Count, MenuMaxRows); i++)
+                    Console.WriteLine($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}");
+                Console.Write("\r" + promptPlain + buf);
+            }
         }
 
         void CloseMenu()
@@ -128,11 +148,11 @@ public static class InputLine
                 return;
             try
             {
-                var shown = Math.Min(menuItems.Count, Math.Min(MenuMaxRows, Math.Max(1, Console.WindowHeight - menuTop - 1)));
+                var shown = Math.Min(menuItems.Count, MenuMaxRows);
                 for (int i = 0; i < shown; i++)
                 {
                     Console.SetCursorPosition(0, menuTop + i);
-                    Console.Write(new string(' ', Math.Max(1, Console.WindowWidth - 1)));
+                    Console.Write(PadLine(""));
                 }
                 Console.SetCursorPosition(0, inputRow);
                 Console.Write(promptPlain + buf + new string(' ', 4));
