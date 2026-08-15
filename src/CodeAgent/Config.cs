@@ -28,6 +28,17 @@ public sealed class ProviderOptions
     public double Temperature { get; set; } = 0.2;
 }
 
+/// <summary>自定义模式定义（codeagent.json 的 modes 列表项）。</summary>
+public sealed class AgentModeConfig
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string SystemPrompt { get; set; } = AgentConfig.DefaultSystemPrompt;
+
+    /// <summary>可用工具名列表；空/省略 = 全部工具。</summary>
+    public List<string>? Tools { get; set; }
+}
+
 /// <summary>全局配置，对应 codeagent.json。</summary>
 public sealed class AgentConfig
 {
@@ -66,6 +77,9 @@ public sealed class AgentConfig
 
     /// <summary>是否对模型回复做 Markdown 渲染（代码块/行内代码/加粗/标题，默认开启）。</summary>
     public bool RenderMarkdown { get; set; } = true;
+
+    /// <summary>自定义工作模式列表（/mode 可切换，配合内置模式）。</summary>
+    public List<AgentModeConfig> Modes { get; set; } = new();
 
     /// <summary>系统提示词。</summary>
     public string SystemPrompt { get; set; } = DefaultSystemPrompt;
