@@ -6,8 +6,8 @@ public sealed record AgentMode(string Name, string Description, string SystemPro
 /// <summary>内置工作模式目录（/mode 命令用）。</summary>
 public static class Modes
 {
-    /// <summary>只读/搜索类工具（规划、解释、审查模式可用）。</summary>
-    private static readonly string[] ReadOnlyTools = ["read_file", "list_directory", "glob", "grep"];
+    /// <summary>只读模式可用工具（读/搜索 + stop 结束对话）。</summary>
+    private static readonly string[] ReadOnlyTools = ["read_file", "list_directory", "glob", "grep", "stop"];
 
     public static readonly AgentMode[] All =
     [

@@ -450,8 +450,8 @@ internal static class Program
                 break;
 
             case "/tools":
-                Console.WriteLine("可用工具:");
-                foreach (var t in tools.ToToolSpecs())
+                Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}）:");
+                foreach (var t in agent.ToolsForMode())
                     Console.WriteLine($"  {t.Name} — {t.Description}");
                 break;
 

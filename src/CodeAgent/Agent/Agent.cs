@@ -338,7 +338,7 @@ public sealed class Agent
         ex.StatusCode is int code ? $"HTTP {code}" : "网络错误";
 
     /// <summary>当前模式下暴露给模型的工具（按模式过滤）。</summary>
-    private IReadOnlyList<ToolSpec> ToolsForMode()
+    public IReadOnlyList<ToolSpec> ToolsForMode()
     {
         var all = _tools.ToToolSpecs();
         if (CurrentMode.AllowedTools is not { } allowed)
