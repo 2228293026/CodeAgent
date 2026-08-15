@@ -74,8 +74,8 @@ public static class InputLine
             Console.Write("\r" + promptPlain + buf);
         }
 
-        // 滚动式菜单：整块往下打印，任何终端都能显示
-        void PrintMenuAndInput()
+        // 完整列表：仅在打开/过滤变化时打印（编号 1-9，数字键可直接选中）
+        void PrintMenuList()
         {
             Console.WriteLine();
             Console.WriteLine(modePicker
@@ -88,12 +88,22 @@ public static class InputLine
             else
             {
                 for (int i = 0; i < Math.Min(menuItems.Count, MenuMaxRows); i++)
-                    Console.WriteLine($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}");
+                    Console.WriteLine($"  {i + 1}) {menuItems[i].Name,-16} {menuItems[i].Desc}");
                 if (menuItems.Count > MenuMaxRows)
                     Console.WriteLine("  ... (more)");
             }
             Console.WriteLine();
             Console.Write(promptPlain + buf);
+        }
+
+        // 选中行：方向键/Tab 时只打印一行，避免整块菜单刷屏
+        void PrintSelection()
+        {
+            if (menuIndex >= 0 && menuIndex < menuItems.Count)
+            {
+                Console.WriteLine($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}");
+                Console.Write(promptPlain + buf);
+            }
         }
 
         void RefreshMenu()
@@ -107,7 +117,7 @@ public static class InputLine
                 .ToList();
             if (menuIndex >= menuItems.Count)
                 menuIndex = menuItems.Count - 1;
-            PrintMenuAndInput();
+            PrintMenuList();
             lastFilter = pat;
         }
 
@@ -121,7 +131,7 @@ public static class InputLine
             if (picker)
             {
                 menuItems = [.. modes ?? []];
-                PrintMenuAndInput();
+                PrintMenuList();
                 lastFilter = "/";
             }
             else
@@ -196,7 +206,7 @@ public static class InputLine
                     if (menuOpen && menuItems.Count > 0)
                     {
                         menuIndex = menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count;
-                        PrintMenuAndInput();
+                        PrintSelection();
                     }
                     else if (idx > 0)
                     {
@@ -210,7 +220,7 @@ public static class InputLine
                     if (menuOpen && menuItems.Count > 0)
                     {
                         menuIndex = menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count;
-                        PrintMenuAndInput();
+                        PrintSelection();
                     }
                     else if (idx < session.Count)
                     {
@@ -226,13 +236,35 @@ public static class InputLine
                     else if (menuOpen && menuItems.Count > 1)
                     {
                         menuIndex = menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count;
-                        PrintMenuAndInput();
+                        PrintSelection();
+                    }
+                    break;
+
+                case ConsoleKey.D1 or ConsoleKey.D2 or ConsoleKey.D3 or ConsoleKey.D4 or ConsoleKey.D5
+                    or ConsoleKey.D6 or ConsoleKey.D7 or ConsoleKey.D8 or ConsoleKey.D9:
+                    // 数字键直接选中执行（菜单编号 1-9）
+                    if (menuOpen && menuItems.Count > 0)
+                    {
+                        var n = key.Key - ConsoleKey.D1 + 1;
+                        if (n <= menuItems.Count)
+                        {
+                            var sel = menuItems[n - 1].Name;
+                            CloseMenu();
+                            Console.WriteLine();
+                            var submit = modePicker ? $"/mode {sel}" : sel;
+                            Remember(submit);
+                            return submit;
+                        }
                     }
                     break;
 
                 case ConsoleKey.Escape:
                     if (menuOpen)
+                    {
                         CloseMenu();
+                        Console.WriteLine("  (menu closed)");
+                        Console.Write(promptPlain + buf);
+                    }
                     break;
 
                 case ConsoleKey.M when IsShortcut(key) && modes is { Count: > 0 }:
