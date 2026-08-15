@@ -329,22 +329,17 @@ public sealed class Agent
                         ClearSpinner();
                         _streamedThisCall = true;
                     }
+                    FlushReasoning(); // 内容到达：先输出缓冲的思考内容
                     _renderer?.Append(delta);
                 }, reason =>
                 {
-                    // 思考内容：以暗色实时显示（DeepSeek-R1 / Claude extended thinking）
-                    if (!_streamedThisCall)
-                    {
-                        ClearSpinner();
-                        _streamedThisCall = true;
-                    }
-                    SafeColor.Foreground(ConsoleColor.DarkGray);
-                    Console.Write(reason);
-                    SafeColor.Reset();
+                    // 思考内容：先缓冲，不打断「⏳ 思考中… Xs」计时器；内容到达或回合结束时统一暗色输出
+                    _reasoningBuf.Append(reason);
                 }, ct), ct);
 
             if (!_streamedThisCall)
                 ClearSpinner();
+            FlushReasoning(); // 无内容（如工具调用轮）也把思考内容输出
             return result;
         }
         catch
@@ -392,6 +387,7 @@ public sealed class Agent
 
     private System.Threading.CancellationTokenSource? _spinnerCts;
     private readonly System.Diagnostics.Stopwatch _spinnerSw = new();
+    private readonly System.Text.StringBuilder _reasoningBuf = new();
 
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
@@ -423,6 +419,20 @@ public sealed class Agent
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
         Console.Write("\r" + new string(' ', 40) + "\r");
+    }
+
+    /// <summary>输出缓冲的思考内容（暗色）与思考用时（计时器保持常驻，思考结束才落盘显示）。</summary>
+    private void FlushReasoning()
+    {
+        if (_reasoningBuf.Length == 0)
+            return;
+        Console.WriteLine();
+        SafeColor.Foreground(ConsoleColor.DarkGray);
+        Console.Write(_reasoningBuf.ToString());
+        SafeColor.Reset();
+        Console.WriteLine();
+        Console.WriteLine($"⏱ 思考用时 {TurnThinkingSeconds:F1}s");
+        _reasoningBuf.Clear();
     }
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
