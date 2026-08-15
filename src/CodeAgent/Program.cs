@@ -1,3 +1,4 @@
+using System.Reflection;
 using CodeAgent.Providers;
 using CodeAgent.Tools;
 using AgentClass = CodeAgent.Agent.Agent;
@@ -9,6 +10,11 @@ internal static class Program
 {
     /// <summary>当前正在运行的一轮请求（供 Ctrl+C / ESC 取消）。</summary>
     private static CancellationTokenSource? _activeTurn;
+
+    private static string InformationalVersion =>
+        Assembly.GetEntryAssembly()?
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion?.Split('+')[0] ?? "0.0.0";
 
     private static async Task<int> Main(string[] args)
     {
@@ -51,6 +57,9 @@ internal static class Program
                 case "--setup":
                     setup = true;
                     break;
+                case "-v" or "--version":
+                    Console.WriteLine($"codeagent {InformationalVersion}");
+                    return 0;
                 case "-h" or "--help":
                     PrintHelp();
                     return 0;
@@ -187,7 +196,7 @@ internal static class Program
                 }
                 else
                 {
-                    HandleCommand(line, config, ref opts, agent, ref providerInst);
+                    HandleCommand(line, config, ref opts, agent, ref providerInst, tools);
                     continue;
                 }
             }
@@ -308,7 +317,8 @@ internal static class Program
         AgentConfig config,
         ref ProviderOptions opts,
         AgentClass agent,
-        ref IAgentProvider providerInst)
+        ref IAgentProvider providerInst,
+        ToolRegistry tools)
     {
         var (cmd, rest) = SplitCommand(line);
 
@@ -434,6 +444,18 @@ internal static class Program
                     $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens");
                 break;
 
+            case "/tools":
+                Console.WriteLine("可用工具:");
+                foreach (var t in tools.ToToolSpecs())
+                    Console.WriteLine($"  {t.Name} — {t.Description}");
+                break;
+
+            case "/providers":
+                Console.WriteLine("已配置的 Provider:");
+                foreach (var kv in config.Providers)
+                    Console.WriteLine($"  {kv.Key} ({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}");
+                break;
+
             case "/help":
                 PrintReplHelp();
                 break;
@@ -466,6 +488,8 @@ internal static class Program
               /export [名]     导出会话为 Markdown
               /stats           显示 token 用量统计
               /retry           重新执行上一条请求
+              /tools           列出可用工具
+              /providers       显示已配置的 Provider
               /exit, /quit     退出
             用法:
               codeagent "帮我给项目写个 README"    一次性任务
@@ -477,6 +501,7 @@ internal static class Program
               --cwd <目录>         切换工作目录
               --init               生成示例配置 codeagent.json
               --setup              交互式配置供应商并生成 codeagent.json
+              -v, --version        显示版本号
             """);
     }
 
