@@ -133,7 +133,7 @@ REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `
 
 运行中按 `Ctrl+C` 或 `Esc` 可**优雅取消当前轮**（中断后历史会自动回滚为合法状态，可继续对话）；空闲时按 `Ctrl+C` 退出程序。
 
-交互输入：`↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`），`Tab` 补全 `/` 命令，`Ctrl+L` 或 `/cls` 清屏，提示符显示当前模式（如 `[debug] codeagent>`）。
+交互输入：`↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`），`Tab` 补全 `/` 命令，`Ctrl+L` 或 `/cls` 清屏。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
 
 ## 工具一览
 

@@ -155,7 +155,7 @@ internal static class Program
         // 列出可用模型模式
         if (listModels)
         {
-            await PrintModelsAsync(providerInst);
+            await PrintModelsAsync(providerInst, opts.Model);
             agent.Close();
             return 0;
         }
@@ -188,7 +188,7 @@ internal static class Program
         PrintBanner(config, opts, agent);
         while (true)
         {
-            var line = InputLine.Read($"\n[{agent.CurrentMode.Name}] codeagent> ");
+            var line = InputLine.Read(PromptFor(opts, agent));
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
             line = line.Trim();
@@ -294,6 +294,17 @@ internal static class Program
         }
     }
 
+    /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
+    private static string PromptFor(ProviderOptions opts, AgentClass agent)
+    {
+        var model = opts.Model;
+        var slash = model.LastIndexOf('/');
+        if (slash >= 0)
+            model = model[(slash + 1)..];
+        var dir = new DirectoryInfo(Environment.CurrentDirectory).Name;
+        return $"\n[{agent.CurrentMode.Name}|{model}] {dir}> ";
+    }
+
     /// <summary>输出最终答复：若已流式打印过则只补换行，否则整体打印。</summary>
     private static void PrintResult(string result, bool streamed, bool prefixNewline)
     {
@@ -308,15 +319,30 @@ internal static class Program
         }
     }
 
-    /// <summary>列出当前 Provider 的可用模型。</summary>
-    private static async Task PrintModelsAsync(IAgentProvider provider)
+    /// <summary>列出当前 Provider 的可用模型，并用 * 标记当前配置的模型。</summary>
+    private static async Task PrintModelsAsync(IAgentProvider provider, string? currentModel)
     {
         try
         {
             var models = await provider.ListModelsAsync(CancellationToken.None);
             Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个）:");
+            var marked = false;
             foreach (var m in models)
-                Console.WriteLine($"  {m}");
+            {
+                if (string.Equals(m, currentModel, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"  {m}  *");
+                    marked = true;
+                }
+                else
+                {
+                    Console.WriteLine($"  {m}");
+                }
+            }
+            if (marked)
+                Console.WriteLine("  * = 当前配置的模型");
+            else if (!string.IsNullOrWhiteSpace(currentModel))
+                Console.WriteLine($"  （当前配置的模型不在列表中: {currentModel}）");
         }
         catch (Exception ex)
         {
@@ -515,7 +541,7 @@ internal static class Program
                 break;
 
             case "/models":
-                PrintModelsAsync(providerInst).GetAwaiter().GetResult();
+                PrintModelsAsync(providerInst, opts.Model).GetAwaiter().GetResult();
                 break;
 
             case "/help":
