@@ -346,18 +346,21 @@ internal static class Program
             var models = await provider.ListModelsAsync(CancellationToken.None);
             Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个）:");
             var marked = false;
-            foreach (var m in models)
+            for (int i = 0; i < models.Count; i++)
             {
+                var m = models[i];
+                var num = $"{i + 1}) ";
                 if (string.Equals(m, currentModel, StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine($"  {m}  *");
+                    Console.WriteLine($"  {num}{m}  *");
                     marked = true;
                 }
                 else
                 {
-                    Console.WriteLine($"  {m}");
+                    Console.WriteLine($"  {num}{m}");
                 }
             }
+            Console.WriteLine("  提示: /model <编号> 可直接切换");
             if (marked)
                 Console.WriteLine("  * = 当前配置的模型");
             else if (!string.IsNullOrWhiteSpace(currentModel))
@@ -427,7 +430,30 @@ internal static class Program
                 }
                 else
                 {
-                    opts.Model = rest.Trim();
+                    var modelArg = rest.Trim();
+                    // 数字参数：从 /models 列表按编号选择（如 /model 5）
+                    if (int.TryParse(modelArg, out var idx) && idx >= 1)
+                    {
+                        try
+                        {
+                            var models = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                            if (idx <= models.Count)
+                            {
+                                modelArg = models[idx - 1];
+                            }
+                            else
+                            {
+                                Console.WriteLine($"无效编号（可选 1-{models.Count}，/models 查看）");
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"获取模型列表失败: {ex.Message}");
+                            break;
+                        }
+                    }
+                    opts.Model = modelArg;
                     try
                     {
                         providerInst = ProviderFactory.Create(config);
