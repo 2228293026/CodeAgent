@@ -93,7 +93,6 @@ public static class InputLine
         var menuShown = 0;   // 可见项数
         var menuOffset = 0;  // 可见窗口在列表中的起点
         var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
-        var menuEverPainted = false; // 菜单块是否已建立（首次在输入行下方建立，之后原地刷新）
         var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
 
         Console.Write(prompt);
@@ -334,7 +333,6 @@ public static class InputLine
             if (ansiOk)
             {
                 EraseMenuAnsi(menuRows);
-                menuEverPainted = false; // 下次打开重新在输入行下方建立块
             }
             menuListShown = false;
         }
