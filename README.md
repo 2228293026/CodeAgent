@@ -14,6 +14,7 @@
 - 🧠 上下文自动摘要：历史超限时先用 LLM 压缩最早对话，失败才回退丢弃旧消息
 - 🎭 多工作模式：`/mode` 切换 code / plan / explain / review，只读模式自动隐藏并拦截写工具
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
+- ⌨️ 终端 TUI：命令历史（↑/↓，持久化）、TAB 补全、行内编辑、Ctrl+L 清屏、`[模式]` 提示符
 - 🔧 内置 10 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `bash` / `powershell` / `stop`（命令类工具自动选用 Git Bash / PowerShell）
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
@@ -130,6 +131,8 @@ REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `
 会话管理：`/save <名>` 把当前对话保存为命名快照（`.codeagent/sessions/`），`/load <名>` 恢复；`/export [名]` 把当前（或指定）会话导出为 Markdown 记录；`/stats` 显示本轮 token 用量；`/retry` 重新执行上一条请求。
 
 运行中按 `Ctrl+C` 或 `Esc` 可**优雅取消当前轮**（中断后历史会自动回滚为合法状态，可继续对话）；空闲时按 `Ctrl+C` 退出程序。
+
+交互输入：`↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`），`Tab` 补全 `/` 命令，`Ctrl+L` 或 `/cls` 清屏，提示符显示当前模式（如 `[debug] codeagent>`）。
 
 ## 工具一览
 

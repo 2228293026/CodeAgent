@@ -176,8 +176,7 @@ internal static class Program
         PrintBanner(config, opts, agent);
         while (true)
         {
-            Console.Write("\ncodeagent> ");
-            var line = Console.ReadLine();
+            var line = InputLine.Read($"\n[{agent.CurrentMode.Name}] codeagent> ");
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
             line = line.Trim();
@@ -333,6 +332,18 @@ internal static class Program
             case "/clear":
                 agent.Reset();
                 Console.WriteLine("已清空对话历史。");
+                break;
+
+            case "/cls":
+                try
+                {
+                    Console.Clear();
+                    PrintBanner(config, opts, agent);
+                }
+                catch
+                {
+                    // 重定向终端不支持清屏
+                }
                 break;
 
             case "/model":
@@ -497,6 +508,7 @@ internal static class Program
             命令:
               /help            显示本帮助
               /clear           清空对话历史
+              /cls             清空屏幕（或按 Ctrl+L）
               /model [名称]    查看或切换模型
               /config          显示当前配置
               /session         显示会话日志路径
