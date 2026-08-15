@@ -86,6 +86,15 @@ public static class InputLine
         {
             try
             {
+                if (menuItems.Count == 0)
+                {
+                    // 空态提示：让用户知道菜单已打开但没有匹配项
+                    Console.SetCursorPosition(0, menuTop);
+                    Console.Write("  (no matching command, press Esc to close)".PadRight(Math.Max(1, Console.WindowWidth - 1)));
+                    Console.SetCursorPosition(0, inputRow);
+                    Console.Write(promptPlain + buf);
+                    return;
+                }
                 var shown = Math.Min(menuItems.Count, Math.Min(MenuMaxRows, Math.Max(1, Console.WindowHeight - menuTop - 1)));
                 for (int i = 0; i < shown; i++)
                 {
@@ -137,18 +146,17 @@ public static class InputLine
 
         void RefreshMenu()
         {
+            // 全角 ／ 视同 / 参与匹配
+            var pat = buf.ToString();
+            if (pat.StartsWith('／'))
+                pat = "/" + pat[1..];
             menuItems = Commands
-                .Where(c => c.Name.StartsWith(buf.ToString(), StringComparison.OrdinalIgnoreCase))
+                .Where(c => c.Name.StartsWith(pat, StringComparison.OrdinalIgnoreCase))
                 .Select(c => c)
                 .ToList();
             if (menuIndex >= menuItems.Count)
                 menuIndex = Math.Max(0, menuItems.Count - 1);
-            if (menuItems.Count == 0)
-            {
-                CloseMenu();
-                return;
-            }
-            PaintMenu();
+            PaintMenu(); // 0 匹配时也绘制空态提示，不静默关闭
         }
 
         void OpenMenu(bool picker)
@@ -170,8 +178,8 @@ public static class InputLine
         {
             var key = Console.ReadKey(intercept: true);
 
-            // 命令菜单：输入不再以 / 开头 → 关闭；模式选择器不受输入影响
-            if (menuOpen && !modePicker && !buf.ToString().StartsWith('/'))
+            // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
+            if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
                 CloseMenu();
 
             switch (key.Key)
@@ -291,7 +299,7 @@ public static class InputLine
                             CloseMenu();
                         buf.Append(key.KeyChar);
                         RedrawInput();
-                        if (!modePicker && buf.ToString().StartsWith('/'))
+                        if (!modePicker && SlashLike(buf.ToString()))
                         {
                             if (!menuOpen)
                                 OpenMenu(false);
@@ -318,6 +326,9 @@ public static class InputLine
         return (m & ConsoleModifiers.Alt) != 0 ||
                ((m & ConsoleModifiers.Control) != 0 && (m & ConsoleModifiers.Shift) != 0);
     }
+
+    /// <summary>输入是否以斜杠开头（兼容中文输入法的全角 ／）。</summary>
+    private static bool SlashLike(string s) => s.StartsWith('/') || s.StartsWith('／');
 
     private static void Remember(string line)
     {
