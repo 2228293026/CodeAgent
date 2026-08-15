@@ -3,8 +3,9 @@ using System.Text;
 namespace CodeAgent;
 
 /// <summary>
-/// 终端输入行：↑/↓ 历史、斜杠命令菜单（**滚动式**：仅用 WriteLine/换行，不依赖光标定位与颜色，
-/// 在任何终端都能工作）、TAB 补全、退格、Ctrl+L 清屏、Alt+M/U/D/N 快捷键。
+/// 终端输入行：斜杠命令菜单（**原地选中**：方向键让 ">" 在列表内上下移动，无颜色依赖；
+/// 光标定位失败时自动退回滚动式）、数字键 1-9 直接执行、↑/↓ 历史、TAB 补全、
+/// 退格、Ctrl+L 清屏、Alt+M/U/D/N 快捷键。
 /// stdin 被重定向（管道/文件）时自动回退为 Console.ReadLine，保证脚本兼容。
 /// </summary>
 public static class InputLine
@@ -41,6 +42,32 @@ public static class InputLine
     private const int MaxHistory = 100;
     private const int MenuMaxRows = 8;
 
+    /// <summary>行补齐：优先使用终端宽度，读取失败时回退 80 列。</summary>
+    private static string PadLine(string line)
+    {
+        int w;
+        try
+        {
+            w = Console.WindowWidth;
+        }
+        catch
+        {
+            w = 80;
+        }
+        w = Math.Clamp(w, 40, 200);
+        return line.PadRight(w - 1);
+    }
+
+    private static int CursorTopSafe()
+    {
+        try { return Console.CursorTop; } catch { return 0; }
+    }
+
+    private static bool SetPos(int left, int top)
+    {
+        try { Console.SetCursorPosition(left, top); return true; } catch { return false; }
+    }
+
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式选择菜单。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null)
     {
@@ -65,46 +92,101 @@ public static class InputLine
         var menuIndex = -1;
         var lastFilter = "";
 
-        Console.Write(prompt);
+        // 原地菜单状态（SetCursorPosition 失败时退回滚动式）
+        var inPlace = true;
+        var menuTop = 0;     // 菜单区域起始行
+        var menuShown = 0;   // 可见项数
+        var menuOffset = 0;  // 可见窗口在列表中的起点
+        var inputRow = 0;    // 输入行位置（原地模式）
 
-        // 输入行重绘：仅用 \r，不依赖光标定位
-        void RedrawInput()
+        Console.Write(prompt);
+        inputRow = CursorTopSafe();
+
+        // —— 绘制助手（局部函数） ——
+
+        void ScrollInput()
         {
             Console.Write("\r" + promptPlain + buf + new string(' ', 4));
             Console.Write("\r" + promptPlain + buf);
         }
 
-        // 完整列表：仅在打开/过滤变化时打印（编号 1-9，数字键可直接选中）
-        void PrintMenuList()
+        void RedrawInput()
+        {
+            if (menuOpen && inPlace)
+            {
+                if (!SetPos(0, inputRow))
+                {
+                    inPlace = false;
+                    ScrollInput();
+                    return;
+                }
+                Console.Write(promptPlain + buf + new string(' ', 4));
+                if (!SetPos(0, inputRow))
+                {
+                    inPlace = false;
+                    ScrollInput();
+                    return;
+                }
+                Console.Write(promptPlain + buf);
+                return;
+            }
+            ScrollInput();
+        }
+
+        int RowOf(int k) => menuTop + 1 + k - menuOffset; // 列表项绝对下标 -> 屏幕行
+
+        void PrintListInPlace()
+        {
+            menuShown = Math.Min(menuItems.Count, MenuMaxRows);
+            if (menuOffset > menuItems.Count - menuShown)
+                menuOffset = Math.Max(0, menuItems.Count - menuShown);
+            var header = modePicker
+                ? "  Modes (1-9 switch, up/down select, Esc close):"
+                : "  Commands (1-9 run, up/down select, Enter run, Esc close):";
+            if (!SetPos(0, menuTop)) { inPlace = false; ScrollList(); return; }
+            Console.Write(PadLine(header));
+            for (int i = 0; i < menuShown; i++)
+            {
+                if (!SetPos(0, menuTop + 1 + i)) { inPlace = false; ScrollList(); return; }
+                var k = menuOffset + i;
+                Console.Write(PadLine($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
+            }
+            for (int i = menuShown; i < MenuMaxRows; i++)
+            {
+                if (!SetPos(0, menuTop + 1 + i)) break;
+                Console.Write(PadLine(""));
+            }
+            var moreRow = menuTop + 1 + MenuMaxRows;
+            if (!SetPos(0, moreRow)) { inPlace = false; ScrollList(); return; }
+            Console.Write(PadLine(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
+            inputRow = moreRow + 1;
+            if (!SetPos(0, inputRow)) { inPlace = false; ScrollList(); return; }
+            Console.Write(promptPlain + buf);
+        }
+
+        void ScrollList()
         {
             Console.WriteLine();
             Console.WriteLine(modePicker
                 ? "  Modes (1-9 switch, up/down select, Esc close):"
                 : "  Commands (1-9 run, up/down select, Enter run, Esc close):");
             if (menuItems.Count == 0)
-            {
                 Console.WriteLine("  (no matching item)");
-            }
             else
-            {
                 for (int i = 0; i < Math.Min(menuItems.Count, MenuMaxRows); i++)
-                    Console.WriteLine($"  {i + 1}) {menuItems[i].Name,-16} {menuItems[i].Desc}");
-                if (menuItems.Count > MenuMaxRows)
-                    Console.WriteLine("  ... (more)");
-            }
+                    Console.WriteLine($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}");
+            if (menuItems.Count > MenuMaxRows)
+                Console.WriteLine("  ... (more)");
             Console.WriteLine();
             Console.Write(promptPlain + buf);
         }
 
-        // 选中行：方向键/Tab 时换行打印，避免与提示符同行，也避免整块菜单刷屏
-        void PrintSelection()
+        void PrintMenu()
         {
-            if (menuIndex >= 0 && menuIndex < menuItems.Count)
-            {
-                Console.WriteLine(); // 先换行，确保选中行从新的一行开始
-                Console.WriteLine($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}");
-                Console.Write(promptPlain + buf);
-            }
+            if (inPlace)
+                PrintListInPlace();
+            else
+                ScrollList();
         }
 
         void RefreshMenu()
@@ -118,7 +200,7 @@ public static class InputLine
                 .ToList();
             if (menuIndex >= menuItems.Count)
                 menuIndex = menuItems.Count - 1;
-            PrintMenuList();
+            PrintMenu();
             lastFilter = pat;
         }
 
@@ -132,11 +214,13 @@ public static class InputLine
             if (picker)
             {
                 menuItems = [.. modes ?? []];
-                PrintMenuList();
+                menuTop = CursorTopSafe() + 1;
+                PrintMenu();
                 lastFilter = "/";
             }
             else
             {
+                menuTop = CursorTopSafe() + 1;
                 RefreshMenu();
             }
         }
@@ -146,6 +230,52 @@ public static class InputLine
             menuOpen = false;
             menuItems.Clear();
             menuIndex = -1;
+            if (inPlace)
+            {
+                for (int i = 0; i <= MenuMaxRows + 1; i++)
+                {
+                    if (!SetPos(0, menuTop + i))
+                        break;
+                    Console.Write(PadLine(""));
+                }
+                if (!SetPos(0, inputRow))
+                {
+                    inPlace = false;
+                    ScrollInput();
+                    return;
+                }
+                Console.Write(promptPlain + buf);
+            }
+        }
+
+        void MoveSelection(int newIndex)
+        {
+            if (menuItems.Count == 0)
+                return;
+            var oldIndex = menuIndex;
+            menuIndex = newIndex;
+            if (inPlace && oldIndex >= 0)
+            {
+                if (menuIndex < menuOffset || menuIndex >= menuOffset + menuShown)
+                {
+                    // 窗口滚动：重绘整块列表
+                    menuOffset = Math.Clamp(menuIndex, 0, Math.Max(0, menuItems.Count - menuShown));
+                    PrintListInPlace();
+                    return;
+                }
+                if (oldIndex >= menuOffset && oldIndex < menuOffset + menuShown && SetPos(0, RowOf(oldIndex)))
+                    Console.Write(PadLine($"  {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
+                if (SetPos(0, RowOf(menuIndex)))
+                    Console.Write(PadLine($"  > {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
+                SetPos(0, inputRow);
+                Console.Write(promptPlain + buf);
+            }
+            else
+            {
+                Console.WriteLine();
+                Console.WriteLine($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}");
+                Console.Write(promptPlain + buf);
+            }
         }
 
         void OnTextChanged()
@@ -166,6 +296,7 @@ public static class InputLine
             }
         }
 
+        // —— 主输入循环 ——
         while (true)
         {
             var key = Console.ReadKey(intercept: true);
@@ -206,8 +337,7 @@ public static class InputLine
                 case ConsoleKey.UpArrow:
                     if (menuOpen && menuItems.Count > 0)
                     {
-                        menuIndex = menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count;
-                        PrintSelection();
+                        MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
                     }
                     else if (idx > 0)
                     {
@@ -220,8 +350,7 @@ public static class InputLine
                 case ConsoleKey.DownArrow:
                     if (menuOpen && menuItems.Count > 0)
                     {
-                        menuIndex = menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count;
-                        PrintSelection();
+                        MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
                     }
                     else if (idx < session.Count)
                     {
@@ -236,8 +365,7 @@ public static class InputLine
                         OpenMenu(false);
                     else if (menuOpen && menuItems.Count > 1)
                     {
-                        menuIndex = menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count;
-                        PrintSelection();
+                        MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
                     }
                     break;
 
@@ -263,8 +391,11 @@ public static class InputLine
                     if (menuOpen)
                     {
                         CloseMenu();
-                        Console.WriteLine("  (menu closed)");
-                        Console.Write(promptPlain + buf);
+                        if (!inPlace)
+                        {
+                            Console.WriteLine("  (menu closed)");
+                            Console.Write(promptPlain + buf);
+                        }
                     }
                     break;
 
@@ -292,6 +423,9 @@ public static class InputLine
 
                 case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
                     try { Console.Clear(); } catch { /* 忽略 */ }
+                    inputRow = 0;
+                    menuTop = 1;
+                    inPlace = true;
                     RedrawInput();
                     if (menuOpen)
                         RefreshMenu();
