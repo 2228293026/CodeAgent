@@ -24,4 +24,7 @@ public interface IAgentProvider
         IReadOnlyList<ToolSpec> tools,
         Action<string>? onText,
         CancellationToken ct);
+
+    /// <summary>列出当前 Provider 可用的模型 ID（--models / /models 用）。</summary>
+    Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct);
 }

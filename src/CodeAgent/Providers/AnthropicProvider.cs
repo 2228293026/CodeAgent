@@ -302,6 +302,27 @@ public sealed class AnthropicProvider : IAgentProvider
         };
     }
 
+    /// <summary>列出 Anthropic 可用模型（GET /v1/models）。</summary>
+    public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/v1/models");
+        req.Headers.Add("x-api-key", _apiKey);
+        req.Headers.Add("anthropic-version", "2023-06-01");
+        using var resp = await _http.SendAsync(req, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {OpenAiProvider.Truncate(body, 400)}");
+
+        var ids = new List<string>();
+        foreach (var m in JsonNode.Parse(body)?["data"]?.AsArray() ?? [])
+        {
+            var id = m?["id"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(id))
+                ids.Add(id);
+        }
+        return ids;
+    }
+
     private JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)
     {
         var arr = new JsonArray();

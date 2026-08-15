@@ -107,6 +107,7 @@ CODEGENT_PROVIDER=anthropic codeagent
 ```bash
 codeagent "把 Program.cs 里的 TODO 都实现掉"
 codeagent --cwd ../some-project "解释一下这个项目怎么构建"
+codeagent --models                    # 列出当前 Provider 的可用模型
 ```
 
 ### 交互模式
@@ -120,7 +121,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/mode` `/exit`。
+REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/models` `/mode` `/exit`。
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 

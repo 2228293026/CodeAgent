@@ -33,6 +33,7 @@ internal static class Program
         string? configPath = null, provider = null, model = null, cwd = null;
         var init = false;
         var setup = false;
+        var listModels = false;
         var positional = new List<string>();
 
         for (int i = 0; i < args.Length; i++)
@@ -56,6 +57,9 @@ internal static class Program
                     break;
                 case "--setup":
                     setup = true;
+                    break;
+                case "--models":
+                    listModels = true;
                     break;
                 case "-v" or "--version":
                     Console.WriteLine($"codeagent {InformationalVersion}");
@@ -147,6 +151,14 @@ internal static class Program
         }
 
         var agent = new AgentClass(config, providerInst, tools);
+
+        // 列出可用模型模式
+        if (listModels)
+        {
+            await PrintModelsAsync(providerInst);
+            agent.Close();
+            return 0;
+        }
 
         // 一次请求模式
         if (positional.Count > 0)
@@ -293,6 +305,22 @@ internal static class Program
         else
         {
             Console.WriteLine((prefixNewline ? "\n" : "") + result);
+        }
+    }
+
+    /// <summary>列出当前 Provider 的可用模型。</summary>
+    private static async Task PrintModelsAsync(IAgentProvider provider)
+    {
+        try
+        {
+            var models = await provider.ListModelsAsync(CancellationToken.None);
+            Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个）:");
+            foreach (var m in models)
+                Console.WriteLine($"  {m}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"⚠ 无法获取模型列表: {ex.Message}");
         }
     }
 
@@ -486,6 +514,10 @@ internal static class Program
                 }
                 break;
 
+            case "/models":
+                PrintModelsAsync(providerInst).GetAwaiter().GetResult();
+                break;
+
             case "/help":
                 PrintReplHelp();
                 break;
@@ -522,6 +554,7 @@ internal static class Program
               /retry           重新执行上一条请求
               /tools           列出可用工具
               /providers       显示已配置的 Provider
+              /models          列出当前 Provider 的可用模型
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /exit, /quit     退出
             用法:
@@ -534,6 +567,7 @@ internal static class Program
               --cwd <目录>         切换工作目录
               --init               生成示例配置 codeagent.json
               --setup              交互式配置供应商并生成 codeagent.json
+              --models             列出当前 Provider 的可用模型
               -v, --version        显示版本号
             """);
     }

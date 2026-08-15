@@ -44,7 +44,7 @@ public sealed class OpenAiProvider : IAgentProvider
             key = Environment.GetEnvironmentVariable(env);
             if (string.IsNullOrWhiteSpace(key))
                 throw new InvalidOperationException(
-                    $"未找到 API Key：请在 codeagent.json 中设置 apiKey，或设置环境变量 {env}。");
+                    $"未找到 API Key：请在 codeagent.json 中设置 apiKey，或设置环境变量 {env}。（可先运行 codeagent --setup 配置供应商）");
         }
         return key.Trim();
     }
@@ -261,6 +261,26 @@ public sealed class OpenAiProvider : IAgentProvider
             Text = text.Length > 0 ? text.ToString() : null,
             ToolCalls = toolCalls,
         };
+    }
+
+    /// <summary>列出 OpenAI 兼容服务的可用模型（GET /models）。</summary>
+    public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/models");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+        using var resp = await _http.SendAsync(req, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {Truncate(body, 400)}");
+
+        var ids = new List<string>();
+        foreach (var m in JsonNode.Parse(body)?["data"]?.AsArray() ?? [])
+        {
+            var id = m?["id"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(id))
+                ids.Add(id);
+        }
+        return ids;
     }
 
     private static JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)
