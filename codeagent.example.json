@@ -48,7 +48,7 @@
   "streamOutput": true,
   "showToolCalls": true,
   "renderMarkdown": true,
-  "tuiAnsi": true,
+  "tuiAnsi": false,
   "thinkingEffort": "off",
   "modes": [
     {

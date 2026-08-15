@@ -78,8 +78,8 @@ public sealed class AgentConfig
     /// <summary>是否对模型回复做 Markdown 渲染（代码块/行内代码/加粗/标题，默认开启）。</summary>
     public bool RenderMarkdown { get; set; } = true;
 
-    /// <summary>是否用 ANSI 转义做菜单原地渲染（方向键高亮移动，默认开）；老式终端乱码时设为 false 退回滚动式。</summary>
-    public bool TuiAnsi { get; set; } = true;
+    /// <summary>是否用 ANSI 转义做菜单原地渲染（方向键高亮移动）；默认 false 使用滚动式（兼容性最好），支持 ANSI 的终端可设为 true。</summary>
+    public bool TuiAnsi { get; set; } = false;
 
     /// <summary>模型思考强度（reasoning effort）：off / low / medium / high，默认 off（不启用）。</summary>
     public string ThinkingEffort { get; set; } = "off";

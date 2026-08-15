@@ -74,7 +74,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "streamOutput": true           // 流式输出模型回复（逐字打印）
   "showToolCalls": true          // 终端实时显示工具调用过程
   "renderMarkdown": true         // 模型回复 Markdown 渲染（代码块/标题等）
-  "tuiAnsi": true                // 菜单 ANSI 原地渲染（老式终端乱码时设 false）
+  "tuiAnsi": false               // 菜单滚动式渲染（默认，兼容性最好）；支持 ANSI 的终端可设 true 用原地高亮
   "thinkingEffort": "off"        // 模型思考强度 off/low/medium/high（推理模型生效）
 }
 ```

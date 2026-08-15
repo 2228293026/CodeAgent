@@ -93,6 +93,7 @@ public static class InputLine
         var menuOffset = 0;  // 可见窗口在列表中的起点
         var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
         var menuEverPainted = false; // 菜单块是否已建立（首次在输入行下方建立，之后原地刷新）
+        var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
 
         Console.Write(prompt);
 
@@ -218,6 +219,7 @@ public static class InputLine
         // —— 滚动式渲染（tuiAnsi=false 时的兜底） ——
         void PrintListScroll()
         {
+            menuListShown = true;
             Console.WriteLine();
             Console.WriteLine(Fit(Header()));
             if (menuItems.Count == 0)
@@ -227,6 +229,24 @@ public static class InputLine
                     Console.WriteLine(Fit($"  {(i == menuIndex ? ">" : " ")} {menuItems[i].Name,-16} {menuItems[i].Desc}"));
             if (menuItems.Count > MenuMaxRows)
                 Console.WriteLine("  ... (more)");
+            Console.WriteLine();
+            Console.Write(promptPlain + buf);
+        }
+
+        // 过滤变化时单行显示匹配结果（滚动式，避免每次按键整块重打导致卡顿）
+        void PrintFilterScroll()
+        {
+            if (menuItems.Count == 0)
+            {
+                Console.WriteLine("  (no matching item, press Esc to close)");
+            }
+            else
+            {
+                var names = string.Join(" ", menuItems.Take(6).Select(m => m.Name));
+                if (menuItems.Count > 6)
+                    names += " …";
+                Console.WriteLine($"  [{buf}] {menuItems.Count} 项匹配: {names}");
+            }
             Console.WriteLine();
             Console.Write(promptPlain + buf);
         }
@@ -271,9 +291,13 @@ public static class InputLine
                     EraseMenuAnsi();
                     PrintListAnsi();
                 }
+                else if (!menuListShown)
+                {
+                    PrintListScroll(); // 打开：完整编号列表
+                }
                 else
                 {
-                    PrintListScroll();
+                    PrintFilterScroll(); // 过滤变化：单行匹配结果
                 }
             }
             lastFilter = pat;
@@ -308,6 +332,7 @@ public static class InputLine
                 EraseMenuAnsi();
                 menuEverPainted = false; // 下次打开重新在输入行下方建立块
             }
+            menuListShown = false;
         }
 
         void MoveSelection(int newIndex)
