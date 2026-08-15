@@ -216,7 +216,7 @@ internal static class Program
                 }
                 else
                 {
-                    HandleCommand(line, config, ref opts, agent, ref providerInst, tools);
+                    HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
                     continue;
                 }
             }
@@ -385,6 +385,7 @@ internal static class Program
     private static void HandleCommand(
         string line,
         AgentConfig config,
+        string configPath,
         ref ProviderOptions opts,
         AgentClass agent,
         ref IAgentProvider providerInst,
@@ -584,7 +585,17 @@ internal static class Program
                     if (v is "off" or "low" or "medium" or "high")
                     {
                         config.ThinkingEffort = v;
-                        Console.WriteLine($"思考强度已设为: {v}（将应用于后续请求）");
+                        // 持久化到配置文件，重启后仍然生效
+                        try
+                        {
+                            var savePath = string.IsNullOrWhiteSpace(configPath) ? "codeagent.json" : configPath;
+                            AgentConfig.Save(config, savePath);
+                            Console.WriteLine($"思考强度已设为: {v}，已保存到 {savePath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"思考强度已设为: {v}（保存配置失败: {ex.Message}）");
+                        }
                     }
                     else
                     {
