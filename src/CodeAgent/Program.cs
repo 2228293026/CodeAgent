@@ -548,7 +548,18 @@ internal static class Program
                 {
                     Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");
                     Console.WriteLine(Modes.ListText(config));
-                    Console.WriteLine("（提示: 按 Alt+M 可弹出模式菜单快速切换）");
+                    Console.WriteLine("（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）");
+                }
+                else if (rest.Equals("next", StringComparison.OrdinalIgnoreCase))
+                {
+                    // /mode next：循环切换到下一个模式（Shift+Tab 快捷键映射到这里）
+                    var modes = Modes.Build(config);
+                    var idx = modes.FindIndex(m => m.Name.Equals(agent.CurrentMode.Name, StringComparison.OrdinalIgnoreCase));
+                    if (idx < 0)
+                        idx = 0;
+                    var next = modes[(idx + 1) % modes.Count];
+                    agent.SetMode(next);
+                    Console.WriteLine($"已切换模式: {next.Name} — {next.Description}");
                 }
                 else
                 {
@@ -618,6 +629,7 @@ internal static class Program
               --models             列出当前 Provider 的可用模型
               -v, --version        显示版本号
             快捷键:
+              Shift+Tab              切换到下一个模式（/mode next）
               Alt+M / Ctrl+Shift+M   模式切换菜单
               Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）
               Alt+D / Ctrl+Shift+D   查看最近修改的 diff（/diff）

@@ -359,6 +359,21 @@ public static class InputLine
                     }
                     break;
 
+                case ConsoleKey.Tab when (key.Modifiers & ConsoleModifiers.Shift) != 0:
+                    // Shift+Tab：菜单内反向循环选择；菜单外切换到下一个模式
+                    if (menuOpen && menuItems.Count > 1)
+                    {
+                        MoveSelection(menuIndex < 0 ? 0 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
+                    }
+                    else if (!menuOpen)
+                    {
+                        CloseMenu();
+                        Console.WriteLine();
+                        Remember("/mode next");
+                        return "/mode next"; // Shift+Tab：切换 agent 模式
+                    }
+                    break;
+
                 case ConsoleKey.Tab:
                     if (!menuOpen && SlashLike(buf.ToString()))
                         OpenMenu(false);
