@@ -357,6 +357,13 @@ public static class InputLine
 
         void OnTextChanged()
         {
+            if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
+            {
+                // 输入不再以斜杠开头（如退格删掉 /）：关闭并擦除菜单
+                CloseMenu();
+                RedrawInput();
+                return;
+            }
             if (menuOpen && !modePicker)
             {
                 var pat = buf.ToString();
