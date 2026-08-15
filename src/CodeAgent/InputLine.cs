@@ -62,8 +62,8 @@ public static class InputLine
         try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
     }
 
-    /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式。</summary>
-    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true)
+    /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式，initial 为预填文本（取消回合后回填草稿）。</summary>
+    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
     {
         if (Console.IsInputRedirected)
         {
@@ -76,6 +76,8 @@ public static class InputLine
         }
 
         var buf = new StringBuilder();
+        if (!string.IsNullOrEmpty(initial))
+            buf.Append(initial); // 预填：取消回合后把上一条输入恢复到输入框
         var session = new List<string>(History);
         var idx = session.Count;
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）

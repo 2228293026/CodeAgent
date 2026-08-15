@@ -206,10 +206,12 @@ internal static class Program
         }
         catch { /* 管道/重定向环境忽略 */ }
 
+        var pendingDraft = (string?)null; // 取消回合后回填到输入框的草稿
         while (true)
         {
             PrintStatusBar(opts, agent, config.ThinkingEffort);
-            var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi);
+            var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
+            pendingDraft = null;
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
             if (line == InputLine.RecallMarker)
@@ -244,6 +246,12 @@ internal static class Program
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var result = await RunTurnAsync(t => agent.RunAsync(line, t));
                 sw.Stop();
+                if (result.Contains("已取消"))
+                {
+                    // ESC/Ctrl+C 取消本轮：撤回未完成的消息，输入恢复到输入框（可修改重发）
+                    agent.UndoLastTurn();
+                    pendingDraft = line;
+                }
                 if (agent.LastTurnFailed)
                 {
                     // 空回复：红色 ⚠ 明确提示失败
