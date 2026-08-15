@@ -14,7 +14,7 @@
 - 🧠 上下文自动摘要：历史超限时先用 LLM 压缩最早对话，失败才回退丢弃旧消息
 - 🎭 多工作模式：`/mode` 切换 code / plan / explain / review，只读模式自动隐藏并拦截写工具
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
-- 🔧 内置 8 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `stop`
+- 🔧 内置 9 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `bash` / `stop`（命令类工具在 Windows 上自动使用 Git Bash）
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
 - 🛡️ 工作区沙箱：文件工具无法访问工作区之外；命令执行可选逐个确认
@@ -128,7 +128,8 @@ REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `
 | `list_directory` | 列出目录树，跳过构建/缓存目录 |
 | `glob` | 按模式找文件，如 `src/**/*.cs` |
 | `grep` | 正则搜索内容，智能大小写 + 上下文行 |
-| `run_command` | 执行 shell 命令（构建/测试/git），带超时 |
+| `run_command` | 执行 shell 命令（构建/测试/git），带超时；Windows 自动使用 Git Bash |
+| `bash` | 在 bash（Git Bash）中执行命令，支持管道、环境变量与 Unix 工具链 |
 | `stop` | 模型完成任务后结束本轮 |
 
 ## 架构

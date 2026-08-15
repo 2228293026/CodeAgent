@@ -132,6 +132,7 @@ public sealed class ToolRegistry
         registry.Register(new GlobTool());
         registry.Register(new GrepTool());
         registry.Register(new CommandTool());
+        registry.Register(new BashTool());
         registry.Register(new StopTool());
         return registry;
     }
