@@ -148,6 +148,7 @@ public sealed class AnthropicProvider : IAgentProvider
         string thinkingEffort,
         Action<string>? onText,
         Action<string>? onReasoning,
+        Action<string>? onToolFragment,
         CancellationToken ct)
     {
         var system = new StringBuilder();
@@ -281,7 +282,10 @@ public sealed class AnthropicProvider : IAgentProvider
                     {
                         var frag = delta?["partial_json"]?.GetValue<string>() ?? "";
                         if (frag.Length > 0 && toolAccum.TryGetValue(index, out var acc))
+                        {
                             acc.Args.Append(frag);
+                            onToolFragment?.Invoke(frag); // 工具参数计入 ↑ tokens
+                        }
                     }
                     break;
                 }

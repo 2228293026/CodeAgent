@@ -146,6 +146,7 @@ public sealed class OpenAiProvider : IAgentProvider
         string thinkingEffort,
         Action<string>? onText,
         Action<string>? onReasoning,
+        Action<string>? onToolFragment,
         CancellationToken ct)
     {
         var payload = new JsonObject
@@ -273,7 +274,10 @@ public sealed class OpenAiProvider : IAgentProvider
                         acc.Name = name;
                     var frag = tc?["function"]?["arguments"]?.GetValue<string>();
                     if (!string.IsNullOrEmpty(frag))
+                    {
                         acc.Args.Append(frag);
+                        onToolFragment?.Invoke(frag); // 工具参数计入 ↑ tokens
+                    }
                 }
             }
         }

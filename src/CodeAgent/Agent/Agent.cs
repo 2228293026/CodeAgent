@@ -349,6 +349,9 @@ public sealed class Agent
                     // 思考内容：先缓冲，不打断计时器；内容到达或回合结束时统一暗色输出
                     _reasoningBuf.Append(reason);
                     _streamTokens += reason.Length / 4; // 估算已生成 token（spinner ↑ 显示）
+                }, frag =>
+                {
+                    _streamTokens += frag.Length / 4; // 工具调用参数也计入 ↑ tokens
                 }, ct), ct);
 
             if (!_streamedThisCall)
