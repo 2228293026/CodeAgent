@@ -209,18 +209,18 @@ public sealed class OpenAiProvider : IAgentProvider
             }
 
             var delta = root?["choices"]?[0]?["delta"];
-            if (delta is null)
+
+            // usage 可能随任意 chunk 到达（hitmargin 在带 delta 的最后一个 chunk 里返回 usage）
+            if (root?["usage"] is JsonObject u)
             {
-                // usage 通常在最后一个 chunk 到达（choices 为空、顶层带 usage）
-                if (root?["usage"] is JsonObject u)
-                {
-                    if (u["prompt_tokens"] is not null)
-                        inTok = u["prompt_tokens"]!.GetValue<int>();
-                    if (u["completion_tokens"] is not null)
-                        outTok = u["completion_tokens"]!.GetValue<int>();
-                }
-                continue;
+                if (u["prompt_tokens"] is not null)
+                    inTok = u["prompt_tokens"]!.GetValue<int>();
+                if (u["completion_tokens"] is not null)
+                    outTok = u["completion_tokens"]!.GetValue<int>();
             }
+
+            if (delta is null)
+                continue;
 
             var content = delta["content"];
             if (content is not null)
