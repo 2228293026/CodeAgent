@@ -447,6 +447,10 @@ public sealed class Agent
         _reasoningBuf.Clear();
     }
 
+    /// <summary>耗时格式：不足 1 秒用毫秒（避免快工具显示 0.0s），否则显示秒。</summary>
+    private static string FormatDuration(TimeSpan t) =>
+        t.TotalSeconds < 1 ? $"{t.TotalMilliseconds:F0}ms" : $"{t.TotalSeconds:F1}s";
+
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
     private static string SummarizeCall(string name, string argsJson)
     {
@@ -584,7 +588,7 @@ public sealed class Agent
         {
             lock (ConsoleLock)
             {
-                var status = $"  {(isError ? "⚠" : "✔")} {summary} ({sw.Elapsed.TotalSeconds:F1}s)";
+                var status = $"  {(isError ? "⚠" : "✔")} {summary} ({FormatDuration(sw.Elapsed)})";
                 if (isError)
                 {
                     SafeColor.Foreground(ConsoleColor.Red);
