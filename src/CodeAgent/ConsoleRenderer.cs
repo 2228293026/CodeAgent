@@ -8,6 +8,7 @@ public sealed class ConsoleRenderer
     private readonly bool _enabled;
     private readonly StringBuilder _line = new();  // 代码块外的当前行缓冲
     private readonly StringBuilder _code = new();  // 代码块内的当前行缓冲
+    private readonly List<string> _tableBuf = new(); // Markdown 表格行缓冲（表格结束统一按列对齐输出）
     private bool _inCode;
     private int _tickRun; // 当前连续反引号数
 
@@ -42,8 +43,13 @@ public sealed class ConsoleRenderer
         }
         else if (_line.Length > 0)
         {
+            FlushTable();
             EmitLine(_line.ToString());
             _line.Clear();
+        }
+        else
+        {
+            FlushTable();
         }
     }
 
@@ -68,8 +74,16 @@ public sealed class ConsoleRenderer
         if (ch == '\n')
         {
             _line.Append(ch);
-            EmitLine(_line.ToString());
+            var line = _line.ToString();
             _line.Clear();
+            if (line.TrimStart().StartsWith('|'))
+            {
+                // Markdown 表格行：缓冲，表格结束时统一按列对齐输出
+                _tableBuf.Add(line.TrimEnd('\n'));
+                return;
+            }
+            FlushTable(); // 表格结束（遇到非表格行）：先输出对齐的表格
+            EmitLine(line);
         }
         else
         {
@@ -183,5 +197,50 @@ public sealed class ConsoleRenderer
                 cur.Clear();
             }
         }
+    }
+
+    // —— Markdown 表格渲染 ——
+
+    /// <summary>输出缓冲的表格行：按列宽对齐、分隔行用横线、考虑 CJK 显示宽度。</summary>
+    private void FlushTable()
+    {
+        if (_tableBuf.Count == 0)
+            return;
+        var rows = _tableBuf.Select(SplitCells).ToList();
+        var cols = rows.Max(r => r.Count);
+        var widths = new int[cols];
+        foreach (var r in rows)
+            for (int i = 0; i < r.Count; i++)
+                widths[i] = Math.Max(widths[i], DisplayWidth(r[i]));
+        foreach (var r in rows)
+        {
+            var isSep = r.Count > 0 && r.All(c => c.Length > 0 && c.All(ch => ch is '-' or ':' or ' '));
+            var cells = new string[r.Count];
+            for (int i = 0; i < r.Count; i++)
+                cells[i] = isSep ? new string('─', widths[i]) : PadToWidth(r[i], widths[i]);
+            Console.WriteLine("  " + string.Join(" │ ", cells));
+        }
+        _tableBuf.Clear();
+    }
+
+    private static List<string> SplitCells(string row)
+    {
+        var s = row.Trim().TrimStart('|').TrimEnd('|');
+        return s.Split('|').Select(c => c.Trim()).ToList();
+    }
+
+    private static string PadToWidth(string s, int width)
+    {
+        var pad = width - DisplayWidth(s);
+        return pad > 0 ? s + new string(' ', pad) : s;
+    }
+
+    /// <summary>显示宽度：CJK/全角字符按 2 列计算。</summary>
+    private static int DisplayWidth(string s)
+    {
+        int w = 0;
+        foreach (var c in s)
+            w += c > 0x2E7F ? 2 : 1;
+        return w;
     }
 }
