@@ -486,8 +486,8 @@ public static class InputLine
                         var n = key.Key - ConsoleKey.D1 + 1;
                         if (n <= menuItems.Count)
                         {
-                            var idx = Math.Min(menuOffset + n - 1, menuItems.Count - 1); // 窗口编号 -> 列表下标
-                            var sel = menuItems[idx].Name;
+                            var selIdx = Math.Min(menuOffset + n - 1, menuItems.Count - 1); // 窗口编号 -> 列表下标
+                            var sel = menuItems[selIdx].Name;
                             CloseMenu();
                             Console.WriteLine();
                             var submit = modePicker ? $"/mode {sel}" : sel;
