@@ -178,7 +178,7 @@ internal static class Program
                 var result = await RunTurnAsync(t => agent.RunAsync(string.Join(" ", positional), t));
                 PrintResult(result, agent.StreamedLastRun, prefixNewline: false);
                 agent.Close();
-                return 0;
+                return agent.LastTurnFailed ? 1 : 0; // 空回复视为失败，非零退出码供脚本判断
             }
             catch (ProviderException ex)
             {
@@ -235,7 +235,17 @@ internal static class Program
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var result = await RunTurnAsync(t => agent.RunAsync(line, t));
                 sw.Stop();
-                PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
+                if (agent.LastTurnFailed)
+                {
+                    // 空回复：红色 ⚠ 明确提示失败
+                    SafeColor.Foreground(ConsoleColor.Red);
+                    Console.WriteLine("⚠ " + result);
+                    SafeColor.Reset();
+                }
+                else
+                {
+                    PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
+                }
                 PrintTurnSummary(agent, sw.Elapsed);
             }
             catch (ProviderException ex)

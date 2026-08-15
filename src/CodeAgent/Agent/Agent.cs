@@ -76,6 +76,9 @@ public sealed class Agent
     public int LastTurnStartCount { get; private set; }
     public int MessageCount => _messages.Count;
 
+    /// <summary>上一轮是否失败（模型空回复）——REPL 红色提示 / 一次性模式非零退出码。</summary>
+    public bool LastTurnFailed { get; private set; }
+
     /// <summary>切换 Provider（/model 命令用）。</summary>
     public void SetProvider(IAgentProvider provider) => _provider = provider;
 
@@ -236,6 +239,7 @@ public sealed class Agent
         TurnOutputTokens = 0;
         TurnCachedTokens = 0;
         TurnThinkingSeconds = 0;
+        LastTurnFailed = false;
         LastTurnStartCount = _messages.Count; // 记录本轮起点（ESC 撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
@@ -272,7 +276,12 @@ public sealed class Agent
             {
                 _ctx.StopRequested = false;
                 StreamedLastRun = _streamedThisCall;
-                return resp.Text ?? "(模型未返回内容：可能是免费模型限额、上下文过长或速率限制，可 /retry 或换模型重试)";
+                if (resp.Text is null)
+                {
+                    LastTurnFailed = true;
+                    return "(模型未返回内容：可能是免费模型限额、上下文过长或速率限制，可 /retry 或换模型重试)";
+                }
+                return resp.Text;
             }
 
             // 模型在调用工具前若已流式输出文本，补一个换行，避免与后续输出粘连
