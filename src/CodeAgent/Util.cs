@@ -2,6 +2,25 @@ using System.Text.RegularExpressions;
 
 namespace CodeAgent;
 
+/// <summary>安全的颜色输出：终端不支持颜色时静默降级为普通输出（避免绘制/日志崩溃）。</summary>
+public static class SafeColor
+{
+    public static void Foreground(ConsoleColor c)
+    {
+        try { Console.ForegroundColor = c; } catch { /* 不支持颜色 */ }
+    }
+
+    public static void Background(ConsoleColor c)
+    {
+        try { Console.BackgroundColor = c; } catch { /* 不支持颜色 */ }
+    }
+
+    public static void Reset()
+    {
+        try { Console.ResetColor(); } catch { /* 不支持颜色 */ }
+    }
+}
+
 /// <summary>通用小工具。</summary>
 public static class TextUtil
 {

@@ -457,9 +457,9 @@ public sealed class Agent
         {
             lock (ConsoleLock)
             {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
+                SafeColor.Foreground(ConsoleColor.DarkGray);
                 Console.WriteLine($"  🔧 {summary} …");
-                Console.ResetColor();
+                SafeColor.Reset();
             }
         }
         var sw = Stopwatch.StartNew();
@@ -490,27 +490,27 @@ public sealed class Agent
                 var status = $"  {(isError ? "⚠" : "✔")} {summary} ({sw.Elapsed.TotalSeconds:F1}s)";
                 if (isError)
                 {
-                    Console.ForegroundColor = ConsoleColor.Red;
+                    SafeColor.Foreground(ConsoleColor.Red);
                     Console.WriteLine(status);
                     if (output.Length > 0)
                     {
-                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        SafeColor.Foreground(ConsoleColor.Yellow);
                         Console.WriteLine("      " + output);
                     }
-                    Console.ResetColor();
+                    SafeColor.Reset();
                 }
                 else
                 {
-                    Console.ForegroundColor = ConsoleColor.Green;
+                    SafeColor.Foreground(ConsoleColor.Green);
                     Console.WriteLine(status);
-                    Console.ResetColor();
+                    SafeColor.Reset();
                     // run_command 附带输出预览，方便直接看到构建/测试结果
                     if (tc.Name == "run_command" && output.Length > 0)
                     {
-                        Console.ForegroundColor = ConsoleColor.DarkGray;
+                        SafeColor.Foreground(ConsoleColor.DarkGray);
                         var preview = string.Join('\n', output.Split('\n').Take(8));
                         Console.WriteLine("      " + TextUtil.Truncate(preview, 800));
-                        Console.ResetColor();
+                        SafeColor.Reset();
                     }
                 }
             }
