@@ -343,10 +343,12 @@ public sealed class Agent
                     }
                     FlushReasoning(); // 内容到达：先输出缓冲的思考内容
                     _renderer?.Append(delta);
+                    _streamTokens += delta.Length / 4; // 内容 token 计数（spinner 尚在时继续 ↑）
                 }, reason =>
                 {
-                    // 思考内容：先缓冲，不打断「⏳ 思考中… Xs」计时器；内容到达或回合结束时统一暗色输出
+                    // 思考内容：先缓冲，不打断计时器；内容到达或回合结束时统一暗色输出
                     _reasoningBuf.Append(reason);
+                    _streamTokens += reason.Length / 4; // 估算已生成 token（spinner ↑ 显示）
                 }, ct), ct);
 
             if (!_streamedThisCall)
@@ -400,25 +402,31 @@ public sealed class Agent
     private System.Threading.CancellationTokenSource? _spinnerCts;
     private readonly System.Diagnostics.Stopwatch _spinnerSw = new();
     private readonly System.Text.StringBuilder _reasoningBuf = new();
+    private long _streamTokens; // 已流式生成的 token 估算（字符数/4），供 spinner 显示 ↑
+    private static readonly string[] SpinnerFrames = ["⠦", "⠸", "⠼", "⠴", "⠦", "⠇"];
 
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
 
-    /// <summary>思考计时器：实时刷新「⏳ 思考中… X.Xs」（首个输出到达前屏幕无其他输出，安全）。</summary>
+    /// <summary>思考计时器：动画帧 + 已耗时 + ↑ 已生成 tokens（首个输出到达前屏幕无其他输出，安全）。</summary>
     private void ShowSpinner()
     {
         _spinnerSw.Restart();
+        _streamTokens = 0;
         _spinnerCts = new System.Threading.CancellationTokenSource();
         var cts = _spinnerCts;
+        var frame = 0;
         _ = Task.Run(async () =>
         {
             try
             {
                 while (!cts.IsCancellationRequested)
                 {
+                    var f = SpinnerFrames[frame++ % SpinnerFrames.Length];
+                    var tok = _streamTokens >= 1000 ? $"{_streamTokens / 1000.0:F1}K" : _streamTokens.ToString();
                     lock (ConsoleLock)
-                        Console.Write($"\r⏳ 思考中… {_spinnerSw.Elapsed.TotalSeconds:F1}s");
-                    await Task.Delay(200, cts.Token);
+                        Console.Write($"\r{f} 思考中… {_spinnerSw.Elapsed.TotalSeconds:F0}s · ↑ {tok} tokens");
+                    await Task.Delay(120, cts.Token);
                 }
             }
             catch (OperationCanceledException) { }
@@ -430,7 +438,7 @@ public sealed class Agent
     {
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
-        Console.Write("\r" + new string(' ', 40) + "\r");
+        Console.Write("\r" + new string(' ', 50) + "\r");
     }
 
     /// <summary>输出缓冲的思考内容（暗色）与思考用时（计时器保持常驻，思考结束才落盘显示）。</summary>
