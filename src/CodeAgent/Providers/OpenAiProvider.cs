@@ -79,12 +79,16 @@ public sealed class OpenAiProvider : IAgentProvider
         }
         catch (HttpRequestException ex)
         {
-            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex);
+            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex) { Retryable = true };
         }
 
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new ProviderException($"OpenAI 兼容 API 返回 {(int)resp.StatusCode} {resp.ReasonPhrase}: {Truncate(body, 800)}");
+            throw new ProviderException($"OpenAI 兼容 API 返回 {(int)resp.StatusCode} {resp.ReasonPhrase}: {Truncate(body, 800)}")
+            {
+                StatusCode = (int)resp.StatusCode,
+                Retryable = (int)resp.StatusCode == 429 || (int)resp.StatusCode >= 500,
+            };
 
         JsonNode? root;
         try
@@ -163,13 +167,17 @@ public sealed class OpenAiProvider : IAgentProvider
         }
         catch (HttpRequestException ex)
         {
-            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex);
+            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex) { Retryable = true };
         }
 
         if (!resp.IsSuccessStatusCode)
         {
             var err = await resp.Content.ReadAsStringAsync(ct);
-            throw new ProviderException($"OpenAI 兼容 API 返回 {(int)resp.StatusCode}: {Truncate(err, 800)}");
+            throw new ProviderException($"OpenAI 兼容 API 返回 {(int)resp.StatusCode}: {Truncate(err, 800)}")
+            {
+                StatusCode = (int)resp.StatusCode,
+                Retryable = (int)resp.StatusCode == 429 || (int)resp.StatusCode >= 500,
+            };
         }
 
         var text = new StringBuilder();

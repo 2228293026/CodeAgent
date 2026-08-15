@@ -217,7 +217,7 @@ public sealed class Agent
                 ToolCalls = resp.ToolCalls,
             });
             LogMessage(_messages[^1]);
-            TrimHistory();
+            await TrimHistoryAsync(ct);
 
             // 无工具调用：模型给出最终答复
             if (resp.ToolCalls.Count == 0)
@@ -249,7 +249,7 @@ public sealed class Agent
                 _messages.Add(r);
                 LogMessage(r);
             }
-            TrimHistory();
+            await TrimHistoryAsync(ct);
 
             if (_ctx.StopRequested)
                 return "⏹ 已按 stop 工具请求结束本轮任务。";
@@ -266,21 +266,23 @@ public sealed class Agent
         {
             if (!_ctx.Config.StreamOutput)
             {
-                var resp = await _provider.ChatAsync(_messages, _tools.ToToolSpecs(), ct);
+                var resp = await CallWithRetryAsync(
+                    () => _provider.ChatAsync(_messages, _tools.ToToolSpecs(), ct), ct);
                 ClearSpinner();
                 return resp;
             }
 
             // 流式：文本增量实时打印到控制台，首次增量到达时先清掉思考指示器
-            var result = await _provider.ChatStreamAsync(_messages, _tools.ToToolSpecs(), delta =>
-            {
-                if (!_streamedThisCall)
+            var result = await CallWithRetryAsync(
+                () => _provider.ChatStreamAsync(_messages, _tools.ToToolSpecs(), delta =>
                 {
-                    ClearSpinner();
-                    _streamedThisCall = true;
-                }
-                Console.Write(delta);
-            }, ct);
+                    if (!_streamedThisCall)
+                    {
+                        ClearSpinner();
+                        _streamedThisCall = true;
+                    }
+                    Console.Write(delta);
+                }, ct), ct);
 
             if (!_streamedThisCall)
                 ClearSpinner();
@@ -292,6 +294,32 @@ public sealed class Agent
             throw;
         }
     }
+
+    /// <summary>
+    /// 对可重试的 Provider 错误（429 / 5xx / 连接失败）自动重试，指数退避。
+    /// 流式已输出过文本时不重试（避免重复输出）；取消令牌生效时立即中止。
+    /// </summary>
+    private async Task<ProviderResponse> CallWithRetryAsync(Func<Task<ProviderResponse>> call, CancellationToken ct)
+    {
+        const int maxRetries = 2;
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await call();
+            }
+            catch (ProviderException ex) when (ex.Retryable && attempt < maxRetries && !_streamedThisCall)
+            {
+                var delay = 2 * (attempt + 1);
+                ClearSpinner();
+                Console.WriteLine($"⚠ 请求失败（{DescribeFailure(ex)}），{delay}s 后重试…");
+                await Task.Delay(TimeSpan.FromSeconds(delay), ct);
+            }
+        }
+    }
+
+    private static string DescribeFailure(ProviderException ex) =>
+        ex.StatusCode is int code ? $"HTTP {code}" : "网络错误";
 
     private void ShowSpinner() => Console.Write("\r⏳ 思考中…");
 
@@ -472,8 +500,11 @@ public sealed class Agent
         }
     }
 
-    /// <summary>历史超限时先截短工具结果，仍超限则丢弃最早的对话对（保留系统提示与首条用户消息）。</summary>
-    private void TrimHistory()
+    /// <summary>
+    /// 历史超限时：先截短工具结果，仍超限则尝试用 LLM 压缩最早对话；
+    /// 压缩不可用时回退为丢弃最早的非锚定消息对（保留系统提示与首条用户消息）。
+    /// </summary>
+    private async Task TrimHistoryAsync(CancellationToken ct)
     {
         var limit = _ctx.Config.MaxHistoryChars;
         long total = 0;
@@ -503,12 +534,70 @@ public sealed class Agent
             }
         }
 
-        // 2) 仍超限：丢弃最早的非锚定消息对（system 与首条 user 保留）
+        // 2) 仍超限：尝试 LLM 压缩最早对话
+        if (total > limit && _messages.Count > 6)
+        {
+            if (await TrySummarizeAsync(ct))
+                return;
+        }
+
+        // 3) 兜底：丢弃最早的非锚定消息对（system 与首条 user 保留）
         while (total > limit && _messages.Count > 4)
         {
             total -= (_messages[2].Content?.Length ?? 0) + (_messages[3].Content?.Length ?? 0);
             _messages.RemoveAt(2);
             _messages.RemoveAt(2);
+        }
+    }
+
+    /// <summary>把最早的一部分对话交给 LLM 压缩成摘要；成功返回 true。</summary>
+    private async Task<bool> TrySummarizeAsync(CancellationToken ct)
+    {
+        var keepFrom = Math.Max(2, _messages.Count * 2 / 3);
+
+        // 避免把 tool_calls 与它的结果截断：分界前一条是带工具调用的 assistant 时，把它留在保留区
+        while (keepFrom > 2 && _messages[keepFrom - 1] is { Role: MessageRole.Assistant } prev && prev.ToolCalls is { Count: > 0 })
+            keepFrom--;
+
+        var chunk = _messages.GetRange(1, keepFrom - 1);
+        if (chunk.Count < 3)
+            return false;
+
+        var payload = string.Join("\n", chunk.Select(m =>
+        {
+            var body = m.Content ?? "";
+            if (m.Role == MessageRole.Tool)
+                body = $"[工具 {m.ToolName}] {body}";
+            return $"<{m.Role.ToString().ToLowerInvariant()}> {body}";
+        }));
+
+        var prompt = new ProviderMessage
+        {
+            Role = MessageRole.User,
+            Content = "请把下面的对话历史压缩成一份精炼的中文摘要（保留：用户需求、已做的文件改动、工具执行结论、未完成事项）。只输出摘要正文，不要任何前缀。\n\n" +
+                      TextUtil.Truncate(payload, 60_000),
+        };
+
+        try
+        {
+            Console.WriteLine("📝 上下文超限，正在压缩历史…");
+            var resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], ct), ct);
+            var summary = resp.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(summary))
+                return false;
+
+            _messages.RemoveRange(1, keepFrom - 1);
+            _messages.Insert(1, new ProviderMessage
+            {
+                Role = MessageRole.System,
+                Content = $"【历史摘要】{summary}",
+            });
+            Console.WriteLine("✔ 历史已压缩，继续执行。");
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 

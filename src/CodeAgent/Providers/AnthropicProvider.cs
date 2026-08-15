@@ -71,7 +71,7 @@ public sealed class AnthropicProvider : IAgentProvider
         }
         catch (HttpRequestException ex)
         {
-            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex);
+            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex) { Retryable = true };
         }
 
         var body = await resp.Content.ReadAsStringAsync(ct);
@@ -82,7 +82,11 @@ public sealed class AnthropicProvider : IAgentProvider
             catch { /* 保留原始响应 */ }
             throw new ProviderException(
                 $"Anthropic API 返回 {(int)resp.StatusCode} {resp.ReasonPhrase}: " +
-                (errMsg.Length > 0 ? errMsg : OpenAiProvider.Truncate(body, 800)));
+                (errMsg.Length > 0 ? errMsg : OpenAiProvider.Truncate(body, 800)))
+            {
+                StatusCode = (int)resp.StatusCode,
+                Retryable = (int)resp.StatusCode == 429 || (int)resp.StatusCode >= 500,
+            };
         }
 
         JsonNode? root;
@@ -167,7 +171,7 @@ public sealed class AnthropicProvider : IAgentProvider
         }
         catch (HttpRequestException ex)
         {
-            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex);
+            throw new ProviderException($"无法连接 API（{_baseUrl}）: {ex.Message}", ex) { Retryable = true };
         }
 
         if (!resp.IsSuccessStatusCode)
@@ -178,7 +182,11 @@ public sealed class AnthropicProvider : IAgentProvider
             catch { /* 保留原始响应 */ }
             throw new ProviderException(
                 $"Anthropic API 返回 {(int)resp.StatusCode}: " +
-                (errMsg.Length > 0 ? errMsg : OpenAiProvider.Truncate(body, 800)));
+                (errMsg.Length > 0 ? errMsg : OpenAiProvider.Truncate(body, 800)))
+            {
+                StatusCode = (int)resp.StatusCode,
+                Retryable = (int)resp.StatusCode == 429 || (int)resp.StatusCode >= 500,
+            };
         }
 
         var text = new StringBuilder();

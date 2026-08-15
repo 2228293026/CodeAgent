@@ -388,6 +388,10 @@ internal static class Program
                 Console.WriteLine(agent.Context.Undo.TryUndo() ?? "没有可撤销的操作。");
                 break;
 
+            case "/diff":
+                Console.WriteLine(agent.Context.Undo.LastDiff() ?? "没有可显示的改动（先让 agent 修改过文件）。");
+                break;
+
             case "/save":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
@@ -483,6 +487,7 @@ internal static class Program
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导
               /undo            撤销最近一次文件修改（write/edit）
+              /diff            显示最近一次修改的 diff
               /save <名>       保存当前会话（命名快照）
               /load <名>       恢复已保存的会话
               /export [名]     导出会话为 Markdown

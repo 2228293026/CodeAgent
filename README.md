@@ -10,6 +10,8 @@
 - ⚡ 流式输出：模型回复逐字打印，接近真实对话（`"streamOutput": false` 可关闭）
 - 🚀 并行工具调用：同一轮多个工具并发执行，同路径写操作自动退化为顺序（`confirmCommands` 开启时也顺序执行）
 - 🖥️ 工具调用可视化：执行工具时实时显示动作与耗时，`run_command` 附带输出预览（`"showToolCalls": false` 可关闭）
+- 🔁 自动重试：429 / 5xx / 连接失败自动指数退避重试（最多 2 次），流式已输出文本则不重试
+- 🧠 上下文自动摘要：历史超限时先用 LLM 压缩最早对话，失败才回退丢弃旧消息
 - 🔧 内置 8 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `stop`
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
@@ -101,9 +103,11 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/save` `/load` `/export` `/stats` `/retry` `/exit`。
+REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/exit`。
 
 `/undo` 会撤销最近一次 `write_file` / `edit_file` 对文件的修改：新建的文件被删除，覆盖的文件恢复原内容（最多记住最近 50 次修改）。
+
+`/diff` 显示最近一次修改的 diff（基于撤销快照与当前文件内容对比），方便审查 agent 的改动。
 
 会话管理：`/save <名>` 把当前对话保存为命名快照（`.codeagent/sessions/`），`/load <名>` 恢复；`/export [名]` 把当前（或指定）会话导出为 Markdown 记录；`/stats` 显示本轮 token 用量；`/retry` 重新执行上一条请求。
 

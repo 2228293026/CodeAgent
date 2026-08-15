@@ -79,4 +79,28 @@ public sealed class UndoManager
         e.Kind == "write"
             ? $"已撤销 write_file: {Path.GetFileName(e.Path)}（{(e.HadFile ? "恢复原内容" : "删除新建文件")}）"
             : $"已撤销 edit_file: {Path.GetFileName(e.Path)}";
+
+    /// <summary>显示最近一次修改的 diff（结合撤销快照与当前文件内容）；无记录时返回 null。</summary>
+    public string? LastDiff()
+    {
+        if (_entries.Count == 0)
+            return null;
+        var e = _entries[^1];
+        try
+        {
+            var current = File.Exists(e.Path) ? File.ReadAllText(e.Path) : "";
+            string original;
+            if (e.Kind == "write")
+                original = e.HadFile ? e.OldText ?? "" : "";
+            else
+                original = current.Replace(e.NewText ?? "", e.OldText ?? "");
+
+            var diff = DiffUtil.Unified(original, current, Path.GetFileName(e.Path));
+            return diff.Length == 0 ? "（内容无差异）" : diff;
+        }
+        catch (Exception ex)
+        {
+            return $"读取失败: {ex.Message}";
+        }
+    }
 }

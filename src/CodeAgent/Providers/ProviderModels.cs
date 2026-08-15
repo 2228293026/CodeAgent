@@ -64,6 +64,12 @@ public sealed class ProviderException : Exception
 {
     public ProviderException(string message) : base(message) { }
     public ProviderException(string message, Exception inner) : base(message, inner) { }
+
+    /// <summary>HTTP 状态码（网络/解析错误时为 null）。</summary>
+    public int? StatusCode { get; init; }
+
+    /// <summary>是否可安全自动重试（429 / 5xx / 连接失败）。</summary>
+    public bool Retryable { get; init; }
 }
 
 /// <summary>SSE 流式解析时按 index 累积的工具调用增量（openai/anthropic 通用）。</summary>
