@@ -77,13 +77,11 @@ public static class InputLine
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
 
-        var winW = TryWindowWidth();
-        var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
-        string Fit(string s)
-        {
-            var max = Math.Max(10, winW - 4);
-            return s.Length > max ? s[..max] + "…" : s;
-        }
+        // Console.WindowWidth 在 dotnet run 下不可靠（/diag 报 120 而可视窗口可能只有 ~34），
+        // 菜单行宽统一固定截断：任何 ≥30 宽的窗口都不换行，ANSI 行号永远正确
+        const int FitMax = 30;
+        var ansiOk = ansi;
+        string Fit(string s) => s.Length > FitMax ? s[..FitMax] + "…" : s;
 
         var menuOpen = false;
         var modePicker = false;
