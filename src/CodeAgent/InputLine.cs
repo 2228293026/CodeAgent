@@ -45,6 +45,9 @@ public static class InputLine
     private const int MaxHistory = 100;
     private const int MenuMaxRows = 8;
 
+    /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
+    public const string RecallMarker = "\u001bRECALL";
+
     // —— ANSI 转义辅助（纯文本输出，任何现代终端都支持） ——
     private static void Ansi(string s) => Console.Write("\x1b[" + s);
     private static void AnsiUp(int n) { if (n > 0) Ansi(n + "A"); }
@@ -531,6 +534,18 @@ public static class InputLine
                             Console.WriteLine("  (menu closed)");
                             Console.Write(promptPlain + buf);
                         }
+                    }
+                    else if (buf.Length > 0)
+                    {
+                        // ESC：清空当前输入
+                        buf.Clear();
+                        draft = null;
+                        RedrawInput();
+                    }
+                    else
+                    {
+                        // ESC（空输入）：撤回最后一条已发送的消息
+                        return RecallMarker;
                     }
                     break;
 

@@ -203,6 +203,12 @@ internal static class Program
             var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi);
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
+            if (line == InputLine.RecallMarker)
+            {
+                // ESC：撤回最后一条已发送的消息
+                Console.WriteLine(agent.UndoLastTurn() ?? "没有可撤回的轮次。");
+                continue;
+            }
             line = line.Trim();
             if (line.Length == 0)
                 continue;
@@ -726,6 +732,7 @@ internal static class Program
               --models             列出当前 Provider 的可用模型
               -v, --version        显示版本号
             快捷键:
+              Esc                   撤回最后一条已发送的消息（空输入时）
               Shift+Tab              切换到下一个模式（/mode next）
               Alt+M / Ctrl+Shift+M   模式切换菜单
               Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）

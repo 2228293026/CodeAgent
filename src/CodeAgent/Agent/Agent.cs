@@ -73,6 +73,7 @@ public sealed class Agent
     public long TurnInputTokens { get; private set; }
     public long TurnOutputTokens { get; private set; }
     public long TurnCachedTokens { get; private set; }
+    public int LastTurnStartCount { get; private set; }
 
     /// <summary>切换 Provider（/model 命令用）。</summary>
     public void SetProvider(IAgentProvider provider) => _provider = provider;
@@ -90,6 +91,15 @@ public sealed class Agent
         CurrentMode = mode;
         if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
             _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = mode.SystemPrompt };
+    }
+
+    /// <summary>撤回最后一轮：移除最后一条用户消息及其回复，恢复发送前状态（ESC 撤回）。</summary>
+    public string? UndoLastTurn()
+    {
+        if (LastTurnStartCount <= 0 || LastTurnStartCount >= _messages.Count)
+            return null;
+        _messages.RemoveRange(LastTurnStartCount, _messages.Count - LastTurnStartCount);
+        return $"⏪ 已撤回最后一轮（剩余 {LastTurnStartCount} 条历史消息）。";
     }
 
     public void Close()
@@ -224,6 +234,7 @@ public sealed class Agent
         TurnInputTokens = 0;
         TurnOutputTokens = 0;
         TurnCachedTokens = 0;
+        LastTurnStartCount = _messages.Count; // 记录本轮起点（ESC 撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
 
