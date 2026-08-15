@@ -150,6 +150,7 @@ public sealed class OpenAiProvider : IAgentProvider
             ["temperature"] = _temperature,
             ["max_tokens"] = _maxTokens,
             ["stream"] = true,
+            ["stream_options"] = new JsonObject { ["include_usage"] = true },
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions");
@@ -182,6 +183,7 @@ public sealed class OpenAiProvider : IAgentProvider
 
         var text = new StringBuilder();
         var toolAccum = new Dictionary<int, StreamToolAccum>();
+        int? inTok = null, outTok = null;
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
@@ -208,7 +210,17 @@ public sealed class OpenAiProvider : IAgentProvider
 
             var delta = root?["choices"]?[0]?["delta"];
             if (delta is null)
+            {
+                // usage 通常在最后一个 chunk 到达（choices 为空、顶层带 usage）
+                if (root?["usage"] is JsonObject u)
+                {
+                    if (u["prompt_tokens"] is not null)
+                        inTok = u["prompt_tokens"]!.GetValue<int>();
+                    if (u["completion_tokens"] is not null)
+                        outTok = u["completion_tokens"]!.GetValue<int>();
+                }
                 continue;
+            }
 
             var content = delta["content"];
             if (content is not null)
@@ -260,6 +272,8 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             Text = text.Length > 0 ? text.ToString() : null,
             ToolCalls = toolCalls,
+            InputTokens = inTok,
+            OutputTokens = outTok,
         };
     }
 
