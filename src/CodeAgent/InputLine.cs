@@ -72,6 +72,7 @@ public static class InputLine
         var buf = new StringBuilder();
         var session = new List<string>(History);
         var idx = session.Count;
+        var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
 
         var winW = TryWindowWidth();
@@ -102,8 +103,17 @@ public static class InputLine
 
         void ScrollInput()
         {
-            Console.Write("\r" + promptPlain + buf + new string(' ', 4));
-            Console.Write("\r" + promptPlain + buf);
+            if (ansiOk)
+            {
+                // 支持 ANSI：\x1b[K 清到行尾，彻底清除历史浏览后残留的字符（不换行、不依赖窗口宽度）
+                Console.Write("\r" + promptPlain + buf);
+                Console.Write("\x1b[K");
+            }
+            else
+            {
+                Console.Write("\r" + promptPlain + buf + new string(' ', 4));
+                Console.Write("\r" + promptPlain + buf);
+            }
         }
 
         void RedrawInput()
@@ -353,11 +363,18 @@ public static class InputLine
                     {
                         MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
                     }
-                    else if (idx > 0)
+                    else
                     {
-                        idx--;
-                        SetBuf(session, buf, idx);
-                        RedrawInput();
+                        if (menuOpen)
+                            CloseMenu(); // 0 匹配的菜单无意义：关闭后浏览历史
+                        if (idx > 0)
+                        {
+                            if (draft is null)
+                                draft = buf.ToString(); // 记住浏览历史前的草稿
+                            idx--;
+                            SetBuf(session, buf, idx);
+                            RedrawInput();
+                        }
                     }
                     break;
 
@@ -366,11 +383,26 @@ public static class InputLine
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
                     }
-                    else if (idx < session.Count)
+                    else
                     {
-                        idx++;
-                        SetBuf(session, buf, idx);
-                        RedrawInput();
+                        if (menuOpen)
+                            CloseMenu();
+                        if (idx < session.Count)
+                        {
+                            idx++;
+                            if (idx == session.Count && draft is not null)
+                            {
+                                // 回到草稿（浏览历史前的原始输入）
+                                buf.Clear();
+                                buf.Append(draft);
+                                draft = null;
+                            }
+                            else
+                            {
+                                SetBuf(session, buf, idx);
+                            }
+                            RedrawInput();
+                        }
                     }
                     break;
 
@@ -463,6 +495,7 @@ public static class InputLine
                         if (menuOpen && modePicker)
                             CloseMenu();
                         buf.Append(key.KeyChar);
+                        draft = null; // 输入使草稿失效
                         OnTextChanged();
                         if (!modePicker && SlashLike(buf.ToString()) && !menuOpen)
                             OpenMenu(false);
