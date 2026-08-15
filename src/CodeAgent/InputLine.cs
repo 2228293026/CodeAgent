@@ -219,20 +219,27 @@ public static class InputLine
             var pat = buf.ToString();
             if (pat.StartsWith('／'))
                 pat = "/" + pat[1..];
-            menuItems = Commands
+            var newItems = Commands
                 .Where(c => c.Name.StartsWith(pat, StringComparison.OrdinalIgnoreCase))
                 .Select(c => c)
                 .ToList();
-            if (menuIndex >= menuItems.Count)
-                menuIndex = menuItems.Count - 1;
-            if (ansiOk)
+            // 仅当过滤结果真的变化时才重绘，避免 /m→/mo→/mod 每个按键都刷一块菜单
+            var same = newItems.Count == menuItems.Count &&
+                       newItems.Zip(menuItems, (a, b) => a.Name == b.Name).All(x => x);
+            if (!same)
             {
-                EraseMenuAnsi();
-                PrintListAnsi();
-            }
-            else
-            {
-                PrintListScroll();
+                menuItems = newItems;
+                if (menuIndex >= menuItems.Count)
+                    menuIndex = menuItems.Count - 1;
+                if (ansiOk)
+                {
+                    EraseMenuAnsi();
+                    PrintListAnsi();
+                }
+                else
+                {
+                    PrintListScroll();
+                }
             }
             lastFilter = pat;
         }
