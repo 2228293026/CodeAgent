@@ -189,6 +189,7 @@ internal static class Program
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
         while (true)
         {
+            PrintStatusBar(opts, agent);
             var line = InputLine.Read(PromptFor(opts, agent), modeTuples);
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
@@ -296,6 +297,14 @@ internal static class Program
             stop = true; // 让监听立即退出，避免吞掉接下来的用户输入（回车/字符）
             try { watcher.Wait(TimeSpan.FromMilliseconds(300)); } catch { /* 忽略 */ }
         }
+    }
+
+    /// <summary>状态栏：模式 · 模型 · 目录 · token 用量（每轮提示符前显示）。</summary>
+    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent)
+    {
+        Console.WriteLine(
+            $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
+            $"{agent.TotalInputTokens:N0}/{agent.TotalOutputTokens:N0} tok");
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>

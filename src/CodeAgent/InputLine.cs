@@ -112,11 +112,16 @@ public static class InputLine
                     return;
                 }
                 var shown = Math.Min(menuItems.Count, MenuMaxRows);
+                // 操作提示行（首行，暗色）
+                Console.SetCursorPosition(0, menuTop);
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write(PadLine("  (up/down choose · Enter run · Esc close)"));
+                Console.ResetColor();
                 for (int i = 0; i < shown; i++)
                 {
                     var (name, desc) = menuItems[i];
                     var line = $"  {(i == menuIndex ? ">" : " ")} {name,-16} {desc}";
-                    Console.SetCursorPosition(0, menuTop + i);
+                    Console.SetCursorPosition(0, menuTop + 1 + i);
                     if (i == menuIndex)
                     {
                         Console.BackgroundColor = ConsoleColor.DarkGray;
@@ -127,7 +132,7 @@ public static class InputLine
                 }
                 if (menuItems.Count > shown)
                 {
-                    Console.SetCursorPosition(0, menuTop + shown);
+                    Console.SetCursorPosition(0, menuTop + 1 + shown);
                     Console.Write(PadLine("  ... (more)"));
                 }
                 Console.SetCursorPosition(0, inputRow);
@@ -149,7 +154,8 @@ public static class InputLine
             try
             {
                 var shown = Math.Min(menuItems.Count, MenuMaxRows);
-                for (int i = 0; i < shown; i++)
+                var rows = shown + 2; // 提示行 + 项 + (more) 余量
+                for (int i = 0; i < rows; i++)
                 {
                     Console.SetCursorPosition(0, menuTop + i);
                     Console.Write(PadLine(""));
@@ -175,7 +181,7 @@ public static class InputLine
                 .Select(c => c)
                 .ToList();
             if (menuIndex >= menuItems.Count)
-                menuIndex = Math.Max(0, menuItems.Count - 1);
+                menuIndex = menuItems.Count - 1;
             PaintMenu(); // 0 匹配时也绘制空态提示，不静默关闭
         }
 
@@ -186,7 +192,7 @@ public static class InputLine
             menuOpen = true;
             modePicker = picker;
             menuTop = inputRow + 1;
-            menuIndex = 0;
+            menuIndex = -1; // 默认不选中任何项，避免回车误执行第一项（如 /help）
             if (picker)
                 PaintMenu();
             else
@@ -205,15 +211,17 @@ public static class InputLine
             switch (key.Key)
             {
                 case ConsoleKey.Enter:
-                    if (menuOpen && menuItems.Count > 0)
+                    if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
                     {
-                        var sel = menuItems[Math.Min(menuIndex, menuItems.Count - 1)].Name;
+                        var sel = menuItems[menuIndex].Name;
                         CloseMenu();
                         Console.WriteLine();
                         var submit = modePicker ? $"/mode {sel}" : sel;
                         Remember(submit);
                         return submit;
                     }
+                    if (menuOpen)
+                        CloseMenu(); // 未选择任何项：关闭菜单，按原输入提交
                     Console.WriteLine();
                     var line = buf.ToString();
                     Remember(line);
