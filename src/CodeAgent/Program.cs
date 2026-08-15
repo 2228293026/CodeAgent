@@ -330,6 +330,29 @@ internal static class Program
         }
     }
 
+    /// <summary>显示当前对话历史（跳过系统提示，内容截断）。</summary>
+    private static void PrintConversation(AgentClass agent)
+    {
+        var msgs = agent.Messages;
+        Console.WriteLine($"对话历史（{msgs.Count} 条）:");
+        foreach (var m in msgs)
+        {
+            if (m.Role == MessageRole.System)
+                continue;
+            var role = m.Role switch
+            {
+                MessageRole.User => "用户",
+                MessageRole.Assistant => "助手",
+                MessageRole.Tool => $"工具{m.ToolName}",
+                _ => m.Role.ToString(),
+            };
+            var content = m.Content ?? "";
+            if (content.Length > 300)
+                content = content[..300] + "…";
+            Console.WriteLine($"  [{role}] {content}");
+        }
+    }
+
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。</summary>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
     {
@@ -605,12 +628,17 @@ internal static class Program
                     {
                         agent.LoadSession(rest.Trim());
                         Console.WriteLine($"✔ 已恢复会话: {rest.Trim()}");
+                        PrintConversation(agent); // 显示恢复的消息，避免"看不到之前的消息"
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"加载失败: {ex.Message}");
                     }
                 }
+                break;
+
+            case "/history":
+                PrintConversation(agent);
                 break;
 
             case "/export":

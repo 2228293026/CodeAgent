@@ -76,6 +76,9 @@ public sealed class Agent
     public int LastTurnStartCount { get; private set; }
     public int MessageCount => _messages.Count;
 
+    /// <summary>当前对话消息列表（只读，/history 与 /load 显示用）。</summary>
+    public IReadOnlyList<ProviderMessage> Messages => _messages;
+
     /// <summary>上一轮是否失败（模型空回复）——REPL 红色提示 / 一次性模式非零退出码。</summary>
     public bool LastTurnFailed { get; private set; }
 
