@@ -108,6 +108,8 @@ public static class InputLine
         var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
 
         Console.Write(prompt);
+        if (!string.IsNullOrEmpty(initial))
+            Console.Write(initial); // 预填文本也要显示出来
 
         // —— 绘制助手（局部函数） ——
 
