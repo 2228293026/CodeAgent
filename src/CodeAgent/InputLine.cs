@@ -106,9 +106,8 @@ public static class InputLine
         {
             if (ansiOk)
             {
-                // 支持 ANSI：\x1b[K 清到行尾，彻底清除历史浏览后残留的字符（不换行、不依赖窗口宽度）
-                Console.Write("\r" + promptPlain + buf);
-                Console.Write("\x1b[K");
+                // 支持 ANSI：\x1b[K 清到行尾（单次写入，避免逐次 Write 卡顿）
+                Console.Write("\r" + promptPlain + buf + "\x1b[K");
             }
             else
             {
@@ -121,9 +120,8 @@ public static class InputLine
         {
             if (menuOpen && ansiOk)
             {
-                AnsiCol1();
-                AnsiErase();
-                Console.Write(promptPlain + buf);
+                // 单次写入：回到行首 + 清到行尾 + 重写输入
+                Console.Write("\x1b[1G\x1b[K" + promptPlain + buf);
                 return;
             }
             ScrollInput();
@@ -135,39 +133,42 @@ public static class InputLine
             menuShown = Math.Min(menuItems.Count, MenuMaxRows);
             if (menuOffset > menuItems.Count - menuShown)
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
-            Console.WriteLine();
-            Console.WriteLine(Fit(Header()));
+            // 整块拼接后单次写入（避免逐行 Write 卡顿）
+            var sb = new StringBuilder();
+            sb.Append('\n');
+            sb.AppendLine(Fit(Header()));
             if (menuItems.Count == 0)
             {
-                // 空态提示：0 匹配时也保持与 MenuAbove 一致的行数（header + 1 + 空行）
-                Console.WriteLine(Fit("  (no matching item, press Esc to close)"));
+                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
             }
             else
             {
                 for (int i = 0; i < menuShown; i++)
                 {
                     var k = menuOffset + i;
-                    Console.WriteLine(Fit($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
+                    sb.AppendLine(Fit($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
                 }
-                Console.WriteLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
+                sb.AppendLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
             }
-            Console.WriteLine();
-            Console.Write(promptPlain + buf);
+            sb.AppendLine();
+            sb.Append(promptPlain + buf);
+            Console.Write(sb.ToString());
         }
 
-        // 擦除菜单块（从输入行上方开始向上擦，回到输入行）
+        // 擦除菜单块（从输入行上方开始向上擦，回到输入行）——单次写入
         void EraseMenuAnsi()
         {
             var above = MenuAbove();
-            AnsiUp(above);
+            var sb = new StringBuilder();
+            sb.Append($"\x1b[{above}A");
             for (int i = 0; i < above; i++)
             {
-                AnsiErase();
-                AnsiDown(1);
+                sb.Append("\x1b[K\x1b[1B");
             }
-            AnsiCol1();
-            Console.Write(promptPlain + buf);
-            AnsiErase();
+            sb.Append("\x1b[1G");
+            sb.Append(promptPlain + buf);
+            sb.Append("\x1b[K");
+            Console.Write(sb.ToString());
         }
 
         void MoveSelectionAnsi(int oldIndex, int newIndex)
@@ -179,24 +180,22 @@ public static class InputLine
                 PrintListAnsi();
                 return;
             }
+            // 整段拼接后单次写入：擦旧行 → 写新行 → 回到输入行
+            var sb = new StringBuilder();
             if (oldIndex >= menuOffset && oldIndex < menuOffset + menuShown && oldIndex != newIndex)
             {
                 var up = MenuAbove() - 1 - (oldIndex - menuOffset);
-                AnsiUp(up);
-                AnsiCol1();
-                AnsiErase();
-                Console.Write(Fit($"  {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
-                AnsiDown(up);
+                sb.Append($"\x1b[{up}A\x1b[1G\x1b[K");
+                sb.Append(Fit($"  {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
+                sb.Append($"\x1b[{up}B");
             }
             var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
-            AnsiUp(up2);
-            AnsiCol1();
-            AnsiErase();
-            Console.Write(Fit($"  > {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}"));
-            AnsiDown(up2);
-            AnsiCol1();
-            Console.Write(promptPlain + buf);
-            AnsiErase();
+            sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
+            sb.Append(Fit($"  > {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}"));
+            sb.Append($"\x1b[{up2}B\x1b[1G");
+            sb.Append(promptPlain + buf);
+            sb.Append("\x1b[K");
+            Console.Write(sb.ToString());
         }
 
         // —— 滚动式渲染（tuiAnsi=false 时的兜底） ——
