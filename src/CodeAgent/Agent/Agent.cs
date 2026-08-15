@@ -272,7 +272,7 @@ public sealed class Agent
             {
                 _ctx.StopRequested = false;
                 StreamedLastRun = _streamedThisCall;
-                return resp.Text ?? "(模型未返回内容)";
+                return resp.Text ?? "(模型未返回内容：可能是免费模型限额、上下文过长或速率限制，可 /retry 或换模型重试)";
             }
 
             // 模型在调用工具前若已流式输出文本，补一个换行，避免与后续输出粘连
