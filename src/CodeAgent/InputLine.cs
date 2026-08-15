@@ -126,12 +126,20 @@ public static class InputLine
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
             Console.WriteLine();
             Console.WriteLine(Fit(Header()));
-            for (int i = 0; i < menuShown; i++)
+            if (menuItems.Count == 0)
             {
-                var k = menuOffset + i;
-                Console.WriteLine(Fit($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
+                // 空态提示：0 匹配时也保持与 MenuAbove 一致的行数（header + 1 + 空行）
+                Console.WriteLine(Fit("  (no matching item, press Esc to close)"));
             }
-            Console.WriteLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
+            else
+            {
+                for (int i = 0; i < menuShown; i++)
+                {
+                    var k = menuOffset + i;
+                    Console.WriteLine(Fit($"  {(k == menuIndex ? ">" : " ")} {menuItems[k].Name,-16} {menuItems[k].Desc}"));
+                }
+                Console.WriteLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
+            }
             Console.WriteLine();
             Console.Write(promptPlain + buf);
         }
