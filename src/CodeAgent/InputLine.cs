@@ -34,6 +34,7 @@ public static class InputLine
         ("/tools", "List available tools"),
         ("/providers", "List configured providers"),
         ("/models", "List available models"),
+        ("/diag", "Show terminal diagnostics"),
         ("/thinking", "Adjust model thinking effort"),
         ("/mode", "View or switch work mode"),
         ("/exit", "Exit (also /quit)"),

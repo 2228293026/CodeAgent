@@ -617,6 +617,23 @@ internal static class Program
                 }
                 break;
 
+            case "/diag":
+                // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
+                Console.WriteLine("终端诊断:");
+                Console.WriteLine($"  IsInputRedirected : {Console.IsInputRedirected}");
+                static string W(Func<int> f)
+                {
+                    try { return f().ToString(); }
+                    catch (Exception e) { return $"读取失败: {e.Message}"; }
+                }
+                Console.WriteLine($"  WindowWidth       : {W(() => Console.WindowWidth)}");
+                Console.WriteLine($"  WindowHeight      : {W(() => Console.WindowHeight)}");
+                Console.WriteLine($"  BufferWidth       : {W(() => Console.BufferWidth)}");
+                Console.WriteLine($"  CursorLeft/Top    : {W(() => Console.CursorLeft)}/{W(() => Console.CursorTop)}");
+                Console.WriteLine($"  TuiAnsi           : {config.TuiAnsi}");
+                Console.WriteLine($"  OutputEncoding    : {Console.OutputEncoding.WebName}");
+                break;
+
             case "/models":
                 PrintModelsAsync(providerInst, opts.Model).GetAwaiter().GetResult();
                 break;
