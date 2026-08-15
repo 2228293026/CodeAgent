@@ -149,10 +149,10 @@ public static class InputLine
                 // 刷新：回到块顶部，在原地重绘（输入行不移动）
                 sb.Append($"\x1b[{above}A\x1b[1G");
             }
-            sb.AppendLine(Fit(Header()));
+            sb.AppendLine(Fit(Header()) + "\x1b[K");
             if (menuItems.Count == 0)
             {
-                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
+                sb.AppendLine(Fit("  (no matching item, press Esc to close)") + "\x1b[K");
             }
             else
             {
@@ -160,10 +160,12 @@ public static class InputLine
                 {
                     var k = menuOffset + i;
                     var line = Fit($"  {i + 1}) {menuItems[k].Name,-16} {menuItems[k].Desc}");
-                    // 选中项：反显高亮（\x1b[7m），缩进不变，不用 > 标记
-                    sb.AppendLine(k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line);
+                    // 选中项：反显高亮（\x1b[7m），缩进不变；每行末尾 \x1b[K 清除旧内容残留（防信息混合）
+                    sb.AppendLine((k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line) + "\x1b[K");
                 }
-                sb.AppendLine(Fit(menuItems.Count > menuShown ? $"  ... (+{menuItems.Count - menuShown} more)" : ""));
+                // more 计数随窗口滚动更新（下方剩余项数）
+                var remaining = menuItems.Count - menuOffset - menuShown;
+                sb.AppendLine(Fit(remaining > 0 ? $"  ... (+{remaining} more)" : "") + "\x1b[K");
             }
             sb.AppendLine(); // 空行；末尾换行后光标已在输入行
             sb.Append("\x1b[1G");
