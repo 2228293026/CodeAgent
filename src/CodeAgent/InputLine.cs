@@ -288,9 +288,10 @@ public static class InputLine
                     menuIndex = menuItems.Count - 1;
                 if (ansiOk)
                 {
-                    // 擦除已绘制 + 新块需要的高度（过滤变宽时避免覆盖上方内容）
-                    var newAbove = Math.Min(menuItems.Count, MenuMaxRows) + 3;
-                    EraseMenuAnsi(Math.Max(menuRows, newAbove));
+                    // 仅当菜单已绘制过才擦除（首次打开直接建立，避免擦掉状态栏等上方内容）；
+                    // 擦除高度取已绘制与新块最大值（过滤变宽时不覆盖上方）
+                    if (menuRows > 0)
+                        EraseMenuAnsi(Math.Max(menuRows, Math.Min(menuItems.Count, MenuMaxRows) + 3));
                     PrintListAnsi();
                 }
                 else if (!menuListShown)
