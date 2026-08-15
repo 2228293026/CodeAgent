@@ -77,12 +77,13 @@ public static class InputLine
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
 
-        // 修复斜杠菜单卡顿的结构根因：Console.WindowWidth 在 dotnet run 下报告的值
-        // 可能大于可视窗口宽度（/diag 报 120 而实际显示 ~34），导致菜单行换行、块溢出滚动。
-        // 行宽固定截断（36 字符），任何窗口都不换行，ANSI 行号永远正确。
-        const int FitMax = 36;
-        var ansiOk = ansi;
-        string Fit(string s) => s.Length > FitMax ? s[..FitMax] + "…" : s;
+        var winW = TryWindowWidth();
+        var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
+        string Fit(string s)
+        {
+            var max = Math.Max(10, winW - 4);
+            return s.Length > max ? s[..max] + "…" : s;
+        }
 
         var menuOpen = false;
         var modePicker = false;
