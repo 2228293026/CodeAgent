@@ -138,18 +138,11 @@ public static class InputLine
             if (menuOffset > menuItems.Count - menuShown)
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
             var above = menuShown + 3; // header + 项 + more/空态行 + 空行
-            var first = !menuEverPainted;
             var sb = new StringBuilder();
-            if (first)
-            {
-                // 首次：在输入行下方建立菜单块（此后输入行固定在块底部）
-                sb.Append('\n');
-            }
-            else
-            {
-                // 刷新：回到块顶部，在原地重绘（输入行不移动）
-                sb.Append($"\x1b[{above}A\x1b[1G");
-            }
+            // 菜单块始终渲染在输入行上方：不推动输入行、不触发滚动。
+            // （30 行窗口下输入行在底部（CursorTop 29）时，下方放不下 11 行的块，
+            //   溢出滚动导致输出暴增 = 卡顿，滚动错位 = 块叠加）
+            sb.Append($"\x1b[{above}A\x1b[1G");
             sb.AppendLine(Fit(Header()) + "\x1b[K");
             if (menuItems.Count == 0)
             {
