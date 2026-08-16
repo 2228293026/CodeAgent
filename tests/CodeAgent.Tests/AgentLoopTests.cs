@@ -127,4 +127,30 @@ public class AgentLoopTests : IDisposable
         agent.SetMode(CodeAgent.Modes.Find("code", new AgentConfig()));
         Assert.Contains(custom, agent.Messages[0].Content!); // 切回 code 恢复自定义提示
     }
+
+    [Fact]
+    public async Task RunAsync_MaxToolIterations_StopsRunawayLoop()
+    {
+        // 回归：模型一直返回工具调用时应被 MaxToolIterations 截断，而不是无限循环。
+        // 用会报错但不置位 StopRequested 的 read_file（路径不存在），确保循环不被提前结束。
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse
+            {
+                ToolCalls = [new ToolCall { Id = "loop", Name = "read_file", ArgumentsJson = """{"path":"no-such-file"}""" }],
+            },
+        };
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            MaxToolIterations = 3, // 故意设小
+        };
+        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
+
+        var result = await agent.RunAsync("一直调用工具", CancellationToken.None);
+
+        Assert.Contains("最大工具调用轮数", result); // 达到上限给出提示
+        Assert.True(agent.ProviderCalls <= 4, $"不应超过上限太多（实际调用 {agent.ProviderCalls} 次）");
+    }
 }
