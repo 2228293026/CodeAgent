@@ -278,6 +278,36 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Table_WithoutSeparatorRow_RendersAsData()
+    {
+        // 无分隔行的两行都应按数据渲染（不应误判任何一行）
+        var output = Render("| a | b |\n| 1 | 2 |\n");
+        Assert.Contains("a", output);
+        Assert.Contains("b", output);
+        Assert.Contains("1", output);
+        Assert.Contains("2", output);
+        Assert.DoesNotContain("──", output); // 无横线（两行都是数据）
+    }
+
+    [Fact]
+    public void Table_SingleColumn_StillRenders()
+    {
+        // 单列表格不应崩溃，内容保留
+        var output = Render("| name |\n|------|\n| a.cs |\n");
+        Assert.Contains("name", output);
+        Assert.Contains("a.cs", output);
+    }
+
+    [Fact]
+    public void Table_UnevenColumns_PadsShortRows()
+    {
+        // 列数不齐（表头 2 列、数据 1 列）不应崩溃，短行按自己的列渲染
+        var output = Render("| a | b |\n|---|---|\n| 1 |\n");
+        Assert.Contains("a", output);
+        Assert.Contains("1", output);
+    }
+
+    [Fact]
     public void Table_TrailingRowWithoutNewline_IsStillAligned()
     {
         // 回归：流以未换行的表格行结束时，该行应仍按表格对齐输出，
