@@ -188,6 +188,30 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_HeadingLine_KeepsContent()
+    {
+        // 标题行（# 开头）内容应完整保留
+        var output = Render("# 标题内容");
+        Assert.Contains("# 标题内容", output);
+    }
+
+    [Fact]
+    public void Append_QuoteLine_KeepsContent()
+    {
+        // 引用行（> 开头）内容应完整保留
+        var output = Render("> 引用内容");
+        Assert.Contains("> 引用内容", output);
+    }
+
+    [Fact]
+    public void Append_RuleLine_IsNotSwallowed()
+    {
+        // 分隔线（---）行应正常输出（可能着色），但不丢失内容
+        var output = Render("---\n");
+        Assert.Contains("---", output);
+    }
+
+    [Fact]
     public void Disabled_OutputsRawText()
     {
         var r = new CodeAgent.ConsoleRenderer(enabled: false);
