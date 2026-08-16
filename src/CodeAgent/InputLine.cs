@@ -337,8 +337,10 @@ public static class InputLine
                 if (lines > 1)
                 {
                     // 多行输入（粘贴含换行）：\r 只回当前行首，逐行重绘会让前面几行残留刷屏；
-                    // 先上移到块首行、清到屏幕末尾，再整体重写
-                    Console.Write($"\x1b[{lines - 1}A\x1b[J");
+                    // 先上移到块首行、回到列 1、清到屏幕末尾，再整体重写。
+                    // 注意 \x1b[{n}A 上移不改变列：不加 \r 会从末行末尾的列开始清屏/写入，
+                    // prompt 首列反复残留（粘贴时表现为一串 [）。
+                    Console.Write($"\x1b[{lines - 1}A\r\x1b[J");
                 }
                 else
                 {
@@ -365,12 +367,17 @@ public static class InputLine
         void PositionCursor()
         {
             var cursor = Math.Clamp(buf.Cursor, 0, buf.Text.Length);
-            var cursorLine = CountNewlines(buf.Text[..cursor]); // 光标所在行（0-based）
+            var upTo = buf.Text[..cursor];
+            var cursorLine = CountNewlines(upTo); // 光标所在行（0-based）
             var totalLines = 1 + CountNewlines(buf.Text);
-            var up = totalLines - 1 - cursorLine; // 从块末尾上移到光标行（光标行行尾即 cursor 位置）
+            var up = totalLines - 1 - cursorLine; // 从块末尾（末行行尾）上移到光标行
             if (up > 0)
-                Console.Write($"\x1b[{up}A");
-            if (up == 0)
+            {
+                // 上移不改变列：回到列 1 后右移到光标行的行内偏移（该行到 cursor 的宽度）
+                var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
+                Console.Write($"\x1b[{up}A\r\x1b[{DisplayWidth(seg)}C");
+            }
+            else
             {
                 // 光标在最后一行：从行尾左移到 cursor（单行输入或光标在末行）
                 var offset = CursorLeftOffset(buf.Text, buf.Cursor);
