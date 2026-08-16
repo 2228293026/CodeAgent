@@ -75,6 +75,15 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_CodeFenceWithCrlfLines_StripsCarriageReturns()
+    {
+        // 回归：CRLF 换行的代码块曾把 \r 混入代码内容，终端会把 \r 当回车覆盖渲染
+        var output = Render("```\r\ncode line\r\n```");
+        Assert.Contains("code line", output);
+        Assert.DoesNotContain("\r", output); // \r 不应残留在代码内容里
+    }
+
+    [Fact]
     public void Append_TripleBackticksMidLine_AreLiteralNotFence()
     {
         // 回归：行中的 ``` 曾误判为代码围栏，_skipCodeIntro 吞掉本行剩余内容；

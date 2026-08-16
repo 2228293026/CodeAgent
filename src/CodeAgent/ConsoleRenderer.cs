@@ -124,6 +124,8 @@ public sealed class ConsoleRenderer
                 _skipCodeIntro = false;
             return;
         }
+        if (ch == '\r')
+            return; // 跳过 CRLF 的 \r，避免混入代码内容（终端会把 \r 当回车覆盖渲染）
         if (ch == '`')
         {
             _tickRun++;
