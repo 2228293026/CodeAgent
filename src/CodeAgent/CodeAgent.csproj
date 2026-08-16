@@ -12,4 +12,9 @@
     <Description>LLM 驱动的编码助手 CLI（支持 OpenAI 兼容协议与 Anthropic Claude）</Description>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- 允许测试程序集直接访问 internal 成员（如 ToolArgs 的容错解析分支） -->
+    <InternalsVisibleTo Include="CodeAgent.Tests" />
+  </ItemGroup>
+
 </Project>
