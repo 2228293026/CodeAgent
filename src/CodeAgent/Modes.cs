@@ -78,9 +78,11 @@ public static class Modes
         return list;
     }
 
-    /// <summary>按名称查找模式（含自定义），未匹配时回退到 code 模式。</summary>
+    /// <summary>按名称查找模式（含自定义），未匹配或空名时回退到 code 模式。</summary>
     public static AgentMode Find(string name, AgentConfig config) =>
-        Build(config).FirstOrDefault(m => m.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)) ?? All[0];
+        string.IsNullOrWhiteSpace(name)
+            ? All[0] // 回归：config.defaultMode 为 null（JSON 显式 null）时 name.Trim() 曾抛 NRE 导致启动崩溃
+            : Build(config).FirstOrDefault(m => m.Name.Equals(name.Trim(), StringComparison.OrdinalIgnoreCase)) ?? All[0];
 
     /// <summary>模式列表展示文本。</summary>
     public static string ListText(AgentConfig config) =>

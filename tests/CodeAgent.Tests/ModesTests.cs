@@ -67,4 +67,16 @@ public class ModesTests
         Assert.Equal("plan", Modes.Find("plan", config).Name);
         Assert.Equal("code", Modes.Find("no-such-mode", config).Name); // 未匹配回退 code
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Find_NullOrEmptyName_FallsBackToCode(string? name)
+    {
+        // 回归：config.defaultMode 为 null（JSON 显式 "defaultMode": null）时
+        // name.Trim() 曾抛 NullReferenceException 导致 codeagent 启动崩溃
+        var config = new AgentConfig();
+        Assert.Equal("code", Modes.Find(name!, config).Name);
+    }
 }
