@@ -44,6 +44,15 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_CodeFenceWithLanguageTag_StripsTag()
+    {
+        // 回归：```cs 的语言标注曾混入代码内容（渲染出 "cs\nint x = 1;"），现应被丢弃
+        var output = Render("```cs\nint x = 1;\n```");
+        Assert.Contains("int x = 1;", output);
+        Assert.DoesNotContain("cs\nint", output); // 语言标注不应出现在代码内容前
+    }
+
+    [Fact]
     public void Append_InlineCode_EmitsContent()
     {
         var output = Render("run `dotnet build` now");

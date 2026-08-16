@@ -11,6 +11,7 @@ public sealed class ConsoleRenderer
     private readonly List<string> _tableBuf = new(); // Markdown 表格行缓冲（表格结束统一按列对齐输出）
     private bool _inCode;
     private int _tickRun; // 当前连续反引号数
+    private bool _skipCodeIntro; // 围栏起始行的语言标注（如 ```cs 的 cs）应丢弃
 
     public ConsoleRenderer(bool enabled) => _enabled = enabled;
 
@@ -75,6 +76,7 @@ public sealed class ConsoleRenderer
                 _line.Clear();
                 _inCode = true;
                 _tickRun = 0;
+                _skipCodeIntro = true; // 丢弃本行剩余的语言标注（```cs）
                 return;
             }
             _line.Append(ch);
@@ -103,6 +105,13 @@ public sealed class ConsoleRenderer
 
     private void HandleCodeChar(char ch)
     {
+        // 围栏起始行（```cs 的 cs）：丢弃直到换行，避免语言标注混入代码内容
+        if (_skipCodeIntro)
+        {
+            if (ch == '\n')
+                _skipCodeIntro = false;
+            return;
+        }
         if (ch == '`')
         {
             _tickRun++;
