@@ -37,4 +37,23 @@ public class ShellRunnerTests
 
         Assert.Contains("[]", output);
     }
+
+    [Fact]
+    public async Task RunAsync_LargeOutput_DoesNotBlock()
+    {
+        // 回归：输出超过截断上限后旧实现停止读取，子进程写满管道缓冲阻塞、被超时误杀。
+        // 现在达到上限后继续排空管道，命令应正常完成且输出带截断标记。
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (exit, output) = await ShellRunner.RunAsync(
+            "bash",
+            "head -c 300000 /dev/zero | tr \"\\0\" \"a\"",
+            System.IO.Path.GetTempPath(),
+            30,
+            CancellationToken.None);
+        sw.Stop();
+
+        Assert.Equal(0, exit);
+        Assert.Contains("输出过长", output);
+        Assert.True(sw.Elapsed.TotalSeconds < 30, $"大输出命令不应被超时误杀（实际耗时 {sw.Elapsed.TotalSeconds:F1}s）");
+    }
 }

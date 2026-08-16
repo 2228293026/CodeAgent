@@ -178,22 +178,32 @@ public static class ShellRunner
 
     private static string QuoteBash(string s) => "'" + s.Replace("'", "'\\''") + "'";
 
+    /// <summary>
+    /// 读取输出并截断到 cap。达到上限后仍继续读取丢弃剩余字节，
+    /// 否则子进程写满管道缓冲会阻塞、被超时误杀（命令本身可能很快完成）。
+    /// </summary>
     private static async Task<string> ReadWithCap(StreamReader reader, int cap, CancellationToken ct)
     {
         var sb = new StringBuilder();
         var buf = new char[8192];
-        while (sb.Length < cap)
+        var capped = false;
+        while (true)
         {
             var n = await reader.ReadAsync(buf, ct);
             if (n == 0)
                 break;
-            var remaining = cap - sb.Length;
-            if (n > remaining)
-                n = remaining;
-            sb.Append(buf, 0, n);
+            if (!capped)
+            {
+                var remaining = cap - sb.Length;
+                var take = Math.Clamp(remaining, 0, n);
+                sb.Append(buf, 0, take);
+                if (take < n)
+                {
+                    capped = true;
+                    sb.Append("\n…(输出过长，已截断)");
+                }
+            }
         }
-        if (sb.Length >= cap)
-            sb.Append("\n…(输出过长，已截断)");
         return sb.ToString();
     }
 }
