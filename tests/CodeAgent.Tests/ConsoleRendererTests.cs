@@ -112,4 +112,22 @@ public class ConsoleRendererTests : IDisposable
         Assert.Contains("─", output); // 分隔行渲染为横线
         Assert.DoesNotContain("|---|", output); // 原始分隔行不出现
     }
+
+    [Fact]
+    public void Table_TrailingRowWithoutNewline_IsStillAligned()
+    {
+        // 回归：流以未换行的表格行结束时，该行应仍按表格对齐输出，
+        // 而非作为普通文本带原始 | 输出
+        var r = new CodeAgent.ConsoleRenderer(enabled: true);
+        r.Append("| name | size |\n|------|------|\n| a.cs | 10 |");
+        r.Flush();
+        var output = _out.ToString();
+
+        Assert.Contains("│", output); // 表格对齐竖线
+        Assert.DoesNotContain("| a.cs | 10 |", output); // 原始未对齐形式不出现
+        var lastLine = output.TrimEnd('\n').Split('\n')[^1];
+        Assert.StartsWith("  ", lastLine); // 表格行有缩进前缀
+        Assert.Contains("a.cs", lastLine);
+        Assert.Contains("10", lastLine);
+    }
 }

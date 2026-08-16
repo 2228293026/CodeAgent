@@ -43,9 +43,19 @@ public sealed class ConsoleRenderer
         }
         else if (_line.Length > 0)
         {
-            FlushTable();
-            EmitLine(_line.ToString());
+            var line = _line.ToString();
             _line.Clear();
+            if (line.TrimStart().StartsWith('|'))
+            {
+                // 流以未换行的表格行结束：仍按表格对齐输出，而不是当普通文本
+                _tableBuf.Add(line.TrimEnd('\n'));
+                FlushTable();
+            }
+            else
+            {
+                FlushTable();
+                EmitLine(line);
+            }
         }
         else
         {
