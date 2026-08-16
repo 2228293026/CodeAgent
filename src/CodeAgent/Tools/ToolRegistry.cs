@@ -25,13 +25,22 @@ public sealed class Workspace
     /// <summary>规范化的工作区根路径。</summary>
     public string Root { get; }
 
-    /// <summary>把相对路径解析为工作区内的绝对路径；越界则抛 ToolException。</summary>
+    /// <summary>把相对路径解析为工作区内的绝对路径；越界或非法则抛 ToolException。</summary>
     public string Resolve(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
             return Root;
 
-        var full = Path.GetFullPath(Path.Combine(Root, path));
+        string full;
+        try
+        {
+            full = Path.GetFullPath(Path.Combine(Root, path));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            // 非法字符（如 NUL）、空段等会让 Path 抛异常，应转为清晰的工具错误而非裸异常
+            throw new ToolException($"路径非法: '{path}'（{ex.Message}）");
+        }
         if (!IsWithin(full))
             throw new ToolException($"路径 '{path}' 位于工作区之外，已拒绝访问。");
         return full;

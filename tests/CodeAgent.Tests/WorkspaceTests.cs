@@ -86,6 +86,16 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public void Resolve_InvalidPathChars_ThrowsToolException()
+    {
+        // 回归：含 NUL 等非法字符的路径曾让 Path.GetFullPath 抛裸 ArgumentException，
+        // 应转为清晰的 ToolException
+        var ws = new Workspace(Root);
+        var ex = Assert.Throws<ToolException>(() => ws.Resolve("bad\0name.txt"));
+        Assert.Contains("路径非法", ex.Message);
+    }
+
+    [Fact]
     public void ToRelative_ConvertsBack()
     {
         var ws = new Workspace(Root);
