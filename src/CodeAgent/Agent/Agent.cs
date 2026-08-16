@@ -355,30 +355,40 @@ public sealed class Agent
             }
 
             // 流式：文本增量实时打印到控制台，首次增量到达时先清掉思考指示器
+            _reasoningShown = false;
             var result = await CallWithRetryAsync(
                 () => _provider.ChatStreamAsync(_messages, ToolsForMode(), _ctx.Config.ThinkingEffort, delta =>
                 {
                     if (!_streamedThisCall)
                     {
-                        ClearSpinner();
+                        // 思考结束（首个文本到达）：定格"用时 · tokens"统计行，结论文本从下一行流式输出
+                        FinalizeSpinner();
                         _streamedThisCall = true;
                     }
-                    FlushReasoning(); // 内容到达：先输出缓冲的思考内容
                     _renderer?.Append(delta);
                     _streamTokens += delta.Length / 4; // 内容 token 计数（spinner 尚在时继续 ↑）
                 }, reason =>
                 {
-                    // 思考内容：先缓冲，不打断计时器；内容到达或回合结束时统一暗色输出
-                    _reasoningBuf.Append(reason);
+                    // 思考内容：实时流式输出（暗色），而非缓冲到最后一次性显示
+                    if (!_reasoningShown)
+                    {
+                        ClearSpinner(); // 思考内容开始显示：清掉 spinner 行
+                        _reasoningShown = true;
+                    }
                     _streamTokens += reason.Length / 4; // 估算已生成 token（spinner ↑ 显示）
+                    lock (ConsoleLock)
+                    {
+                        SafeColor.Foreground(ConsoleColor.DarkGray);
+                        Console.Write(reason);
+                        SafeColor.Reset();
+                    }
                 }, frag =>
                 {
                     _streamTokens += frag.Length / 4; // 工具调用参数也计入 ↑ tokens
                 }, ct), ct);
 
-            if (!_streamedThisCall)
+            if (!_streamedThisCall && !_reasoningShown)
                 ClearSpinner();
-            FlushReasoning(); // 无内容（如工具调用轮）也把思考内容输出
             return result;
         }
         catch
@@ -427,7 +437,7 @@ public sealed class Agent
     private System.Threading.CancellationTokenSource? _spinnerCts;
     private readonly System.Diagnostics.Stopwatch _spinnerSw = new();
     private readonly System.Diagnostics.Stopwatch _sessionSw = new(); // 整个对话的累计用时
-    private readonly System.Text.StringBuilder _reasoningBuf = new();
+    private bool _reasoningShown; // 本轮是否已开始实时输出思考内容（首段到达时清掉 spinner）
     private long _streamTokens; // 当前调用已流式生成的 token 估算（字符数/4）
     private static readonly string[] SpinnerFrames = ["⠦", "⠸", "⠼", "⠴", "⠦", "⠇"];
 
@@ -453,8 +463,9 @@ public sealed class Agent
                     var f = SpinnerFrames[frame++ % SpinnerFrames.Length];
                     var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
                     var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
+                    // 显示实际用时与 token（而非"思考中"），实时更新
                     lock (ConsoleLock)
-                        Console.Write($"\r{f} 思考中… {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens");
+                        Console.Write($"\r{f} 用时 {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens");
                     await Task.Delay(120, cts.Token);
                 }
             }
@@ -472,17 +483,21 @@ public sealed class Agent
         Console.Write("\r" + new string(' ', 60) + "\r");
     }
 
-    /// <summary>输出缓冲的思考内容（暗色）；思考用时已由常驻指示行显示。</summary>
-    private void FlushReasoning()
+    /// <summary>思考结束（首个文本到达）：把 spinner 行定格为「用时 X · ↑ tokens」统计行并换行。
+    /// 用户要求思考结束后仍实时看到用时与 token，而不是 spinner 直接消失。</summary>
+    private void FinalizeSpinner()
     {
-        if (_reasoningBuf.Length == 0)
-            return;
-        Console.WriteLine();
-        SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.Write(_reasoningBuf.ToString());
-        SafeColor.Reset();
-        Console.WriteLine();
-        _reasoningBuf.Clear();
+        _spinnerCts?.Cancel();
+        TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
+        var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
+        var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
+        if (!_reasoningShown)
+        {
+            // spinner 动画行还在：先清掉再定格（避免残留帧字符）
+            Console.Write("\r" + new string(' ', 60) + "\r");
+        }
+        // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
+        Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens");
     }
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
