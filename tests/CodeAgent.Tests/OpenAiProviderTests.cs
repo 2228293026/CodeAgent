@@ -66,19 +66,57 @@ public class OpenAiProviderTests
         Assert.NotNull(asst["tool_calls"]);
     }
 
-    [Fact]
-    public async Task ListModelsAsync_ParsesModelIds()
+    /// <summary>返回指定状态码响应的假 HttpClient 处理器。</summary>
+    private sealed class StatusHandler : HttpMessageHandler
     {
-        var handler = new CaptureHandler();
-        // 覆写响应：模型列表 JSON
-        handler.OverrideBody = """
-            {"data":[{"id":"gpt-4o"},{"id":"gpt-4o-mini"},{"id":"o3"}]}
-            """;
+        public int StatusCode { get; init; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage((HttpStatusCode)StatusCode)
+            {
+                Content = new StringContent("""{"error":{"message":"boom"}}""", Encoding.UTF8, "application/json"),
+            });
+    }
+
+    [Theory]
+    [InlineData(429, true)]   // 限流 → 可重试
+    [InlineData(500, true)]   // 服务端错误 → 可重试
+    [InlineData(503, true)]
+    [InlineData(400, false)]  // 请求错误 → 不可重试
+    [InlineData(401, false)]  // 鉴权失败 → 不可重试
+    public async Task ChatAsync_ErrorStatus_ClassifiesRetryable(int statusCode, bool expectRetryable)
+    {
         var provider = new OpenAiProvider(
-            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(new StatusHandler { StatusCode = statusCode }));
 
-        var models = await provider.ListModelsAsync(CancellationToken.None);
+        var ex = await Assert.ThrowsAsync<ProviderException>(() =>
+            provider.ChatAsync(
+                [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+                [], "off", CancellationToken.None));
 
-        Assert.Equal(["gpt-4o", "gpt-4o-mini", "o3"], models);
+        Assert.Equal(statusCode, ex.StatusCode);
+        Assert.Equal(expectRetryable, ex.Retryable); // 重试分类决定 Agent 是否自动重试
+    }
+
+    [Fact]
+    public async Task ChatAsync_RequestTimeout_ThrowsProviderException()
+    {
+        // 用短超时的 HttpClient：SlowHandler 永远延迟，触发超时路径（避免等默认 100s）
+        var http = new HttpClient(new SlowHandler()) { Timeout = TimeSpan.FromSeconds(2) };
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "test-key" }, http);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(() =>
+            provider.ChatAsync(
+                [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+                [], "off", CancellationToken.None));
+        Assert.Contains("超时", ex.Message);
+    }
+
+    /// <summary>永远延迟的处理器：触发 HttpClient 超时（用极短超时验证）。</summary>
+    private sealed class SlowHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.Delay(Timeout.Infinite, ct).ContinueWith(_ => new HttpResponseMessage(), ct);
     }
 }
