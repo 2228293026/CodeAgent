@@ -8,13 +8,13 @@ namespace CodeAgent.Tools;
 public sealed class GlobTool : ITool
 {
     public string Name => "glob";
-    public string Description => "按 glob 模式查找文件，如 src/**/*.cs 或 *.sln。返回相对路径列表。";
+    public string Description => "按 glob 模式查找文件，如 src/**/*.cs 或 *.sln。pattern 可用字符串或数组（任一匹配即命中）。返回相对路径列表。";
     public JsonObject Parameters { get; } = new()
     {
         ["type"] = "object",
         ["properties"] = new JsonObject
         {
-            ["pattern"] = new JsonObject { ["type"] = "string", ["description"] = "glob 模式，支持 ** 跨目录、*、?" },
+            ["pattern"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "glob 模式，支持 ** 跨目录、*、?；可用字符串或字符串数组" },
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索起点目录，默认工作区根目录" },
         },
         ["required"] = new JsonArray("pattern"),
@@ -22,8 +22,8 @@ public sealed class GlobTool : ITool
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
-        var pattern = ToolArgs.GetString(args, "pattern");
-        if (string.IsNullOrWhiteSpace(pattern))
+        var patterns = ToolArgs.GetStringList(args, "pattern");
+        if (patterns is null || patterns.Count == 0)
             throw new ToolException("缺少必填参数 pattern");
 
         var basePath = ToolArgs.GetString(args, "path");
@@ -31,7 +31,7 @@ public sealed class GlobTool : ITool
         if (!Directory.Exists(start))
             throw new ToolException($"目录不存在: {basePath}");
 
-        var re = Glob.ToRegex(pattern);
+        var regexes = patterns.Select(Glob.ToRegex).ToList();
         var results = new List<string>();
         var scanned = 0;
 
@@ -40,13 +40,13 @@ public sealed class GlobTool : ITool
             if (scanned++ > 200_000 || results.Count > 500)
                 break;
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
-            if (re.IsMatch(rel))
+            if (regexes.Any(r => r.IsMatch(rel)))
                 results.Add(rel);
         }
 
         await Task.Yield();
         if (results.Count == 0)
-            return $"(没有匹配 {pattern} 的文件)";
+            return $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
         var shown = string.Join('\n', results.Take(300));
         return shown + (results.Count > 300 ? $"\n…(共 {results.Count} 个，仅显示前 300)" : "");
     }
