@@ -434,7 +434,8 @@ public sealed class Agent
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
 
-    /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens（首个输出到达前屏幕无其他输出，安全）。</summary>
+    /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens。
+    /// 先换到输入行下方独立一行（spinner 专属行），\r 只更新该行，不覆盖输入框。</summary>
     private void ShowSpinner()
     {
         _spinnerSw.Restart();
@@ -442,6 +443,7 @@ public sealed class Agent
         _spinnerCts = new System.Threading.CancellationTokenSource();
         var cts = _spinnerCts;
         var frame = 0;
+        Console.WriteLine(); // 输入行下方新行：spinner 独立显示，避免与输入框/输出混在一起
         _ = Task.Run(async () =>
         {
             try
@@ -465,17 +467,9 @@ public sealed class Agent
     {
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
-        if (TurnThinkingSeconds >= 1 || _streamTokens > 0)
-        {
-            // 常驻指示行：整个对话的累计时间 + 累计 tokens
-            var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
-            var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
-            Console.WriteLine("\r" + $"⠦ 思考中… {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens".PadRight(50));
-        }
-        else
-        {
-            Console.Write("\r" + new string(' ', 50) + "\r");
-        }
+        // 清空 spinner 行并回到行首：不留常驻文本（思考时长由回合摘要行显示），
+        // 流式输出/工具日志从该行继续，输入行保持在上方
+        Console.Write("\r" + new string(' ', 60) + "\r");
     }
 
     /// <summary>输出缓冲的思考内容（暗色）；思考用时已由常驻指示行显示。</summary>
