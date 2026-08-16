@@ -59,6 +59,19 @@ public static class TextUtil
     /// <summary>耗时格式：不足 1 秒用毫秒（避免快操作显示 0.0s），否则显示秒。</summary>
     public static string FormatDuration(TimeSpan t) =>
         t.TotalSeconds < 1 ? $"{t.TotalMilliseconds:F0}ms" : $"{t.TotalSeconds:F1}s";
+
+    /// <summary>模型短名：取 '/' 后的末段；末段过短（&lt;5 字符）不具辨识度时保留完整名。</summary>
+    public static string ShortModelName(string model)
+    {
+        var slash = model.LastIndexOf('/');
+        if (slash >= 0)
+        {
+            var last = model[(slash + 1)..];
+            if (last.Length >= 5)
+                return last;
+        }
+        return model;
+    }
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>

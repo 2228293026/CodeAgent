@@ -38,4 +38,13 @@ public class TextUtilFormattingTests
     [Fact]
     public void FormatDuration_OverSecond_OneDecimal() =>
         Assert.Equal("1.5s", TextUtil.FormatDuration(TimeSpan.FromSeconds(1.5)));
+
+    [Theory]
+    [InlineData("deepseek-chat", "deepseek-chat")]                     // 无斜杠：原样
+    [InlineData("poolside/laguna-s-2.1:free", "laguna-s-2.1:free")]    // 末段够长：取末段
+    [InlineData("provider/free", "provider/free")]                     // 末段过短：保留完整名
+    [InlineData("a/b/c", "a/b/c")]                                     // 末段 1 字符：保留完整名
+    [InlineData("x/y/long-model-name", "long-model-name")]             // 多层路径取最后一段
+    public void ShortModelName_SelectsReadableSegment(string model, string expected) =>
+        Assert.Equal(expected, TextUtil.ShortModelName(model));
 }

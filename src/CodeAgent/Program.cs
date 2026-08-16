@@ -410,14 +410,7 @@ internal static class Program
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
     private static string PromptFor(ProviderOptions opts, AgentClass agent)
     {
-        var model = opts.Model;
-        var slash = model.LastIndexOf('/');
-        if (slash >= 0)
-        {
-            var last = model[(slash + 1)..];
-            // 末段过短（如 "free"）不具辨识度时显示完整模型名
-            model = last.Length >= 5 ? last : model;
-        }
+        var model = TextUtil.ShortModelName(opts.Model);
         var dir = new DirectoryInfo(Environment.CurrentDirectory).Name;
         return $"\n[{agent.CurrentMode.Name}|{model}] {dir}> ";
     }
