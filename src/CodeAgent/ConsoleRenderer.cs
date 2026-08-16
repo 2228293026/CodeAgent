@@ -145,14 +145,17 @@ public sealed class ConsoleRenderer
 
     private void EmitLine(string line)
     {
-        var content = line.EndsWith('\n') ? line[..^1] : line;
+        // 剥离行尾 \r（Windows 换行残留）：否则终端把 \r 当回车，光标跳回行首覆盖本行
+        var hadNewline = line.EndsWith('\n');
+        var content = hadNewline ? line[..^1] : line;
+        content = content.TrimEnd('\r');
         var color = ResolveLineColor(content);
         var parts = ParseInline(content);
 
         // 无任何样式：原样输出（保留换行）
         if (color is null && parts.Count <= 1)
         {
-            Console.Write(line);
+            Console.Write(content + (hadNewline ? "\n" : ""));
             return;
         }
 

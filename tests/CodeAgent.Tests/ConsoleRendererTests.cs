@@ -37,6 +37,28 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_CrlfLineEndings_DoNotLeakCarriageReturns()
+    {
+        // 回归：Windows 换行（\r\n）的行尾 \r 曾被原样输出，终端会把它当回车跳回行首覆盖本行
+        var output = Render("第一行\r\n第二行\r\n");
+        Assert.Contains("第一行", output);
+        Assert.Contains("第二行", output);
+        Assert.DoesNotContain("\r", output); // \r 不应残留
+        Assert.Equal(2, output.TrimEnd('\n').Split('\n').Length); // 两行都完整
+    }
+
+    [Fact]
+    public void Append_LastLineWithCrNoNewline_IsTrimmed()
+    {
+        // 流末尾的行若以 \r 结束（无 \n），也不应残留回车
+        var r = new CodeAgent.ConsoleRenderer(enabled: true);
+        r.Append("tail content\r");
+        r.Flush();
+        Assert.Contains("tail content", _out.ToString());
+        Assert.DoesNotContain("\r", _out.ToString());
+    }
+
+    [Fact]
     public void Append_CodeFence_EmitsCodeContent()
     {
         var output = Render("```\nint x = 1;\n```");
