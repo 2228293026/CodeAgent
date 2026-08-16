@@ -72,10 +72,12 @@ public sealed class WriteFileTool : ITool
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
         var path = ToolArgs.GetString(args, "path");
-        var content = ToolArgs.GetString(args, "content");
         if (string.IsNullOrWhiteSpace(path))
             throw new ToolException("缺少必填参数 path");
+        if (args?["content"] is null)
+            throw new ToolException("缺少必填参数 content");
 
+        var content = ToolArgs.GetString(args, "content");
         var full = ctx.Workspace.Resolve(path);
         if (ToolArgs.GetBool(args, "create_dirs", true))
         {
