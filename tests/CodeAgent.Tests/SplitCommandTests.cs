@@ -14,6 +14,15 @@ public class SplitCommandTests
         Assert.Equal("gpt-4o", rest);
     }
 
+    [Theory]
+    [InlineData("\u001bCANCELLED_TURN", true)]                        // 取消哨兵
+    [InlineData("已取消。", false)]                                    // 回归：模型回复含"已取消"字样不应误判为取消
+    [InlineData("该操作已取消，请重试。", false)]                       // 含"已取消"子串的普通回复
+    [InlineData("正常回复文本", false)]
+    [InlineData(null, false)]
+    public void IsCancelledTurn_ExactMatchOnly(string? result, bool expected) =>
+        Assert.Equal(expected, Program.IsCancelledTurn(result));
+
     [Fact]
     public void CommandWithoutArgs_EmptyRest()
     {

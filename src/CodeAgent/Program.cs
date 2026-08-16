@@ -11,6 +11,12 @@ internal static class Program
     /// <summary>当前正在运行的一轮请求（供 Ctrl+C / ESC 取消）。</summary>
     private static CancellationTokenSource? _activeTurn;
 
+    /// <summary>回合被用户取消的哨兵返回（区别于模型回复文本：模型内容可能含"已取消"字样）。</summary>
+    private const string CancelledTurnMarker = "\u001bCANCELLED_TURN";
+
+    /// <summary>判断结果是否为「用户取消」哨兵（精确匹配，防止模型文本含"已取消"被误判）。</summary>
+    internal static bool IsCancelledTurn(string? result) => result == CancelledTurnMarker;
+
     private static string InformationalVersion =>
         Assembly.GetEntryAssembly()?
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
@@ -188,6 +194,8 @@ internal static class Program
             try
             {
                 var result = await RunTurnAsync(t => agent.RunAsync(string.Join(" ", positional), t));
+                if (IsCancelledTurn(result))
+                    result = "\n⏹ 已取消。"; // 哨兵映射回显示文本（一次性模式没有草稿回填）
                 PrintResult(result, agent.StreamedLastRun, prefixNewline: false);
                 agent.Close();
                 return agent.LastTurnFailed ? 1 : 0; // 空回复视为失败，非零退出码供脚本判断
@@ -258,7 +266,7 @@ internal static class Program
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var result = await RunTurnAsync(t => agent.RunAsync(line, t));
                 sw.Stop();
-                if (result.Contains("已取消"))
+                if (IsCancelledTurn(result))
                 {
                     // ESC/Ctrl+C 取消本轮：撤回未完成的消息，输入恢复到输入框（可修改重发）
                     agent.UndoLastTurn();
@@ -348,7 +356,8 @@ internal static class Program
         }
         catch (OperationCanceledException)
         {
-            return "\n⏹ 已取消。";
+            // 返回哨兵而非文本：REPL 用 IsCancelledTurn 精确判断，避免模型回复含"已取消"字样被误判
+            return CancelledTurnMarker;
         }
         finally
         {
