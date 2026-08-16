@@ -192,7 +192,7 @@ public static class InputLine
     ];
 
     private static readonly HistoryStore History = new(Path.Combine(Environment.CurrentDirectory, ".codeagent", "history.txt"));
-    private const int MenuMaxRows = 8;
+    private const int MenuMaxRows = 9; // 与 header 的 "1-9 run" 及数字键上限一致
 
     /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
     public const string RecallMarker = "\u001bRECALL";
