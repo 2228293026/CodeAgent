@@ -184,7 +184,11 @@ public sealed class ToolRegistry
         JsonObject? args;
         try
         {
-            args = JsonNode.Parse(argsJson) as JsonObject ?? new JsonObject();
+            // 空白参数视为空对象（与各 Provider 的 ?? "{}" 兜底一致），避免模型给空字符串时误报非法 JSON
+            if (string.IsNullOrWhiteSpace(argsJson))
+                args = new JsonObject();
+            else
+                args = JsonNode.Parse(argsJson) as JsonObject ?? new JsonObject();
         }
         catch (JsonException)
         {
