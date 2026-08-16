@@ -222,6 +222,14 @@ public sealed class ConsoleRenderer
             }
             else if (s[i] == '*' && i + 1 < s.Length && s[i + 1] == '*')
             {
+                // 行内代码内一切按字面处理：`a**b` 的 ** 应保留，不能作为加粗开关消费
+                if (style == InlineStyle.Code)
+                {
+                    cur.Append(s[i]);
+                    cur.Append(s[i + 1]);
+                    i++;
+                    continue;
+                }
                 // 连续 3 个及以上星号按字面文本保留（如 *** 分隔符），
                 // 否则 *** 会被解析成 ** 加粗开关 + 单个 *，渲染时丢失两个星号
                 var run = 2;

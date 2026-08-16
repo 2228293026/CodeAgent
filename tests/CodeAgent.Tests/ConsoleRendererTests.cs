@@ -169,6 +169,25 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_DoubleAsterisksInsideInlineCode_AreLiteral()
+    {
+        // 回归：`a**b` 中 ** 曾被当作加粗开关消费，渲染后星号丢失（输出 "ab"）；
+        // 行内代码内容应逐字保留
+        var output = Render("run `a**b` now");
+        Assert.Contains("a**b", output); // 星号完整保留
+        Assert.Contains("run", output);
+        Assert.Contains("now", output);
+    }
+
+    [Fact]
+    public void Append_BoldWithInlineCode_KeepBackticks()
+    {
+        // 粗体内嵌套行内代码：反引号内容与星号都应保留
+        var output = Render("**`x**y`**");
+        Assert.Contains("x**y", output);
+    }
+
+    [Fact]
     public void Disabled_OutputsRawText()
     {
         var r = new CodeAgent.ConsoleRenderer(enabled: false);
