@@ -105,4 +105,21 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("3\t", output); // 末尾换行不应产生幽灵空行
         Assert.DoesNotContain("bbb\r", output); // 行尾 \r 不应残留在内容里
     }
+
+    [Fact]
+    public async Task ReadFile_StringNumberParams_AreParsedTolerantly()
+    {
+        // 模型常把数字参数序列化为字符串（"2" / "true"），应正确解析而非回退默认值
+        var path = Path.Combine(_dir, "r4.txt");
+        File.WriteAllText(path, "line1\nline2\nline3");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "r4.txt", ["offset"] = "2", ["limit"] = "1", ["no_line_numbers"] = "true" },
+            ctx, CancellationToken.None);
+        Assert.Contains("line2", output); // offset=2, limit=1 → 只有第二行
+        Assert.DoesNotContain("line1", output);
+        Assert.DoesNotContain("line3", output);
+    }
 }

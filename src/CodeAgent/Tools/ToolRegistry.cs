@@ -84,11 +84,26 @@ internal static class ToolArgs
     public static string GetString(JsonObject? args, string key, string def = "") =>
         args?[key]?.GetValue<string>() ?? def;
 
-    public static int GetInt(JsonObject? args, string key, int def) =>
-        args?[key] is JsonValue v && v.TryGetValue<int>(out var i) ? i : def;
+    /// <summary>读取整数；兼容模型把数字序列化为字符串的情况（如 "300"）。</summary>
+    public static int GetInt(JsonObject? args, string key, int def)
+    {
+        if (args?[key] is not JsonValue v)
+            return def;
+        if (v.TryGetValue<int>(out var i))
+            return i;
+        return v.TryGetValue<string>(out var s) && int.TryParse(s, out var p) ? p : def;
+    }
 
-    public static bool GetBool(JsonObject? args, string key, bool def) =>
-        args?[key] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : def;
+    /// <summary>读取布尔；兼容 "true"/"false"/"1"/"0" 字符串。</summary>
+    public static bool GetBool(JsonObject? args, string key, bool def)
+    {
+        if (args?[key] is not JsonValue v)
+            return def;
+        if (v.TryGetValue<bool>(out var b))
+            return b;
+        return v.TryGetValue<string>(out var s) && (s.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               s.Equals("1", StringComparison.OrdinalIgnoreCase) || s.Equals("yes", StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>读取一个字符串键值对对象（env 等）；key 缺失或不是对象时返回 null。</summary>
     public static Dictionary<string, string>? GetStringDict(JsonObject? args, string key)
