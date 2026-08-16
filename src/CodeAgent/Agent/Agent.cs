@@ -92,6 +92,8 @@ public sealed class Agent
     {
         _messages.Clear();
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
+        // 清空后没有「上一轮」可撤回：重置起点，避免 ESC 撤回按过期索引误删
+        LastTurnStartCount = _messages.Count;
     }
 
     /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
@@ -134,6 +136,8 @@ public sealed class Agent
     {
         _messages.Clear();
         _messages.AddRange(LoadMessages(name));
+        // 加载的会话没有「上一轮」可撤回：重置起点，否则 ESC 撤回会按过期索引删掉刚加载的消息
+        LastTurnStartCount = _messages.Count;
     }
 
     /// <summary>把当前对话（或指定命名会话）导出为 Markdown 记录，返回文件路径。</summary>

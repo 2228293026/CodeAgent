@@ -220,4 +220,36 @@ public class AgentSessionTests : IDisposable
         Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(exportDir)!, "evil.md")),
             "不得在 ExportDir 父目录写出 evil.md（路径穿越）");
     }
+
+    [Fact]
+    public async Task LoadSession_ResetsUndoStart()
+    {
+        // 回归：/load 曾不重置 LastTurnStartCount，加载会话后空输入按 ESC 会按过期索引
+        // RemoveRange 删掉刚加载的消息；现在加载后没有「上一轮」可撤回
+        var agent = MakeAgent(_sessionDir, out var path);
+        await agent.RunAsync("第一轮", CancellationToken.None);
+        await agent.RunAsync("第二轮", CancellationToken.None);
+        var saved = agent.MessageCount;
+        agent.SaveSession("multi");
+
+        var restored = MakeAgent(_sessionDir, out _);
+        restored.LoadSession("multi");
+        Assert.Equal(saved, restored.MessageCount);
+
+        Assert.Null(restored.UndoLastTurn()); // 加载的会话无「上一轮」可撤回
+        Assert.Equal(saved, restored.MessageCount); // 消息未被误删
+    }
+
+    [Fact]
+    public async Task Reset_ResetsUndoStart()
+    {
+        // 回归：/clear 曾不重置 LastTurnStartCount；现在清空后 ESC 撤回应是无操作
+        var agent = MakeAgent(_sessionDir, out _);
+        await agent.RunAsync("你好", CancellationToken.None);
+        Assert.NotNull(agent.UndoLastTurn()); // 清空前可撤回
+
+        agent.Reset();
+        Assert.Null(agent.UndoLastTurn()); // 清空后无「上一轮」可撤回
+        Assert.Equal(1, agent.MessageCount); // 仅剩 system
+    }
 }
