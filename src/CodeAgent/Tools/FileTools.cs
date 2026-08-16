@@ -93,6 +93,8 @@ public sealed class WriteFileTool : ITool
 
         var content = ToolArgs.GetString(args, "content");
         var full = ctx.Workspace.Resolve(path);
+        if (Directory.Exists(full))
+            throw new ToolException($"'{path}' 是目录，不能作为文件写入（目标应为文件路径）。");
         if (ToolArgs.GetBool(args, "create_dirs", true))
         {
             var dir = Path.GetDirectoryName(full);
@@ -160,6 +162,8 @@ public sealed class EditFileTool : ITool
             throw new ToolException("缺少必填参数 old_string");
 
         var full = ctx.Workspace.Resolve(path);
+        if (Directory.Exists(full))
+            throw new ToolException($"'{path}' 是目录，edit_file 只能修改文件。");
         if (!File.Exists(full))
             throw new ToolException($"文件不存在: {path}");
 
@@ -226,6 +230,8 @@ public sealed class ListDirectoryTool : ITool
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
 
         var root = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(path) ? null : path);
+        if (File.Exists(root))
+            throw new ToolException($"'{path}' 是文件，请用 read_file 查看内容。");
         if (!Directory.Exists(root))
             throw new ToolException($"目录不存在: {path}");
 

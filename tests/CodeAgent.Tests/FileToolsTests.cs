@@ -137,4 +137,42 @@ public class FileToolsTests : IDisposable
         Assert.Contains("list_directory", ex.Message);
         Assert.DoesNotContain("文件不存在", ex.Message);
     }
+
+    [Fact]
+    public async Task WriteFile_DirectoryPath_ThrowsHint()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "adir"));
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(
+            () => tool.ExecuteAsync(new JsonObject { ["path"] = "adir", ["content"] = "x" }, ctx, CancellationToken.None));
+        Assert.Contains("是目录", ex.Message);
+    }
+
+    [Fact]
+    public async Task EditFile_DirectoryPath_ThrowsHint()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "edir"));
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(
+            () => tool.ExecuteAsync(
+                new JsonObject { ["path"] = "edir", ["old_string"] = "a", ["new_string"] = "b" },
+                ctx, CancellationToken.None));
+        Assert.Contains("是目录", ex.Message);
+    }
+
+    [Fact]
+    public async Task ListDirectory_FilePath_ThrowsHint()
+    {
+        File.WriteAllText(Path.Combine(_dir, "afile.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(
+            () => tool.ExecuteAsync(new JsonObject { ["path"] = "afile.txt" }, ctx, CancellationToken.None));
+        Assert.Contains("read_file", ex.Message);
+    }
 }
