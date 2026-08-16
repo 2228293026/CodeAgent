@@ -90,6 +90,17 @@ internal static class Program
             return 2;
         }
 
+        // --cwd 先于 --init/--setup 生效：--init 生成的示例配置应写入目标目录
+        if (cwd is not null)
+        {
+            if (!Directory.Exists(cwd))
+            {
+                Console.Error.WriteLine($"目录不存在: {cwd}");
+                return 2;
+            }
+            Environment.CurrentDirectory = Path.GetFullPath(cwd);
+        }
+
         if (init)
         {
             var target = Path.Combine(Environment.CurrentDirectory, "codeagent.json");
@@ -103,16 +114,6 @@ internal static class Program
             Console.WriteLine("提示: 也可运行 codeagent --setup 用向导快速配置供应商。");
             Console.WriteLine("请填入 API Key（或设置对应环境变量），然后运行 codeagent。");
             return 0;
-        }
-
-        if (cwd is not null)
-        {
-            if (!Directory.Exists(cwd))
-            {
-                Console.Error.WriteLine($"目录不存在: {cwd}");
-                return 2;
-            }
-            Environment.CurrentDirectory = Path.GetFullPath(cwd);
         }
 
         AgentConfig config;
