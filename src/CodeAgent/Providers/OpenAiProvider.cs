@@ -339,11 +339,12 @@ public sealed class OpenAiProvider : IAgentProvider
 
                 case MessageRole.Assistant:
                 {
-                    var obj = new JsonObject
-                    {
-                        ["role"] = "assistant",
-                        ["content"] = m.Content ?? "",
-                    };
+                    var obj = new JsonObject { ["role"] = "assistant" };
+                    // 带 tool_calls 且无文本时传 null content：部分 OpenAI 兼容 API 会拒绝空字符串
+                    if (m.ToolCalls is { Count: > 0 } && string.IsNullOrEmpty(m.Content))
+                        obj["content"] = null;
+                    else
+                        obj["content"] = m.Content ?? "";
                     if (m.ToolCalls is { Count: > 0 })
                     {
                         var calls = new JsonArray();
