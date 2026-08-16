@@ -43,41 +43,51 @@ internal static class Program
         var listModels = false;
         var positional = new List<string>();
 
-        for (int i = 0; i < args.Length; i++)
+        try
         {
-            switch (args[i])
+            for (int i = 0; i < args.Length; i++)
             {
-                case "-c" or "--config":
-                    configPath = NextArg(args, ref i, "--config");
-                    break;
-                case "-p" or "--provider":
-                    provider = NextArg(args, ref i, "--provider");
-                    break;
-                case "-m" or "--model":
-                    model = NextArg(args, ref i, "--model");
-                    break;
-                case "--cwd":
-                    cwd = NextArg(args, ref i, "--cwd");
-                    break;
-                case "--init":
-                    init = true;
-                    break;
-                case "--setup":
-                    setup = true;
-                    break;
-                case "--models":
-                    listModels = true;
-                    break;
-                case "-v" or "--version":
-                    Console.WriteLine($"codeagent {InformationalVersion}");
-                    return 0;
-                case "-h" or "--help":
-                    PrintHelp();
-                    return 0;
-                default:
-                    positional.Add(args[i]);
-                    break;
+                switch (args[i])
+                {
+                    case "-c" or "--config":
+                        configPath = NextArg(args, ref i, "--config");
+                        break;
+                    case "-p" or "--provider":
+                        provider = NextArg(args, ref i, "--provider");
+                        break;
+                    case "-m" or "--model":
+                        model = NextArg(args, ref i, "--model");
+                        break;
+                    case "--cwd":
+                        cwd = NextArg(args, ref i, "--cwd");
+                        break;
+                    case "--init":
+                        init = true;
+                        break;
+                    case "--setup":
+                        setup = true;
+                        break;
+                    case "--models":
+                        listModels = true;
+                        break;
+                    case "-v" or "--version":
+                        Console.WriteLine($"codeagent {InformationalVersion}");
+                        return 0;
+                    case "-h" or "--help":
+                        PrintHelp();
+                        return 0;
+                    default:
+                        positional.Add(args[i]);
+                        break;
+                }
             }
+        }
+        catch (ArgumentException ex)
+        {
+            // 参数缺值（如 codeagent -c）应友好提示而非抛堆栈
+            Console.Error.WriteLine($"参数错误: {ex.Message}");
+            PrintHelp();
+            return 2;
         }
 
         if (init)
