@@ -79,10 +79,18 @@ public static class Glob
             {
                 if (i + 1 < pattern.Length && pattern[i + 1] == '*')
                 {
-                    sb.Append(".*");
                     i++;
                     if (i + 1 < pattern.Length && (pattern[i + 1] == '/' || pattern[i + 1] == '\\'))
+                    {
+                        // **/ 表示「零或多个目录段 + 分隔符」：a/**/b 应匹配 a/b、a/x/b，
+                        // 但不能匹配 a/xb（x 不是目录段）。因此用 (?:…/)* 而非 .*
+                        sb.Append("(?:[^/\\\\]*/)*");
                         i++;
+                    }
+                    else
+                    {
+                        sb.Append(".*");
+                    }
                 }
                 else
                 {

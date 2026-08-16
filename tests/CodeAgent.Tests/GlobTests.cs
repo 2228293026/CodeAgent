@@ -23,6 +23,27 @@ public class GlobTests
     }
 
     [Fact]
+    public void DoubleStarSlash_DoesNotMatchPartialSegment()
+    {
+        // 回归：a/**/b 曾用 .* 导致误匹配 a/xb（x 不是目录段）；现在只匹配完整目录段
+        var re = Glob.ToRegex("a/**/b");
+        Assert.Matches(re, "a/b");
+        Assert.Matches(re, "a/x/b");
+        Assert.Matches(re, "a/x/y/b");
+        Assert.DoesNotMatch(re, "a/xb");
+        Assert.DoesNotMatch(re, "a/xb/c");
+    }
+
+    [Fact]
+    public void DoubleStarSlash_AtStart_DoesNotMatchPartialSegment()
+    {
+        var re = Glob.ToRegex("**/foo.txt");
+        Assert.Matches(re, "foo.txt");
+        Assert.Matches(re, "src/deep/foo.txt");
+        Assert.DoesNotMatch(re, "xfoo.txt");
+    }
+
+    [Fact]
     public void Question_MatchesExactlyOneChar()
     {
         var re = Glob.ToRegex("a?c.txt");
