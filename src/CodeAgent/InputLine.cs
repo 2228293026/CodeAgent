@@ -89,6 +89,72 @@ public sealed class EditableLine
 }
 
 /// <summary>
+/// 输入历史存储：去重（连续重复不入）、上限 100、持久化到文件。
+/// 独立成类以便单测（此前逻辑在 InputLine 内部且依赖硬编码路径，无法测试）。
+/// </summary>
+public sealed class HistoryStore
+{
+    public const int MaxEntries = 100;
+
+    private readonly string _path;
+    private readonly List<string> _entries;
+
+    public HistoryStore(string path)
+    {
+        _path = path;
+        _entries = Load();
+    }
+
+    /// <summary>历史条目（旧 → 新）。</summary>
+    public IReadOnlyList<string> Entries => _entries;
+
+    public int Count => _entries.Count;
+
+    /// <summary>记录一条输入：空白忽略、与末尾重复忽略、超上限丢最旧。</summary>
+    public void Remember(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+            return;
+        if (_entries.Count > 0 && _entries[^1] == line)
+            return;
+        _entries.Add(line);
+        if (_entries.Count > MaxEntries)
+            _entries.RemoveAt(0);
+        Save();
+    }
+
+    private List<string> Load()
+    {
+        try
+        {
+            if (!File.Exists(_path))
+                return [];
+            return File.ReadAllLines(_path)
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .TakeLast(MaxEntries)
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private void Save()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            File.WriteAllLines(_path, _entries.TakeLast(MaxEntries));
+        }
+        catch
+        {
+            // 历史保存失败不影响主流程
+        }
+    }
+}
+
+/// <summary>
 /// 终端输入行：斜杠命令菜单（**ANSI 原地渲染**：方向键让 ">" 在列表内上下移动，
 /// 纯转义文本输出，不依赖控制台光标 API，兼容 Windows Terminal 等现代终端；
 /// `tuiAnsi=false` 时退回滚动式）、数字键 1-9 直接执行、↑/↓ 历史、TAB 补全、
@@ -97,9 +163,6 @@ public sealed class EditableLine
 /// </summary>
 public static class InputLine
 {
-    private static readonly string HistoryFile =
-        Path.Combine(Environment.CurrentDirectory, ".codeagent", "history.txt");
-
     /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。</summary>
     public static readonly (string Name, string Desc)[] Commands =
     [
@@ -128,8 +191,7 @@ public static class InputLine
         ("/quit", "Exit"),
     ];
 
-    private static readonly List<string> History = LoadHistory();
-    private const int MaxHistory = 100;
+    private static readonly HistoryStore History = new(Path.Combine(Environment.CurrentDirectory, ".codeagent", "history.txt"));
     private const int MenuMaxRows = 8;
 
     /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
@@ -175,7 +237,7 @@ public static class InputLine
 
         var buf = new EditableLine();
         buf.SetInitial(initial); // 预填：取消回合后把上一条输入恢复到输入框
-        var session = new List<string>(History);
+        var session = History.Entries.ToList();
         var idx = session.Count;
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
@@ -761,45 +823,6 @@ public static class InputLine
     /// <summary>输入是否以斜杠开头（兼容中文输入法的全角 ／）。</summary>
     private static bool SlashLike(string s) => s.StartsWith('/') || s.StartsWith('／');
 
-    private static void Remember(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-            return;
-        if (History.Count > 0 && History[^1] == line)
-            return;
-        History.Add(line);
-        if (History.Count > MaxHistory)
-            History.RemoveAt(0);
-        SaveHistory();
-    }
-
-    private static List<string> LoadHistory()
-    {
-        try
-        {
-            if (!File.Exists(HistoryFile))
-                return [];
-            return File.ReadAllLines(HistoryFile)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .TakeLast(MaxHistory)
-                .ToList();
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private static void SaveHistory()
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(HistoryFile)!);
-            File.WriteAllLines(HistoryFile, History.TakeLast(MaxHistory));
-        }
-        catch
-        {
-            // 历史保存失败不影响主流程
-        }
-    }
+    /// <summary>记录一条输入到历史（委托给 HistoryStore）。</summary>
+    private static void Remember(string line) => History.Remember(line);
 }
