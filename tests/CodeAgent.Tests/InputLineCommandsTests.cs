@@ -35,4 +35,18 @@ public class InputLineCommandsTests
         Assert.All(InputLine.Commands, c => Assert.StartsWith("/", c.Name));
         Assert.All(InputLine.Commands, c => Assert.False(string.IsNullOrWhiteSpace(c.Desc)));
     }
+
+    [Theory]
+    // 回归：菜单 23 项、窗口 8 项时，数字 9 应返回 -1（第 9 项不可见，不应被触发）
+    [InlineData(1, 0, 8, 23, 0)]   // 窗口第 1 项
+    [InlineData(8, 0, 8, 23, 7)]   // 窗口最后一项
+    [InlineData(9, 0, 8, 23, -1)]  // 超出可见窗口 → 忽略
+    [InlineData(3, 5, 8, 23, 7)]   // 窗口已滚动：第 3 项对应列表下标 5+3-1=7
+    [InlineData(9, 5, 8, 23, -1)]  // 滚动后数字 9 仍超出可见窗口
+    [InlineData(4, 0, 2, 2, -1)]   // 菜单只有 2 项：数字 4 无效
+    [InlineData(2, 0, 2, 2, 1)]    // 菜单 2 项：数字 2 有效
+    [InlineData(1, 0, 0, 23, 0)]   // 滚动模式（menuShown=0）：视为全部项可见
+    [InlineData(0, 0, 8, 23, -1)]  // 数字 0 无效
+    public void DigitKeySelection_RespectsVisibleWindow(int n, int offset, int shown, int count, int expected) =>
+        Assert.Equal(expected, InputLine.DigitKeySelection(n, offset, shown, count));
 }

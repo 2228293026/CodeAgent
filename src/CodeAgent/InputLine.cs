@@ -717,9 +717,10 @@ public static class InputLine
                     if (menuOpen && !modePicker && menuItems.Count > 0)
                     {
                         var n = key.Key - ConsoleKey.D1 + 1;
-                        if (n <= menuItems.Count)
+                        // 只对可见窗口内的项生效：菜单滚动后窗口外（如第 9 项）不可见，不应被数字键触发
+                        var selIdx = DigitKeySelection(n, menuOffset, menuShown, menuItems.Count);
+                        if (selIdx >= 0)
                         {
-                            var selIdx = Math.Min(menuOffset + n - 1, menuItems.Count - 1); // 窗口编号 -> 列表下标
                             var sel = menuItems[selIdx].Name;
                             CloseMenu();
                             Console.WriteLine();
@@ -822,6 +823,20 @@ public static class InputLine
 
     /// <summary>输入是否以斜杠开头（兼容中文输入法的全角 ／）。</summary>
     private static bool SlashLike(string s) => s.StartsWith('/') || s.StartsWith('／');
+
+    /// <summary>
+    /// 数字键 1-9 在命令菜单中对应的列表下标。
+    /// 仅对「可见窗口内」的项生效（ANSI 模式 menuShown 为窗口大小；滚动模式 menuShown=0 时视为全部项）；
+    /// 无效（越界/窗口外）返回 -1，调用方忽略该按键。
+    /// </summary>
+    internal static int DigitKeySelection(int n, int menuOffset, int menuShown, int menuCount)
+    {
+        var visible = menuShown > 0 ? menuShown : menuCount; // 滚动模式无窗口限制
+        if (n < 1 || n > visible || menuCount <= 0)
+            return -1;
+        var idx = menuOffset + n - 1;
+        return idx < menuCount ? idx : -1;
+    }
 
     /// <summary>记录一条输入到历史（委托给 HistoryStore）。</summary>
     private static void Remember(string line) => History.Remember(line);
