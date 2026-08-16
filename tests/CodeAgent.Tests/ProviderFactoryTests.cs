@@ -83,4 +83,24 @@ public class ProviderFactoryTests
         Assert.Equal("https://x.example/v1", opts.BaseUrl);
         Assert.Equal("m1", opts.Model); // 显式值不应被默认覆盖
     }
+
+    [Fact]
+    public void Create_NullType_FallsBackToOpenAi()
+    {
+        // 回归：JSON 显式 "type": null 会覆盖默认值，曾导致 opts.Type.Trim() 抛 NRE；
+        // 现在 null/空白 type 兜底为 openai
+        var config = new AgentConfig
+        {
+            Provider = "weird",
+            Providers =
+            {
+                ["weird"] = new ProviderOptions { Type = null!, ApiKey = "test-key" },
+            },
+        };
+
+        var provider = ProviderFactory.Create(config);
+
+        Assert.IsType<OpenAiProvider>(provider);
+        Assert.Equal("openai", config.Providers["weird"].Type); // 已收敛
+    }
 }

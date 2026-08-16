@@ -14,7 +14,7 @@ public static class ProviderFactory
             config.Providers[name] = opts;
         }
 
-        var type = opts.Type.Trim().ToLowerInvariant();
+        var type = (opts.Type ?? "openai").Trim().ToLowerInvariant(); // JSON 显式 "type": null 时兜底，避免 NRE
         if (type is "anthropic" or "claude")
         {
             type = "anthropic";
