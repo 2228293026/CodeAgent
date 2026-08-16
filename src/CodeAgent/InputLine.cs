@@ -135,13 +135,6 @@ public static class InputLine
     /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
     public const string RecallMarker = "\u001bRECALL";
 
-    // —— ANSI 转义辅助（纯文本输出，任何现代终端都支持） ——
-    private static void Ansi(string s) => Console.Write("\x1b[" + s);
-    private static void AnsiUp(int n) { if (n > 0) Ansi(n + "A"); }
-    private static void AnsiDown(int n) { if (n > 0) Ansi(n + "B"); }
-    private static void AnsiCol1() => Ansi("1G");
-    private static void AnsiErase() => Ansi("K");
-
     /// <summary>读取终端宽度；失败返回 0（未知）。</summary>
     private static int TryWindowWidth()
     {
