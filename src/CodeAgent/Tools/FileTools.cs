@@ -105,7 +105,7 @@ public sealed class WriteFileTool : ITool
                 Directory.CreateDirectory(dir);
         }
 
-        // 记录撤销信息（大文件不记录，避免内存占用）
+        // 记录撤销信息（大文件不记录，避免内存占用）；先写入成功再入栈，失败不污染撤销历史
         var hadFile = File.Exists(full);
         string? old = null;
         if (hadFile)
@@ -114,13 +114,6 @@ public sealed class WriteFileTool : ITool
             if (info.Length <= 4 * 1024 * 1024)
                 old = await File.ReadAllTextAsync(full, ct);
         }
-        ctx.Undo.Push(new UndoEntry
-        {
-            Kind = "write",
-            Path = full,
-            OldText = old,
-            HadFile = hadFile,
-        });
 
         try
         {
@@ -130,6 +123,14 @@ public sealed class WriteFileTool : ITool
         {
             throw new ToolException($"写入失败: {ex.Message}");
         }
+
+        ctx.Undo.Push(new UndoEntry
+        {
+            Kind = "write",
+            Path = full,
+            OldText = old,
+            HadFile = hadFile,
+        });
 
         var bytes = Encoding.UTF8.GetByteCount(content);
         return $"已写入 {bytes:N0} 字节 → {path}";
@@ -196,8 +197,11 @@ public sealed class EditFileTool : ITool
             result = text.Remove(firstIdx, oldString.Length).Insert(firstIdx, newString);
         }
 
-        // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对
+        // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对；
+        // 先写入成功再入栈，失败不污染撤销历史
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
+        await File.WriteAllTextAsync(full, result, ct);
+
         ctx.Undo.Push(new UndoEntry
         {
             Kind = "edit",
@@ -205,7 +209,6 @@ public sealed class EditFileTool : ITool
             OldText = fullOld ?? oldString, // 完整原文（小文件）或修改前的原文片段（大文件）
             NewText = fullOld is null ? newString : null, // 仅大文件退化时使用
         });
-        await File.WriteAllTextAsync(full, result, ct);
 
         var startLine = text.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
         return $"已替换 {count} 处 → {path}（修改起始行 {startLine}）";

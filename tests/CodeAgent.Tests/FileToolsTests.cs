@@ -220,4 +220,19 @@ public class FileToolsTests : IDisposable
         Assert.Contains("写入失败", ex.Message);
         Assert.False(Directory.Exists(parent)); // 父目录不应被自动创建
     }
+
+    [Fact]
+    public async Task WriteFile_FailedWrite_DoesNotPolluteUndoStack()
+    {
+        // 回归：写入失败时撤销栈不应残留条目（否则 /undo 会撤销一个从未生效的写入）
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "missing-dir/f.txt", ["content"] = "x", ["create_dirs"] = false },
+                ctx, CancellationToken.None));
+
+        Assert.Equal(0, ctx.Undo.Count); // 失败写入不入撤销栈
+    }
 }
