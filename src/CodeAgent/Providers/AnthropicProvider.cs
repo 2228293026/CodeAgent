@@ -50,16 +50,11 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             ["model"] = _model,
             ["max_tokens"] = _maxTokens,
-            ["temperature"] = _temperature,
             ["system"] = system.ToString().TrimEnd(),
             ["messages"] = BuildMessages(messages),
             ["tools"] = BuildTools(tools),
         };
-        if (thinkingEffort != "off")
-        {
-            var budget = thinkingEffort switch { "low" => 1024, "high" => 16384, _ => 4096 };
-            payload["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = budget };
-        }
+        ApplyThinking(payload, thinkingEffort);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);
@@ -159,17 +154,12 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             ["model"] = _model,
             ["max_tokens"] = _maxTokens,
-            ["temperature"] = _temperature,
             ["system"] = system.ToString().TrimEnd(),
             ["messages"] = BuildMessages(messages),
             ["tools"] = BuildTools(tools),
             ["stream"] = true,
         };
-        if (thinkingEffort != "off")
-        {
-            var budget = thinkingEffort switch { "low" => 1024, "high" => 16384, _ => 4096 };
-            payload["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = budget };
-        }
+        ApplyThinking(payload, thinkingEffort);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);
@@ -436,6 +426,22 @@ public sealed class AnthropicProvider : IAgentProvider
     }
 
     private static JsonObject TextBlock(string text) => new() { ["type"] = "text", ["text"] = text };
+
+    /// <summary>
+    /// 应用思考强度。Anthropic 约束：thinking 启用时 temperature 必须省略（默认 1），
+    /// 且 max_tokens 必须大于思考预算（至少多 1024）；这里按 max_tokens 收敛预算并省略 temperature。
+    /// </summary>
+    private void ApplyThinking(JsonObject payload, string thinkingEffort)
+    {
+        if (thinkingEffort == "off")
+        {
+            payload["temperature"] = _temperature;
+            return;
+        }
+        var budget = thinkingEffort switch { "low" => 1024, "high" => 16384, _ => 4096 };
+        budget = Math.Min(budget, Math.Max(1024, _maxTokens - 1024)); // 预算不超过 max_tokens - 1024
+        payload["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = budget };
+    }
 
     private static JsonNode ParseInput(string json)
     {
