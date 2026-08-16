@@ -106,4 +106,32 @@ public class AgentTrimHistoryTests : IDisposable
             }
         }
     }
+
+    [Fact]
+    public async Task UndoAfterTrimming_RemovesOnlyTheLastTurn()
+    {
+        // 回归：历史裁剪移除最早消息后，ESC 撤回（UndoLastTurn）曾按过期的 LastTurnStartCount
+        // 定位，可能删错消息；现在撤回索引随裁剪前移，应只删除本轮消息。
+        // FailSummarization=true 强制走兜底裁剪路径（该路径保留首条 user 锚点），
+        // 正是 LastTurnStartCount 需要随 RemoveAt 前移的路径。
+        var provider = new FakeProvider
+        {
+            FailSummarization = true,
+            NextResponse = new ProviderResponse { Text = new string('y', 1500) }, // 每轮都触发裁剪
+        };
+        var agent = MakeAgent(provider, maxHistoryChars: 2000);
+
+        for (int i = 0; i < 8; i++)
+            await agent.RunAsync($"第 {i} 轮", CancellationToken.None);
+
+        var beforeUndo = agent.MessageCount;
+        var desc = agent.UndoLastTurn();
+        Assert.NotNull(desc);
+
+        // 撤回后消息数应回到 LastTurnStartCount（撤回索引随裁剪前移后定位准确）
+        Assert.Equal(agent.LastTurnStartCount, agent.MessageCount);
+        Assert.True(agent.MessageCount < beforeUndo, "撤回应减少消息数");
+        // 兜底路径保留首条 user 锚点
+        Assert.Contains(agent.Messages, m => m.Role == MessageRole.User && m.Content == "第 0 轮");
+    }
 }

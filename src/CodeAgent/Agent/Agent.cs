@@ -742,6 +742,9 @@ public sealed class Agent
             for (int i = 0; i < removeCount; i++)
             {
                 total -= _messages[u1 + 1].Content?.Length ?? 0;
+                // 被移除消息在本轮起点之前时，撤回索引需同步前移（ESC 撤回按 LastTurnStartCount 定位）
+                if (u1 + 1 < LastTurnStartCount)
+                    LastTurnStartCount--;
                 _messages.RemoveAt(u1 + 1);
             }
         }
@@ -784,6 +787,8 @@ public sealed class Agent
                 return false;
 
             _messages.RemoveRange(1, keepFrom - 1);
+            // 摘要移除最早消息后索引前移：撤回起点（ESC 用）同步前移，避免定位到错误消息
+            LastTurnStartCount = Math.Max(1, LastTurnStartCount - (keepFrom - 1));
             _messages.Insert(1, new ProviderMessage
             {
                 Role = MessageRole.System,
