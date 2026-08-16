@@ -36,6 +36,26 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ClampsHugeBoundsToCaps()
+    {
+        // 回归：maxToolIterations=9999 曾导致超长循环烧 token、maxHistoryChars=2e9 曾导致
+        // 历史永不裁剪请求体无限膨胀（OOM）；现在超大值收敛到上限
+        var path = Path.Combine(_dir, "huge.json");
+        File.WriteAllText(path, """
+            {
+              "provider": "openai",
+              "providers": { "openai": { "type": "openai", "model": "gpt-4o" } },
+              "maxToolIterations": 9999,
+              "maxHistoryChars": 2000000000
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal(200, cfg.MaxToolIterations);      // 9999 → 200（上限）
+        Assert.Equal(20_000_000, cfg.MaxHistoryChars); // 2e9 → 20M（上限）
+    }
+
+    [Fact]
     public void Load_MissingFile_Throws()
     {
         var path = Path.Combine(_dir, "nope.json");
