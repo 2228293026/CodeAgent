@@ -50,6 +50,48 @@ public class InputLineCommandsTests
     [InlineData(9, 0, 0, 23, 8)]   // 滚动模式：数字 9 有效（上限内）
     [InlineData(10, 0, 0, 23, -1)] // 滚动模式：数字 10 超出上限 9 → 忽略（回归）
     [InlineData(0, 0, 8, 23, -1)]  // 数字 0 无效
+    // 额外边界：窗口偏移与可见数组合
+    [InlineData(1, 10, 9, 23, 10)]  // 窗口滚动到 offset=10：数字 1 → 列表下标 10
+    [InlineData(9, 10, 9, 23, 18)]  // 窗口滚动：数字 9 → 下标 18
+    [InlineData(9, 15, 9, 23, -1)]  // offset=15 + 8 = 23 越界 → 忽略（回归：越界下标不触发）
+    [InlineData(1, 0, 9, 1, 0)]     // 单选项：数字 1 有效
+    [InlineData(2, 0, 9, 1, -1)]    // 单选项：数字 2 无效
+    [InlineData(1, 0, 0, 0, -1)]    // 空菜单：任何数字无效
+    [InlineData(5, 0, 0, 5, 4)]     // 滚动模式 5 项：数字 5 有效
+    [InlineData(5, 0, 0, 4, -1)]    // 滚动模式 4 项：数字 5 超出
     public void DigitKeySelection_RespectsVisibleWindow(int n, int offset, int shown, int count, int expected) =>
         Assert.Equal(expected, InputLine.DigitKeySelection(n, offset, shown, count));
+
+    [Fact]
+    public void Commands_AreListedInLogicalOrder()
+    {
+        // 常用命令应排在前部（帮助/清空/清屏/模型切换），方便数字键快速触发
+        var names = InputLine.Commands.Select(c => c.Name).ToList();
+        Assert.Equal("/help", names[0]);
+        Assert.Equal("/clear", names[1]);
+        Assert.Equal("/cls", names[2]);
+        Assert.Equal("/model", names[3]);
+        Assert.Equal("/quit", names[^1]); // 退出命令在末尾（/quit 在 /exit 之后）
+    }
+
+    [Fact]
+    public void Commands_EveryNameMatchesHandleCommand()
+    {
+        // 每个菜单命令都应在 HandleCommand 的 case 或 REPL 特殊处理中有对应逻辑
+        // （间接验证：菜单与实现不脱节）
+        var special = new[] { "/retry" }; // REPL 循环特殊处理
+        var handled = new[]
+        {
+            "/help", "/clear", "/cls", "/model", "/config", "/session", "/setup",
+            "/undo", "/diff", "/save", "/load", "/history", "/export", "/stats",
+            "/tools", "/providers", "/mode", "/diag", "/models", "/thinking",
+            "/exit", "/quit",
+        };
+        foreach (var c in InputLine.Commands)
+        {
+            Assert.True(
+                handled.Contains(c.Name) || special.Contains(c.Name),
+                $"命令 {c.Name} 在 HandleCommand 中无对应处理");
+        }
+    }
 }

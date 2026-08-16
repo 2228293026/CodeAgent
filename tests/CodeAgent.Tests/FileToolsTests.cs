@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -353,5 +354,149 @@ public class FileToolsTests : IDisposable
         Assert.Contains("出现 2 次", ex.Message);
         Assert.Equal("x y x", File.ReadAllText(Path.Combine(_dir, "amb.txt"))); // 文件未被改动
         Assert.Equal(0, ctx.Undo.Count); // 失败编辑不入撤销栈
+    }
+
+    [Fact]
+    public async Task ReadFile_OffsetBeyondEnd_ReturnsEmpty()
+    {
+        // offset 超过文件行数时应友好提示而非崩溃
+        File.WriteAllText(Path.Combine(_dir, "short.txt"), "only one line");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "short.txt", ["offset"] = 999 }, ctx, CancellationToken.None);
+        Assert.Contains("超出范围", output); // 提示超出范围
+    }
+
+    [Fact]
+    public async Task ReadFile_OffsetZero_ClampsToOne()
+    {
+        // offset=0 或负数应收敛为 1（第 1 行）
+        File.WriteAllText(Path.Combine(_dir, "clamp.txt"), "a\nb\nc");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "clamp.txt", ["offset"] = 0 }, ctx, CancellationToken.None);
+        Assert.Contains("1\ta", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_LimitTooLarge_ClampsTo5000()
+    {
+        // limit 超过 5000 应收敛到 5000（最多输出 5000 行），不崩溃
+        var content = string.Join('\n', Enumerable.Range(1, 6000).Select(i => $"line{i}"));
+        File.WriteAllText(Path.Combine(_dir, "big.txt"), content);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "big.txt", ["limit"] = 99999 }, ctx, CancellationToken.None);
+        Assert.Contains("line5000", output); // 前 5000 行在内
+        Assert.DoesNotContain("line6000", output); // 超出 limit 的行不输出
+    }
+
+    [Fact]
+    public async Task EditFile_MissingOldString_ThrowsHelpfulError()
+    {
+        File.WriteAllText(Path.Combine(_dir, "nomatch.txt"), "hello world");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "nomatch.txt", ["old_string"] = "zzz", ["new_string"] = "x" },
+                ctx, CancellationToken.None));
+        Assert.Contains("未找到 old_string", ex.Message);
+        Assert.Equal(0, ctx.Undo.Count); // 失败编辑不入撤销栈
+    }
+
+    [Fact]
+    public async Task EditFile_MissingPath_Throws()
+    {
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["old_string"] = "a", ["new_string"] = "b" },
+                ctx, CancellationToken.None));
+        Assert.Contains("path", ex.Message);
+    }
+
+    [Fact]
+    public async Task EditFile_MissingOldStringParam_Throws()
+    {
+        File.WriteAllText(Path.Combine(_dir, "e.txt"), "abc");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "e.txt", ["new_string"] = "b" },
+                ctx, CancellationToken.None));
+        Assert.Contains("old_string", ex.Message);
+    }
+
+    [Fact]
+    public async Task ListDirectory_DepthZero_OnlyRoot()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(Path.Combine(_dir, "top.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "sub", "deep.txt"), "y");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["depth"] = 0 }, ctx, CancellationToken.None);
+        Assert.Contains("sub/", output);
+        Assert.DoesNotContain("deep.txt", output); // 深度 0 不进入子目录
+    }
+
+    [Fact]
+    public async Task ListDirectory_FileTarget_Throws()
+    {
+        File.WriteAllText(Path.Combine(_dir, "f.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "f.txt" }, ctx, CancellationToken.None));
+        Assert.Contains("是文件", ex.Message);
+    }
+
+    [Fact]
+    public async Task ListDirectory_MissingDir_Throws()
+    {
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "no-such" }, ctx, CancellationToken.None));
+        Assert.Contains("目录不存在", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReadFile_MissingFile_Throws()
+    {
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "nope.txt" }, ctx, CancellationToken.None));
+        Assert.Contains("文件不存在", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReadFile_DirectoryTarget_Throws()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "adir"));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "adir" }, ctx, CancellationToken.None));
+        Assert.Contains("是目录", ex.Message);
     }
 }

@@ -79,4 +79,71 @@ public class ModesTests
         var config = new AgentConfig();
         Assert.Equal("code", Modes.Find(name!, config).Name);
     }
+
+    [Fact]
+    public void Find_CustomMode_ResolvesByName()
+    {
+        var config = new AgentConfig
+        {
+            Modes = { new AgentModeConfig { Name = "audit", Description = "审计" } },
+        };
+        Assert.Equal("audit", Modes.Find("audit", config).Name);
+        Assert.Equal("audit", Modes.Find("AUDIT", config).Name); // 大小写不敏感
+    }
+
+    [Fact]
+    public void ListText_ContainsAllModeNames()
+    {
+        var config = new AgentConfig
+        {
+            Modes = { new AgentModeConfig { Name = "fix", Description = "修复模式" } },
+        };
+        var text = Modes.ListText(config);
+        Assert.Contains("code", text);
+        Assert.Contains("plan", text);
+        Assert.Contains("fix", text); // 自定义模式也在列表
+        Assert.Contains("— 修复模式", text);
+    }
+
+    [Fact]
+    public void Build_CustomModeWithoutDescription_UsesNameAsFallback()
+    {
+        var config = new AgentConfig
+        {
+            Modes = { new AgentModeConfig { Name = "bare" } },
+        };
+        var mode = Modes.Build(config).First(m => m.Name == "bare");
+        Assert.Equal("bare", mode.Description); // 空描述回退为名称
+        Assert.Equal(AgentConfig.DefaultSystemPrompt, mode.SystemPrompt); // 空提示回退默认
+    }
+
+    [Fact]
+    public void Build_ReadOnlyModes_AllRestrictWrites()
+    {
+        // 所有只读模式（plan/explain/review）都不应暴露写工具
+        foreach (var name in new[] { "plan", "explain", "review" })
+        {
+            var mode = Modes.All.First(m => m.Name == name);
+            foreach (var t in mode.AllowedTools!)
+                Assert.DoesNotContain(t, new[] { "write_file", "edit_file", "run_command", "bash", "powershell" });
+        }
+    }
+
+    [Fact]
+    public void All_EveryModeHasSystemPrompt()
+    {
+        foreach (var m in Modes.All)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(m.SystemPrompt));
+            Assert.False(string.IsNullOrWhiteSpace(m.Description));
+        }
+    }
+
+    [Fact]
+    public void All_CodeModeIsDefault_AllowsAllTools()
+    {
+        var code = Modes.All[0];
+        Assert.Equal("code", code.Name);
+        Assert.Null(code.AllowedTools); // code 模式不限制工具
+    }
 }

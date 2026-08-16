@@ -373,4 +373,100 @@ public class ConsoleRendererTests : IDisposable
         Assert.Contains("共 122 行", output); // 表头 + 分隔行 + 120 数据行
         Assert.DoesNotContain("| 120 |", output); // 末尾行被截断
     }
+
+    [Theory]
+    [InlineData("# title", "# title")]
+    [InlineData("## sub", "## sub")]
+    [InlineData("### deep", "### deep")]
+    [InlineData("#", "#")]                  // 只有井号
+    [InlineData("> quote", "> quote")]
+    [InlineData(">", ">")]
+    [InlineData("---", "---")]
+    [InlineData("====", "====")]
+    [InlineData("plain", "plain")]
+    [InlineData("", "")]                    // 空行
+    public void EmitLine_ContentPreserved(string input, string expected)
+    {
+        var output = Render(input + "\n");
+        Assert.Contains(expected, output);
+    }
+
+    [Theory]
+    [InlineData("a **b** c", "abc")]        // 加粗文本保留
+    [InlineData("a `b` c", "abc")]          // 行内代码保留
+    [InlineData("`a` **b** `c`", "abc")]    // 混合样式
+    [InlineData("**bold**", "bold")]
+    [InlineData("`code`", "code")]
+    [InlineData("a *** b", "a *** b")]      // 连续星号字面
+    public void InlineStyles_KeepTextContent(string input, string expectedChars)
+    {
+        var output = Render(input);
+        foreach (var ch in expectedChars)
+            Assert.Contains(ch.ToString(), output);
+    }
+
+    [Fact]
+    public void Table_EmptyCell_DoesNotCrash()
+    {
+        var output = Render("| a | b |\n|---|---|\n| 1 |  |\n");
+        Assert.Contains("a", output);
+        Assert.Contains("1", output);
+    }
+
+    [Fact]
+    public void Table_OnlySeparatorRows_DoesNotCrash()
+    {
+        var output = Render("|---|---|\n|---|---|\n");
+        Assert.Contains("─", output); // 分隔行渲染为横线
+    }
+
+    [Fact]
+    public void CodeFence_EmptyBody_DoesNotCrash()
+    {
+        var output = Render("```\n```\n");
+        Assert.Contains("```", output); // 围栏标记本身输出
+    }
+
+    [Fact]
+    public void CodeFence_ImmediatelyClosed_NoContent()
+    {
+        var output = Render("```\n```\n");
+        // 空代码块不应产生额外内容
+        Assert.NotNull(output);
+    }
+
+    [Fact]
+    public void MultipleCodeFences_InterleavedWithText()
+    {
+        var output = Render("text1\n```\ncode\n```\ntext2\n");
+        Assert.Contains("text1", output);
+        Assert.Contains("code", output);
+        Assert.Contains("text2", output);
+    }
+
+    [Fact]
+    public void CodeFence_WithBackticksInside_ClosesAtThird()
+    {
+        // 代码内容含单个/两个反引号不提前关闭围栏，三个才关闭
+        var output = Render("```\n`a` ``b``\n```\n");
+        Assert.Contains("`a`", output);
+        Assert.Contains("``b``", output);
+    }
+
+    [Fact]
+    public void Table_ThenCodeFence_DoesNotMix()
+    {
+        // 表格行后紧跟代码围栏：表格应先按列对齐输出，再进入代码块
+        var output = Render("| a |\n|---|\n```\ncode\n```\n");
+        Assert.Contains("a", output);
+        Assert.Contains("code", output);
+    }
+
+    [Fact]
+    public void Heading_WithInlineCode_KeepsBoth()
+    {
+        var output = Render("# 标题 `code`\n");
+        Assert.Contains("标题", output);
+        Assert.Contains("code", output);
+    }
 }

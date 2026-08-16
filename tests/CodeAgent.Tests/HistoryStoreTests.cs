@@ -85,4 +85,52 @@ public class HistoryStoreTests : IDisposable
         var store = new HistoryStore(_file);
         Assert.Equal(["keep", "also"], store.Entries);
     }
+
+    [Fact]
+    public void Load_MissingFile_StartsEmpty()
+    {
+        // 历史文件不存在时从空开始，不抛异常
+        var store = new HistoryStore(Path.Combine(_dir, "never-created.txt"));
+        Assert.Equal(0, store.Count);
+    }
+
+    [Fact]
+    public void Load_OverCap_KeepsLatestOnly()
+    {
+        // 磁盘文件超过上限时只保留最新的 MaxEntries 条
+        var lines = Enumerable.Range(0, HistoryStore.MaxEntries + 10).Select(i => $"line{i}").ToArray();
+        Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
+        File.WriteAllLines(_file, lines);
+
+        var store = new HistoryStore(_file);
+        Assert.Equal(HistoryStore.MaxEntries, store.Count);
+        Assert.Equal("line10", store.Entries[0]); // 最旧的 10 条被丢弃
+    }
+
+    [Fact]
+    public void Remember_AfterLoad_AppendsNew()
+    {
+        // 加载旧历史后继续记录：新条目追加到末尾并持久化
+        var store = new HistoryStore(_file);
+        store.Remember("old1");
+        store.Remember("old2");
+        var reloaded = new HistoryStore(_file);
+        reloaded.Remember("new3");
+
+        Assert.Equal(["old1", "old2", "new3"], reloaded.Entries);
+    }
+
+    [Theory]
+    [InlineData("/save x")]
+    [InlineData("/mode next")]
+    [InlineData("/undo")]
+    [InlineData("普通输入")]
+    public void Remember_SlashCommands_AreStored(string line)
+    {
+        // 斜杠命令也应进入历史（REPL 里可按 ↑ 复用）
+        var store = new HistoryStore(_file);
+        store.Remember(line);
+        Assert.Equal(1, store.Count);
+        Assert.Equal(line, store.Entries[0]);
+    }
 }

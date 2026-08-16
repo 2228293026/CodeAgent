@@ -136,4 +136,84 @@ public class UndoManagerTests : IDisposable
         Assert.Contains("- foo bar foo", diff); // - 为原始内容
         Assert.Contains("+ foo foo foo", diff); // + 为当前内容
     }
+
+    [Fact]
+    public void LastDiff_EmptyStack_ReturnsNull()
+    {
+        var um = new UndoManager();
+        Assert.Null(um.LastDiff());
+    }
+
+    [Fact]
+    public void TryUndo_EditMissingFile_ReportsFailure()
+    {
+        // edit 撤销时文件已不存在：应报告失败而非崩溃
+        var path = Path.Combine(_dir, "gone.txt");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "old", NewText = "new" });
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc);
+        Assert.Contains("文件已不存在", desc);
+    }
+
+    [Fact]
+    public void TryUndo_UndoAfterLastDiff_KeepsStackConsistent()
+    {
+        // LastDiff 不应弹出条目；随后 TryUndo 仍应能撤销
+        var path = Path.Combine(_dir, "f.txt");
+        File.WriteAllText(path, "old");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = path, OldText = "old", HadFile = true });
+        File.WriteAllText(path, "new");
+
+        Assert.NotNull(um.LastDiff());
+        Assert.Equal(1, um.Count); // LastDiff 只读
+        Assert.NotNull(um.TryUndo()); // 仍可撤销
+        Assert.Equal(0, um.Count);
+    }
+
+    [Fact]
+    public void TryUndo_EditLargeFileFallback_UndoAfterUndo_IsNoOp()
+    {
+        // 连续两次撤销：第二次应返回 null（栈已空）
+        var path = Path.Combine(_dir, "g.txt");
+        File.WriteAllText(path, "old");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = path, OldText = "old", HadFile = true });
+        File.WriteAllText(path, "new");
+
+        Assert.NotNull(um.TryUndo());
+        Assert.Null(um.TryUndo());
+    }
+
+    [Theory]
+    [InlineData("write")]
+    [InlineData("edit")]
+    [InlineData("unknown-kind")]
+    public void Push_AnyKind_DoesNotCrash(string kind)
+    {
+        // 各种 Kind 的条目入栈都应安全；未知 kind 撤销时按无操作处理（不崩溃）
+        var path = Path.Combine(_dir, "h.txt");
+        File.WriteAllText(path, "x");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = kind, Path = path, OldText = "x", HadFile = true });
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc); // 至少返回描述文本，不崩溃
+    }
+
+    [Fact]
+    public void TryUndo_EditLargeFileFallback_PairNotFound_KeepsFile()
+    {
+        // 大文件退化：文件中找不到 NewText 时 Replace 无效果，文件保持不变（不崩溃、不报错）
+        var path = Path.Combine(_dir, "i.txt");
+        File.WriteAllText(path, "hello world");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "zzz", NewText = "qqq" });
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc);
+        Assert.Equal("hello world", File.ReadAllText(path)); // 无匹配 → 文件原样
+    }
 }

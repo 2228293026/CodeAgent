@@ -159,4 +159,52 @@ public class WorkspaceTests
             Path.Combine("src", "a.cs"),
             ws.ToRelative(Path.GetFullPath(Path.Combine(Root, "src", "a.cs"))));
     }
+
+    [Fact]
+    public void ToRelative_RootItself_ReturnsEmpty()
+    {
+        var ws = new Workspace(Root);
+        Assert.Equal("", ws.ToRelative(Path.GetFullPath(Root)));
+    }
+
+    [Fact]
+    public void ToRelative_TrailingSeparator_IsNormalized()
+    {
+        // 结尾带分隔符的路径也应转成不带分隔符的相对路径
+        var ws = new Workspace(Root);
+        var dir = Path.GetFullPath(Path.Combine(Root, "src")) + Path.DirectorySeparatorChar;
+        Assert.Equal("src", ws.ToRelative(dir));
+    }
+
+    [Theory]
+    [InlineData("a.txt")]
+    [InlineData("dir/b.txt")]
+    [InlineData("a/b/c/d.txt")]
+    public void Resolve_DeepRelativePaths_StayInside(string rel)
+    {
+        var ws = new Workspace(Root);
+        var full = ws.Resolve(rel);
+        Assert.Equal(Path.GetFullPath(Path.Combine(Root, rel)), full);
+    }
+
+    [Theory]
+    [InlineData("../x.txt")]
+    [InlineData("../../x.txt")]
+    [InlineData("a/../../x.txt")]      // 中间穿越
+    [InlineData("a/../../../x.txt")]
+    public void Resolve_EscapeVariants_AllRejected(string rel)
+    {
+        var ws = new Workspace(Root);
+        Assert.Throws<ToolException>(() => ws.Resolve(rel));
+    }
+
+    [Fact]
+    public void Resolve_WorkspaceRootViaParent_NormalizesInside()
+    {
+        // ../<根目录名>/x.txt 经 Path.GetFullPath 规范化后落在工作区内，应放行而非误拦
+        var ws = new Workspace(Root);
+        var parentName = new DirectoryInfo(Root).Name;
+        var full = ws.Resolve(Path.Combine("..", parentName, "x.txt"));
+        Assert.Equal(Path.GetFullPath(Path.Combine(Root, "x.txt")), full);
+    }
 }

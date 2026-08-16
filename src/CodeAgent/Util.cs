@@ -35,6 +35,9 @@ public static class TextUtil
 
     public static int CountOccurrences(string text, string sub)
     {
+        // 空子串会令 IndexOf 恒返回 idx 且 idx += 0 永不前进 → 死循环（回归：测试曾触发主机挂起）
+        if (sub.Length == 0)
+            return 0;
         int count = 0, idx = 0;
         while ((idx = text.IndexOf(sub, idx, StringComparison.Ordinal)) >= 0)
         {
@@ -73,9 +76,9 @@ public static class TextUtil
         return model;
     }
 
-    /// <summary>百分比（0-100 封顶）：part/total 的整数百分比，total ≤ 0 时返回 0。</summary>
+    /// <summary>百分比（0-100 收敛）：part/total 的整数百分比，total ≤ 0 时返回 0，负值收敛到 0。</summary>
     public static int PercentOf(long part, long total) =>
-        total <= 0 ? 0 : (int)Math.Min(100, part * 100.0 / total);
+        total <= 0 ? 0 : (int)Math.Clamp(part * 100.0 / total, 0, 100);
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>
@@ -139,6 +142,9 @@ public static class Glob
 {
     public static Regex ToRegex(string pattern)
     {
+        // Windows 风格反斜杠分隔符归一化为 /（与工具层 rel.Replace('\\','/') 一致）：
+        // 否则 src\**\*.cs 的 pattern 匹配不到已归一化成正斜杠的相对路径
+        pattern = pattern.Replace('\\', '/');
         var sb = new System.Text.StringBuilder("^");
         for (int i = 0; i < pattern.Length; i++)
         {

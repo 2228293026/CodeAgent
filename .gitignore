@@ -5,3 +5,6 @@ obj/
 .vs/
 # 本地配置可能含 API Key，不入库（参考 codeagent.example.json）
 codeagent.json
+# xunit 测试结果与 hang 转储（--blame-hang 产物很大，严禁入库）
+TestResults/
+*.dmp

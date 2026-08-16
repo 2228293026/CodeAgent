@@ -105,4 +105,95 @@ public class ToolArgsTests
     {
         Assert.Null(ToolArgs.GetStringList(new JsonObject(), "pattern"));
     }
+
+    [Theory]
+    [InlineData(true, "true")]      // 布尔值转字符串
+    [InlineData(3.14, "3.14")]      // 浮点值转字符串
+    [InlineData("", "")]            // 空字符串
+    [InlineData("  ", "  ")]        // 空白字符串（不 trim）
+    public void GetString_NonStringScalars_Coerced(object value, string expected)
+    {
+        var args = new JsonObject { ["v"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(value))! };
+        Assert.Equal(expected, ToolArgs.GetString(args, "v"));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]            // 原生 int 0 直接返回 0（非默认值）
+    [InlineData(-3, -3)]          // 原生负 int 直接返回自身
+    [InlineData(int.MaxValue, int.MaxValue)]
+    [InlineData(int.MinValue, int.MinValue)]
+    public void GetInt_EdgeValues(int value, int expected)
+    {
+        var args = new JsonObject { ["n"] = value };
+        Assert.Equal(expected, ToolArgs.GetInt(args, "n", 9));
+    }
+
+    [Theory]
+    [InlineData("", 9)]             // 空字符串无法解析 → 默认
+    [InlineData("999999999999", 9)] // 超出 int 范围 → 默认
+    [InlineData("+42", 42)]         // 带符号
+    public void GetInt_StringEdgeValues(string value, int expected)
+    {
+        var args = new JsonObject { ["n"] = value };
+        Assert.Equal(expected, ToolArgs.GetInt(args, "n", 9));
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData("TRUE", true)]      // 大小写不敏感
+    [InlineData("False", false)]
+    [InlineData("2", false)]        // 未知字符串回退默认 false
+    [InlineData("", false)]         // 空串回退默认
+    [InlineData("y", true)]
+    [InlineData("n", false)]
+    public void GetBool_MoreForms(object value, bool expected)
+    {
+        var args = new JsonObject { ["flag"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(value))! };
+        Assert.Equal(expected, ToolArgs.GetBool(args, "flag", false));
+    }
+
+    [Fact]
+    public void GetStringDict_NonObjectValue_ReturnsNull()
+    {
+        // env 传了字符串/数字而非对象：应返回 null 而不是崩溃
+        var args = new JsonObject { ["env"] = "not-an-object" };
+        Assert.Null(ToolArgs.GetStringDict(args, "env"));
+    }
+
+    [Fact]
+    public void GetStringDict_NumericValues_CoercedToString()
+    {
+        var args = new JsonObject
+        {
+            ["env"] = new JsonObject { ["PORT"] = 8080 },
+        };
+        var dict = ToolArgs.GetStringDict(args, "env");
+        Assert.NotNull(dict);
+        Assert.Equal("8080", dict!["PORT"]);
+    }
+
+    [Fact]
+    public void GetStringList_EmptyArray_ReturnsNull()
+    {
+        var args = new JsonObject { ["pattern"] = new JsonArray() };
+        Assert.Null(ToolArgs.GetStringList(args, "pattern"));
+    }
+
+    [Fact]
+    public void GetStringList_MixedArray_KeepsNonEmptyStrings()
+    {
+        var args = new JsonObject { ["pattern"] = new JsonArray("a", "", "b", 123) };
+        var list = ToolArgs.GetStringList(args, "pattern");
+        Assert.NotNull(list);
+        Assert.Equal(["a", "b"], list); // 空串与数字被过滤
+    }
+
+    [Fact]
+    public void GetString_MissingKeyWithNullArgs_ReturnsDefault()
+    {
+        Assert.Equal("x", ToolArgs.GetString(null, "any", "x"));
+        Assert.Equal(5, ToolArgs.GetInt(null, "any", 5));
+        Assert.False(ToolArgs.GetBool(null, "any", false));
+    }
 }

@@ -101,6 +101,8 @@ public sealed class Workspace
     public string ToRelative(string fullPath)
     {
         var rel = Path.GetRelativePath(Root, fullPath);
+        // 尾部分隔符（如 dir\）会让相对路径带 \ 后缀，破坏 glob 匹配与展示；归一化掉
+        rel = rel.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return rel == "." ? "" : rel;
     }
 }
