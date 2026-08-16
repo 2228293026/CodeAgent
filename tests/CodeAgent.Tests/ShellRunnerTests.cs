@@ -66,4 +66,22 @@ public class ShellRunnerTests
             ShellRunner.RunAsync("bash", "echo hi", missing, 30, CancellationToken.None));
         Assert.Contains("目录不存在", ex.Message);
     }
+
+    [Fact]
+    public async Task RunAsync_Timeout_KillsProcessAndReports()
+    {
+        // 超时路径：进程应在超时后被杀掉，返回退出码 124 并带提示
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var (exit, output) = await ShellRunner.RunAsync(
+            "bash",
+            "sleep 30",
+            System.IO.Path.GetTempPath(),
+            1,
+            CancellationToken.None);
+        sw.Stop();
+
+        Assert.Equal(124, exit);
+        Assert.Contains("超时", output);
+        Assert.True(sw.Elapsed.TotalSeconds < 20, $"超时应及时终止进程（实际 {sw.Elapsed.TotalSeconds:F1}s）");
+    }
 }
