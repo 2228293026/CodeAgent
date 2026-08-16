@@ -8,3 +8,6 @@ codeagent.json
 # xunit 测试结果与 hang 转储（--blame-hang 产物很大，严禁入库）
 TestResults/
 *.dmp
+# 本地发布产物与发布脚本（publish.ps1 生成的 dist/ 是平台绑定产物，不入库）
+dist/
+publish.ps1
