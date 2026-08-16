@@ -17,4 +17,10 @@
     <ProjectReference Include="..\..\src\CodeAgent\CodeAgent.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- xUnit 配置（关闭测试集合并行）：ConsoleRendererTests 捕获全局 Console.Out，
+         与其他测试类并行时会互相污染输出导致间歇性失败 -->
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
