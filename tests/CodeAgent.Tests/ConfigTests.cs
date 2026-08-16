@@ -49,4 +49,51 @@ public class ConfigTests : IDisposable
         File.WriteAllText(path, "{ not json !!");
         Assert.Throws<InvalidDataException>(() => AgentConfig.Load(path));
     }
+
+    [Fact]
+    public void SaveLoad_RoundTripsAllFields()
+    {
+        // 回归：camelCase 序列化往返后，多 provider、自定义模式、开关项都应存活
+        var path = Path.Combine(_dir, "roundtrip.json");
+        var original = new AgentConfig
+        {
+            Provider = "qwen",
+            Providers =
+            {
+                ["qwen"] = new ProviderOptions { Type = "openai", BaseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1", Model = "qwen3-coder-plus", ApiKeyEnv = "DASHSCOPE_API_KEY" },
+                ["anthropic"] = new ProviderOptions { Type = "anthropic", Model = "claude-sonnet-4-5" },
+            },
+            MaxToolIterations = 5,
+            MaxHistoryChars = 20_000,
+            AllowCommands = false,
+            ConfirmCommands = true,
+            StreamOutput = false,
+            ShowToolCalls = false,
+            RenderMarkdown = false,
+            ThinkingEffort = "medium",
+            DefaultMode = "plan",
+            ExportDir = ".codeagent/out",
+            Modes = { new AgentModeConfig { Name = "fix", Description = "修复", SystemPrompt = "fix it", Tools = ["read_file"] } },
+        };
+
+        AgentConfig.Save(original, path);
+        var loaded = AgentConfig.Load(path);
+
+        Assert.Equal("qwen", loaded.Provider);
+        Assert.True(loaded.Providers.ContainsKey("anthropic"));
+        Assert.Equal("claude-sonnet-4-5", loaded.Providers["anthropic"].Model);
+        Assert.Equal(5, loaded.MaxToolIterations);
+        Assert.Equal(20_000, loaded.MaxHistoryChars);
+        Assert.False(loaded.AllowCommands);
+        Assert.True(loaded.ConfirmCommands);
+        Assert.False(loaded.StreamOutput);
+        Assert.False(loaded.ShowToolCalls);
+        Assert.False(loaded.RenderMarkdown);
+        Assert.Equal("medium", loaded.ThinkingEffort);
+        Assert.Equal("plan", loaded.DefaultMode);
+        Assert.Equal(".codeagent/out", loaded.ExportDir);
+        var fix = Assert.Single(loaded.Modes);
+        Assert.Equal("fix", fix.Name);
+        Assert.Equal(new[] { "read_file" }, fix.Tools);
+    }
 }
