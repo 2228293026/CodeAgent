@@ -52,4 +52,15 @@ public class InputLineCommandsTests
     [InlineData(0, 0, 8, 23, -1)]  // 数字 0 无效
     public void DigitKeySelection_RespectsVisibleWindow(int n, int offset, int shown, int count, int expected) =>
         Assert.Equal(expected, InputLine.DigitKeySelection(n, offset, shown, count));
+
+    [Theory]
+    // 回归：零匹配时菜单块高 4（header + no-matching + more 行 + 空行），
+    // 曾错误地用 menuShown+3=3，导致光标上移/擦除差一行、输入行被推下
+    [InlineData(0, 0, 4)]
+    [InlineData(1, 1, 4)]
+    [InlineData(2, 2, 5)]
+    [InlineData(8, 8, 11)]
+    [InlineData(23, 8, 11)] // 窗口封顶 8：header + 8 项 + more 行 + 空行
+    public void MenuBlockHeight_AccountsForEmptyState(int itemCount, int menuShown, int expected) =>
+        Assert.Equal(expected, InputLine.MenuBlockHeight(itemCount, menuShown));
 }
