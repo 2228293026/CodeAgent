@@ -61,7 +61,7 @@ public class AnthropicProviderTests
         var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
         Assert.NotNull(msgs);
         // tool_result 应以 user 角色出现（Anthropic 要求）
-        var last = msgs![^1];
+        var last = msgs![^1]!;
         Assert.Equal("user", last["role"]!.GetValue<string>());
         var content = last["content"]!.AsArray();
         Assert.Equal("tool_result", content[0]!["type"]!.GetValue<string>());
@@ -128,8 +128,8 @@ public class AnthropicProviderTests
 
         var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
         Assert.NotNull(msgs);
-        Assert.Equal(1, msgs!.Count); // 两条连续 user 已合并为 1 条消息
-        var user = msgs[0];
+        Assert.Single(msgs!); // 两条连续 user 已合并为 1 条消息
+        var user = msgs[0]!;
         Assert.Equal("user", user["role"]!.GetValue<string>());
         var content = user["content"]!.AsArray();
         Assert.Equal(2, content.Count); // 两个文本块
@@ -160,7 +160,7 @@ public class AnthropicProviderTests
 
         var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
         Assert.NotNull(msgs);
-        var asst = msgs![^1];
+        var asst = msgs![^1]!;
         Assert.Equal("assistant", asst["role"]!.GetValue<string>());
         var content = asst["content"]!.AsArray();
         Assert.Equal(2, content.Count); // 文本块 + tool_use 块

@@ -60,7 +60,7 @@ public class OpenAiProviderTests
 
         var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
         Assert.NotNull(msgs);
-        var asst = msgs![2];
+        var asst = msgs![2]!;
         Assert.Equal("assistant", asst["role"]!.GetValue<string>());
         Assert.Null(asst["content"]); // 应为 null 而非 ""
         Assert.NotNull(asst["tool_calls"]);
