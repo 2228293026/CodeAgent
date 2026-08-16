@@ -166,4 +166,15 @@ public class EditableLineTests
         Assert.Equal(0, InputLine.CursorLeftOffset("abc", 99));  // 越界 → 视为末尾，不移动
         Assert.Equal(3, InputLine.CursorLeftOffset("abc", -5));  // 负值 → 视为行首，左移整行
     }
+
+    [Fact]
+    public void CursorLeftOffset_EmojiCountsAsTwoColumns()
+    {
+        // 回归：emoji 是代理对（两个 char），曾按 4 列计算导致光标/表格对齐错位；
+        // 终端实际按 2 列显示
+        var emoji = "😀"; // U+1F600，两个 surrogate
+        Assert.Equal(2, InputLine.CursorLeftOffset(emoji, 0));  // 整行 emoji = 2 列
+        Assert.Equal(2, InputLine.CursorLeftOffset("a😀", 1));  // 总宽 1+2=3，前缀 "a"=1 → 左移 2
+        Assert.Equal(3, InputLine.CursorLeftOffset("😀b", 0));  // 总宽 2+1=3，光标行首 → 左移 3
+    }
 }
