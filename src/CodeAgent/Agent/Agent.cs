@@ -438,7 +438,7 @@ public sealed class Agent
                     var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
                     var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
                     lock (ConsoleLock)
-                        Console.Write($"\r{f} 思考中… {SessionTimeText(_sessionSw.Elapsed)} · ↑ {tok} tokens");
+                        Console.Write($"\r{f} 思考中… {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens");
                     await Task.Delay(120, cts.Token);
                 }
             }
@@ -446,10 +446,6 @@ public sealed class Agent
             catch { /* 忽略 */ }
         });
     }
-
-    /// <summary>会话总时长文本（如 2m 5s / 22s）。</summary>
-    private static string SessionTimeText(TimeSpan t) =>
-        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F0}s";
 
     private void ClearSpinner()
     {
@@ -460,7 +456,7 @@ public sealed class Agent
             // 常驻指示行：整个对话的累计时间 + 累计 tokens
             var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
             var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
-            Console.WriteLine("\r" + $"⠦ 思考中… {SessionTimeText(_sessionSw.Elapsed)} · ↑ {tok} tokens".PadRight(50));
+            Console.WriteLine("\r" + $"⠦ 思考中… {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens".PadRight(50));
         }
         else
         {
@@ -480,10 +476,6 @@ public sealed class Agent
         Console.WriteLine();
         _reasoningBuf.Clear();
     }
-
-    /// <summary>耗时格式：不足 1 秒用毫秒（避免快工具显示 0.0s），否则显示秒。</summary>
-    private static string FormatDuration(TimeSpan t) =>
-        t.TotalSeconds < 1 ? $"{t.TotalMilliseconds:F0}ms" : $"{t.TotalSeconds:F1}s";
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
     private static string SummarizeCall(string name, string argsJson)
@@ -622,7 +614,7 @@ public sealed class Agent
         {
             lock (ConsoleLock)
             {
-                var status = $"  {(isError ? "⚠" : "✔")} {summary} ({FormatDuration(sw.Elapsed)})";
+                var status = $"  {(isError ? "⚠" : "✔")} {summary} ({TextUtil.FormatDuration(sw.Elapsed)})";
                 if (isError)
                 {
                     SafeColor.Foreground(ConsoleColor.Red);

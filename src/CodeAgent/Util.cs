@@ -43,6 +43,22 @@ public static class TextUtil
         }
         return count;
     }
+
+    /// <summary>紧凑 token 数格式（如 1937 → 1.9k，1.2M → 1.2M）。</summary>
+    public static string CompactTokenCount(long n) =>
+        n >= 1_000_000 ? $"{n / 1_000_000.0:F1}M" : n >= 1000 ? $"{n / 1000.0:F1}k" : n.ToString();
+
+    /// <summary>会话总时长文本（如 2m 5s / 22s，不足 1 分钟取整秒）。</summary>
+    public static string FormatSessionTime(TimeSpan t) =>
+        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F0}s";
+
+    /// <summary>耗时格式（如 1m 5s / 22.0s，保留一位小数秒）。</summary>
+    public static string FormatElapsed(TimeSpan t) =>
+        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F1}s";
+
+    /// <summary>耗时格式：不足 1 秒用毫秒（避免快操作显示 0.0s），否则显示秒。</summary>
+    public static string FormatDuration(TimeSpan t) =>
+        t.TotalSeconds < 1 ? $"{t.TotalMilliseconds:F0}ms" : $"{t.TotalSeconds:F1}s";
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>

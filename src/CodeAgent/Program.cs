@@ -391,12 +391,9 @@ internal static class Program
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
-            $"{FormatTime(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache} ──");
+            $"{TextUtil.FormatElapsed(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache} ──");
         SafeColor.Reset();
     }
-
-    private static string FormatTime(TimeSpan t) =>
-        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F1}s";
 
     /// <summary>状态栏：模式 · 模型 · 目录 · 上下文总量 · 思考强度（每轮提示符前显示）——灰色。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort)
@@ -406,13 +403,9 @@ internal static class Program
         var total = agent.TotalInputTokens + agent.TotalOutputTokens;
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{CompactTok(total)}/1M tok ({100.0 * total / 1_000_000:F0}%){think}");
+            $"{TextUtil.CompactTokenCount(total)}/1M tok ({100.0 * total / 1_000_000:F0}%){think}");
         SafeColor.Reset();
     }
-
-    /// <summary>紧凑 token 数格式（如 1937 → 1.9k）。</summary>
-    private static string CompactTok(long n) =>
-        n >= 1_000_000 ? $"{n / 1_000_000.0:F1}M" : n >= 1000 ? $"{n / 1000.0:F1}k" : n.ToString();
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
     private static string PromptFor(ProviderOptions opts, AgentClass agent)
