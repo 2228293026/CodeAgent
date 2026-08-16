@@ -130,4 +130,19 @@ public class ConsoleRendererTests : IDisposable
         Assert.Contains("a.cs", lastLine);
         Assert.Contains("10", lastLine);
     }
+
+    [Fact]
+    public void Table_VeryLargeTable_IsTruncatedWithNotice()
+    {
+        // 回归：超大表格曾全部渲染撑爆终端；现应截断并提示总行数
+        var sb = new System.Text.StringBuilder();
+        sb.Append("| n |\n|---|\n");
+        for (int i = 1; i <= 120; i++)
+            sb.Append($"| {i} |\n");
+        var output = Render(sb.ToString());
+
+        Assert.Contains("仅显示前 50 行", output);
+        Assert.Contains("共 122 行", output); // 表头 + 分隔行 + 120 数据行
+        Assert.DoesNotContain("| 120 |", output); // 末尾行被截断
+    }
 }

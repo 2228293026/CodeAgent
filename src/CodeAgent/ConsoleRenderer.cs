@@ -211,12 +211,17 @@ public sealed class ConsoleRenderer
 
     // —— Markdown 表格渲染 ——
 
+    /// <summary>单张表格最大渲染行数，超出截断（防止模型输出的超大表格撑爆终端）。</summary>
+    private const int MaxTableRows = 50;
+
     /// <summary>输出缓冲的表格行：按列宽对齐、分隔行用横线、考虑 CJK 显示宽度。</summary>
     private void FlushTable()
     {
         if (_tableBuf.Count == 0)
             return;
-        var rows = _tableBuf.Select(SplitCells).ToList();
+        var truncated = _tableBuf.Count > MaxTableRows;
+        var visible = truncated ? _tableBuf.Take(MaxTableRows).ToList() : _tableBuf;
+        var rows = visible.Select(SplitCells).ToList();
         var cols = rows.Max(r => r.Count);
         var widths = new int[cols];
         foreach (var r in rows)
@@ -230,6 +235,8 @@ public sealed class ConsoleRenderer
                 cells[i] = isSep ? new string('─', widths[i]) : PadToWidth(r[i], widths[i]);
             Console.WriteLine("  " + string.Join(" │ ", cells));
         }
+        if (truncated)
+            Console.WriteLine($"  …(表格共 {_tableBuf.Count} 行，仅显示前 {MaxTableRows} 行)");
         _tableBuf.Clear();
     }
 
