@@ -53,6 +53,24 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_TripleBackticksMidLine_AreLiteralNotFence()
+    {
+        // 回归：行中的 ``` 曾误判为代码围栏，_skipCodeIntro 吞掉本行剩余内容；
+        // 围栏必须位于行首（可含前导空白），行中应作为字面文本保留
+        var output = Render("use ```literal``` here");
+        Assert.Contains("use ```literal``` here", output); // 全部文本保留
+    }
+
+    [Fact]
+    public void Append_IndentedCodeFence_StillOpens()
+    {
+        // 前导空白 + ``` 仍是合法围栏（Markdown 允许缩进围栏）
+        var output = Render("  ```\ncode\n```");
+        Assert.Contains("code", output);
+        Assert.DoesNotContain("  ```\ncode", output); // 围栏行本身不作为文本输出
+    }
+
+    [Fact]
     public void Append_InlineCode_EmitsContent()
     {
         var output = Render("run `dotnet build` now");

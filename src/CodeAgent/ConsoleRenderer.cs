@@ -71,6 +71,18 @@ public sealed class ConsoleRenderer
             _tickRun++;
             if (_tickRun == 3)
             {
+                // 前两个反引号已追加进 _line：检查围栏前缀（反引号之前的文本）是否全为空白。
+                // 仅当 ``` 位于行首（可含前导空白）时才视为围栏开始；
+                // 行中出现的 ```（如 use ```literal``` here）应作为字面文本保留，
+                // 否则 _skipCodeIntro 会吞掉本行剩余内容。
+                var prefixLen = _line.Length - (_tickRun - 1); // 去掉已追加的两个反引号
+                var prefix = prefixLen > 0 ? _line.ToString(0, prefixLen) : "";
+                if (!string.IsNullOrWhiteSpace(prefix))
+                {
+                    _line.Append('`');
+                    _tickRun = 0;
+                    return;
+                }
                 // 围栏开始：先输出围栏前的内容，进入代码模式
                 EmitLine(_line.ToString());
                 _line.Clear();
@@ -191,6 +203,17 @@ public sealed class ConsoleRenderer
         {
             if (s[i] == '`')
             {
+                // 连续 3 个及以上反引号是字面文本（围栏语法，行内解析不处理），
+                // 只有单个反引号对才作为行内代码开关
+                var run = 1;
+                while (i + run < s.Length && s[i + run] == '`')
+                    run++;
+                if (run >= 3)
+                {
+                    cur.Append(s, i, run);
+                    i += run - 1;
+                    continue;
+                }
                 Flush();
                 style = style == InlineStyle.Code ? InlineStyle.Normal : InlineStyle.Code;
             }
