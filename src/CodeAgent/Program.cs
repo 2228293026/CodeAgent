@@ -131,7 +131,8 @@ internal static class Program
         {
             try
             {
-                SetupWizard.Run(config);
+                // 尊重 -c 指定的配置文件路径；未指定时向导保存到当前目录 codeagent.json
+                SetupWizard.Run(config, Console.In, Console.Out, configPath);
             }
             catch (OperationCanceledException)
             {
@@ -580,7 +581,8 @@ internal static class Program
             case "/setup":
                 try
                 {
-                    SetupWizard.Run(config);
+                    // 尊重 -c 指定的配置文件路径；未指定时向导保存到当前目录 codeagent.json
+                    SetupWizard.Run(config, Console.In, Console.Out, configPath);
                 }
                 catch (OperationCanceledException)
                 {

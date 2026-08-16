@@ -29,7 +29,7 @@ public class SetupWizardFlowTests : IDisposable
         var config = new AgentConfig();
         var writer = new StringWriter();
         using var reader = new StringReader(input);
-        SetupWizard.Run(config, reader, writer);
+        SetupWizard.Run(config, reader, writer, null);
         return (config, writer.ToString());
     }
 
@@ -90,7 +90,25 @@ public class SetupWizardFlowTests : IDisposable
         using var reader = new StringReader("");
         using var writer = new StringWriter();
 
-        Assert.Throws<OperationCanceledException>(() => SetupWizard.Run(config, reader, writer));
+        Assert.Throws<OperationCanceledException>(() => SetupWizard.Run(config, reader, writer, null));
         Assert.False(File.Exists(Path.Combine(_dir, "codeagent.json")));
+    }
+
+    [Fact]
+    public void CustomSavePath_IsRespected()
+    {
+        // 回归：曾硬编码保存到当前目录 codeagent.json，-c 指定的配置路径被忽略；
+        // 现在应保存到 savePath 指定的位置
+        var config = new AgentConfig();
+        var savePath = Path.Combine(_dir, "custom-config.json");
+        using var reader = new StringReader("1\n\n\n1\n\n");
+        using var writer = new StringWriter();
+
+        SetupWizard.Run(config, reader, writer, savePath);
+
+        Assert.True(File.Exists(savePath)); // 保存到指定路径
+        Assert.False(File.Exists(Path.Combine(_dir, "codeagent.json"))); // 不再覆盖默认路径
+        Assert.Contains("配置已保存", writer.ToString());
+        Assert.Contains(savePath, writer.ToString()); // 提示使用指定路径
     }
 }

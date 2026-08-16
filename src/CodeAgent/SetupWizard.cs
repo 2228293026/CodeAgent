@@ -21,14 +21,15 @@ public static class SetupWizard
     ];
 
     /// <summary>运行向导：就地更新 config 并保存到当前目录的 codeagent.json。</summary>
-    public static void Run(AgentConfig config) => Run(config, Console.In, Console.Out);
+    public static void Run(AgentConfig config) => Run(config, Console.In, Console.Out, null);
 
     /// <summary>
-    /// 运行向导（可注入输入输出以便测试）：就地更新 config 并保存到当前目录的 codeagent.json。
+    /// 运行向导（可注入输入输出以便测试）：就地更新 config。
+    /// savePath 为保存路径；null 时保存到当前目录的 codeagent.json。
     /// </summary>
-    internal static void Run(AgentConfig config, TextReader input, TextWriter output)
+    internal static void Run(AgentConfig config, TextReader input, TextWriter output, string? savePath)
     {
-        var path = Path.Combine(Environment.CurrentDirectory, "codeagent.json");
+        var path = savePath ?? Path.Combine(Environment.CurrentDirectory, "codeagent.json");
 
         output.WriteLine("── CodeAgent 供应商配置向导 ──────────────");
         output.WriteLine($"将更新配置文件: {path}\n");
