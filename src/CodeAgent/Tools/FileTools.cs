@@ -61,6 +61,8 @@ public sealed class ReadFileTool : ITool
         for (int i = 0; i < count; i++)
         {
             var line = lines[start + i].TrimEnd('\r');
+            // 单行截断保护：压缩 JSON / base64 等超长行会撑爆上下文（默认 2000 字符/行）
+            line = TextUtil.TruncateLine(line, 2000);
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
         }
 

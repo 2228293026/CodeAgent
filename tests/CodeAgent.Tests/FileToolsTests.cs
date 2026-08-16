@@ -205,6 +205,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_VeryLongLine_IsTruncated()
+    {
+        // 回归：压缩 JSON / base64 等超长行曾整行输出撑爆上下文，现应按 2000 字符/行截断
+        var path = Path.Combine(_dir, "long.txt");
+        File.WriteAllText(path, new string('x', 5000) + "\nshort");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "long.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("…", output); // 有截断标记
+        Assert.True(output.Length < 2500, $"超长行应被截断（当前输出 {output.Length} 字符）");
+        Assert.Contains("short", output); // 后续正常行不受影响
+    }
+
+    [Fact]
     public async Task WriteFile_CreateDirsFalseString_IsRespected()
     {
         // 回归：create_dirs 默认 true，模型传字符串 "0" 时应解析为 false（不自动建目录），
