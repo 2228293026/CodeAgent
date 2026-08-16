@@ -86,6 +86,20 @@ internal static class ToolArgs
 
     public static bool GetBool(JsonObject? args, string key, bool def) =>
         args?[key] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : def;
+
+    /// <summary>读取一个字符串键值对对象（env 等）；key 缺失或不是对象时返回 null。</summary>
+    public static Dictionary<string, string>? GetStringDict(JsonObject? args, string key)
+    {
+        if (args?[key] is not JsonObject obj)
+            return null;
+        var dict = new Dictionary<string, string>();
+        foreach (var kv in obj)
+        {
+            if (kv.Value is JsonValue v)
+                dict[kv.Key] = v.TryGetValue<string>(out var s) ? s : v.ToJsonString();
+        }
+        return dict.Count == 0 ? null : dict;
+    }
 }
 
 /// <summary>工具注册表：注册、生成 ToolSpec、按名分发执行。</summary>

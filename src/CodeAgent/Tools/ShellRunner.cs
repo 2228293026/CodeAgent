@@ -7,9 +7,10 @@ namespace CodeAgent.Tools;
 /// <summary>共享的 shell 命令执行器：shell 选择、进程启动、超时、输出截断。</summary>
 public static class ShellRunner
 {
-    /// <summary>执行命令，返回 (退出码, 格式化输出)。</summary>
+    /// <summary>执行命令，返回 (退出码, 格式化输出)。env 为附加环境变量（叠加到当前环境）。</summary>
     public static async Task<(int ExitCode, string Output)> RunAsync(
-        string shell, string command, string cwd, int timeoutSeconds, CancellationToken ct)
+        string shell, string command, string cwd, int timeoutSeconds, CancellationToken ct,
+        IReadOnlyDictionary<string, string>? env = null)
     {
         var (fileName, arguments) = BuildShellCommand(shell, command);
         var psi = new ProcessStartInfo
@@ -24,6 +25,11 @@ public static class ShellRunner
             StandardErrorEncoding = Encoding.UTF8,
             CreateNoWindow = true,
         };
+        if (env is not null)
+        {
+            foreach (var kv in env)
+                psi.Environment[kv.Key] = kv.Value;
+        }
 
         using var proc = new Process { StartInfo = psi };
         try
@@ -206,6 +212,7 @@ public sealed class BashTool : ITool
             ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的 bash 命令" },
             ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
             ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+            ["env"] = new JsonObject { ["type"] = "object", ["description"] = "附加环境变量（字符串键值对，叠加到当前环境）", ["additionalProperties"] = new JsonObject { ["type"] = "string" } },
         },
         ["required"] = new JsonArray("command"),
     };
@@ -222,11 +229,12 @@ public sealed class BashTool : ITool
         var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 60), 1, 300);
         var cwdArg = ToolArgs.GetString(args, "cwd");
         var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
+        var env = ToolArgs.GetStringDict(args, "env");
 
         if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
             return "用户已取消命令执行。";
 
-        var (_, output) = await ShellRunner.RunAsync("bash", command, cwd, timeout, ct);
+        var (_, output) = await ShellRunner.RunAsync("bash", command, cwd, timeout, ct, env);
         return output;
     }
 }
@@ -245,6 +253,7 @@ public sealed class PowerShellTool : ITool
             ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的 PowerShell 命令" },
             ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
             ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+            ["env"] = new JsonObject { ["type"] = "object", ["description"] = "附加环境变量（字符串键值对，叠加到当前环境）", ["additionalProperties"] = new JsonObject { ["type"] = "string" } },
         },
         ["required"] = new JsonArray("command"),
     };
@@ -261,13 +270,14 @@ public sealed class PowerShellTool : ITool
         var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 60), 1, 300);
         var cwdArg = ToolArgs.GetString(args, "cwd");
         var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
+        var env = ToolArgs.GetStringDict(args, "env");
 
         if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
             return "用户已取消命令执行。";
 
         // Windows：无 pwsh 7 时用系统自带的 Windows PowerShell 5.1；其他平台需要 pwsh
         var shell = OperatingSystem.IsWindows() && ShellRunner.FindPwsh() is null ? "powershell" : "pwsh";
-        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct);
+        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct, env);
         return output;
     }
 }

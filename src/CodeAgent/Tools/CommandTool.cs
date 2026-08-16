@@ -20,6 +20,7 @@ public sealed class CommandTool : ITool
             ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的命令，如 dotnet build" },
             ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
             ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+            ["env"] = new JsonObject { ["type"] = "object", ["description"] = "附加环境变量（字符串键值对，叠加到当前环境）", ["additionalProperties"] = new JsonObject { ["type"] = "string" } },
         },
         ["required"] = new JsonArray("command"),
     };
@@ -36,12 +37,13 @@ public sealed class CommandTool : ITool
         var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 60), 1, 300);
         var cwdArg = ToolArgs.GetString(args, "cwd");
         var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
+        var env = ToolArgs.GetStringDict(args, "env");
 
         if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
             return "用户已取消命令执行。";
 
         var shell = string.IsNullOrWhiteSpace(ctx.Config.Shell) ? ShellRunner.AutoShell() : ctx.Config.Shell;
-        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct);
+        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct, env);
         return output;
     }
 }
