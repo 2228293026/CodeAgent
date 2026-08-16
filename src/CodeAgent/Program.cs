@@ -299,7 +299,7 @@ internal static class Program
         return opts;
     }
 
-    private static string NextArg(string[] args, ref int i, string flag)
+    internal static string NextArg(string[] args, ref int i, string flag)
     {
         if (i + 1 >= args.Length)
             throw new ArgumentException($"缺少 {flag} 的参数值");
