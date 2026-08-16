@@ -249,6 +249,9 @@ public sealed class ConsoleRenderer
     /// <summary>单张表格最大渲染行数，超出截断（防止模型输出的超大表格撑爆终端）。</summary>
     private const int MaxTableRows = 50;
 
+    /// <summary>Markdown 分隔行单元格：可选冒号 + 至少 3 个 -（---、:---、---:、:---:）。</summary>
+    private static readonly System.Text.RegularExpressions.Regex SepRe = new(@"^:?-{3,}:?$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>输出缓冲的表格行：按列宽对齐、分隔行用横线、考虑 CJK 显示宽度。</summary>
     private void FlushTable()
     {
@@ -264,7 +267,9 @@ public sealed class ConsoleRenderer
                 widths[i] = Math.Max(widths[i], DisplayWidth(r[i]));
         foreach (var r in rows)
         {
-            var isSep = r.Count > 0 && r.All(c => c.Length > 0 && c.All(ch => ch is '-' or ':' or ' '));
+            // 分隔行判定需精确：Markdown 分隔行单元格形如 ---、:---、---:、:---:
+            // （可选冒号 + 至少 3 个 -），否则单字符数据行（如 - 或 :）会被误判为分隔行而丢失
+            var isSep = r.Count > 0 && r.All(c => SepRe.IsMatch(c));
             var cells = new string[r.Count];
             for (int i = 0; i < r.Count; i++)
                 cells[i] = isSep ? new string('─', widths[i]) : PadToWidth(r[i], widths[i]);

@@ -189,6 +189,27 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Table_SingleCharDataCells_AreNotSeparators()
+    {
+        // 回归：单字符数据行（如 - 或 :）曾被宽松判定误判为分隔行而丢失，
+        // 现应作为数据单元格正常渲染（分隔行需至少 3 个 -）
+        var output = Render("| a | b |\n|---|---|\n| - | : |\n");
+        Assert.Contains("-", output); // 数据 - 保留
+        Assert.Contains(":", output); // 数据 : 保留
+        Assert.Contains("│", output); // 数据行仍有分隔竖线（非横线）
+        var dataLine = output.TrimEnd('\n').Split('\n')[^1];
+        Assert.DoesNotContain("──", dataLine); // 数据行不应渲染成横线
+    }
+
+    [Fact]
+    public void Table_ColonAlignmentSeparators_StillRecognized()
+    {
+        // Markdown 对齐分隔行（:---、---:、:---:）仍应渲染为横线
+        var output = Render("| a | b |\n|:---|:---:|\n| 1 | 2 |\n");
+        Assert.Contains("─", output); // 对齐分隔行渲染为横线
+    }
+
+    [Fact]
     public void Table_TrailingRowWithoutNewline_IsStillAligned()
     {
         // 回归：流以未换行的表格行结束时，该行应仍按表格对齐输出，
