@@ -422,8 +422,9 @@ public static class InputLine
             }
             else
             {
-                var parts = menuItems.Take(6).Select((m, i) => $"{i + 1}) {m.Name}");
-                var more = menuItems.Count > 6 ? $" …(共 {menuItems.Count} 项)" : "";
+                // 与数字键上限一致（1-9 run）：显示前 9 项，超出提示总数
+                var parts = menuItems.Take(9).Select((m, i) => $"{i + 1}) {m.Name}");
+                var more = menuItems.Count > 9 ? $" …(共 {menuItems.Count} 项)" : "";
                 sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
             }
             sb.AppendLine();
