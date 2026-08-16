@@ -153,4 +153,46 @@ public class AgentSessionTests : IDisposable
         Assert.Contains("## 工具：stop", text); // 工具结果段落
         Assert.Contains("调用工具 `stop`", text); // 工具调用行
     }
+
+    [Fact]
+    public async Task ExportMarkdown_ByName_LoadsSavedSession()
+    {
+        // /export <名>：从磁盘读取命名会话再导出，标题应带会话名
+        var provider = new FakeProvider { NextResponse = new Providers.ProviderResponse { Text = "你好" } };
+        var exportDir = Path.Combine(Path.GetTempPath(), "codeagent-export-name-" + Guid.NewGuid().ToString("N"), "out");
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = _sessionDir,
+            ExportDir = Path.GetRelativePath(Environment.CurrentDirectory, exportDir),
+        };
+        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
+        await agent.RunAsync("任务", CancellationToken.None);
+        agent.SaveSession("named-session");
+
+        var file = agent.ExportMarkdown("named-session");
+        var text = File.ReadAllText(file);
+
+        Assert.True(File.Exists(file));
+        Assert.Contains("CodeAgent 会话：named-session", text); // 标题带会话名
+        Assert.Contains("## 用户", text);
+        Assert.Contains("任务", text);
+        Assert.Contains("## 助手", text);
+        Assert.Contains("你好", text);
+    }
+
+    [Fact]
+    public void ExportMarkdown_UnknownName_ThrowsFileNotFound()
+    {
+        var exportDir = Path.Combine(Path.GetTempPath(), "codeagent-export-miss-" + Guid.NewGuid().ToString("N"), "out");
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = _sessionDir,
+            ExportDir = Path.GetRelativePath(Environment.CurrentDirectory, exportDir),
+        };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+        Assert.Throws<FileNotFoundException>(() => agent.ExportMarkdown("no-such-session"));
+    }
 }
