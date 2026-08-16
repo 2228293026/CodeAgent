@@ -195,4 +195,29 @@ public class AgentSessionTests : IDisposable
 
         Assert.Throws<FileNotFoundException>(() => agent.ExportMarkdown("no-such-session"));
     }
+
+    [Fact]
+    public void ExportMarkdown_TraversalName_StaysInsideExportDir()
+    {
+        // 回归：/export ../evil 曾把 name 直接拼进导出路径（写入 ExportDir 父目录，路径穿越）；
+        // 现在导出名与保存名一样经 sanitize（../evil → .._evil.md），文件必须落在 ExportDir 内
+        var exportDir = Path.Combine(Path.GetTempPath(), "codeagent-export-trav-" + Guid.NewGuid().ToString("N"), "out");
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = _sessionDir,
+            ExportDir = Path.GetRelativePath(Environment.CurrentDirectory, exportDir),
+        };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+        // 先保存一个「穿越名」会话（SaveSession 走 SessionFilePath 的 sanitize）
+        agent.SaveSession("../evil");
+        var file = agent.ExportMarkdown("../evil");
+
+        var full = Path.GetFullPath(file);
+        Assert.StartsWith(Path.GetFullPath(exportDir), full); // 导出文件在 ExportDir 内
+        Assert.EndsWith(".._evil.md", Path.GetFileName(file)); // 名字已 sanitize
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(exportDir)!, "evil.md")),
+            "不得在 ExportDir 父目录写出 evil.md（路径穿越）");
+    }
 }

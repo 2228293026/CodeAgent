@@ -142,7 +142,9 @@ public sealed class Agent
         IReadOnlyList<ProviderMessage> msgs = name is null ? _messages : LoadMessages(name);
         var dir = Path.Combine(Environment.CurrentDirectory, _ctx.Config.ExportDir);
         Directory.CreateDirectory(dir);
-        var file = Path.Combine(dir, (name ?? $"chat-{DateTime.Now:yyyyMMdd-HHmmss}") + ".md");
+        // name 同样需 sanitize：/export ../evil 曾写入 ExportDir 父目录（路径穿越）
+        var safeName = name is null ? $"chat-{DateTime.Now:yyyyMMdd-HHmmss}" : SanitizeName(name);
+        var file = Path.Combine(dir, safeName + ".md");
 
         var sb = new StringBuilder();
         sb.AppendLine($"# CodeAgent 会话{(name is null ? "" : $"：{name}")}");
@@ -182,12 +184,18 @@ public sealed class Agent
         return dto.Select(FromDto).ToList();
     }
 
-    private string SessionFilePath(string name)
+    /// <summary>会话名/导出名 sanitize：非法文件名字符替换为 _（防目录穿越与非法文件名）。</summary>
+    private static string SanitizeName(string name)
     {
         var sb = new StringBuilder();
         foreach (var c in name)
             sb.Append(Path.GetInvalidFileNameChars().Contains(c) ? '_' : c);
-        var safe = sb.Length == 0 ? "session" : sb.ToString();
+        return sb.Length == 0 ? "session" : sb.ToString();
+    }
+
+    private string SessionFilePath(string name)
+    {
+        var safe = SanitizeName(name);
         return Path.Combine(Environment.CurrentDirectory, _ctx.Config.SessionDir, safe + ".json");
     }
 
