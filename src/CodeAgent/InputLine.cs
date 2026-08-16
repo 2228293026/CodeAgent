@@ -320,7 +320,7 @@ public static class InputLine
             menuShown = Math.Min(menuItems.Count, MenuMaxRows);
             if (menuOffset > menuItems.Count - menuShown)
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
-            var above = MenuBlockHeight(menuItems.Count, menuShown); // header + 项/空态 + more 行 + 空行
+            var above = menuShown + 3; // header + 项 + more/空态行 + 空行
             var sb = new StringBuilder();
             // 菜单块始终渲染在输入行上方：不推动输入行、不触发滚动。
             // （30 行窗口下输入行在底部（CursorTop 29）时，下方放不下 11 行的块，
@@ -843,13 +843,6 @@ public static class InputLine
         var idx = menuOffset + n - 1;
         return idx < menuCount ? idx : -1;
     }
-
-    /// <summary>
-    /// ANSI 菜单块总行数（含空行，用于光标上移/擦除的行数计算）：
-    /// header + 项/空态 + more 行 + 空行。零匹配时多一行 "(no matching item)"。
-    /// </summary>
-    internal static int MenuBlockHeight(int itemCount, int menuShown) =>
-        itemCount == 0 ? 4 : menuShown + 3;
 
     /// <summary>记录一条输入到历史（委托给 HistoryStore）。</summary>
     private static void Remember(string line) => History.Remember(line);
