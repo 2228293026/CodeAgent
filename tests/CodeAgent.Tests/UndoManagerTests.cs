@@ -108,6 +108,21 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void TryUndo_EditLargeFileFallback_ReplacesPair()
+    {
+        // 大文件（>4MB）不记录完整原文，退化为 old/new 对：撤销时把新文本替换回旧文本
+        var path = Path.Combine(_dir, "big.txt");
+        File.WriteAllText(path, "hello old tail");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "old", NewText = "new" });
+        File.WriteAllText(path, "hello new tail");
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc);
+        Assert.Equal("hello old tail", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void LastDiff_EditWithFullSnapshot_ShowsExactOriginal()
     {
         var path = Path.Combine(_dir, "e.txt");
