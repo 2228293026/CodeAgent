@@ -56,7 +56,7 @@ public sealed class GlobTool : ITool
 public sealed class GrepTool : ITool
 {
     public string Name => "grep";
-    public string Description => "用正则搜索文件内容。pattern 含大写字母时区分大小写，否则忽略大小写。可用 include/exclude（glob）限定文件范围。返回 文件:行号: 内容。";
+    public string Description => "用正则搜索文件内容。pattern 含大写字母时区分大小写，否则忽略大小写。可用 include/exclude（glob）限定文件范围。files_only=true 只返回匹配的文件名。返回 文件:行号: 内容。";
     public JsonObject Parameters { get; } = new()
     {
         ["type"] = "object",
@@ -68,6 +68,7 @@ public sealed class GrepTool : ITool
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最大结果数（默认 50，最大 500）" },
             ["include"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "仅搜索匹配这些 glob 的文件（如 \"*.cs\"），可用字符串或数组" },
             ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
+            ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -81,6 +82,7 @@ public sealed class GrepTool : ITool
         var target = ToolArgs.GetString(args, "path");
         var context = Math.Clamp(ToolArgs.GetInt(args, "context", 3), 0, 10);
         var max = Math.Clamp(ToolArgs.GetInt(args, "max_results", 50), 1, 500);
+        var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var include = ToolArgs.GetStringList(args, "include");
         var exclude = ToolArgs.GetStringList(args, "exclude");
         var includeRes = include?.Select(Glob.ToRegex).ToList();
@@ -103,6 +105,7 @@ public sealed class GrepTool : ITool
         var full = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(target) ? null : target);
         var sb = new StringBuilder();
         var hits = 0;
+        var matchedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void ScanFile(string path)
         {
@@ -123,6 +126,19 @@ public sealed class GrepTool : ITool
                 var text = File.ReadAllText(path);
                 if (SkipDirs.LooksBinary(text))
                     return;
+
+                if (filesOnly)
+                {
+                    // 只统计匹配文件数：每文件最多计一次
+                    if (re.IsMatch(text))
+                    {
+                        hits++;
+                        matchedFiles.Add(rel);
+                        sb.AppendLine(rel);
+                    }
+                    return;
+                }
+
                 var lines = text.Split('\n');
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {
@@ -164,6 +180,8 @@ public sealed class GrepTool : ITool
 
         if (hits == 0)
             return $"(无匹配: {pattern})";
-        return $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd();
+        return filesOnly
+            ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd()
+            : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd();
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -65,5 +66,36 @@ public class GrepToolTests : IDisposable
             new JsonObject { ["pattern"] = "FIXME", ["include"] = new JsonArray("*.cs") }, ctx, CancellationToken.None);
         Assert.Contains("x.cs:1", output);
         Assert.DoesNotContain("y.md", output);
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ReturnsPathsWithoutLines()
+    {
+        File.WriteAllText(Path.Combine(_dir, "a.cs"), "TODO first\n");
+        File.WriteAllText(Path.Combine(_dir, "b.cs"), "TODO second\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "TODO", ["files_only"] = true }, ctx, CancellationToken.None);
+        Assert.Contains("a.cs", output);
+        Assert.Contains("b.cs", output);
+        Assert.DoesNotContain("TODO first", output); // 不返回行内容
+        Assert.DoesNotContain(":1:", output);        // 不返回行号
+        Assert.Contains("个文件", output);
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_CountsEachFileOnce()
+    {
+        // 同一文件多行匹配时 files_only 只计一次
+        File.WriteAllText(Path.Combine(_dir, "multi.cs"), "TODO a\nTODO b\nTODO c\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "TODO", ["files_only"] = true }, ctx, CancellationToken.None);
+        Assert.Contains("1 个文件", output); // 3 行匹配但只算 1 个文件
+        Assert.Equal(1, output.Split('\n').Count(l => l.Contains("multi.cs")));
     }
 }
