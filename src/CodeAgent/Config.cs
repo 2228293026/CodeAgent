@@ -152,6 +152,11 @@ public sealed class AgentConfig
             var text = File.ReadAllText(found);
             var cfg = JsonSerializer.Deserialize<AgentConfig>(text, JsonOpts) ?? new AgentConfig();
             cfg.SourceFile = found;
+            // 边界校验：非法值收敛到可用范围，避免空转/异常
+            if (cfg.MaxToolIterations < 1)
+                cfg.MaxToolIterations = 1;
+            if (cfg.MaxHistoryChars < 1_000)
+                cfg.MaxHistoryChars = 1_000;
             return cfg;
         }
         catch (JsonException ex)
