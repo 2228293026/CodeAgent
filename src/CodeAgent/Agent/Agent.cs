@@ -639,8 +639,8 @@ public sealed class Agent
                     SafeColor.Foreground(ConsoleColor.Green);
                     Console.WriteLine(status);
                     SafeColor.Reset();
-                    // run_command 附带输出预览，方便直接看到构建/测试结果
-                    if (tc.Name == "run_command" && output.Length > 0)
+                    // 命令类工具附带输出预览，方便直接看到构建/测试结果
+                    if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
                         var preview = string.Join('\n', output.Split('\n').Take(8));
