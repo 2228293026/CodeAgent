@@ -611,11 +611,24 @@ public static class InputLine
 
         // —— 主输入循环 ——
         var pendingKey = (ConsoleKeyInfo?)null; // 粘贴流中暂存的按键（CRLF 的 \n 会被吞掉、普通字符放回）
+        var keySw = new System.Diagnostics.Stopwatch();
+        var pasteStream = false; // 最近一次 ReadKey 等待 < 阈值 → 键已缓冲（粘贴流，兼容分批注入）
         while (true)
         {
-            // 优先消费暂存键：粘贴流中 ReadKey 逐键读取，吞掉 CRLF 的 \n 后需把下一字符放回
-            var key = pendingKey is { } pk ? pk : Console.ReadKey(intercept: true);
-            pendingKey = null;
+            ConsoleKeyInfo key;
+            if (pendingKey is { } pk)
+            {
+                key = pk; // 暂存键来自粘贴流，保持 pasteStream
+                pendingKey = null;
+            }
+            else
+            {
+                keySw.Restart();
+                key = Console.ReadKey(intercept: true);
+                keySw.Stop();
+                // 键几乎立即返回（<30ms）说明是缓冲中的粘贴流；手动输入的键间隔通常更慢
+                pasteStream = keySw.ElapsedMilliseconds < 30;
+            }
 
             // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
             if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
@@ -633,9 +646,10 @@ public static class InputLine
                         Remember(submit);
                         return submit;
                     }
-                    // 粘贴多行内容：缓冲未空（后续键还在）时换行是内容的一部分，插入而非提交。
-                    // 否则粘贴 【PERSONA_LOAD】\nCETACEA_LOLI… 会在第一个换行处就被立即发送。
-                    if (Console.KeyAvailable)
+                    // 粘贴多行内容：缓冲未空或键快速连续到达（粘贴流）时，换行是内容的一部分，插入而非提交。
+                    // Windows 终端粘贴是分批注入，首个 \r 到达时后续字符可能尚未进入缓冲区，
+                    // 仅靠 KeyAvailable 不可靠，需结合 ReadKey 等待时间（<30ms=粘贴流）判定。
+                    if (pasteStream || Console.KeyAvailable)
                     {
                         buf.Insert('\n');
                         // CRLF 粘贴的 \r\n 中 \r 触发本分支后 \n 还会再触发一次 Enter：
