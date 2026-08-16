@@ -683,7 +683,13 @@ public sealed class Agent
         var limit = _ctx.Config.MaxHistoryChars;
         long total = 0;
         foreach (var m in _messages)
+        {
             total += m.Content?.Length ?? 0;
+            // 工具调用的参数字符串（如 write_file 的大段 content）也计入，否则历史可能远超上限
+            if (m.ToolCalls is not null)
+                foreach (var tc in m.ToolCalls)
+                    total += tc.ArgumentsJson.Length;
+        }
         if (total <= limit)
             return;
 
