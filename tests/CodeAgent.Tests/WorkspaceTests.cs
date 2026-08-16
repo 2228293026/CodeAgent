@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using CodeAgent.Tools;
 using Xunit;
 
@@ -47,6 +48,24 @@ public class WorkspaceTests
         // 同级前缀目录（如 proj2）不应被 proj 的沙箱放行
         var ws = new Workspace(Root);
         Assert.Throws<ToolException>(() => ws.Resolve(Path.Combine("..", "proj2", "x.txt")));
+    }
+
+    [Fact]
+    public void Resolve_CaseVariant_MatchesFileSystemSemantics()
+    {
+        // 回归：Windows 大小写不敏感（../PROJ 应放行，等同根目录）；
+        // Linux/macOS 大小写敏感（../PROJ 是另一目录，必须拒绝），否则沙箱可被大小写变体绕过。
+        var ws = new Workspace(Root);
+        var caseVariant = Path.Combine("..", Root.Split(Path.DirectorySeparatorChar).Last().ToUpperInvariant());
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows 大小写不敏感：放行（Path.GetFullPath 会保留传入的大小写，故只断言不抛异常）
+            _ = ws.Resolve(caseVariant);
+        }
+        else
+        {
+            Assert.Throws<ToolException>(() => ws.Resolve(caseVariant));
+        }
     }
 
     [Fact]

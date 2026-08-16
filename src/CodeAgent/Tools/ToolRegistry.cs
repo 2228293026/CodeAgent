@@ -40,9 +40,12 @@ public sealed class Workspace
     /// <summary>判断完整路径是否在工作区内（等于根目录也视为合法，如 path="."）。</summary>
     private bool IsWithin(string fullPath)
     {
-        if (string.Equals(fullPath, Root, StringComparison.OrdinalIgnoreCase))
+        // Windows 文件系统大小写不敏感用 OrdinalIgnoreCase；Linux/macOS 大小写敏感必须精确匹配，
+        // 否则 ../Proj/x 之类的大小写变体可绕过沙箱（/home/proj 与 /home/Proj 是两个目录）。
+        var cmp = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (string.Equals(fullPath, Root, cmp))
             return true;
-        return fullPath.StartsWith(_rootPrefix, StringComparison.OrdinalIgnoreCase);
+        return fullPath.StartsWith(_rootPrefix, cmp);
     }
 
     /// <summary>把绝对路径转为相对工作区的展示路径。</summary>
