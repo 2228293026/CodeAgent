@@ -592,7 +592,15 @@ internal static class Program
                 break;
 
             case "/setup":
-                SetupWizard.Run(config);
+                try
+                {
+                    SetupWizard.Run(config);
+                }
+                catch (OperationCanceledException)
+                {
+                    Console.WriteLine("已取消配置向导。");
+                    break;
+                }
                 opts = EnsureSelectedProvider(config);
                 try
                 {
