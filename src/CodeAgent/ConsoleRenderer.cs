@@ -127,15 +127,15 @@ public sealed class ConsoleRenderer
 
         foreach (var (text, style) in parts)
         {
-            Console.ForegroundColor = style switch
+            SafeColor.Foreground(style switch
             {
                 InlineStyle.Bold => ConsoleColor.White,
                 InlineStyle.Code => ConsoleColor.DarkYellow,
                 _ => color ?? ConsoleColor.Gray,
-            };
+            });
             Console.Write(text);
         }
-        Console.ResetColor();
+        SafeColor.Reset();
         Console.WriteLine();
     }
 
@@ -154,9 +154,9 @@ public sealed class ConsoleRenderer
     {
         if (code.Length == 0)
             return;
-        Console.ForegroundColor = ConsoleColor.Green;
+        SafeColor.Foreground(ConsoleColor.Green);
         Console.Write(code);
-        Console.ResetColor();
+        SafeColor.Reset();
     }
 
     private enum InlineStyle { Normal, Bold, Code }
