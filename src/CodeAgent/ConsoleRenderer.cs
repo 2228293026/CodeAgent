@@ -155,7 +155,7 @@ public sealed class ConsoleRenderer
         var parts = ParseInline(content);
 
         // 无任何样式：原样输出（保留换行）
-        if (color is null && parts.Count <= 1)
+        if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal))
         {
             Console.Write(content + (hadNewline ? "\n" : ""));
             return;

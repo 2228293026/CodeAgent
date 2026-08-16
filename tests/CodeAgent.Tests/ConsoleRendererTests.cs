@@ -109,6 +109,16 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_LineWithOnlyInlineCode_StripsBackticks()
+    {
+        // 回归：单独成行的行内代码（`code`）曾走快速路径，反引号未剥离（输出 "`code`"）；
+        // 快速路径现在要求全部为 Normal 样式，带样式的单段走样式循环
+        var output = Render("`dotnet build`");
+        Assert.Contains("dotnet build", output);
+        Assert.DoesNotContain("`", output); // 反引号应被剥离
+    }
+
+    [Fact]
     public void Append_Table_EmitsAllCells()
     {
         var output = Render("| name | size |\n|------|------|\n| a.cs | 1 KB |\n");
