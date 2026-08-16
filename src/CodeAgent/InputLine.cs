@@ -405,8 +405,9 @@ public static class InputLine
             var sb = new StringBuilder();
             sb.AppendLine();
             sb.AppendLine(Fit(Header()));
-            // 紧凑展示：一行列出全部命令名（避免 14 行大块渲染导致卡顿）
-            sb.AppendLine(Fit("  " + string.Join(" ", Commands.Select(c => c.Name))));
+            // 紧凑展示：一行列出当前过滤结果（避免 14 行大块渲染导致卡顿）
+            var names = menuItems.Count > 0 ? menuItems.Select(m => m.Name) : Commands.Select(c => c.Name);
+            sb.AppendLine(Fit("  " + string.Join(" ", names)));
             sb.AppendLine();
             sb.Append(InputText());
             Console.Write(sb.ToString());
