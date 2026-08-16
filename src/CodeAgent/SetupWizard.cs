@@ -21,43 +21,48 @@ public static class SetupWizard
     ];
 
     /// <summary>运行向导：就地更新 config 并保存到当前目录的 codeagent.json。</summary>
-    public static void Run(AgentConfig config)
+    public static void Run(AgentConfig config) => Run(config, Console.In, Console.Out);
+
+    /// <summary>
+    /// 运行向导（可注入输入输出以便测试）：就地更新 config 并保存到当前目录的 codeagent.json。
+    /// </summary>
+    internal static void Run(AgentConfig config, TextReader input, TextWriter output)
     {
         var path = Path.Combine(Environment.CurrentDirectory, "codeagent.json");
 
-        Console.WriteLine("── CodeAgent 供应商配置向导 ──────────────");
-        Console.WriteLine($"将更新配置文件: {path}\n");
-        Console.WriteLine("请选择供应商:");
+        output.WriteLine("── CodeAgent 供应商配置向导 ──────────────");
+        output.WriteLine($"将更新配置文件: {path}\n");
+        output.WriteLine("请选择供应商:");
         for (int i = 0; i < Presets.Length; i++)
-            Console.WriteLine($"  {i + 1}) {Presets[i].Label}");
-        Console.WriteLine();
+            output.WriteLine($"  {i + 1}) {Presets[i].Label}");
+        output.WriteLine();
 
-        var idx = AskChoice("选择", Presets.Length, 1);
+        var idx = AskChoice(input, output, "选择", Presets.Length, 1);
         var p = Presets[idx - 1];
 
-        Console.WriteLine();
+        output.WriteLine();
         var opts = new ProviderOptions { Type = p.Type };
 
         // 模型名
         string model = p.Model;
         if (p.Name == "custom")
         {
-            model = AskRequired("模型名（必填）");
+            model = AskRequired(input, output, "模型名（必填）");
         }
         else
         {
-            model = Ask("模型名", p.Model) ?? p.Model;
+            model = Ask(input, output, "模型名", p.Model) ?? p.Model;
         }
 
         // API 地址
         string baseUrl = p.BaseUrl;
         if (p.Name == "custom")
         {
-            baseUrl = AskRequired("API 地址（必填，一般以 /v1 结尾）");
+            baseUrl = AskRequired(input, output, "API 地址（必填，一般以 /v1 结尾）");
         }
         else
         {
-            baseUrl = Ask("API 地址", p.BaseUrl) ?? p.BaseUrl;
+            baseUrl = Ask(input, output, "API 地址", p.BaseUrl) ?? p.BaseUrl;
         }
 
         opts.Model = model;
@@ -70,28 +75,28 @@ public static class SetupWizard
         }
         else
         {
-            Console.WriteLine("\nAPI Key 提供方式:");
-            Console.WriteLine("  1) 使用环境变量（推荐）");
-            Console.WriteLine("  2) 直接输入 Key（明文存入配置文件）");
-            Console.WriteLine("  3) 暂不设置（启动前自行配置）");
-            var k = AskChoice("选择", 3, 1);
+            output.WriteLine("\nAPI Key 提供方式:");
+            output.WriteLine("  1) 使用环境变量（推荐）");
+            output.WriteLine("  2) 直接输入 Key（明文存入配置文件）");
+            output.WriteLine("  3) 暂不设置（启动前自行配置）");
+            var k = AskChoice(input, output, "选择", 3, 1);
 
             if (k == 1)
             {
-                var env = Ask("环境变量名", p.Env) ?? p.Env;
+                var env = Ask(input, output, "环境变量名", p.Env) ?? p.Env;
                 opts.ApiKeyEnv = env;
             }
             else if (k == 2)
             {
-                Console.Write("请输入 API Key: ");
-                var key = Console.ReadLine()?.Trim() ?? "";
+                output.Write("请输入 API Key: ");
+                var key = input.ReadLine()?.Trim() ?? "";
                 opts.ApiKey = key.Length == 0 ? null : key;
                 opts.ApiKeyEnv = null;
             }
             else
             {
                 opts.ApiKeyEnv = p.Env;
-                Console.WriteLine($"提示: 启动前请先设置环境变量 {p.Env}。");
+                output.WriteLine($"提示: 启动前请先设置环境变量 {p.Env}。");
             }
         }
 
@@ -99,50 +104,50 @@ public static class SetupWizard
         config.Providers[p.Name] = opts;
 
         AgentConfig.Save(config, path);
-        Console.WriteLine($"\n✔ 配置已保存: {path}");
-        Console.WriteLine($"当前供应商: {p.Name}   模型: {opts.Model}");
-        Console.WriteLine("运行 codeagent 即可开始使用。");
+        output.WriteLine($"\n✔ 配置已保存: {path}");
+        output.WriteLine($"当前供应商: {p.Name}   模型: {opts.Model}");
+        output.WriteLine("运行 codeagent 即可开始使用。");
     }
 
     /// <summary>带默认值的文本输入：回车使用默认值；输入被中断（EOF）时返回 null。</summary>
-    private static string? Ask(string prompt, string? defaultValue = null)
+    private static string? Ask(TextReader input, TextWriter output, string prompt, string? defaultValue = null)
     {
         var def = defaultValue is null ? "" : $" [{defaultValue}]";
-        Console.Write($"{prompt}{def}: ");
-        var line = Console.ReadLine();
+        output.Write($"{prompt}{def}: ");
+        var line = input.ReadLine();
         if (line is null)
             return null;
-        var input = line.Trim();
-        return input.Length > 0 ? input : defaultValue;
+        var text = line.Trim();
+        return text.Length > 0 ? text : defaultValue;
     }
 
     /// <summary>必填输入：空输入继续询问，输入被中断（EOF）时取消整个向导。</summary>
-    private static string AskRequired(string prompt)
+    private static string AskRequired(TextReader input, TextWriter output, string prompt)
     {
         while (true)
         {
-            var input = Ask(prompt);
-            if (input is null)
+            var value = Ask(input, output, prompt);
+            if (value is null)
             {
-                Console.WriteLine("\n⚠ 输入已中断，配置向导取消，未保存任何更改。");
+                output.WriteLine("\n⚠ 输入已中断，配置向导取消，未保存任何更改。");
                 throw new OperationCanceledException();
             }
-            if (input.Length > 0)
-                return input;
+            if (value.Length > 0)
+                return value;
         }
     }
 
     /// <summary>带默认值的序号选择，非法输入会重新询问；EOF 时取消向导。</summary>
-    private static int AskChoice(string prompt, int max, int def)
+    private static int AskChoice(TextReader input, TextWriter output, string prompt, int max, int def)
     {
         while (true)
         {
-            var input = Ask(prompt, def.ToString());
-            if (input is null)
+            var value = Ask(input, output, prompt, def.ToString());
+            if (value is null)
                 throw new OperationCanceledException();
-            if (int.TryParse(input, out var n) && n >= 1 && n <= max)
+            if (int.TryParse(value, out var n) && n >= 1 && n <= max)
                 return n;
-            Console.WriteLine($"  请输入 1-{max} 之间的数字。");
+            output.WriteLine($"  请输入 1-{max} 之间的数字。");
         }
     }
 }
