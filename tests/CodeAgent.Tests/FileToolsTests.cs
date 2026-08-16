@@ -177,6 +177,78 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_ListsEntries_SkipsBuildDirs()
+    {
+        // 目录条目应列出；bin/obj/node_modules 等构建目录应跳过
+        Directory.CreateDirectory(Path.Combine(_dir, "src"));
+        Directory.CreateDirectory(Path.Combine(_dir, "bin"));
+        Directory.CreateDirectory(Path.Combine(_dir, "node_modules"));
+        File.WriteAllText(Path.Combine(_dir, "README.md"), "x");
+        File.WriteAllText(Path.Combine(_dir, "src", "Program.cs"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject(), ctx, CancellationToken.None);
+
+        Assert.Contains("src/", output);
+        Assert.Contains("README.md", output);
+        Assert.Contains("Program.cs", output);
+        Assert.DoesNotContain("bin/", output);
+        Assert.DoesNotContain("node_modules", output);
+    }
+
+    [Fact]
+    public async Task ListDirectory_DepthLimit_ControlsRecursion()
+    {
+        // depth=0 只列直接子项，不深入任何子目录
+        Directory.CreateDirectory(Path.Combine(_dir, "a", "b", "c"));
+        File.WriteAllText(Path.Combine(_dir, "a", "top.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "a", "b", "deep.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "a", ["depth"] = 0 }, ctx, CancellationToken.None);
+
+        Assert.Contains("top.txt", output);
+        Assert.Contains("b/", output);
+        Assert.DoesNotContain("deep.txt", output); // 深度 0 不进入 b
+        Assert.DoesNotContain("c/", output);       // 也不显示 b 的子目录
+    }
+
+    [Fact]
+    public async Task ListDirectory_EmptyDir_ReportsHelpfully()
+    {
+        Directory.CreateDirectory(Path.Combine(_dir, "empty"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "empty" }, ctx, CancellationToken.None);
+
+        Assert.Contains("空", output);
+    }
+
+    [Fact]
+    public async Task ListDirectory_Entries_AreSorted()
+    {
+        // 输出确定性：目录组与文件组各自按名称排序（目录先于文件）
+        Directory.CreateDirectory(Path.Combine(_dir, "zeta"));
+        Directory.CreateDirectory(Path.Combine(_dir, "alpha"));
+        File.WriteAllText(Path.Combine(_dir, "mid.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject(), ctx, CancellationToken.None);
+
+        var idxAlpha = output.IndexOf("alpha/", StringComparison.Ordinal);
+        var idxZeta = output.IndexOf("zeta/", StringComparison.Ordinal);
+        var idxMid = output.IndexOf("mid.txt", StringComparison.Ordinal);
+        Assert.True(idxAlpha >= 0 && idxZeta > idxAlpha, $"目录组应按字母序排列:\n{output}");
+        Assert.True(idxMid > idxZeta, $"文件组应列在目录之后:\n{output}");
+    }
+
+    [Fact]
     public async Task WriteFile_NumericContent_IsCoercedToString()
     {
         // 回归：模型偶尔把字符串参数序列化为数字，GetString 应容错转换而非抛 InvalidOperationException
