@@ -3,6 +3,92 @@ using System.Text;
 namespace CodeAgent;
 
 /// <summary>
+/// 可编辑输入行：文本 + 光标位置（行内编辑的基础单元）。
+/// 支持左右移动、Home/End、在光标处插入/删除；所有操作都在内存中进行，
+/// 由 InputLine 负责把结果渲染到终端。
+/// </summary>
+public sealed class EditableLine
+{
+    private readonly StringBuilder _text = new();
+
+    /// <summary>当前光标位置（0..Length，位于字符之间）。</summary>
+    public int Cursor { get; private set; }
+
+    /// <summary>当前文本长度。</summary>
+    public int Length => _text.Length;
+
+    /// <summary>完整文本。</summary>
+    public string Text => _text.ToString();
+
+    /// <summary>预填初始文本，光标移到末尾。</summary>
+    public void SetInitial(string? initial)
+    {
+        if (string.IsNullOrEmpty(initial))
+            return;
+        _text.Append(initial);
+        Cursor = _text.Length;
+    }
+
+    /// <summary>在光标处插入字符，光标后移。</summary>
+    public void Insert(char ch)
+    {
+        _text.Insert(Cursor, ch);
+        Cursor++;
+    }
+
+    /// <summary>删除光标前一个字符；光标在行首时无操作。返回是否删除。</summary>
+    public bool Backspace()
+    {
+        if (Cursor <= 0)
+            return false;
+        _text.Remove(Cursor - 1, 1);
+        Cursor--;
+        return true;
+    }
+
+    /// <summary>删除光标处（后一个）字符；光标在行尾时无操作。返回是否删除。</summary>
+    public bool Delete()
+    {
+        if (Cursor >= _text.Length)
+            return false;
+        _text.Remove(Cursor, 1);
+        return true;
+    }
+
+    public void MoveLeft()
+    {
+        if (Cursor > 0)
+            Cursor--;
+    }
+
+    public void MoveRight()
+    {
+        if (Cursor < _text.Length)
+            Cursor++;
+    }
+
+    public void Home() => Cursor = 0;
+
+    public void End() => Cursor = _text.Length;
+
+    public void Clear()
+    {
+        _text.Clear();
+        Cursor = 0;
+    }
+
+    /// <summary>整体替换文本（历史浏览用），光标移到末尾。</summary>
+    public void Replace(string text)
+    {
+        _text.Clear();
+        _text.Append(text);
+        Cursor = _text.Length;
+    }
+
+    public override string ToString() => _text.ToString();
+}
+
+/// <summary>
 /// 终端输入行：斜杠命令菜单（**ANSI 原地渲染**：方向键让 ">" 在列表内上下移动，
 /// 纯转义文本输出，不依赖控制台光标 API，兼容 Windows Terminal 等现代终端；
 /// `tuiAnsi=false` 时退回滚动式）、数字键 1-9 直接执行、↑/↓ 历史、TAB 补全、
@@ -75,9 +161,8 @@ public static class InputLine
             return line;
         }
 
-        var buf = new StringBuilder();
-        if (!string.IsNullOrEmpty(initial))
-            buf.Append(initial); // 预填：取消回合后把上一条输入恢复到输入框
+        var buf = new EditableLine();
+        buf.SetInitial(initial); // 预填：取消回合后把上一条输入恢复到输入框
         var session = new List<string>(History);
         var idx = session.Count;
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
@@ -86,8 +171,8 @@ public static class InputLine
         // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」
         string InputText() =>
             idx < session.Count
-                ? $"{promptPlain} (历史 {idx + 1}/{session.Count}){buf}"
-                : promptPlain + buf;
+                ? $"{promptPlain} (历史 {idx + 1}/{session.Count}){buf.Text}"
+                : promptPlain + buf.Text;
 
         var winW = TryWindowWidth();
         var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
@@ -283,7 +368,7 @@ public static class InputLine
 
         void RefreshMenu()
         {
-            var pat = buf.ToString();
+            var pat = buf.Text;
             if (pat.StartsWith('／'))
                 pat = "/" + pat[1..];
             var newItems = Commands
@@ -364,7 +449,7 @@ public static class InputLine
 
         void OnTextChanged()
         {
-            if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
+            if (menuOpen && !modePicker && !SlashLike(buf.Text))
             {
                 // 输入不再以斜杠开头（如退格删掉 /）：关闭并擦除菜单
                 CloseMenu();
@@ -373,7 +458,7 @@ public static class InputLine
             }
             if (menuOpen && !modePicker)
             {
-                var pat = buf.ToString();
+                var pat = buf.Text;
                 if (pat.StartsWith('／'))
                     pat = "/" + pat[1..];
                 if (pat != lastFilter)
@@ -411,18 +496,52 @@ public static class InputLine
                     if (menuOpen)
                         CloseMenu(); // 未选择任何项：关闭菜单，按原输入提交
                     Console.WriteLine();
-                    var line = buf.ToString();
+                    var line = buf.Text;
                     Remember(line);
                     return line;
 
                 case ConsoleKey.Backspace:
                     if (menuOpen && modePicker)
                         CloseMenu();
-                    if (buf.Length > 0)
-                    {
-                        buf.Length--;
+                    if (buf.Backspace())
                         OnTextChanged();
+                    break;
+
+                case ConsoleKey.LeftArrow:
+                    if (!menuOpen)
+                    {
+                        buf.MoveLeft();
+                        RedrawInput();
                     }
+                    break;
+
+                case ConsoleKey.RightArrow:
+                    if (!menuOpen)
+                    {
+                        buf.MoveRight();
+                        RedrawInput();
+                    }
+                    break;
+
+                case ConsoleKey.Home:
+                    if (!menuOpen)
+                    {
+                        buf.Home();
+                        RedrawInput();
+                    }
+                    break;
+
+                case ConsoleKey.End:
+                    if (!menuOpen)
+                    {
+                        buf.End();
+                        RedrawInput();
+                    }
+                    break;
+
+                case ConsoleKey.Delete:
+                    if (!menuOpen && buf.Delete())
+                        OnTextChanged();
                     break;
 
                 case ConsoleKey.UpArrow:
@@ -437,7 +556,7 @@ public static class InputLine
                         if (idx > 0)
                         {
                             if (draft is null)
-                                draft = buf.ToString(); // 记住浏览历史前的草稿
+                                draft = buf.Text; // 记住浏览历史前的草稿
                             idx--;
                             SetBuf(session, buf, idx);
                             RedrawInput();
@@ -460,8 +579,7 @@ public static class InputLine
                             if (idx == session.Count && draft is not null)
                             {
                                 // 回到草稿（浏览历史前的原始输入）
-                                buf.Clear();
-                                buf.Append(draft);
+                                buf.Replace(draft);
                                 draft = null;
                             }
                             else
@@ -492,13 +610,12 @@ public static class InputLine
                     if (menuOpen && menuItems.Count == 1)
                     {
                         // 唯一匹配：Tab 补全为完整命令（/think + Tab → /thinking）
-                        buf.Clear();
-                        buf.Append(menuItems[0].Name);
+                        buf.Replace(menuItems[0].Name);
                         draft = null;
                         CloseMenu();
                         RedrawInput();
                     }
-                    else if (!menuOpen && SlashLike(buf.ToString()))
+                    else if (!menuOpen && SlashLike(buf.Text))
                     {
                         OpenMenu(false);
                     }
@@ -530,7 +647,7 @@ public static class InputLine
                         CloseMenu(); // 模式菜单：数字按普通输入处理
                     if (key.KeyChar != '\0' && !char.IsControl(key.KeyChar))
                     {
-                        buf.Append(key.KeyChar);
+                        buf.Insert(key.KeyChar);
                         draft = null;
                         RedrawInput();
                     }
@@ -594,10 +711,10 @@ public static class InputLine
                     {
                         if (menuOpen && modePicker)
                             CloseMenu();
-                        buf.Append(key.KeyChar);
+                        buf.Insert(key.KeyChar);
                         draft = null; // 输入使草稿失效
                         OnTextChanged();
-                        if (!modePicker && SlashLike(buf.ToString()) && !menuOpen)
+                        if (!modePicker && SlashLike(buf.Text) && !menuOpen)
                             OpenMenu(false);
                     }
                     break;
@@ -605,11 +722,9 @@ public static class InputLine
         }
     }
 
-    private static void SetBuf(List<string> session, StringBuilder buf, int idx)
+    private static void SetBuf(List<string> session, EditableLine buf, int idx)
     {
-        buf.Clear();
-        if (idx < session.Count)
-            buf.Append(session[idx]);
+        buf.Replace(idx < session.Count ? session[idx] : "");
     }
 
     /// <summary>快捷键判定：Alt+键 或 Ctrl+Shift+键（部分终端会吞 Alt，提供 Ctrl+Shift 兜底）。</summary>
