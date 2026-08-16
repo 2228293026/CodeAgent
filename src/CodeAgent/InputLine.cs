@@ -829,12 +829,13 @@ public static class InputLine
 
     /// <summary>
     /// 数字键 1-9 在命令菜单中对应的列表下标。
-    /// 仅对「可见窗口内」的项生效（ANSI 模式 menuShown 为窗口大小；滚动模式 menuShown=0 时视为全部项）；
+    /// 仅对「可见窗口内」的项生效（ANSI 模式 menuShown 为窗口大小；滚动模式 menuShown=0 时
+    /// 以数字键上限 9 为可见数，与 PrintFilterScroll 显示项数一致）；
     /// 无效（越界/窗口外）返回 -1，调用方忽略该按键。
     /// </summary>
     internal static int DigitKeySelection(int n, int menuOffset, int menuShown, int menuCount)
     {
-        var visible = menuShown > 0 ? menuShown : menuCount; // 滚动模式无窗口限制
+        var visible = menuShown > 0 ? menuShown : Math.Min(menuCount, 9); // 滚动模式：最多 9（数字键上限）
         if (n < 1 || n > visible || menuCount <= 0)
             return -1;
         var idx = menuOffset + n - 1;

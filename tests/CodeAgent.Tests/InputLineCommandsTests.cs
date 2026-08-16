@@ -45,7 +45,10 @@ public class InputLineCommandsTests
     [InlineData(9, 5, 8, 23, -1)]  // 滚动后数字 9 仍超出可见窗口
     [InlineData(4, 0, 2, 2, -1)]   // 菜单只有 2 项：数字 4 无效
     [InlineData(2, 0, 2, 2, 1)]    // 菜单 2 项：数字 2 有效
-    [InlineData(1, 0, 0, 23, 0)]   // 滚动模式（menuShown=0）：视为全部项可见
+    // 滚动模式（menuShown=0）：可见数 = min(项数, 9)，与 PrintFilterScroll 显示项数一致
+    [InlineData(1, 0, 0, 23, 0)]   // 滚动模式：数字 1 有效
+    [InlineData(9, 0, 0, 23, 8)]   // 滚动模式：数字 9 有效（上限内）
+    [InlineData(10, 0, 0, 23, -1)] // 滚动模式：数字 10 超出上限 9 → 忽略（回归）
     [InlineData(0, 0, 8, 23, -1)]  // 数字 0 无效
     public void DigitKeySelection_RespectsVisibleWindow(int n, int offset, int shown, int count, int expected) =>
         Assert.Equal(expected, InputLine.DigitKeySelection(n, offset, shown, count));
