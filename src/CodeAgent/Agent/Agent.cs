@@ -715,12 +715,30 @@ public sealed class Agent
                 return;
         }
 
-        // 3) 兜底：丢弃最早的非锚定消息对（system 与首条 user 保留）
+        // 3) 兜底：按「完整回复块」丢弃最早的非锚定对话（system 与首条 user 保留）。
+        //    整块移除 assistant 及其全部 tool 结果，避免拆散工具调用与结果
+        //    （否则留下「孤儿」tool 结果，OpenAI/Anthropic 会拒绝请求）。
         while (total > limit && _messages.Count > 4)
         {
-            total -= (_messages[2].Content?.Length ?? 0) + (_messages[3].Content?.Length ?? 0);
-            _messages.RemoveAt(2);
-            _messages.RemoveAt(2);
+            // 定位首条 user 消息（锚点，之后的消息才可移除）
+            int u1 = 1;
+            while (u1 < _messages.Count && _messages[u1].Role != MessageRole.User)
+                u1++;
+            if (u1 >= _messages.Count - 1)
+                break; // 没有可移除的回复块
+
+            // 下一条 user（或结尾）之前的区间 [u1+1, u2) 是 u1 的完整回复块
+            int u2 = u1 + 1;
+            while (u2 < _messages.Count && _messages[u2].Role != MessageRole.User)
+                u2++;
+            var removeCount = Math.Min(u2 - u1 - 1, _messages.Count - 4);
+            if (removeCount <= 0)
+                break;
+            for (int i = 0; i < removeCount; i++)
+            {
+                total -= _messages[u1 + 1].Content?.Length ?? 0;
+                _messages.RemoveAt(u1 + 1);
+            }
         }
     }
 
