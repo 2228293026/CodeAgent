@@ -787,9 +787,12 @@ public static class InputLine
 
                 case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
                     try { Console.Clear(); } catch { /* 忽略 */ }
-                    RedrawInput();
+                    // 清屏后菜单内容已消失：RefreshMenu 在过滤未变时短路不重绘，
+                    // 必须用 PrintMenu 强制整体重绘（菜单 + 输入行）
                     if (menuOpen)
-                        RefreshMenu();
+                        PrintMenu();
+                    else
+                        RedrawInput();
                     break;
 
                 default:
