@@ -308,6 +308,7 @@ public static class InputLine
         var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
         var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
         var lastInputLines = 1;      // 上次绘制的输入块行数（多行重绘逐行清残留用）
+        var lastCursorLine = 0;      // 终端光标当前所在行（上次重绘后 PositionCursor 放置处，多行重绘上移基点）
 
         Console.Write(prompt);
         if (!string.IsNullOrEmpty(initial))
@@ -340,8 +341,11 @@ public static class InputLine
                     // 多行输入（粘贴含换行）：上移到块首后逐行 \x1b[2K 清整行重写。
                     // 不依赖 \x1b[J（清屏到末尾）——部分终端对 ED 支持不佳，导致每次重绘
                     // 向下追加旧块、刷屏。行数取新旧最大值，多余的旧行清空。
+                    // 上移基点用 lastCursorLine（终端光标当前行）而非块末尾：
+                    // 删除文本后光标被 PositionCursor 放在中间行，从中间行上移 rows-1
+                    // 到不了块首，会覆盖错位、提示符行残留重复。
                     var rows = Math.Max(lines, lastInputLines);
-                    Console.Write($"\x1b[{rows - 1}A");
+                    Console.Write($"\x1b[{lastCursorLine}A");
                     var textLines = InputText().Split('\n');
                     for (int i = 0; i < rows; i++)
                     {
@@ -358,6 +362,9 @@ public static class InputLine
                     Console.Write("\r\x1b[2K" + InputText());
                 }
                 PositionCursor();
+                // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处），
+                // 作为下次多行重绘的上移基点
+                lastCursorLine = CountNewlines(buf.Text[..Math.Clamp(buf.Cursor, 0, buf.Text.Length)]);
             }
             else
             {
