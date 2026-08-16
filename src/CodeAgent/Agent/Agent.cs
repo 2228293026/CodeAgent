@@ -16,6 +16,7 @@ public sealed class Agent
     private IAgentProvider _provider;
     private readonly ToolRegistry _tools;
     private readonly AgentContext _ctx;
+    private readonly AgentConfig _config;
     private readonly List<ProviderMessage> _messages = [];
     private readonly StreamWriter? _sessionLog;
 
@@ -23,6 +24,7 @@ public sealed class Agent
     {
         _provider = provider;
         _tools = tools;
+        _config = config;
         _ctx = new AgentContext
         {
             Config = config,
@@ -89,7 +91,7 @@ public sealed class Agent
     public void Reset()
     {
         _messages.Clear();
-        _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = CurrentMode.SystemPrompt });
+        _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
     }
 
     /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
@@ -97,8 +99,12 @@ public sealed class Agent
     {
         CurrentMode = mode;
         if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
-            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = mode.SystemPrompt };
+            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(mode) };
     }
+
+    /// <summary>code 模式使用配置的自定义 systemPrompt；其他模式用模式自身的提示词。</summary>
+    private string EffectivePrompt(AgentMode mode) =>
+        mode.Name == "code" ? _config.SystemPrompt : mode.SystemPrompt;
 
     /// <summary>撤回最后一轮：移除最后一条用户消息及其回复，恢复发送前状态（ESC 撤回）。</summary>
     public string? UndoLastTurn()
