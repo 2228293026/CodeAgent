@@ -64,9 +64,10 @@ public class AgentSessionTests : IDisposable
     [Fact]
     public void SaveSession_SanitizesInvalidFileNameChars()
     {
+        // / 在 Windows 与 Linux/macOS 上都是非法文件名分隔符，跨平台可断言
         var agent = MakeAgent(_sessionDir, out _);
-        agent.SaveSession("a/b:c*");
-        Assert.True(File.Exists(Path.Combine(_sessionDir, "a_b_c_.json")));
+        agent.SaveSession("a/b");
+        Assert.True(File.Exists(Path.Combine(_sessionDir, "a_b.json")));
     }
 
     [Fact]

@@ -15,11 +15,10 @@ public static class ShellRunner
         if (!Directory.Exists(cwd))
             throw new ToolException($"执行目录不存在: {cwd}");
 
-        var (fileName, arguments) = BuildShellCommand(shell, command);
+        var (fileName, args) = BuildShellCommand(shell, command);
         var psi = new ProcessStartInfo
         {
             FileName = fileName,
-            Arguments = arguments,
             WorkingDirectory = cwd,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -28,6 +27,11 @@ public static class ShellRunner
             StandardErrorEncoding = Encoding.UTF8,
             CreateNoWindow = true,
         };
+        // 用 ArgumentList 逐个传参：Linux/macOS 上 .NET 把 Arguments 字符串按双引号规则解析，
+        // 单引号包裹的命令会被拆坏（bash 报语法错误退出码 2）；ArgumentList 在 Unix 直接进 argv，
+        // 在 Windows 由 .NET 自动做引号转义，跨平台都安全。
+        foreach (var a in args)
+            psi.ArgumentList.Add(a);
         if (env is not null)
         {
             foreach (var kv in env)
@@ -87,23 +91,23 @@ public static class ShellRunner
         return string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static (string fileName, string arguments) BuildShellCommand(string shell, string command)
+    private static (string fileName, string[] args) BuildShellCommand(string shell, string command)
     {
         if (OperatingSystem.IsWindows())
         {
             return shell.ToLowerInvariant() switch
             {
                 // 注意：不能把命令包进 & '...'——PowerShell 会把整串当命令名查找导致 CommandNotFound
-                "powershell" => ("powershell.exe", $"-NoProfile -ExecutionPolicy Bypass -Command {command}"),
-                "pwsh" => ("pwsh", $"-NoProfile -ExecutionPolicy Bypass -Command {command}"),
-                "bash" => (FindGitBash() ?? "bash.exe", $"-lc {QuoteBash(command)}"),
-                _ => ("cmd.exe", $"/d /c {command}"),
+                "powershell" => ("powershell.exe", new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command }),
+                "pwsh" => ("pwsh", new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command }),
+                "bash" => (FindGitBash() ?? "bash.exe", new[] { "-lc", command }),
+                _ => ("cmd.exe", new[] { "/d", "/c", command }),
             };
         }
         return shell.ToLowerInvariant() switch
         {
-            "sh" => ("/bin/sh", $"-lc {QuoteBash(command)}"),
-            _ => ("/bin/bash", $"-lc {QuoteBash(command)}"),
+            "sh" => ("/bin/sh", new[] { "-lc", command }),
+            _ => ("/bin/bash", new[] { "-lc", command }),
         };
     }
 
@@ -178,8 +182,6 @@ public static class ShellRunner
         }
         return null;
     }
-
-    private static string QuoteBash(string s) => "'" + s.Replace("'", "'\\''") + "'";
 
     /// <summary>
     /// 读取输出并截断到 cap。达到上限后仍继续读取丢弃剩余字节，
