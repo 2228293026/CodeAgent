@@ -1,0 +1,109 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using CodeAgent.Providers;
+using CodeAgent.Tools;
+using Xunit;
+using AgentClass = CodeAgent.Agent.Agent;
+
+namespace CodeAgent.Tests;
+
+public class AgentTrimHistoryTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "codeagent-trim-" + Guid.NewGuid().ToString("N"));
+    private string SessionDir => Path.Combine(_dir, ".codeagent", "sessions");
+
+    public AgentTrimHistoryTests() => Directory.CreateDirectory(SessionDir);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, true); } catch { /* 忽略 */ }
+    }
+
+    private AgentClass MakeAgent(FakeProvider provider, int maxHistoryChars) => new(
+        new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            MaxHistoryChars = maxHistoryChars,
+            MaxToolIterations = 10,
+        },
+        provider,
+        ToolRegistry.CreateDefault());
+
+    [Fact]
+    public async Task LongConversation_IsTrimmedToHistoryLimit()
+    {
+        // 历史超限时应被裁剪：system 保留、总字符量收敛到上限附近
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse { Text = new string('x', 2000) }, // 每次回复很大
+        };
+        var agent = MakeAgent(provider, maxHistoryChars: 3000);
+
+        for (int i = 0; i < 6; i++)
+            await agent.RunAsync($"第 {i} 轮请求", CancellationToken.None);
+
+        var totalChars = agent.Messages.Sum(m => m.Content?.Length ?? 0);
+        Assert.True(agent.MessageCount < 13, $"历史应被裁剪（当前 {agent.MessageCount} 条）");
+        Assert.Equal(MessageRole.System, agent.Messages[0].Role); // system 保留
+        // 未裁剪时 6 轮 × 2000 字符 ≈ 12000+；应收敛到远低于该值
+        Assert.True(totalChars < 10000, $"总字符量应收敛（当前 {totalChars}）");
+    }
+
+    [Fact]
+    public async Task TrimmedHistory_KeepsFirstUserAnchored()
+    {
+        // FailSummarization=true：LLM 摘要失败 → 走兜底裁剪路径，该路径保留 system 与首条 user
+        var provider = new FakeProvider
+        {
+            FailSummarization = true,
+            NextResponse = new ProviderResponse { Text = new string('y', 1500) },
+        };
+        var agent = MakeAgent(provider, maxHistoryChars: 2000);
+
+        await agent.RunAsync("最初的请求", CancellationToken.None);
+        for (int i = 0; i < 8; i++)
+            await agent.RunAsync($"后续请求 {i}", CancellationToken.None);
+
+        // 首条 user 消息应保留（锚点），后续内容被裁剪
+        Assert.Contains(agent.Messages, m => m.Role == MessageRole.User && m.Content == "最初的请求");
+        Assert.True(agent.MessageCount >= 3, "至少保留 system + 首条 user + 至少一条回复");
+    }
+
+    [Fact]
+    public async Task ToolCallMessages_SurviveTrimming()
+    {
+        // 工具调用轮（assistant 带 tool_calls + tool 结果）在裁剪后不应出现「孤儿」tool 结果
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse
+            {
+                Text = new string('z', 1200), // 先占满历史
+                ToolCalls = [new ToolCall { Id = "c1", Name = "stop", ArgumentsJson = "{}" }],
+            },
+        };
+        var agent = MakeAgent(provider, maxHistoryChars: 1500);
+
+        // 第一轮返回大文本（触发裁剪路径），第二轮带工具调用
+        await agent.RunAsync("第一轮", CancellationToken.None);
+        provider.NextResponse = new ProviderResponse
+        {
+            ToolCalls = [new ToolCall { Id = "c2", Name = "stop", ArgumentsJson = "{}" }],
+        };
+        await agent.RunAsync("第二轮", CancellationToken.None);
+
+        // 裁剪后：每个 Tool 结果都应有对应的 assistant tool_calls 在其之前（无孤儿）
+        for (int i = 1; i < agent.Messages.Count; i++)
+        {
+            if (agent.Messages[i].Role == MessageRole.Tool)
+            {
+                Assert.True(agent.Messages[i - 1].Role == MessageRole.Assistant
+                            && agent.Messages[i - 1].ToolCalls is { Count: > 0 },
+                    "tool 结果前应有带 tool_calls 的 assistant 消息（无孤儿 tool 结果）");
+            }
+        }
+    }
+}

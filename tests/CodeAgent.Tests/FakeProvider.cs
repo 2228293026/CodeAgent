@@ -12,12 +12,19 @@ public sealed class FakeProvider : IAgentProvider
     public string Name => "fake";
     public ProviderResponse? NextResponse { get; set; }
 
+    /// <summary>为 true 时，摘要请求（单条 user 消息）返回空回复，使 LLM 摘要失败、走兜底裁剪路径。</summary>
+    public bool FailSummarization { get; set; }
+
     public Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
         string thinkingEffort,
-        CancellationToken ct) =>
-        Task.FromResult(NextResponse ?? new ProviderResponse { Text = "ok" });
+        CancellationToken ct)
+    {
+        if (FailSummarization && messages.Count == 1 && messages[0].Role == MessageRole.User)
+            return Task.FromResult(new ProviderResponse { Text = null });
+        return Task.FromResult(NextResponse ?? new ProviderResponse { Text = "ok" });
+    }
 
     public Task<ProviderResponse> ChatStreamAsync(
         IReadOnlyList<ProviderMessage> messages,
