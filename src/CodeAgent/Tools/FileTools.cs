@@ -39,7 +39,14 @@ public sealed class ReadFileTool : ITool
         var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
 
-        var lines = await File.ReadAllLinesAsync(full, ct);
+        var text = await File.ReadAllTextAsync(full, ct);
+        if (SkipDirs.LooksBinary(text))
+            throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
+
+        var lines = text.Split('\n');
+        // 去掉末尾换行产生的空段（与 ReadAllLinesAsync 语义一致），避免幽灵空行
+        if (lines.Length > 0 && lines[^1].Length == 0)
+            lines = lines[..^1];
         if (lines.Length == 0)
             return $"(文件 {path} 为空)";
 
@@ -47,7 +54,10 @@ public sealed class ReadFileTool : ITool
         var count = Math.Min(limit, lines.Length - start);
         var sb = new StringBuilder();
         for (int i = 0; i < count; i++)
-            sb.AppendLine(noLineNumbers ? lines[start + i] : $"{start + i + 1}\t{lines[start + i]}");
+        {
+            var line = lines[start + i].TrimEnd('\r');
+            sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
+        }
 
         var head = count < lines.Length ? $"（{path} 共 {lines.Length} 行，已显示 {start + 1}-{start + count}）\n" : "";
         return head + sb.ToString().TrimEnd();

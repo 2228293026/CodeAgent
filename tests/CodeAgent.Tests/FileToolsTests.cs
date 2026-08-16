@@ -76,4 +76,33 @@ public class FileToolsTests : IDisposable
         Assert.Contains("second", output);
         Assert.DoesNotContain("1\t", output); // 不应出现行号前缀
     }
+
+    [Fact]
+    public async Task ReadFile_BinaryFile_ThrowsInsteadOfGarbage()
+    {
+        // 回归：二进制文件（含 NUL 字节）不应输出乱码行，应明确报错
+        var path = Path.Combine(_dir, "bin.dat");
+        File.WriteAllBytes(path, [0x00, 0x01, 0x02, 0x41, 0x00]);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(
+            () => tool.ExecuteAsync(new JsonObject { ["path"] = "bin.dat" }, ctx, CancellationToken.None));
+        Assert.Contains("二进制", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReadFile_CrlfLineEndings_DoNotPolluteLineContent()
+    {
+        var path = Path.Combine(_dir, "r3.txt");
+        File.WriteAllText(path, "aaa\r\nbbb\r\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "r3.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("1\taaa", output);
+        Assert.Contains("2\tbbb", output);
+        Assert.DoesNotContain("3\t", output); // 末尾换行不应产生幽灵空行
+        Assert.DoesNotContain("bbb\r", output); // 行尾 \r 不应残留在内容里
+    }
 }
