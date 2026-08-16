@@ -69,6 +69,9 @@ public sealed class AgentConfig
     /// <summary>会话日志目录（相对工作目录）。</summary>
     public string SessionDir { get; set; } = ".codeagent/sessions";
 
+    /// <summary>Markdown 导出目录（相对工作目录，/export 用）。</summary>
+    public string ExportDir { get; set; } = ".codeagent/exports";
+
     /// <summary>是否流式输出模型回复（逐字打印，默认开启）。</summary>
     public bool StreamOutput { get; set; } = true;
 

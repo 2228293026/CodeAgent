@@ -140,7 +140,7 @@ public sealed class Agent
     public string ExportMarkdown(string? name)
     {
         IReadOnlyList<ProviderMessage> msgs = name is null ? _messages : LoadMessages(name);
-        var dir = Path.Combine(Environment.CurrentDirectory, ".codeagent", "exports");
+        var dir = Path.Combine(Environment.CurrentDirectory, _ctx.Config.ExportDir);
         Directory.CreateDirectory(dir);
         var file = Path.Combine(dir, (name ?? $"chat-{DateTime.Now:yyyyMMdd-HHmmss}") + ".md");
 

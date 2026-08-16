@@ -99,4 +99,23 @@ public class AgentSessionTests : IDisposable
         Assert.Equal("call_1", toolMsg.ToolCallId);
         Assert.Equal("stop", toolMsg.ToolName);
     }
+
+    [Fact]
+    public void ExportMarkdown_RespectsConfiguredExportDir()
+    {
+        // 回归：导出目录曾硬编码 .codeagent/exports；现在应使用 config.ExportDir
+        var exportDir = Path.Combine(Path.GetTempPath(), "codeagent-export-" + Guid.NewGuid().ToString("N"), "out");
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = _sessionDir,
+            ExportDir = Path.GetRelativePath(Environment.CurrentDirectory, exportDir),
+        };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+        var file = agent.ExportMarkdown(null);
+        Assert.True(File.Exists(file));
+        Assert.StartsWith(exportDir, Path.GetFullPath(file));
+        Assert.Contains("CodeAgent 会话", File.ReadAllText(file));
+    }
 }
