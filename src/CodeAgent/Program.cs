@@ -388,7 +388,7 @@ internal static class Program
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。</summary>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
     {
-        var cache = agent.TurnInputTokens > 0 ? $" {100.0 * agent.TurnCachedTokens / agent.TurnInputTokens:F0}% cached" : "";
+        var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
@@ -405,7 +405,7 @@ internal static class Program
         var total = agent.TotalInputTokens + agent.TotalOutputTokens;
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{TextUtil.CompactTokenCount(total)}/1M tok ({100.0 * total / 1_000_000:F0}%){think}");
+            $"{TextUtil.CompactTokenCount(total)}/1M tok ({TextUtil.PercentOf(total, 1_000_000)}%){think}");
         SafeColor.Reset();
     }
 

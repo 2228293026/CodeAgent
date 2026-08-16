@@ -47,4 +47,15 @@ public class TextUtilFormattingTests
     [InlineData("x/y/long-model-name", "long-model-name")]             // 多层路径取最后一段
     public void ShortModelName_SelectsReadableSegment(string model, string expected) =>
         Assert.Equal(expected, TextUtil.ShortModelName(model));
+
+    [Theory]
+    [InlineData(0, 100, 0)]
+    [InlineData(50, 100, 50)]
+    [InlineData(100, 100, 100)]
+    [InlineData(150, 100, 100)]   // 超出部分封顶 100（回归：曾显示 150%）
+    [InlineData(500_000, 1_000_000, 50)]
+    [InlineData(1_500_000, 1_000_000, 100)] // 回归：1.5M/1M 曾显示 150%
+    [InlineData(10, 0, 0)]        // total ≤ 0：返回 0
+    public void PercentOf_ClampsToHundred(long part, long total, int expected) =>
+        Assert.Equal(expected, TextUtil.PercentOf(part, total));
 }

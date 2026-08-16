@@ -72,6 +72,10 @@ public static class TextUtil
         }
         return model;
     }
+
+    /// <summary>百分比（0-100 封顶）：part/total 的整数百分比，total ≤ 0 时返回 0。</summary>
+    public static int PercentOf(long part, long total) =>
+        total <= 0 ? 0 : (int)Math.Min(100, part * 100.0 / total);
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>
