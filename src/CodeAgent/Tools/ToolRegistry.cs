@@ -81,8 +81,16 @@ public interface ITool
 /// <summary>工具参数读取助手。</summary>
 internal static class ToolArgs
 {
-    public static string GetString(JsonObject? args, string key, string def = "") =>
-        args?[key]?.GetValue<string>() ?? def;
+    /// <summary>读取字符串；兼容模型把值序列化为数字/布尔的情况（如 content=123 → "123"）。</summary>
+    public static string GetString(JsonObject? args, string key, string def = "")
+    {
+        if (args?[key] is not JsonValue v)
+            return def;
+        if (v.TryGetValue<string>(out var s))
+            return s;
+        // 非字符串值（数字/布尔/null 之外的标量）转为其 JSON 文本表示
+        return v.ToJsonString().Trim('"');
+    }
 
     /// <summary>读取整数；兼容模型把数字序列化为字符串的情况（如 "300"）。</summary>
     public static int GetInt(JsonObject? args, string key, int def)

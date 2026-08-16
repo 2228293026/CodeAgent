@@ -175,4 +175,16 @@ public class FileToolsTests : IDisposable
             () => tool.ExecuteAsync(new JsonObject { ["path"] = "afile.txt" }, ctx, CancellationToken.None));
         Assert.Contains("read_file", ex.Message);
     }
+
+    [Fact]
+    public async Task WriteFile_NumericContent_IsCoercedToString()
+    {
+        // 回归：模型偶尔把字符串参数序列化为数字，GetString 应容错转换而非抛 InvalidOperationException
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "n.txt", ["content"] = 123 }, ctx, CancellationToken.None);
+        Assert.Equal("123", File.ReadAllText(Path.Combine(_dir, "n.txt")));
+    }
 }
