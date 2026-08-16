@@ -199,7 +199,6 @@ public sealed class EditFileTool : ITool
         await File.WriteAllTextAsync(full, result, ct);
 
         var startLine = text.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
-        var before = firstIdx >= 0 ? TextUtil.TruncateLine(text.Substring(Math.Max(0, firstIdx - 60), Math.Min(120, text.Length - Math.Max(0, firstIdx))), 120) : "";
         return $"已替换 {count} 处 → {path}（修改起始行 {startLine}）";
     }
 }
