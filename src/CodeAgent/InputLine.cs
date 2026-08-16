@@ -610,9 +610,12 @@ public static class InputLine
         }
 
         // —— 主输入循环 ——
+        var pendingKey = (ConsoleKeyInfo?)null; // 粘贴流中暂存的按键（CRLF 的 \n 会被吞掉、普通字符放回）
         while (true)
         {
-            var key = Console.ReadKey(intercept: true);
+            // 优先消费暂存键：粘贴流中 ReadKey 逐键读取，吞掉 CRLF 的 \n 后需把下一字符放回
+            var key = pendingKey is { } pk ? pk : Console.ReadKey(intercept: true);
+            pendingKey = null;
 
             // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
             if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
@@ -629,6 +632,22 @@ public static class InputLine
                         var submit = modePicker ? $"/mode {sel}" : sel;
                         Remember(submit);
                         return submit;
+                    }
+                    // 粘贴多行内容：缓冲未空（后续键还在）时换行是内容的一部分，插入而非提交。
+                    // 否则粘贴 【PERSONA_LOAD】\nCETACEA_LOLI… 会在第一个换行处就被立即发送。
+                    if (Console.KeyAvailable)
+                    {
+                        buf.Insert('\n');
+                        // CRLF 粘贴的 \r\n 中 \r 触发本分支后 \n 还会再触发一次 Enter：
+                        // 读取并丢弃；若下一个是普通字符（LF-only 粘贴的下一行内容）则放回暂存
+                        if (Console.KeyAvailable)
+                        {
+                            var next = Console.ReadKey(intercept: true);
+                            if (next.Key != ConsoleKey.Enter)
+                                pendingKey = next;
+                        }
+                        OnTextChanged();
+                        break;
                     }
                     if (menuOpen)
                         CloseMenu(); // 未选择任何项：关闭菜单，按原输入提交
