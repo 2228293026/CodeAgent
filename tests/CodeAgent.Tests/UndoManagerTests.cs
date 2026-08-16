@@ -74,4 +74,36 @@ public class UndoManagerTests : IDisposable
         Assert.Contains("- hello", diff);
         Assert.Contains("+ world", diff);
     }
+
+    [Fact]
+    public void TryUndo_EditWithFullSnapshot_RestoresExactly()
+    {
+        // 回归：旧实现用 text.Replace(new, old) 撤销，当新文本在文件中多处存在时会破坏内容。
+        // 例如 replace_all 把 "bar" 全替换为 "foo" 后，撤销会把所有 "foo" 都换回 "bar"。
+        var path = Path.Combine(_dir, "d.txt");
+        File.WriteAllText(path, "foo bar foo");
+        var um = new UndoManager();
+        // 模拟 EditFileTool：小文件记录完整原文（NewText = null）
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "foo bar foo", NewText = null });
+        File.WriteAllText(path, "foo foo foo");
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc);
+        Assert.Equal("foo bar foo", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void LastDiff_EditWithFullSnapshot_ShowsExactOriginal()
+    {
+        var path = Path.Combine(_dir, "e.txt");
+        File.WriteAllText(path, "foo bar foo");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "foo bar foo", NewText = null });
+        File.WriteAllText(path, "foo foo foo");
+
+        var diff = um.LastDiff();
+        Assert.NotNull(diff);
+        Assert.Contains("- foo bar foo", diff); // - 为原始内容
+        Assert.Contains("+ foo foo foo", diff); // + 为当前内容
+    }
 }

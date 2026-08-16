@@ -173,12 +173,14 @@ public sealed class EditFileTool : ITool
             result = text.Remove(firstIdx, oldString.Length).Insert(firstIdx, newString);
         }
 
+        // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对
+        string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
         ctx.Undo.Push(new UndoEntry
         {
             Kind = "edit",
             Path = full,
-            OldText = oldString, // 撤销时恢复目标（文件中的原文）
-            NewText = newString, // 当前文件中的新文本
+            OldText = fullOld ?? oldString, // 完整原文（小文件）或修改前的原文片段（大文件）
+            NewText = fullOld is null ? newString : null, // 仅大文件退化时使用
         });
         await File.WriteAllTextAsync(full, result, ct);
 

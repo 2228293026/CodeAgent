@@ -70,8 +70,17 @@ public sealed class UndoManager
         {
             if (!File.Exists(e.Path))
                 throw new InvalidOperationException($"文件已不存在: {e.Path}");
-            var text = File.ReadAllText(e.Path);
-            File.WriteAllText(e.Path, text.Replace(e.NewText ?? "", e.OldText ?? ""));
+            if (e.NewText is null)
+            {
+                // 小文件：记录了完整原文，直接写回（精确恢复）
+                File.WriteAllText(e.Path, e.OldText ?? "");
+            }
+            else
+            {
+                // 大文件退化：仅替换 old/new 片段（可能有精度损失，但避免整文件内存开销）
+                var text = File.ReadAllText(e.Path);
+                File.WriteAllText(e.Path, text.Replace(e.NewText, e.OldText ?? ""));
+            }
         }
     }
 
@@ -92,8 +101,10 @@ public sealed class UndoManager
             string original;
             if (e.Kind == "write")
                 original = e.HadFile ? e.OldText ?? "" : "";
+            else if (e.NewText is null)
+                original = e.OldText ?? ""; // 完整原文快照
             else
-                original = current.Replace(e.NewText ?? "", e.OldText ?? "");
+                original = current.Replace(e.NewText, e.OldText ?? "");
 
             var diff = DiffUtil.Unified(original, current, Path.GetFileName(e.Path));
             return diff.Length == 0 ? "（内容无差异）" : diff;
