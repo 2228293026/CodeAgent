@@ -119,4 +119,38 @@ public class AgentSessionTests : IDisposable
         Assert.StartsWith(exportDir, Path.GetFullPath(file));
         Assert.Contains("CodeAgent 会话", File.ReadAllText(file));
     }
+
+    [Fact]
+    public async Task ExportMarkdown_ContainsConversationSections()
+    {
+        // 导出内容应包含用户/助手段落与工具调用行，方便回看
+        var provider = new FakeProvider
+        {
+            NextResponse = new Providers.ProviderResponse
+            {
+                ToolCalls =
+                [
+                    new Providers.ToolCall { Id = "call_1", Name = "stop", ArgumentsJson = """{"reason":"done"}""" },
+                ],
+            },
+        };
+        var exportDir = Path.Combine(Path.GetTempPath(), "codeagent-export-ctx-" + Guid.NewGuid().ToString("N"), "out");
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = _sessionDir,
+            ExportDir = Path.GetRelativePath(Environment.CurrentDirectory, exportDir),
+        };
+        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
+        await agent.RunAsync("帮我看看项目", CancellationToken.None);
+
+        var file = agent.ExportMarkdown(null);
+        var text = File.ReadAllText(file);
+
+        Assert.Contains("## 用户", text);
+        Assert.Contains("帮我看看项目", text); // 用户消息内容
+        Assert.Contains("## 助手", text);       // 助手段落
+        Assert.Contains("## 工具：stop", text); // 工具结果段落
+        Assert.Contains("调用工具 `stop`", text); // 工具调用行
+    }
 }
