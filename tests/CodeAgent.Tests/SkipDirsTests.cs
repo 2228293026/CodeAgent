@@ -38,4 +38,24 @@ public class SkipDirsTests : IDisposable
         Assert.Contains("src/deep/b.cs", files);
         Assert.DoesNotContain(files, f => f.Contains("node_modules") || f.Contains("/bin/"));
     }
+
+    [Fact]
+    public void EnumerateFilesPruned_SkipsVenvAndTerraform()
+    {
+        // 回归：常见语言的缓存目录也应剪枝
+        Directory.CreateDirectory(Path.Combine(_dir, ".venv", "lib"));
+        Directory.CreateDirectory(Path.Combine(_dir, ".terraform", "modules"));
+        Directory.CreateDirectory(Path.Combine(_dir, ".pytest_cache"));
+        File.WriteAllText(Path.Combine(_dir, ".venv", "lib", "x.py"), "x");
+        File.WriteAllText(Path.Combine(_dir, ".terraform", "modules", "m.tf"), "m");
+        File.WriteAllText(Path.Combine(_dir, ".pytest_cache", "c.py"), "c");
+        File.WriteAllText(Path.Combine(_dir, "real.py"), "r");
+
+        var files = SkipDirs.EnumerateFilesPruned(_dir)
+            .Select(f => Path.GetRelativePath(_dir, f).Replace('\\', '/'))
+            .ToList();
+
+        Assert.Contains("real.py", files);
+        Assert.DoesNotContain(files, f => f.Contains(".venv") || f.Contains(".terraform") || f.Contains(".pytest_cache"));
+    }
 }

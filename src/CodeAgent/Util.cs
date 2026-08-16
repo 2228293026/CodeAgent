@@ -53,6 +53,8 @@ public static class SkipDirs
         ".git", ".svn", ".hg", ".vs", ".idea", ".vscode", ".trae",
         "bin", "obj", "node_modules", "packages", "dist", "build", "out",
         "target", "Library", "Temp", "temp", "logs", "Logs", ".codeagent",
+        ".venv", "venv", ".gradle", ".terraform", ".dart_tool", ".pytest_cache",
+        ".next", ".nuxt", "Pods", ".mypy_cache", ".ruff_cache", ".coverage",
     };
 
     public static bool IsSkipped(string dirName) => Names.Contains(dirName);
