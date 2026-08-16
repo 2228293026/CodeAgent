@@ -105,4 +105,65 @@ public class AnthropicProviderTests
         Assert.NotNull(body?["temperature"]);
         Assert.Null(body!["thinking"]);
     }
+
+    [Fact]
+    public async Task ChatAsync_ConsecutiveSameRoleMessages_AreMerged()
+    {
+        // 回归：Anthropic 要求角色交替；连续同角色（如两条 user）应合并为一个消息的内容块
+        var handler = new CaptureHandler();
+        var provider = MakeProvider(handler);
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "第一问" },
+            new ProviderMessage { Role = MessageRole.User, Content = "第二问" }, // 连续 user
+        };
+
+        await provider.ChatAsync(messages, [], "off", CancellationToken.None);
+
+        var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
+        Assert.NotNull(msgs);
+        Assert.Equal(1, msgs!.Count); // 两条连续 user 已合并为 1 条消息
+        var user = msgs[0];
+        Assert.Equal("user", user["role"]!.GetValue<string>());
+        var content = user["content"]!.AsArray();
+        Assert.Equal(2, content.Count); // 两个文本块
+        Assert.Equal("第一问", content[0]!["text"]!.GetValue<string>());
+        Assert.Equal("第二问", content[1]!["text"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ChatAsync_AssistantToolUse_IsBuiltAsContentBlock()
+    {
+        // assistant 消息的 tool_calls 应转成 tool_use 内容块（含 id/name/input）
+        var handler = new CaptureHandler();
+        var provider = MakeProvider(handler);
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "hi" },
+            new ProviderMessage
+            {
+                Role = MessageRole.Assistant,
+                Content = "我先看看",
+                ToolCalls = [new ToolCall { Id = "call_9", Name = "glob", ArgumentsJson = """{"pattern":"*.cs"}""" }],
+            },
+        };
+
+        await provider.ChatAsync(messages, [], "off", CancellationToken.None);
+
+        var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
+        Assert.NotNull(msgs);
+        var asst = msgs![^1];
+        Assert.Equal("assistant", asst["role"]!.GetValue<string>());
+        var content = asst["content"]!.AsArray();
+        Assert.Equal(2, content.Count); // 文本块 + tool_use 块
+        Assert.Equal("text", content[0]!["type"]!.GetValue<string>());
+        Assert.Equal("tool_use", content[1]!["type"]!.GetValue<string>());
+        Assert.Equal("call_9", content[1]!["id"]!.GetValue<string>());
+        Assert.Equal("glob", content[1]!["name"]!.GetValue<string>());
+        Assert.Equal("""{"pattern":"*.cs"}""", content[1]!["input"]!.ToJsonString());
+    }
 }
