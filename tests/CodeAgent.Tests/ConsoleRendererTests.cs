@@ -76,4 +76,40 @@ public class ConsoleRendererTests : IDisposable
         r.Flush();
         Assert.Contains("plain **markdown** `code`", _out.ToString()); // 禁用时原样输出
     }
+
+    [Fact]
+    public void Table_CjkCells_AreWidthAligned()
+    {
+        // 回归：中文按 2 列宽对齐，短单元格应补齐空格使竖线对齐
+        var output = Render("| 名称 | size |\n|------|------|\n| 中文 | 10 |\n");
+        var line3 = output.Split('\n')[2]; // 数据行
+        // 2 列表格只有 1 条竖线分隔符；"中文"(宽4) 与 "10" 需按列宽补齐
+        var pipe = line3.IndexOf("│", StringComparison.Ordinal);
+        Assert.True(pipe > 0, $"数据行应有竖线: {line3}");
+        Assert.False(line3[(pipe + 1)..].Contains("│"), $"2 列表格不应有第二条竖线: {line3}");
+        // 表头、分隔行、数据行的竖线列应对齐
+        var headPipe = output.Split('\n')[0].IndexOf("│", StringComparison.Ordinal);
+        var sepPipe = output.Split('\n')[1].IndexOf("│", StringComparison.Ordinal);
+        Assert.True(Math.Abs(headPipe - pipe) <= 2, $"竖线列应对齐（表头 {headPipe} vs 数据 {pipe}）");
+        Assert.True(Math.Abs(sepPipe - pipe) <= 2, $"竖线列应对齐（分隔 {sepPipe} vs 数据 {pipe}）");
+    }
+
+    [Fact]
+    public void UnclosedCodeFence_IsFlushedAtEnd()
+    {
+        // 回归：未闭合的代码围栏在 Flush 时不应丢失内容
+        var r = new CodeAgent.ConsoleRenderer(enabled: true);
+        r.Append("```\nint x = 1;");
+        r.Flush();
+        Assert.Contains("int x = 1;", _out.ToString());
+    }
+
+    [Fact]
+    public void Table_SeparatorRow_IsNotTreatedAsData()
+    {
+        // 回归：|---| 分隔行应渲染为横线而非普通内容
+        var output = Render("| a | b |\n|---|---|\n| 1 | 2 |\n");
+        Assert.Contains("─", output); // 分隔行渲染为横线
+        Assert.DoesNotContain("|---|", output); // 原始分隔行不出现
+    }
 }
