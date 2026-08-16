@@ -320,36 +320,76 @@ public static class InputLine
             ? "  Modes (up/down select, Enter switch, Esc close):"
             : "  Commands (1-9 run, up/down select, Enter run, Esc close):";
 
+        int CountNewlines(string s)
+        {
+            int n = 0;
+            foreach (var c in s)
+                if (c == '\n')
+                    n++;
+            return n;
+        }
+
         void ScrollInput()
         {
             if (ansiOk)
             {
-                // 支持 ANSI：\x1b[K 清到行尾（单次写入，避免逐次 Write 卡顿），
-                // 然后按光标位置左移，让终端光标跟随行内编辑
-                Console.Write("\r" + InputText() + "\x1b[K");
+                var lines = 1 + CountNewlines(buf.Text); // 输入块总行数（prompt 无换行）
+                if (lines > 1)
+                {
+                    // 多行输入（粘贴含换行）：\r 只回当前行首，逐行重绘会让前面几行残留刷屏；
+                    // 先上移到块首行、清到屏幕末尾，再整体重写
+                    Console.Write($"\x1b[{lines - 1}A\x1b[J");
+                }
+                else
+                {
+                    Console.Write("\r\x1b[K");
+                }
+                Console.Write(InputText());
                 PositionCursor();
             }
             else
             {
-                Console.Write("\r" + InputText() + new string(' ', 4));
-                Console.Write("\r" + InputText());
+                // 滚动模式无 ANSI 无法原地擦除：多行时只写一次（双写会加倍刷屏），
+                // 单行保持原逻辑（\r 重写 + 空格清残留）
+                if (1 + CountNewlines(buf.Text) > 1)
+                    Console.Write("\r" + InputText());
+                else
+                {
+                    Console.Write("\r" + InputText() + new string(' ', 4));
+                    Console.Write("\r" + InputText());
+                }
             }
         }
 
-        /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈）。</summary>
+        /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈，支持多行输入）。</summary>
         void PositionCursor()
         {
-            var offset = CursorLeftOffset(buf.Text, buf.Cursor);
-            if (offset > 0)
-                Console.Write($"\x1b[{offset}D");
+            var cursor = Math.Clamp(buf.Cursor, 0, buf.Text.Length);
+            var cursorLine = CountNewlines(buf.Text[..cursor]); // 光标所在行（0-based）
+            var totalLines = 1 + CountNewlines(buf.Text);
+            var up = totalLines - 1 - cursorLine; // 从块末尾上移到光标行（光标行行尾即 cursor 位置）
+            if (up > 0)
+                Console.Write($"\x1b[{up}A");
+            if (up == 0)
+            {
+                // 光标在最后一行：从行尾左移到 cursor（单行输入或光标在末行）
+                var offset = CursorLeftOffset(buf.Text, buf.Cursor);
+                if (offset > 0)
+                    Console.Write($"\x1b[{offset}D");
+            }
         }
 
         void RedrawInput()
         {
             if (menuOpen && ansiOk)
             {
-                // 单次写入：回到行首 + 清到行尾 + 重写输入
-                Console.Write("\x1b[1G\x1b[K" + InputText());
+                // 单次写入：多行时先上移到块首清屏，否则回到行首清行尾，再重写输入
+                var lines = 1 + CountNewlines(buf.Text);
+                if (lines > 1)
+                    Console.Write($"\x1b[{lines - 1}A\x1b[J");
+                else
+                    Console.Write("\x1b[1G\x1b[K");
+                Console.Write(InputText());
                 PositionCursor();
                 return;
             }
