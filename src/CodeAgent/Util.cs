@@ -136,6 +136,25 @@ public static class Glob
             {
                 sb.Append("[^/\\\\]");
             }
+            else if (c == '{')
+            {
+                // 花括号多选：{a,b,c} → (?:a|b|c)；无右花括号、无逗号或全为空时按字面 '{' 处理
+                var close = pattern.IndexOf('}', i + 1);
+                if (close > i + 1)
+                {
+                    var inner = pattern[(i + 1)..close];
+                    var parts = inner.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
+                    if (inner.Contains(',') && parts.Count >= 1)
+                    {
+                        sb.Append("(?:");
+                        sb.Append(string.Join('|', parts.Select(Regex.Escape)));
+                        sb.Append(')');
+                        i = close;
+                        continue;
+                    }
+                }
+                sb.Append(Regex.Escape("{"));
+            }
             else if (c == '[')
             {
                 // 字符类：[abc]、[a-z]、[!abc]（否定）；未闭合或空类按字面 '[' 处理

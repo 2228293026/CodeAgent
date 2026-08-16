@@ -88,6 +88,32 @@ public class GlobTests
     }
 
     [Fact]
+    public void BraceAlternation_MatchesAnyOption()
+    {
+        var re = Glob.ToRegex("*.{cs,rs}");
+        Assert.Matches(re, "main.cs");
+        Assert.Matches(re, "main.rs");
+        Assert.DoesNotMatch(re, "main.py");
+        Assert.DoesNotMatch(re, "sub/main.cs"); // * 不跨目录
+    }
+
+    [Fact]
+    public void BraceWithoutComma_TreatedAsLiteral()
+    {
+        var re = Glob.ToRegex("a{b");
+        Assert.Matches(re, "a{b");
+        Assert.DoesNotMatch(re, "ab");
+    }
+
+    [Fact]
+    public void BraceWithEmptyOption_IgnoresEmptyParts()
+    {
+        var re = Glob.ToRegex("x.{cs,}");
+        Assert.Matches(re, "x.cs");
+        Assert.DoesNotMatch(re, "x.rs"); // 空选项被忽略，仅保留 cs
+    }
+
+    [Fact]
     public void Literal_IsCaseInsensitive()
     {
         var re = Glob.ToRegex("README.md");
