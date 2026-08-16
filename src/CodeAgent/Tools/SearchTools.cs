@@ -47,6 +47,7 @@ public sealed class GlobTool : ITool
         await Task.Yield();
         if (results.Count == 0)
             return $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
+        results.Sort(StringComparer.Ordinal); // 确定性输出：枚举顺序跨平台不定
         var shown = string.Join('\n', results.Take(300));
         return shown + (results.Count > 300 ? $"\n…(共 {results.Count} 个，仅显示前 300)" : "");
     }

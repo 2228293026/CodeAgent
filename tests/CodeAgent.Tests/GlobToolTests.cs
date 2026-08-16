@@ -77,4 +77,22 @@ public class GlobToolTests : IDisposable
             () => tool.ExecuteAsync(new JsonObject(), ctx, CancellationToken.None));
         Assert.Contains("pattern", ex.Message);
     }
+
+    [Fact]
+    public async Task Glob_Results_AreSortedDeterministically()
+    {
+        // 回归：枚举顺序跨平台不定，输出应按相对路径排序，保证确定性
+        File.WriteAllText(Path.Combine(_dir, "zeta.txt"), "");
+        File.WriteAllText(Path.Combine(_dir, "alpha.txt"), "");
+        File.WriteAllText(Path.Combine(_dir, "mid.txt"), "");
+        var tool = new GlobTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "*.txt" }, ctx, CancellationToken.None);
+        var idxAlpha = output.IndexOf("alpha.txt", StringComparison.Ordinal);
+        var idxMid = output.IndexOf("mid.txt", StringComparison.Ordinal);
+        var idxZeta = output.IndexOf("zeta.txt", StringComparison.Ordinal);
+        Assert.True(idxAlpha >= 0 && idxMid > idxAlpha && idxZeta > idxMid, $"结果应按字母序排列:\n{output}");
+    }
 }
