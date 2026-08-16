@@ -181,6 +181,20 @@ public static class DiffUtil
             return "";
 
         int n = oldLines.Length, m = newLines.Length;
+
+        // LCS 的 dp 矩阵是 O(n*m) 内存：几万行的文件会分配数 GB 数组直接 OOM，
+        // 超限时退化为行数摘要（/diff 大文件场景）。
+        const long MaxDpCells = 2_000_000;
+        if ((long)n * m > MaxDpCells)
+        {
+            var sb0 = new System.Text.StringBuilder();
+            sb0.AppendLine($"--- a/{path}");
+            sb0.AppendLine($"+++ b/{path}");
+            sb0.AppendLine($"@@ -{n} +{m} @@");
+            sb0.AppendLine($"（内容差异过大（{n} 行 → {m} 行），跳过逐行 diff）");
+            return sb0.ToString().TrimEnd();
+        }
+
         var dp = new int[n + 1, m + 1];
         for (int i = n - 1; i >= 0; i--)
             for (int j = m - 1; j >= 0; j--)

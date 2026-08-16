@@ -1,3 +1,4 @@
+using System.Linq;
 using CodeAgent;
 using Xunit;
 
@@ -38,5 +39,16 @@ public class DiffUtilTests
         Assert.Contains("--- a/src/x.txt", d);
         Assert.Contains("+++ b/src/x.txt", d);
         Assert.Contains("@@", d);
+    }
+
+    [Fact]
+    public void Unified_LargeInput_FallsBackToSummary()
+    {
+        // 回归：LCS dp 矩阵是 O(n*m) 内存，超大输入曾直接 OOM；现应退化为行数摘要
+        var big = string.Join('\n', Enumerable.Range(0, 3000).Select(i => $"line{i}"));
+        var d = DiffUtil.Unified(big, big + "\nextra", "big.txt");
+        Assert.Contains("差异过大", d);
+        Assert.Contains("3000 行", d);
+        Assert.DoesNotContain("line2999", d); // 不应输出逐行内容
     }
 }
