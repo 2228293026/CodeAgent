@@ -69,6 +69,23 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public void Resolve_AbsolutePathOutside_IsRejected()
+    {
+        // 绝对路径（如 C:\Windows 或 /etc）即使以合法相对形式传入也应被拒绝
+        var ws = new Workspace(Root);
+        var absolute = Path.Combine(Path.GetTempPath(), "codeagent-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(absolute);
+        try
+        {
+            Assert.Throws<ToolException>(() => ws.Resolve(absolute));
+        }
+        finally
+        {
+            try { Directory.Delete(absolute, true); } catch { /* 忽略 */ }
+        }
+    }
+
+    [Fact]
     public void ToRelative_ConvertsBack()
     {
         var ws = new Workspace(Root);
