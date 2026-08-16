@@ -56,4 +56,14 @@ public class ShellRunnerTests
         Assert.Contains("输出过长", output);
         Assert.True(sw.Elapsed.TotalSeconds < 30, $"大输出命令不应被超时误杀（实际耗时 {sw.Elapsed.TotalSeconds:F1}s）");
     }
+
+    [Fact]
+    public async Task RunAsync_MissingCwd_ThrowsHelpfulError()
+    {
+        // 回归：cwd 不存在时应友好报错，而非进程启动失败显示"无法启动进程"
+        var missing = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "no-such-dir-" + Guid.NewGuid().ToString("N"));
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            ShellRunner.RunAsync("bash", "echo hi", missing, 30, CancellationToken.None));
+        Assert.Contains("目录不存在", ex.Message);
+    }
 }
