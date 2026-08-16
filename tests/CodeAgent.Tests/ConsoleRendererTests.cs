@@ -78,6 +78,32 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_UnclosedBold_StillEmitsText()
+    {
+        // 回归：未闭合的 ** 不应吞掉后续文本
+        var output = Render("**unclosed bold text");
+        Assert.Contains("unclosed bold text", output);
+    }
+
+    [Fact]
+    public void Append_UnclosedInlineCode_StillEmitsText()
+    {
+        // 回归：未闭合的行内代码反引号不应吞掉后续文本
+        var output = Render("use `dotnet build please");
+        Assert.Contains("dotnet build please", output);
+    }
+
+    [Fact]
+    public void Append_BoldWithInlineCode_NestedStylesWork()
+    {
+        // 粗体中嵌套行内代码：两种样式都应输出文本
+        var output = Render("**run `test` now**");
+        Assert.Contains("run", output);
+        Assert.Contains("test", output);
+        Assert.Contains("now", output);
+    }
+
+    [Fact]
     public void Disabled_OutputsRawText()
     {
         var r = new CodeAgent.ConsoleRenderer(enabled: false);
