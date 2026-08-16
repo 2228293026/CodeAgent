@@ -187,4 +187,20 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["path"] = "n.txt", ["content"] = 123 }, ctx, CancellationToken.None);
         Assert.Equal("123", File.ReadAllText(Path.Combine(_dir, "n.txt")));
     }
+
+    [Fact]
+    public async Task ReadFile_OffsetBeyondEnd_ReportsRange()
+    {
+        // 回归：offset 超出文件行数时曾显示错误范围（如"已显示 11-10"），应友好说明
+        var path = Path.Combine(_dir, "r5.txt");
+        File.WriteAllText(path, "a\nb\nc");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "r5.txt", ["offset"] = 99 }, ctx, CancellationToken.None);
+        Assert.Contains("共 3 行", output);
+        Assert.Contains("超出范围", output);
+        Assert.DoesNotContain("99-99", output); // 不应出现倒退的行号区间
+    }
 }

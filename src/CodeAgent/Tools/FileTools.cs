@@ -53,6 +53,9 @@ public sealed class ReadFileTool : ITool
             return $"(文件 {path} 为空)";
 
         var start = Math.Min(offset - 1, lines.Length);
+        if (start >= lines.Length)
+            return $"(文件 {path} 共 {lines.Length} 行，offset={offset} 超出范围，无需读取)";
+
         var count = Math.Min(limit, lines.Length - start);
         var sb = new StringBuilder();
         for (int i = 0; i < count; i++)
