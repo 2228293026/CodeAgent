@@ -250,4 +250,36 @@ public class FileToolsTests : IDisposable
 
         Assert.Equal(0, ctx.Undo.Count); // 失败写入不入撤销栈
     }
+
+    [Fact]
+    public async Task EditFile_ReplaceAll_ReplacesEveryOccurrence()
+    {
+        File.WriteAllText(Path.Combine(_dir, "ra.txt"), "foo foo bar foo");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ra.txt", ["old_string"] = "foo", ["new_string"] = "baz", ["replace_all"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Equal("baz baz bar baz", File.ReadAllText(Path.Combine(_dir, "ra.txt")));
+        Assert.Equal(1, ctx.Undo.Count); // 一次编辑只记录一条撤销
+    }
+
+    [Fact]
+    public async Task EditFile_AmbiguousMatch_WithoutReplaceAll_Throws()
+    {
+        // old_string 出现多次且未指定 replace_all 时应报错，提示扩大上下文或设 replace_all
+        File.WriteAllText(Path.Combine(_dir, "amb.txt"), "x y x");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "amb.txt", ["old_string"] = "x", ["new_string"] = "z" },
+                ctx, CancellationToken.None));
+        Assert.Contains("出现 2 次", ex.Message);
+        Assert.Equal("x y x", File.ReadAllText(Path.Combine(_dir, "amb.txt"))); // 文件未被改动
+        Assert.Equal(0, ctx.Undo.Count); // 失败编辑不入撤销栈
+    }
 }
