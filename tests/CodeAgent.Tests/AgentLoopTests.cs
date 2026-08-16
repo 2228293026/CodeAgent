@@ -51,6 +51,30 @@ public class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadOnlyMode_BlocksWriteToolExecution()
+    {
+        // 回归：plan 等只读模式下，即使模型强行调用 write_file，执行层也必须拦截
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse
+            {
+                ToolCalls =
+                [
+                    new ToolCall { Id = "w1", Name = "write_file", ArgumentsJson = """{"path":"x.txt","content":"x"}""" },
+                ],
+            },
+        };
+        var agent = MakeAgent(provider);
+        agent.SetMode(CodeAgent.Modes.Find("plan", new AgentConfig()));
+
+        var result = await agent.RunAsync("尝试写入", CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(SessionDir, "x.txt"))); // 文件未被写入
+        Assert.Contains(agent.Messages, m => m.Role == MessageRole.Tool
+            && m.Content != null && m.Content.Contains("不可用")); // 工具结果标记为被拦截
+    }
+
+    [Fact]
     public async Task RunAsync_FinalText_IsReturned()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "完成！" } };
