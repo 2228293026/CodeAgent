@@ -93,4 +93,38 @@ public class AgentLoopTests : IDisposable
         Assert.Equal(1, agent.MessageCount); // 仅剩 system
         Assert.Equal(MessageRole.System, agent.Messages[0].Role);
     }
+
+    [Fact]
+    public async Task SetMode_SwitchesSystemPromptAndToolScope()
+    {
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
+        var agent = MakeAgent(provider);
+
+        agent.SetMode(CodeAgent.Modes.Find("plan", new AgentConfig()));
+
+        Assert.Equal("plan", agent.CurrentMode.Name);
+        Assert.Contains("PLAN mode", agent.Messages[0].Content!); // 系统提示已切换
+        var tools = agent.ToolsForMode();
+        Assert.Contains(tools, t => t.Name == "read_file");
+        Assert.DoesNotContain(tools, t => t.Name == "write_file"); // 只读模式隐藏写工具
+        Assert.DoesNotContain(tools, t => t.Name == "run_command");
+    }
+
+    [Fact]
+    public async Task SetMode_CustomSystemPrompt_SurvivesModeRoundTrip()
+    {
+        // 回归：code 模式使用配置的自定义 systemPrompt，切走再切回不应丢失
+        var custom = "我是自定义系统提示";
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false, SessionDir = SessionDir, SystemPrompt = custom },
+            provider,
+            ToolRegistry.CreateDefault());
+
+        Assert.Contains(custom, agent.Messages[0].Content!); // 初始用自定义提示
+        agent.SetMode(CodeAgent.Modes.Find("plan", new AgentConfig()));
+        Assert.Contains("PLAN mode", agent.Messages[0].Content!); // 切到 plan
+        agent.SetMode(CodeAgent.Modes.Find("code", new AgentConfig()));
+        Assert.Contains(custom, agent.Messages[0].Content!); // 切回 code 恢复自定义提示
+    }
 }
