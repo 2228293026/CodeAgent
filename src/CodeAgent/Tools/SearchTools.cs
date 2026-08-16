@@ -56,7 +56,7 @@ public sealed class GlobTool : ITool
 public sealed class GrepTool : ITool
 {
     public string Name => "grep";
-    public string Description => "用正则搜索文件内容。pattern 含大写字母时区分大小写，否则忽略大小写。返回 文件:行号: 内容。";
+    public string Description => "用正则搜索文件内容。pattern 含大写字母时区分大小写，否则忽略大小写。可用 include/exclude（glob）限定文件范围。返回 文件:行号: 内容。";
     public JsonObject Parameters { get; } = new()
     {
         ["type"] = "object",
@@ -66,6 +66,8 @@ public sealed class GrepTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索的文件或目录，默认工作区根目录" },
             ["context"] = new JsonObject { ["type"] = "integer", ["description"] = "上下文行数（默认 3，最大 10）" },
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最大结果数（默认 50，最大 500）" },
+            ["include"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "仅搜索匹配这些 glob 的文件（如 \"*.cs\"），可用字符串或数组" },
+            ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -79,6 +81,10 @@ public sealed class GrepTool : ITool
         var target = ToolArgs.GetString(args, "path");
         var context = Math.Clamp(ToolArgs.GetInt(args, "context", 3), 0, 10);
         var max = Math.Clamp(ToolArgs.GetInt(args, "max_results", 50), 1, 500);
+        var include = ToolArgs.GetStringList(args, "include");
+        var exclude = ToolArgs.GetStringList(args, "exclude");
+        var includeRes = include?.Select(Glob.ToRegex).ToList();
+        var excludeRes = exclude?.Select(Glob.ToRegex).ToList();
 
         RegexOptions opts = RegexOptions.Compiled;
         if (pattern == pattern.ToLowerInvariant())
@@ -104,6 +110,13 @@ public sealed class GrepTool : ITool
                 return;
             try
             {
+                var rel = ctx.Workspace.ToRelative(path).Replace('\\', '/');
+                // include/exclude 仅作用于目录扫描（单文件目标视为用户显式指定）
+                if (includeRes is not null && includeRes.Count > 0 && !includeRes.Any(r => r.IsMatch(rel)))
+                    return;
+                if (excludeRes is not null && excludeRes.Any(r => r.IsMatch(rel)))
+                    return;
+
                 var fi = new FileInfo(path);
                 if (fi.Length > 2_000_000)
                     return;
@@ -117,7 +130,6 @@ public sealed class GrepTool : ITool
                     if (!re.IsMatch(line))
                         continue;
                     hits++;
-                    var rel = ctx.Workspace.ToRelative(path);
                     sb.AppendLine($"{rel}:{i + 1}: {TextUtil.TruncateLine(line, 300)}");
                     for (int c = Math.Max(0, i - context); c <= Math.Min(lines.Length - 1, i + context); c++)
                     {

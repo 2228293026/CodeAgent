@@ -118,6 +118,27 @@ internal static class ToolArgs
         }
         return dict.Count == 0 ? null : dict;
     }
+
+    /// <summary>读取字符串或字符串数组（include/exclude 等）；缺失时返回 null。</summary>
+    public static List<string>? GetStringList(JsonObject? args, string key)
+    {
+        if (args?[key] is not JsonNode node)
+            return null;
+        var list = new List<string>();
+        if (node is JsonArray arr)
+        {
+            foreach (var item in arr)
+            {
+                if (item is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0)
+                    list.Add(s);
+            }
+        }
+        else if (node is JsonValue v2 && v2.TryGetValue<string>(out var single) && single.Length > 0)
+        {
+            list.Add(single);
+        }
+        return list.Count == 0 ? null : list;
+    }
 }
 
 /// <summary>工具注册表：注册、生成 ToolSpec、按名分发执行。</summary>
