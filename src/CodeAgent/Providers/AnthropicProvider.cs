@@ -355,10 +355,17 @@ public sealed class AnthropicProvider : IAgentProvider
                 var target = last["content"] as JsonArray;
                 var source = msg["content"] as JsonArray;
                 if (target is not null && source is not null)
+                {
                     foreach (var block in source)
-                        target.Add(block.DeepClone()); // 深拷贝：block 仍属于源消息，直接添加会报 "node already has a parent"
+                    {
+                        if (block is not null)
+                            target.Add(block.DeepClone()); // 深拷贝：block 仍属于源消息，直接添加会报 "node already has a parent"
+                    }
+                }
                 else if (target is not null && msg["content"] is JsonValue sv)
+                {
                     target.Add(TextBlock(sv.GetValue<string>()));
+                }
             }
             else
             {
