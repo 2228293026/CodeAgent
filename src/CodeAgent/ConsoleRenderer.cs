@@ -222,6 +222,17 @@ public sealed class ConsoleRenderer
             }
             else if (s[i] == '*' && i + 1 < s.Length && s[i + 1] == '*')
             {
+                // 连续 3 个及以上星号按字面文本保留（如 *** 分隔符），
+                // 否则 *** 会被解析成 ** 加粗开关 + 单个 *，渲染时丢失两个星号
+                var run = 2;
+                while (i + run < s.Length && s[i + run] == '*')
+                    run++;
+                if (run >= 3)
+                {
+                    cur.Append(s, i, run);
+                    i += run - 1;
+                    continue;
+                }
                 Flush();
                 style = style == InlineStyle.Bold ? InlineStyle.Normal : InlineStyle.Bold;
                 i++;

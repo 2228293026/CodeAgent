@@ -144,6 +144,31 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_TripleAsterisks_AreLiteralNotBoldToggle()
+    {
+        // 回归：*** 曾被解析成 ** 加粗开关 + 单个 *，渲染时丢失两个星号
+        var output = Render("a *** b");
+        Assert.Contains("a *** b", output); // 三个星号完整保留
+    }
+
+    [Fact]
+    public void Append_FourAsterisks_AreLiteralNotBoldToggle()
+    {
+        // 连续 4 个星号同样应按字面保留
+        var output = Render("x **** y");
+        Assert.Contains("x **** y", output);
+    }
+
+    [Fact]
+    public void Append_DoubleAsterisks_StillToggleBold()
+    {
+        // 修复不应破坏 **bold** 的加粗语义
+        var output = Render("**bold** text");
+        Assert.Contains("bold", output);
+        Assert.Contains("text", output);
+    }
+
+    [Fact]
     public void Disabled_OutputsRawText()
     {
         var r = new CodeAgent.ConsoleRenderer(enabled: false);
