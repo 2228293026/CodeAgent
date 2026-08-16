@@ -307,6 +307,7 @@ public static class InputLine
         var menuOffset = 0;  // 可见窗口在列表中的起点
         var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
         var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
+        var lastInputLines = 1;      // 上次绘制的输入块行数（多行重绘逐行清残留用）
 
         Console.Write(prompt);
         if (!string.IsNullOrEmpty(initial))
@@ -334,19 +335,28 @@ public static class InputLine
             if (ansiOk)
             {
                 var lines = 1 + CountNewlines(buf.Text); // 输入块总行数（prompt 无换行）
-                if (lines > 1)
+                if (lines > 1 || lastInputLines > 1)
                 {
-                    // 多行输入（粘贴含换行）：\r 只回当前行首，逐行重绘会让前面几行残留刷屏；
-                    // 先上移到块首行、回到列 1、清到屏幕末尾，再整体重写。
-                    // 注意 \x1b[{n}A 上移不改变列：不加 \r 会从末行末尾的列开始清屏/写入，
-                    // prompt 首列反复残留（粘贴时表现为一串 [）。
-                    Console.Write($"\x1b[{lines - 1}A\r\x1b[J");
+                    // 多行输入（粘贴含换行）：上移到块首后逐行 \x1b[2K 清整行重写。
+                    // 不依赖 \x1b[J（清屏到末尾）——部分终端对 ED 支持不佳，导致每次重绘
+                    // 向下追加旧块、刷屏。行数取新旧最大值，多余的旧行清空。
+                    var rows = Math.Max(lines, lastInputLines);
+                    Console.Write($"\x1b[{rows - 1}A");
+                    var textLines = InputText().Split('\n');
+                    for (int i = 0; i < rows; i++)
+                    {
+                        Console.Write("\r\x1b[2K");
+                        if (i < textLines.Length)
+                            Console.Write(textLines[i]);
+                        if (i < rows - 1)
+                            Console.Write("\n");
+                    }
+                    lastInputLines = lines;
                 }
                 else
                 {
-                    Console.Write("\r\x1b[K");
+                    Console.Write("\r\x1b[2K" + InputText());
                 }
-                Console.Write(InputText());
                 PositionCursor();
             }
             else
@@ -388,18 +398,8 @@ public static class InputLine
 
         void RedrawInput()
         {
-            if (menuOpen && ansiOk)
-            {
-                // 单次写入：多行时先上移到块首清屏，否则回到行首清行尾，再重写输入
-                var lines = 1 + CountNewlines(buf.Text);
-                if (lines > 1)
-                    Console.Write($"\x1b[{lines - 1}A\x1b[J");
-                else
-                    Console.Write("\x1b[1G\x1b[K");
-                Console.Write(InputText());
-                PositionCursor();
-                return;
-            }
+            // 统一走 ScrollInput：菜单打开时它只重绘输入行（菜单块在上方不动），
+            // 多行粘贴用逐行覆盖（\x1b[2K 清整行），避免 \x1b[J 在部分终端无效导致刷屏
             ScrollInput();
         }
 
