@@ -323,6 +323,8 @@ public sealed class Agent
                 return "⏹ 已按 stop 工具请求结束本轮任务。";
         }
 
+        // 达到轮数上限说明任务未完成：标记失败，REPL 显示 ⚠、一次性模式退出码非 0
+        LastTurnFailed = true;
         return "⚠ 达到最大工具调用轮数（MaxToolIterations），任务可能未完成。";
     }
 

@@ -204,5 +204,6 @@ public class AgentLoopTests : IDisposable
 
         Assert.Contains("最大工具调用轮数", result); // 达到上限给出提示
         Assert.True(agent.ProviderCalls <= 4, $"不应超过上限太多（实际调用 {agent.ProviderCalls} 次）");
+        Assert.True(agent.LastTurnFailed, "达到轮数上限应标记为失败（REPL 显示 ⚠、一次性模式退出码非 0）");
     }
 }
