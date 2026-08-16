@@ -720,6 +720,9 @@ public sealed class Agent
         //    （否则留下「孤儿」tool 结果，OpenAI/Anthropic 会拒绝请求）。
         while (total > limit && _messages.Count > 4)
         {
+            // 最后一条若是「待执行工具调用的 assistant」（结果尚未回填），不可删除
+            var pending = _messages[^1] is { Role: MessageRole.Assistant, ToolCalls.Count: > 0 };
+
             // 定位首条 user 消息（锚点，之后的消息才可移除）
             int u1 = 1;
             while (u1 < _messages.Count && _messages[u1].Role != MessageRole.User)
@@ -727,10 +730,12 @@ public sealed class Agent
             if (u1 >= _messages.Count - 1)
                 break; // 没有可移除的回复块
 
-            // 下一条 user（或结尾）之前的区间 [u1+1, u2) 是 u1 的完整回复块
+            // 下一条 user（或结尾，但不越过待执行消息）之前的区间 [u1+1, u2) 是 u1 的完整回复块
             int u2 = u1 + 1;
             while (u2 < _messages.Count && _messages[u2].Role != MessageRole.User)
                 u2++;
+            if (pending && u2 > _messages.Count - 1)
+                u2 = _messages.Count - 1; // 保留待执行消息
             var removeCount = Math.Min(u2 - u1 - 1, _messages.Count - 4);
             if (removeCount <= 0)
                 break;
