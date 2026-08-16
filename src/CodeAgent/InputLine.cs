@@ -677,7 +677,10 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.Delete:
-                    if (!menuOpen && buf.Delete())
+                    // 与 Backspace 一致：命令菜单打开时也应删字符并刷新过滤（曾因 !menuOpen 守卫被完全忽略）
+                    if (menuOpen && modePicker)
+                        CloseMenu();
+                    if (buf.Delete())
                         OnTextChanged();
                     break;
 
