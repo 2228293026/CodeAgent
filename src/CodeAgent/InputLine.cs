@@ -148,6 +148,25 @@ public static class InputLine
         try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
     }
 
+    /// <summary>显示宽度：CJK/全角字符按 2 列计算（与 ConsoleRenderer 一致）。</summary>
+    private static int DisplayWidth(string s)
+    {
+        int w = 0;
+        foreach (var c in s)
+            w += c > 0x2E7F ? 2 : 1;
+        return w;
+    }
+
+    /// <summary>
+    /// 光标定位偏移：把终端光标从行尾移到 <paramref name="cursor"/> 处需要左移的列数。
+    /// 用显示宽度计算（CJK 占 2 列），避免中文行内编辑时光标错位。
+    /// </summary>
+    public static int CursorLeftOffset(string text, int cursor)
+    {
+        cursor = Math.Clamp(cursor, 0, text.Length);
+        return DisplayWidth(text) - DisplayWidth(text[..cursor]);
+    }
+
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式，initial 为预填文本（取消回合后回填草稿）。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
     {
@@ -208,8 +227,10 @@ public static class InputLine
         {
             if (ansiOk)
             {
-                // 支持 ANSI：\x1b[K 清到行尾（单次写入，避免逐次 Write 卡顿）
+                // 支持 ANSI：\x1b[K 清到行尾（单次写入，避免逐次 Write 卡顿），
+                // 然后按光标位置左移，让终端光标跟随行内编辑
                 Console.Write("\r" + InputText() + "\x1b[K");
+                PositionCursor();
             }
             else
             {
@@ -218,12 +239,21 @@ public static class InputLine
             }
         }
 
+        /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈）。</summary>
+        void PositionCursor()
+        {
+            var offset = CursorLeftOffset(buf.Text, buf.Cursor);
+            if (offset > 0)
+                Console.Write($"\x1b[{offset}D");
+        }
+
         void RedrawInput()
         {
             if (menuOpen && ansiOk)
             {
                 // 单次写入：回到行首 + 清到行尾 + 重写输入
                 Console.Write("\x1b[1G\x1b[K" + InputText());
+                PositionCursor();
                 return;
             }
             ScrollInput();

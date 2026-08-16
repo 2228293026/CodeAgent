@@ -141,4 +141,29 @@ public class EditableLineTests
         Assert.Equal("abc", line.Text);
         Assert.Equal(2, line.Cursor);
     }
+
+    [Fact]
+    public void CursorLeftOffset_PlainAscii()
+    {
+        // 光标在中间：从行尾左移到 cursor 处 = 剩余字符数
+        Assert.Equal(0, InputLine.CursorLeftOffset("abc", 3)); // 光标在末尾：不移动
+        Assert.Equal(2, InputLine.CursorLeftOffset("abc", 1)); // 剩 "bc" 两个字符列
+        Assert.Equal(3, InputLine.CursorLeftOffset("abc", 0)); // 剩整行
+    }
+
+    [Fact]
+    public void CursorLeftOffset_CjkCountsAsTwoColumns()
+    {
+        // 中文占 2 列："你好" = 4 列
+        Assert.Equal(4, InputLine.CursorLeftOffset("你好", 0));   // 光标在行首：左移整行 4 列
+        Assert.Equal(2, InputLine.CursorLeftOffset("你好", 1));   // 剩 "好" = 2 列
+        Assert.Equal(3, InputLine.CursorLeftOffset("a你好b", 2)); // 总宽 1+2+2+1=6，光标前 "a你"=3 列 → 左移 3
+    }
+
+    [Fact]
+    public void CursorLeftOffset_ClampsCursorToBounds()
+    {
+        Assert.Equal(0, InputLine.CursorLeftOffset("abc", 99));  // 越界 → 视为末尾，不移动
+        Assert.Equal(3, InputLine.CursorLeftOffset("abc", -5));  // 负值 → 视为行首，左移整行
+    }
 }
