@@ -167,7 +167,10 @@ public sealed class GrepTool : ITool
         }
         else if (Directory.Exists(full))
         {
-            foreach (var file in SkipDirs.EnumerateFilesPruned(full))
+            // 确定性输出：先收集再排序（枚举顺序跨平台不定），与 glob 保持一致
+            var files = SkipDirs.EnumerateFilesPruned(full).ToList();
+            files.Sort(StringComparer.Ordinal);
+            foreach (var file in files)
             {
                 if (hits >= max)
                     break;

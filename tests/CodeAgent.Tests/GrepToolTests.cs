@@ -98,4 +98,22 @@ public class GrepToolTests : IDisposable
         Assert.Contains("1 个文件", output); // 3 行匹配但只算 1 个文件
         Assert.Equal(1, output.Split('\n').Count(l => l.Contains("multi.cs")));
     }
+
+    [Fact]
+    public async Task Grep_Results_AreSortedByFile()
+    {
+        // 回归：目录扫描按文件路径排序输出，跨平台确定性
+        File.WriteAllText(Path.Combine(_dir, "zeta.cs"), "TODO z\n");
+        File.WriteAllText(Path.Combine(_dir, "alpha.cs"), "TODO a\n");
+        File.WriteAllText(Path.Combine(_dir, "mid.cs"), "TODO m\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "TODO" }, ctx, CancellationToken.None);
+        var idxAlpha = output.IndexOf("alpha.cs:1", StringComparison.Ordinal);
+        var idxMid = output.IndexOf("mid.cs:1", StringComparison.Ordinal);
+        var idxZeta = output.IndexOf("zeta.cs:1", StringComparison.Ordinal);
+        Assert.True(idxAlpha >= 0 && idxMid > idxAlpha && idxZeta > idxMid, $"结果应按文件名排序:\n{output}");
+    }
 }
