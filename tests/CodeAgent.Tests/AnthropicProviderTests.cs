@@ -18,15 +18,19 @@ public class AnthropicProviderTests
     {
         public string? LastBody;
 
+        /// <summary>覆写响应体（默认返回 chat 响应）。</summary>
+        public string OverrideBody { get; set; } = "";
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken ct)
         {
             LastBody = request.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            var body = OverrideBody.Length > 0
+                ? OverrideBody
+                : """{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(
-                    """{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}""",
-                    Encoding.UTF8, "application/json"),
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
             });
         }
     }
@@ -165,5 +169,19 @@ public class AnthropicProviderTests
         Assert.Equal("call_9", content[1]!["id"]!.GetValue<string>());
         Assert.Equal("glob", content[1]!["name"]!.GetValue<string>());
         Assert.Equal("""{"pattern":"*.cs"}""", content[1]!["input"]!.ToJsonString());
+    }
+
+    [Fact]
+    public async Task ListModelsAsync_ParsesModelIds()
+    {
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"claude-sonnet-4-5"},{"id":"claude-opus-4"}]}""",
+        };
+        var provider = MakeProvider(handler);
+
+        var models = await provider.ListModelsAsync(CancellationToken.None);
+
+        Assert.Equal(["claude-sonnet-4-5", "claude-opus-4"], models);
     }
 }

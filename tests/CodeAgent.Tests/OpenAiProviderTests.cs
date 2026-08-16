@@ -18,15 +18,19 @@ public class OpenAiProviderTests
     {
         public string? LastBody;
 
+        /// <summary>覆写响应体（默认返回 chat 响应）。</summary>
+        public string OverrideBody { get; set; } = "";
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken ct)
         {
             LastBody = request.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            var body = OverrideBody.Length > 0
+                ? OverrideBody
+                : """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent(
-                    """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
-                    Encoding.UTF8, "application/json"),
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
             });
         }
     }
@@ -60,5 +64,21 @@ public class OpenAiProviderTests
         Assert.Equal("assistant", asst["role"]!.GetValue<string>());
         Assert.Null(asst["content"]); // 应为 null 而非 ""
         Assert.NotNull(asst["tool_calls"]);
+    }
+
+    [Fact]
+    public async Task ListModelsAsync_ParsesModelIds()
+    {
+        var handler = new CaptureHandler();
+        // 覆写响应：模型列表 JSON
+        handler.OverrideBody = """
+            {"data":[{"id":"gpt-4o"},{"id":"gpt-4o-mini"},{"id":"o3"}]}
+            """;
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var models = await provider.ListModelsAsync(CancellationToken.None);
+
+        Assert.Equal(["gpt-4o", "gpt-4o-mini", "o3"], models);
     }
 }
