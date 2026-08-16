@@ -200,6 +200,18 @@ public sealed class HistoryStore
 /// </summary>
 public static class InputLine
 {
+    /// <summary>
+    /// 折叠长文本为「前 threshold-1 行 + 折叠提示行」：行数超过 threshold 时折叠，否则原样。
+    /// 折叠提示行显示总行数（⏷ 共 N 行 ↓ 展开），供多行输入框减少屏幕占用。
+    /// </summary>
+    internal static string FoldText(string text, int threshold = 3)
+    {
+        var lines = text.Split('\n');
+        if (lines.Length <= threshold)
+            return text;
+        return string.Join('\n', lines.Take(threshold - 1)) + "\n⏷ 共 " + lines.Length + " 行 ↓ 展开";
+    }
+
     /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。</summary>
     public static readonly (string Name, string Desc)[] Commands =
     [
@@ -346,6 +358,7 @@ public static class InputLine
         var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
         var lastInputLines = 1;      // 上次绘制的输入块行数（多行重绘逐行清残留用）
         var lastCursorLine = 0;      // 终端光标当前所在行（上次重绘后 PositionCursor 放置处，多行重绘上移基点）
+        var inputExpanded = false;   // 用户是否展开过折叠的多行输入（展开后不再自动折叠）
 
         Console.Write(prompt);
         if (!string.IsNullOrEmpty(initial))
@@ -372,7 +385,10 @@ public static class InputLine
         {
             if (ansiOk)
             {
-                var lines = 1 + CountNewlines(buf.Text); // 输入块总行数（prompt 无换行）
+                // 折叠显示：行数 > 3 且未展开时，只显示前 2 行 + 折叠提示行（减少屏幕占用）
+                var fold = !inputExpanded && 1 + CountNewlines(buf.Text) > 3;
+                var text = fold ? InputLine.FoldText(InputText()) : InputText();
+                var lines = 1 + CountNewlines(text); // 显示块总行数（折叠时 = 3）
                 if (lines > 1 || lastInputLines > 1)
                 {
                     // 多行输入（粘贴含换行）：上移到块首后逐行 \x1b[2K 清整行重写。
@@ -383,7 +399,7 @@ public static class InputLine
                     // 到不了块首，会覆盖错位、提示符行残留重复。
                     var rows = Math.Max(lines, lastInputLines);
                     Console.Write($"\x1b[{lastCursorLine}A");
-                    var textLines = InputText().Split('\n');
+                    var textLines = text.Split('\n');
                     for (int i = 0; i < rows; i++)
                     {
                         Console.Write("\r\x1b[2K");
@@ -396,12 +412,13 @@ public static class InputLine
                 }
                 else
                 {
-                    Console.Write("\r\x1b[2K" + InputText());
+                    Console.Write("\r\x1b[2K" + text);
                 }
-                PositionCursor();
-                // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处），
-                // 作为下次多行重绘的上移基点
-                lastCursorLine = CountNewlines(buf.Text[..Math.Clamp(buf.Cursor, 0, buf.Text.Length)]);
+                PositionCursor(fold);
+                // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
+                // 折叠时按折叠视图行计），作为下次多行重绘的上移基点
+                var rawCursorLine = CountNewlines(buf.Text[..Math.Clamp(buf.Cursor, 0, buf.Text.Length)]);
+                lastCursorLine = fold ? Math.Min(rawCursorLine, 2) : rawCursorLine;
             }
             else
             {
@@ -417,19 +434,41 @@ public static class InputLine
             }
         }
 
-        /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈，支持多行输入）。</summary>
-        void PositionCursor()
+        /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈，支持多行输入与折叠视图）。</summary>
+        void PositionCursor(bool folded)
         {
             var cursor = Math.Clamp(buf.Cursor, 0, buf.Text.Length);
             var upTo = buf.Text[..cursor];
             var cursorLine = CountNewlines(upTo); // 光标所在行（0-based）
             var totalLines = 1 + CountNewlines(buf.Text);
-            var up = totalLines - 1 - cursorLine; // 从块末尾（末行行尾）上移到光标行
-            if (up > 0)
+            if (folded)
+            {
+                // 折叠视图：前 2 行 + 折叠行（⏷ 共 N 行）；buf 行 >= 2 都显示在折叠行
+                var dispLine = cursorLine < 2 ? cursorLine : 2;
+                var up = 3 - 1 - dispLine; // 从块末尾（折叠行末尾）上移到光标显示行
+                if (up > 0)
+                {
+                    string seg;
+                    if (dispLine == 2)
+                    {
+                        var foldLines = InputLine.FoldText(InputText()).Split('\n');
+                        seg = foldLines.Length > 2 ? foldLines[2] : ""; // 折叠行文本，光标显示在末尾
+                    }
+                    else
+                    {
+                        seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
+                    }
+                    Console.Write($"\x1b[{up}A\r\x1b[{DisplayWidth(seg)}C");
+                }
+                // up == 0：光标已在折叠行末尾（重绘后块末尾即折叠行末尾），无需移动
+                return;
+            }
+            var up2 = totalLines - 1 - cursorLine; // 从块末尾（末行行尾）上移到光标行
+            if (up2 > 0)
             {
                 // 上移不改变列：回到列 1 后右移到光标行的行内偏移（该行到 cursor 的宽度）
                 var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
-                Console.Write($"\x1b[{up}A\r\x1b[{DisplayWidth(seg)}C");
+                Console.Write($"\x1b[{up2}A\r\x1b[{DisplayWidth(seg)}C");
             }
             else
             {
@@ -838,9 +877,13 @@ public static class InputLine
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
                     }
-                    else if (1 + CountNewlines(buf.Text) > 1 && buf.MoveLineDown())
+                    else if (1 + CountNewlines(buf.Text) > 1)
                     {
                         // 多行输入：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入，逻辑错误）
+                        if (!inputExpanded && 1 + CountNewlines(buf.Text) > 3)
+                            inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
+                        else
+                            buf.MoveLineDown();
                         RedrawInput();
                     }
                     else

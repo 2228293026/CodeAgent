@@ -94,4 +94,46 @@ public class InputLineCommandsTests
                 $"命令 {c.Name} 在 HandleCommand 中无对应处理");
         }
     }
+
+    [Theory]
+    [InlineData("", 3)]
+    [InlineData("单行", 3)]
+    [InlineData("a\nb", 3)]
+    [InlineData("a\nb\nc", 3)]   // 恰好 3 行：不折叠
+    public void FoldText_AtOrBelowThreshold_ReturnsAsIs(string text, int threshold)
+    {
+        Assert.Equal(text, InputLine.FoldText(text, threshold));
+    }
+
+    [Fact]
+    public void FoldText_OverThreshold_FoldsToFirstTwoLinesPlusHint()
+    {
+        var input = "行1\n行2\n行3\n行4\n行5";
+        var folded = InputLine.FoldText(input);
+        var lines = folded.Split('\n');
+        Assert.Equal(3, lines.Length);                 // 前 2 行 + 折叠提示行
+        Assert.Equal("行1", lines[0]);
+        Assert.Equal("行2", lines[1]);
+        Assert.Contains("共 5 行", lines[2]);          // 提示行包含总行数
+        Assert.DoesNotContain("行3", folded);          // 隐藏中间行
+    }
+
+    [Fact]
+    public void FoldText_FourLines_FoldsToOneHint()
+    {
+        // 4 行（刚超阈值）：折成前 2 行 + 提示（共 4 行）
+        var folded = InputLine.FoldText("a\nb\nc\nd");
+        Assert.Equal(3, folded.Split('\n').Length);
+        Assert.Contains("共 4 行", folded);
+    }
+
+    [Fact]
+    public void FoldText_CustomThreshold_Respected()
+    {
+        // 自定义阈值 4：超过 4 行才折叠，折成前 3 行 + 提示
+        var folded = InputLine.FoldText("a\nb\nc\nd\ne", 4);
+        Assert.Equal(4, folded.Split('\n').Length);    // 前 3 行 + 提示行
+        Assert.Contains("共 5 行", folded);
+        Assert.Contains("c", folded);                  // 第 3 行保留（阈值 4 折前 3 行）
+    }
 }
