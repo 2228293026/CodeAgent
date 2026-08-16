@@ -96,6 +96,62 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public void Resolve_SymlinkEscape_IsRejected()
+    {
+        // 回归：工作区内的符号链接指向外部时，应通过链接解析后的真实路径拦截越界
+        var outside = Path.Combine(Path.GetTempPath(), "codeagent-link-out-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        var wsRoot = Path.Combine(Path.GetTempPath(), "codeagent-link-ws-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(wsRoot);
+        try
+        {
+            var link = Path.Combine(wsRoot, "escape");
+            try
+            {
+                Directory.CreateSymbolicLink(link, outside); // 不支持的平台/无权限时跳过
+            }
+            catch
+            {
+                return; // 无符号链接权限（如 Windows 非开发者模式）：跳过
+            }
+            var ws = new Workspace(wsRoot);
+            Assert.Throws<ToolException>(() => ws.Resolve(Path.Combine("escape", "secret.txt")));
+        }
+        finally
+        {
+            try { Directory.Delete(wsRoot, true); } catch { /* 忽略 */ }
+            try { Directory.Delete(outside, true); } catch { /* 忽略 */ }
+        }
+    }
+
+    [Fact]
+    public void Resolve_SymlinkInside_IsAllowed()
+    {
+        // 符号链接指向工作区内时不应误拦
+        var wsRoot = Path.Combine(Path.GetTempPath(), "codeagent-link-ws2-" + Guid.NewGuid().ToString("N"));
+        var target = Path.Combine(wsRoot, "real");
+        Directory.CreateDirectory(target);
+        try
+        {
+            var link = Path.Combine(wsRoot, "alias");
+            try
+            {
+                Directory.CreateSymbolicLink(link, target);
+            }
+            catch
+            {
+                return; // 无权限：跳过
+            }
+            var ws = new Workspace(wsRoot);
+            _ = ws.Resolve(Path.Combine("alias", "x.txt")); // 不应抛异常
+        }
+        finally
+        {
+            try { Directory.Delete(wsRoot, true); } catch { /* 忽略 */ }
+        }
+    }
+
+    [Fact]
     public void ToRelative_ConvertsBack()
     {
         var ws = new Workspace(Root);

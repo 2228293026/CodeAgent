@@ -41,9 +41,49 @@ public sealed class Workspace
             // 非法字符（如 NUL）、空段等会让 Path 抛异常，应转为清晰的工具错误而非裸异常
             throw new ToolException($"路径非法: '{path}'（{ex.Message}）");
         }
-        if (!IsWithin(full))
+        // 解析符号链接后的真实路径再检查沙箱：工作区内的 symlink 可能指向外部
+        if (!IsWithin(ResolveRealPath(full)))
             throw new ToolException($"路径 '{path}' 位于工作区之外，已拒绝访问。");
         return full;
+    }
+
+    /// <summary>
+    /// 解析路径的真实位置（跟随符号链接）。逐级向上找到最深已存在的组件，
+    /// 解析其链接目标后拼回未存在的尾部，用于沙箱越界检查。
+    /// </summary>
+    private static string ResolveRealPath(string fullPath)
+    {
+        var current = fullPath;
+        var tail = new Stack<string>();
+        while (!File.Exists(current) && !Directory.Exists(current))
+        {
+            var name = Path.GetFileName(current);
+            if (name.Length == 0)
+                break;
+            tail.Push(name);
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent) || parent == current)
+                break;
+            current = parent;
+        }
+
+        try
+        {
+            FileSystemInfo info = File.Exists(current)
+                ? new FileInfo(current)
+                : new DirectoryInfo(current);
+            var target = info.ResolveLinkTarget(true);
+            if (target is not null)
+                current = target.FullName;
+        }
+        catch
+        {
+            // 无法解析时按字面路径处理（IsWithin 仍会拦截明显的越界）
+        }
+
+        foreach (var seg in tail)
+            current = Path.Combine(current, seg);
+        return current;
     }
 
     /// <summary>判断完整路径是否在工作区内（等于根目录也视为合法，如 path="."）。</summary>
