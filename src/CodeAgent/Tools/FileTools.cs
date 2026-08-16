@@ -16,6 +16,7 @@ public sealed class ReadFileTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "文件路径，相对工作区根目录" },
             ["offset"] = new JsonObject { ["type"] = "integer", ["description"] = "起始行号（1 起，默认 1）" },
             ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（默认 300，最大 5000）" },
+            ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -36,6 +37,7 @@ public sealed class ReadFileTool : ITool
 
         var offset = Math.Max(1, ToolArgs.GetInt(args, "offset", 1));
         var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
+        var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
 
         var lines = await File.ReadAllLinesAsync(full, ct);
         if (lines.Length == 0)
@@ -45,7 +47,7 @@ public sealed class ReadFileTool : ITool
         var count = Math.Min(limit, lines.Length - start);
         var sb = new StringBuilder();
         for (int i = 0; i < count; i++)
-            sb.AppendLine($"{start + i + 1}\t{lines[start + i]}");
+            sb.AppendLine(noLineNumbers ? lines[start + i] : $"{start + i + 1}\t{lines[start + i]}");
 
         var head = count < lines.Length ? $"（{path} 共 {lines.Length} 行，已显示 {start + 1}-{start + count}）\n" : "";
         return head + sb.ToString().TrimEnd();

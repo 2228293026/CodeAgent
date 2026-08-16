@@ -48,4 +48,32 @@ public class FileToolsTests : IDisposable
         await tool.ExecuteAsync(args, ctx, CancellationToken.None);
         Assert.True(File.Exists(Path.Combine(_dir, "b.txt"))); // 显式空串是合法写入
     }
+
+    [Fact]
+    public async Task ReadFile_DefaultsToLineNumbers()
+    {
+        var path = Path.Combine(_dir, "r1.txt");
+        File.WriteAllText(path, "第一行\nsecond");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "r1.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("1\t第一行", output);
+        Assert.Contains("2\tsecond", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_NoLineNumbers_OutputsRawText()
+    {
+        var path = Path.Combine(_dir, "r2.txt");
+        File.WriteAllText(path, "第一行\nsecond");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "r2.txt", ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+        Assert.Contains("第一行", output);
+        Assert.Contains("second", output);
+        Assert.DoesNotContain("1\t", output); // 不应出现行号前缀
+    }
 }
