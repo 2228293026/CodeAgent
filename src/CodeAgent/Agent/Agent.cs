@@ -261,8 +261,7 @@ public sealed class Agent
         TurnCachedTokens = 0;
         TurnThinkingSeconds = 0;
         LastTurnFailed = false;
-        if (!_sessionSw.IsRunning)
-            _sessionSw.Start(); // 整个对话的累计计时
+        _turnSw.Restart(); // 本回合计时：每轮重启，spinner/定格行显示本轮用时而非整个会话的累计用时
         LastTurnStartCount = _messages.Count; // 记录本轮起点（ESC 撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
@@ -436,7 +435,7 @@ public sealed class Agent
 
     private System.Threading.CancellationTokenSource? _spinnerCts;
     private readonly System.Diagnostics.Stopwatch _spinnerSw = new();
-    private readonly System.Diagnostics.Stopwatch _sessionSw = new(); // 整个对话的累计用时
+    private readonly System.Diagnostics.Stopwatch _turnSw = new(); // 本回合累计用时（每轮 RunAsync 重启）
     private bool _reasoningShown; // 本轮是否已开始实时输出思考内容（首段到达时清掉 spinner）
     private long _streamTokens; // 当前调用已流式生成的 token 估算（字符数/4）
     private static readonly string[] SpinnerFrames = ["⠦", "⠸", "⠼", "⠴", "⠦", "⠇"];
@@ -465,7 +464,7 @@ public sealed class Agent
                     var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
                     // 显示实际用时与 token（而非"思考中"），实时更新
                     lock (ConsoleLock)
-                        Console.Write($"\r{f} 用时 {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens");
+                        Console.Write($"\r{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
                     await Task.Delay(120, cts.Token);
                 }
             }
@@ -497,7 +496,7 @@ public sealed class Agent
             Console.Write("\r" + new string(' ', 60) + "\r");
         }
         // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
-        Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_sessionSw.Elapsed)} · ↑ {tok} tokens");
+        Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
     }
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
