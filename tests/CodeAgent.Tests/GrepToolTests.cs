@@ -116,4 +116,24 @@ public class GrepToolTests : IDisposable
         var idxZeta = output.IndexOf("zeta.cs:1", StringComparison.Ordinal);
         Assert.True(idxAlpha >= 0 && idxMid > idxAlpha && idxZeta > idxMid, $"结果应按文件名排序:\n{output}");
     }
+
+    [Fact]
+    public async Task Grep_ContextLines_SharedBetweenNearbyMatches_NotDuplicated()
+    {
+        // 回归：两个匹配行相距 ≤ 2×context 时，中间的上下文行曾在两个匹配里各输出一次；
+        // 现在共享的上下文行只输出一次（避免重复刷屏）
+        File.WriteAllText(Path.Combine(_dir, "ctx.cs"),
+            "line1\nline2\nmatchA\nline4\nmatchB\nline6\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "match", ["context"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("matchA", output);
+        Assert.Contains("matchB", output);
+        // 中间的共享行 line4 只应出现一次（作为上下文行），而不是每个匹配各一次
+        var count = output.Split('\n').Count(l => l.Contains("4| line4"));
+        Assert.Equal(1, count);
+    }
 }

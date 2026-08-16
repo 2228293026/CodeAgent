@@ -141,6 +141,7 @@ public sealed class GrepTool : ITool
                 }
 
                 var lines = text.Split('\n');
+                var printedUntil = -1; // 已打印过的上下文行（避免邻近匹配的共享行重复输出）
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {
                     var line = lines[i].TrimEnd('\r');
@@ -150,9 +151,11 @@ public sealed class GrepTool : ITool
                     sb.AppendLine($"{rel}:{i + 1}: {TextUtil.TruncateLine(line, 300)}");
                     for (int c = Math.Max(0, i - context); c <= Math.Min(lines.Length - 1, i + context); c++)
                     {
-                        if (c != i)
+                        // 跳过已作为上个匹配上下文输出过的行，避免重复
+                        if (c != i && c > printedUntil)
                             sb.AppendLine($"  {c + 1}| {TextUtil.TruncateLine(lines[c].TrimEnd('\r'), 300)}");
                     }
+                    printedUntil = Math.Max(printedUntil, Math.Min(lines.Length - 1, i + context));
                     sb.AppendLine();
                 }
             }
