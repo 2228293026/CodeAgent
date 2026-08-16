@@ -189,4 +189,67 @@ public class EditableLineTests
     [InlineData("😀xy", 3, "😀…")]                   // 2+1+1=4 > 3：截断，预留省略号列
     public void FitToWidth_TruncatesByDisplayWidth(string input, int width, string expected) =>
         Assert.Equal(expected, InputLine.FitToWidth(input, width));
+
+    [Fact]
+    public void MoveLineUp_JumpsToPreviousLineStart()
+    {
+        var line = new EditableLine();
+        line.SetInitial("aa\nbb\ncc");
+        line.End();                       // 光标在末尾（cc 后）
+        Assert.True(line.MoveLineUp());   // 上一行（bb 行）行首
+        Assert.Equal(3, line.Cursor);     // "aa\n" 之后 = bb 行首
+        Assert.True(line.MoveLineUp());   // 再上一行（aa 行）行首
+        Assert.Equal(0, line.Cursor);
+        Assert.False(line.MoveLineUp());  // 已在首行：不再移动
+    }
+
+    [Fact]
+    public void MoveLineUp_FromMiddleLine_GoesToLineStart()
+    {
+        var line = new EditableLine();
+        line.SetInitial("aa\nbb\ncc");
+        line.End(); // 光标在末尾（index 8）
+        for (int i = 0; i < 4; i++)
+            line.MoveLeft(); // 移到 index 4（bb 行内，第二个 b 前）
+        Assert.Equal(4, line.Cursor);
+        Assert.True(line.MoveLineUp()); // 上一行（aa 行）行首
+        Assert.Equal(0, line.Cursor);
+    }
+
+    [Fact]
+    public void MoveLineDown_JumpsToNextLineStart()
+    {
+        var line = new EditableLine();
+        line.SetInitial("aa\nbb\ncc");
+        line.Home();                      // 光标在开头
+        Assert.True(line.MoveLineDown()); // 下一行（bb 行）行首
+        Assert.Equal(3, line.Cursor);     // "aa\n" 之后
+        Assert.True(line.MoveLineDown()); // 下一行（cc 行）行首
+        Assert.Equal(6, line.Cursor);     // "aa\nbb\n" 之后
+        Assert.True(line.MoveLineDown()); // 已在末行：移到行尾（无 \n）
+        Assert.Equal(8, line.Cursor);     // 文本末尾
+        Assert.False(line.MoveLineDown()); // 已在末尾：不再移动
+    }
+
+    [Fact]
+    public void MoveLineUp_SingleLine_ClampsToStart()
+    {
+        var line = new EditableLine();
+        line.SetInitial("abc");
+        line.End();
+        Assert.True(line.MoveLineUp()); // 单行无换行：移到行首
+        Assert.Equal(0, line.Cursor);
+        Assert.False(line.MoveLineUp()); // 已在行首
+    }
+
+    [Fact]
+    public void MoveLineDown_SingleLine_ClampsToEnd()
+    {
+        var line = new EditableLine();
+        line.SetInitial("abc");
+        line.Home();
+        Assert.True(line.MoveLineDown()); // 单行无换行：移到行尾
+        Assert.Equal(3, line.Cursor);
+        Assert.False(line.MoveLineDown()); // 已在行尾
+    }
 }

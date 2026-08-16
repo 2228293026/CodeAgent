@@ -67,6 +67,43 @@ public sealed class EditableLine
             Cursor++;
     }
 
+    /// <summary>光标向上移一行（多行输入）：移到上一行行首；已在首行则移到行首。返回是否移动。</summary>
+    public bool MoveLineUp()
+    {
+        if (Cursor <= 0)
+            return false;
+        var text = _text.ToString();
+        var first = text.LastIndexOf('\n', Cursor - 1); // 光标前最近 \n（当前行首前）
+        int target;
+        if (first < 0)
+        {
+            target = 0; // 已在首行：移到行首
+        }
+        else
+        {
+            var second = text.LastIndexOf('\n', first - 1); // 上一行行首前的 \n
+            target = second < 0 ? 0 : second + 1;           // 上一行行首（无则首行）
+        }
+        if (target == Cursor)
+            return false;
+        Cursor = target;
+        return true;
+    }
+
+    /// <summary>光标向下移一行（多行输入）：移到下一行行首；已在末行则移到行尾。返回是否移动。</summary>
+    public bool MoveLineDown()
+    {
+        if (Cursor >= _text.Length)
+            return false;
+        var text = _text.ToString();
+        var next = text.IndexOf('\n', Cursor);
+        var target = next < 0 ? text.Length : next + 1;
+        if (target == Cursor)
+            return false;
+        Cursor = target;
+        return true;
+    }
+
     public void Home() => Cursor = 0;
 
     public void End() => Cursor = _text.Length;
@@ -776,6 +813,11 @@ public static class InputLine
                     {
                         MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
                     }
+                    else if (1 + CountNewlines(buf.Text) > 1 && buf.MoveLineUp())
+                    {
+                        // 多行输入：↑ 在行内上移光标（不切换历史——历史切换会替换整个输入，逻辑错误）
+                        RedrawInput();
+                    }
                     else
                     {
                         if (menuOpen)
@@ -795,6 +837,11 @@ public static class InputLine
                     if (menuOpen && menuItems.Count > 0)
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
+                    }
+                    else if (1 + CountNewlines(buf.Text) > 1 && buf.MoveLineDown())
+                    {
+                        // 多行输入：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入，逻辑错误）
+                        RedrawInput();
                     }
                     else
                     {
