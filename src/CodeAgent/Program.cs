@@ -787,7 +787,7 @@ internal static class Program
         }
     }
 
-    private static (string cmd, string rest) SplitCommand(string line)
+    internal static (string cmd, string rest) SplitCommand(string line)
     {
         var idx = line.IndexOf(' ');
         return idx < 0 ? (line, "") : (line[..idx], line[(idx + 1)..]);
