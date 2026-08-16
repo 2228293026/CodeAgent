@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CodeAgent.Providers;
 using CodeAgent.Tools;
 using Xunit;
 using AgentClass = CodeAgent.Agent.Agent;
@@ -21,14 +23,14 @@ public class AgentSessionTests : IDisposable
         try { Directory.Delete(Path.GetDirectoryName(_sessionDir)!, true); } catch { /* 忽略 */ }
     }
 
-    private static AgentClass MakeAgent(string sessionDir, out string sessionPath)
+    private static AgentClass MakeAgent(string sessionDir, out string sessionPath, FakeProvider? provider = null)
     {
         var config = new AgentConfig
         {
             SaveSessions = false, // 测试不写 jsonl 日志
             SessionDir = sessionDir, // 绝对路径：与工作目录无关
         };
-        var provider = new FakeProvider { NextResponse = new Providers.ProviderResponse { Text = "ok" } };
+        provider ??= new FakeProvider { NextResponse = new Providers.ProviderResponse { Text = "ok" } };
         var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
         sessionPath = Path.Combine(sessionDir, "s.json");
         return agent;
@@ -65,5 +67,36 @@ public class AgentSessionTests : IDisposable
         var agent = MakeAgent(_sessionDir, out _);
         agent.SaveSession("a/b:c*");
         Assert.True(File.Exists(Path.Combine(_sessionDir, "a_b_c_.json")));
+    }
+
+    [Fact]
+    public async Task SaveLoadSession_RoundTripsToolCallMessages()
+    {
+        // 工具调用消息的 DTO 字段（toolCallId/toolName/isError/toolCalls）也应完整往返
+        var provider = new FakeProvider
+        {
+            NextResponse = new Providers.ProviderResponse
+            {
+                ToolCalls =
+                [
+                    new Providers.ToolCall { Id = "call_1", Name = "stop", ArgumentsJson = """{"reason":"x"}""" },
+                ],
+            },
+        };
+        var agent = MakeAgent(_sessionDir, out _, provider);
+        await agent.RunAsync("任务", CancellationToken.None);
+
+        agent.SaveSession("tools");
+        var restored = MakeAgent(_sessionDir, out _);
+        restored.LoadSession("tools");
+
+        // 找到 assistant 的工具调用与对应的 tool 结果，校验映射未丢失
+        var asst = restored.Messages.First(m => m.ToolCalls is { Count: > 0 });
+        Assert.Equal("call_1", asst.ToolCalls![0].Id);
+        Assert.Equal("stop", asst.ToolCalls[0].Name);
+
+        var toolMsg = restored.Messages.First(m => m.Role == MessageRole.Tool);
+        Assert.Equal("call_1", toolMsg.ToolCallId);
+        Assert.Equal("stop", toolMsg.ToolName);
     }
 }
