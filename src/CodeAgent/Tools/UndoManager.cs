@@ -46,6 +46,11 @@ public sealed class UndoManager
 
         var e = _entries[^1];
         _entries.RemoveAt(_entries.Count - 1);
+
+        // 大文件（>4MB）未记录原内容，无法恢复：如实说明而非谎报成功
+        if (e.Kind == "write" && e.HadFile && e.OldText is null)
+            return $"无法撤销: {Path.GetFileName(e.Path)} 过大，未记录原内容（仅限 ≤4MB 的文件可撤销覆盖）。";
+
         try
         {
             Apply(e);

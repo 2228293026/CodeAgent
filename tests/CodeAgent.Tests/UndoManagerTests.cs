@@ -52,6 +52,21 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void TryUndo_LargeFileWithoutSnapshot_ReportsHonestly()
+    {
+        // 回归：>4MB 文件覆盖时未记录原内容（OldText=null），撤销应如实说明而非谎报成功
+        var path = Path.Combine(_dir, "big.txt");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = path, OldText = null, HadFile = true });
+        File.WriteAllText(path, "new content");
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc);
+        Assert.Contains("无法撤销", desc);
+        Assert.Equal("new content", File.ReadAllText(path)); // 文件未被改动
+    }
+
+    [Fact]
     public void Push_CapsAtFiftyEntries()
     {
         var um = new UndoManager();
