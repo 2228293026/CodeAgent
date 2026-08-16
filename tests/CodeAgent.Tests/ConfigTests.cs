@@ -96,4 +96,19 @@ public class ConfigTests : IDisposable
         Assert.Equal("fix", fix.Name);
         Assert.Equal(new[] { "read_file" }, fix.Tools);
     }
+
+    [Fact]
+    public void WriteExample_ProducesLoadableConfig()
+    {
+        // 回归：--init 生成的示例配置应能被 Load 正常解析，且含全部默认 provider
+        var path = Path.Combine(_dir, "example.json");
+        AgentConfig.WriteExample(path);
+
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal("openai", cfg.Provider);
+        foreach (var name in new[] { "openai", "deepseek", "qwen", "ollama", "anthropic" })
+            Assert.True(cfg.Providers.ContainsKey(name), $"示例配置缺少 provider: {name}");
+        Assert.Equal("deepseek-chat", cfg.Providers["deepseek"].Model);
+        Assert.Equal("anthropic", cfg.Providers["anthropic"].Type);
+    }
 }
