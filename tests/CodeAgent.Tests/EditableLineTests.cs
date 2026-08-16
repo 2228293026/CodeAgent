@@ -177,4 +177,16 @@ public class EditableLineTests
         Assert.Equal(2, InputLine.CursorLeftOffset("a😀", 1));  // 总宽 1+2=3，前缀 "a"=1 → 左移 2
         Assert.Equal(3, InputLine.CursorLeftOffset("😀b", 0));  // 总宽 2+1=3，光标行首 → 左移 3
     }
+
+    [Theory]
+    [InlineData("abc", 5, "abc")]                    // 未超宽：原样
+    [InlineData("abc", 3, "abc")]                    // 刚好：原样
+    [InlineData("abcdef", 3, "ab…")]                 // 超宽：截断 + 省略号
+    [InlineData("中文", 4, "中文")]                   // CJK 2 列，未超宽
+    [InlineData("中文ab", 4, "中…")]                  // 回归：CJK 按 2 列计，曾按 1 字符算导致超宽
+    [InlineData("中文abc", 6, "中文a…")]              // 2+2+1=5 ≤ 5，预留省略号列
+    [InlineData("😀x", 3, "😀x")]                    // emoji(2)+x(1)=3 恰好上限：不截断
+    [InlineData("😀xy", 3, "😀…")]                   // 2+1+1=4 > 3：截断，预留省略号列
+    public void FitToWidth_TruncatesByDisplayWidth(string input, int width, string expected) =>
+        Assert.Equal(expected, InputLine.FitToWidth(input, width));
 }

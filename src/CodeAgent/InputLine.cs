@@ -224,6 +224,41 @@ public static class InputLine
     }
 
     /// <summary>
+    /// 按显示宽度截断文本（CJK/emoji 按 2 列计），超宽处补省略号。
+    /// 曾按字符数截断：中文菜单项/描述按 1 字符算但显示 2 列，导致超宽换行破坏 ANSI 布局。
+    /// </summary>
+    public static string FitToWidth(string s, int maxWidth)
+    {
+        if (DisplayWidth(s) <= maxWidth)
+            return s;
+        var sb = new StringBuilder();
+        int w = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            int cw;
+            if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+            {
+                cw = 2;
+                if (w + cw > maxWidth - 1)
+                    break; // 预留省略号的一列
+                sb.Append(c);
+                sb.Append(s[i + 1]);
+                i++;
+            }
+            else
+            {
+                cw = c > 0x2E7F ? 2 : 1;
+                if (w + cw > maxWidth - 1)
+                    break; // 预留省略号的一列
+                sb.Append(c);
+            }
+            w += cw;
+        }
+        return sb.ToString() + "…";
+    }
+
+    /// <summary>
     /// 光标定位偏移：把终端光标从行尾移到 <paramref name="cursor"/> 处需要左移的列数。
     /// 用显示宽度计算（CJK 占 2 列），避免中文行内编辑时光标错位。
     /// </summary>
@@ -261,11 +296,7 @@ public static class InputLine
 
         var winW = TryWindowWidth();
         var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
-        string Fit(string s)
-        {
-            var max = Math.Max(10, winW - 4);
-            return s.Length > max ? s[..max] + "…" : s;
-        }
+        string Fit(string s) => FitToWidth(s, Math.Max(10, winW - 4));
 
         var menuOpen = false;
         var modePicker = false;
