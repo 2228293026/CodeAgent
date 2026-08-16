@@ -52,6 +52,42 @@ public class GlobTests
     }
 
     [Fact]
+    public void CharClass_MatchesAnyListedChar()
+    {
+        var re = Glob.ToRegex("file[abc].txt");
+        Assert.Matches(re, "filea.txt");
+        Assert.Matches(re, "fileb.txt");
+        Assert.Matches(re, "filec.txt");
+        Assert.DoesNotMatch(re, "filed.txt");
+    }
+
+    [Fact]
+    public void CharClass_Range_MatchesWithinRange()
+    {
+        var re = Glob.ToRegex("[a-c].txt");
+        Assert.Matches(re, "a.txt");
+        Assert.Matches(re, "c.txt");
+        Assert.DoesNotMatch(re, "d.txt");
+    }
+
+    [Fact]
+    public void CharClass_Negated_ExcludesListedChars()
+    {
+        var re = Glob.ToRegex("[!ab].txt");
+        Assert.Matches(re, "c.txt");
+        Assert.DoesNotMatch(re, "a.txt");
+        Assert.DoesNotMatch(re, "b.txt");
+    }
+
+    [Fact]
+    public void UnclosedCharClass_TreatedAsLiteral()
+    {
+        var re = Glob.ToRegex("a[b");
+        Assert.Matches(re, "a[b");
+        Assert.DoesNotMatch(re, "ab");
+    }
+
+    [Fact]
     public void Literal_IsCaseInsensitive()
     {
         var re = Glob.ToRegex("README.md");

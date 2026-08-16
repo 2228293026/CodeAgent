@@ -99,7 +99,7 @@ public static class SkipDirs
     }
 }
 
-/// <summary>把 glob 模式（支持 **、*、?）转换为正则。</summary>
+/// <summary>把 glob 模式（支持 **、*、?、字符类 [ab]/[a-z]/[!abc]）转换为正则。</summary>
 public static class Glob
 {
     public static Regex ToRegex(string pattern)
@@ -133,6 +133,31 @@ public static class Glob
             else if (c == '?')
             {
                 sb.Append("[^/\\\\]");
+            }
+            else if (c == '[')
+            {
+                // 字符类：[abc]、[a-z]、[!abc]（否定）；未闭合或空类按字面 '[' 处理
+                var close = pattern.IndexOf(']', i + 1);
+                if (close > i + 1)
+                {
+                    var cls = pattern[(i + 1)..close];
+                    var neg = false;
+                    if (cls.StartsWith('!') || cls.StartsWith('^'))
+                    {
+                        neg = true;
+                        cls = cls[1..];
+                    }
+                    if (cls.Length > 0)
+                    {
+                        cls = cls.Replace("\\", "\\\\").Replace("]", "\\]");
+                        sb.Append(neg ? "[^" : "[");
+                        sb.Append(cls);
+                        sb.Append(']');
+                        i = close;
+                        continue;
+                    }
+                }
+                sb.Append(Regex.Escape("["));
             }
             else
             {
