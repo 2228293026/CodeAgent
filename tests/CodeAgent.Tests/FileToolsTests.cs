@@ -122,4 +122,19 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("line1", output);
         Assert.DoesNotContain("line3", output);
     }
+
+    [Fact]
+    public async Task ReadFile_Directory_ReturnsHelpfulHint()
+    {
+        // 回归：对目录调用 read_file 应提示用 list_directory，而非误报"文件不存在"
+        var sub = Path.Combine(_dir, "subdir");
+        Directory.CreateDirectory(sub);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(
+            () => tool.ExecuteAsync(new JsonObject { ["path"] = "subdir" }, ctx, CancellationToken.None));
+        Assert.Contains("list_directory", ex.Message);
+        Assert.DoesNotContain("文件不存在", ex.Message);
+    }
 }

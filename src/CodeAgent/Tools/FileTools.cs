@@ -28,6 +28,8 @@ public sealed class ReadFileTool : ITool
             throw new ToolException("缺少必填参数 path");
 
         var full = ctx.Workspace.Resolve(path);
+        if (Directory.Exists(full))
+            throw new ToolException($"'{path}' 是目录，请用 list_directory 查看目录内容。");
         if (!File.Exists(full))
             throw new ToolException($"文件不存在: {path}");
 
