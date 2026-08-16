@@ -416,9 +416,17 @@ public static class InputLine
             var sb = new StringBuilder();
             sb.AppendLine();
             sb.AppendLine(Fit(Header()));
-            // 紧凑展示：一行列出当前过滤结果（避免 14 行大块渲染导致卡顿）
-            var names = menuItems.Count > 0 ? menuItems.Select(m => m.Name) : Commands.Select(c => c.Name);
-            sb.AppendLine(Fit("  " + string.Join(" ", names)));
+            if (menuItems.Count == 0)
+            {
+                // 过滤无匹配时显示提示而非回退到全部命令（与 PrintFilterScroll 一致）
+                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
+            }
+            else
+            {
+                // 紧凑展示：一行列出当前过滤结果（避免 14 行大块渲染导致卡顿）
+                var names = menuItems.Select(m => m.Name);
+                sb.AppendLine(Fit("  " + string.Join(" ", names)));
+            }
             sb.AppendLine();
             sb.Append(InputText());
             Console.Write(sb.ToString());
