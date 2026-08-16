@@ -153,6 +153,21 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void ParseInline_CodeSpanRestoresOuterStyle()
+    {
+        // 回归：` 退出代码曾只回 Normal，`**run `test` now**` 中 now 失去加粗；
+        // 现在退出代码应恢复进入前的外层样式（Bold）
+        var parts = CodeAgent.ConsoleRenderer.ParseInline("**run `test` now**");
+
+        var run = Assert.Single(parts, p => p.text.Contains("run"));
+        Assert.Equal(CodeAgent.ConsoleRenderer.InlineStyleToken.Bold, run.style);
+        var test = Assert.Single(parts, p => p.text.Contains("test"));
+        Assert.Equal(CodeAgent.ConsoleRenderer.InlineStyleToken.Code, test.style);
+        var now = Assert.Single(parts, p => p.text.Contains("now"));
+        Assert.Equal(CodeAgent.ConsoleRenderer.InlineStyleToken.Bold, now.style); // 恢复加粗
+    }
+
+    [Fact]
     public void Append_TripleAsterisks_AreLiteralNotBoldToggle()
     {
         // 回归：*** 曾被解析成 ** 加粗开关 + 单个 *，渲染时丢失两个星号

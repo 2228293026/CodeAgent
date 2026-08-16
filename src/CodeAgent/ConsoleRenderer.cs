@@ -165,8 +165,8 @@ public sealed class ConsoleRenderer
         {
             SafeColor.Foreground(style switch
             {
-                InlineStyle.Bold => ConsoleColor.White,
-                InlineStyle.Code => ConsoleColor.DarkYellow,
+                InlineStyleToken.Bold => ConsoleColor.White,
+                InlineStyleToken.Code => ConsoleColor.DarkYellow,
                 _ => color ?? ConsoleColor.Gray,
             });
             Console.Write(text);
@@ -195,14 +195,16 @@ public sealed class ConsoleRenderer
         SafeColor.Reset();
     }
 
-    private enum InlineStyle { Normal, Bold, Code }
+    /// <summary>行内样式（internal 以便测试断言样式序列）。</summary>
+    internal enum InlineStyleToken { Normal, Bold, Code }
 
-    /// <summary>解析行内样式：`行内代码` 与 **加粗**。</summary>
-    private static List<(string text, InlineStyle style)> ParseInline(string s)
+    /// <summary>解析行内样式：`行内代码` 与 **加粗**（internal 以便测试样式序列）。</summary>
+    internal static List<(string text, InlineStyleToken style)> ParseInline(string s)
     {
-        var result = new List<(string, InlineStyle)>();
+        var result = new List<(string, InlineStyleToken)>();
         var cur = new StringBuilder();
-        var style = InlineStyle.Normal;
+        var style = InlineStyleToken.Normal;
+        var codePrevStyle = InlineStyleToken.Normal; // 进入行内代码前的外层样式，退出时恢复
 
         for (int i = 0; i < s.Length; i++)
         {
@@ -220,12 +222,18 @@ public sealed class ConsoleRenderer
                     continue;
                 }
                 Flush();
-                style = style == InlineStyle.Code ? InlineStyle.Normal : InlineStyle.Code;
+                if (style == InlineStyleToken.Code)
+                    style = codePrevStyle; // 退出代码：恢复外层样式（如加粗）
+                else
+                {
+                    codePrevStyle = style; // 进入代码：记住外层样式
+                    style = InlineStyleToken.Code;
+                }
             }
             else if (s[i] == '*' && i + 1 < s.Length && s[i + 1] == '*')
             {
                 // 行内代码内一切按字面处理：`a**b` 的 ** 应保留，不能作为加粗开关消费
-                if (style == InlineStyle.Code)
+                if (style == InlineStyleToken.Code)
                 {
                     cur.Append(s[i]);
                     cur.Append(s[i + 1]);
@@ -244,7 +252,7 @@ public sealed class ConsoleRenderer
                     continue;
                 }
                 Flush();
-                style = style == InlineStyle.Bold ? InlineStyle.Normal : InlineStyle.Bold;
+                style = style == InlineStyleToken.Bold ? InlineStyleToken.Normal : InlineStyleToken.Bold;
                 i++;
             }
             else
