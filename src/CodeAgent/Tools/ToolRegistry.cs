@@ -102,15 +102,27 @@ internal static class ToolArgs
         return v.TryGetValue<string>(out var s) && int.TryParse(s, out var p) ? p : def;
     }
 
-    /// <summary>读取布尔；兼容 "true"/"false"/"1"/"0" 字符串。</summary>
+    /// <summary>读取布尔；兼容 "true"/"false"/"1"/"0"/"yes"/"no" 字符串。</summary>
     public static bool GetBool(JsonObject? args, string key, bool def)
     {
         if (args?[key] is not JsonValue v)
             return def;
         if (v.TryGetValue<bool>(out var b))
             return b;
-        return v.TryGetValue<string>(out var s) && (s.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-               s.Equals("1", StringComparison.OrdinalIgnoreCase) || s.Equals("yes", StringComparison.OrdinalIgnoreCase));
+        if (v.TryGetValue<string>(out var s))
+        {
+            if (s.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("y", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (s.Equals("false", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("0", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("no", StringComparison.OrdinalIgnoreCase) ||
+                s.Equals("n", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return def;
     }
 
     /// <summary>读取一个字符串键值对对象（env 等）；key 缺失或不是对象时返回 null。</summary>

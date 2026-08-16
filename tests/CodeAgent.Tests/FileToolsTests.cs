@@ -203,4 +203,21 @@ public class FileToolsTests : IDisposable
         Assert.Contains("超出范围", output);
         Assert.DoesNotContain("99-99", output); // 不应出现倒退的行号区间
     }
+
+    [Fact]
+    public async Task WriteFile_CreateDirsFalseString_IsRespected()
+    {
+        // 回归：create_dirs 默认 true，模型传字符串 "0" 时应解析为 false（不自动建目录），
+        // 而非回退默认值 true 导致父目录被静默创建。
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var parent = Path.Combine(_dir, "not-created");
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "not-created/sub/f.txt", ["content"] = "x", ["create_dirs"] = "0" },
+                ctx, CancellationToken.None));
+        Assert.Contains("写入失败", ex.Message);
+        Assert.False(Directory.Exists(parent)); // 父目录不应被自动创建
+    }
 }
