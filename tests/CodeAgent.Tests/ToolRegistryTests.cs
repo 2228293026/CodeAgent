@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,5 +62,28 @@ public class ToolRegistryTests : IDisposable
         var ex = await Assert.ThrowsAsync<ToolException>(() =>
             registry.ExecuteAsync("read_file", "", MakeContext(_dir), CancellationToken.None));
         Assert.Contains("path", ex.Message); // 走到缺参校验而非 JSON 解析错误
+    }
+
+    [Fact]
+    public void CreateDefault_RegistersAllTenTools()
+    {
+        // 回归：默认工具集应完整；缺工具会让 Agent 某些能力静默失效
+        var registry = ToolRegistry.CreateDefault();
+        var specs = registry.ToToolSpecs();
+        var names = specs.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var expected = new[]
+        {
+            "read_file", "write_file", "edit_file", "list_directory",
+            "glob", "grep", "run_command", "bash", "powershell", "stop",
+        };
+        foreach (var name in expected)
+            Assert.True(names.Contains(name), $"缺少工具: {name}");
+        Assert.Equal(expected.Length, specs.Count); // 不应有多余工具
+        foreach (var spec in specs)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(spec.Description), $"{spec.Name} 缺描述");
+            Assert.NotNull(spec.Parameters);
+        }
     }
 }
