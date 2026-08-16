@@ -81,6 +81,34 @@ public class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task UndoLastTurn_NoPriorTurn_ReturnsNull()
+    {
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
+        var agent = MakeAgent(provider);
+
+        // 从未运行过回合：没有可撤回的轮次
+        Assert.Null(agent.UndoLastTurn());
+    }
+
+    [Fact]
+    public async Task Reset_WithCustomSystemPrompt_KeepsIt()
+    {
+        // 回归：code 模式配置了自定义 systemPrompt 时，/clear（Reset）不应丢失它
+        var custom = "我是自定义系统提示";
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false, SessionDir = SessionDir, SystemPrompt = custom },
+            provider,
+            ToolRegistry.CreateDefault());
+        await agent.RunAsync("一些对话", CancellationToken.None);
+
+        agent.Reset();
+
+        Assert.Equal(1, agent.MessageCount);
+        Assert.Contains(custom, agent.Messages[0].Content!); // 自定义提示在 Reset 后保留
+    }
+
+    [Fact]
     public async Task Reset_ClearsHistoryKeepingSystem()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
