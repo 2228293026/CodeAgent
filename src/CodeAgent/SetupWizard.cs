@@ -6,9 +6,10 @@ namespace CodeAgent;
 /// </summary>
 public static class SetupWizard
 {
-    private sealed record Preset(string Name, string Label, string Type, string BaseUrl, string Model, string Env);
+    internal sealed record Preset(string Name, string Label, string Type, string BaseUrl, string Model, string Env);
 
-    private static readonly Preset[] Presets =
+    /// <summary>供应商预设表（--setup 向导用；internal 以便测试数据完整性）。</summary>
+    internal static readonly Preset[] Presets =
     [
         new("openai", "OpenAI 官方", "openai", "https://api.openai.com/v1", "gpt-4o", "OPENAI_API_KEY"),
         new("deepseek", "DeepSeek（OpenAI 兼容）", "openai", "https://api.deepseek.com/v1", "deepseek-chat", "DEEPSEEK_API_KEY"),
