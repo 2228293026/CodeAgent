@@ -35,13 +35,11 @@ public sealed class GlobTool : ITool
         var results = new List<string>();
         var scanned = 0;
 
-        foreach (var file in Directory.EnumerateFiles(start, "*", SearchOption.AllDirectories))
+        foreach (var file in SkipDirs.EnumerateFilesPruned(start))
         {
             if (scanned++ > 200_000 || results.Count > 500)
                 break;
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
-            if (rel.Split('/').Any(SkipDirs.IsSkipped))
-                continue;
             if (re.IsMatch(rel))
                 results.Add(rel);
         }
@@ -140,13 +138,10 @@ public sealed class GrepTool : ITool
         }
         else if (Directory.Exists(full))
         {
-            foreach (var file in Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories))
+            foreach (var file in SkipDirs.EnumerateFilesPruned(full))
             {
                 if (hits >= max)
                     break;
-                var rel = Path.GetRelativePath(full, file);
-                if (rel.Split('\\', '/').Any(SkipDirs.IsSkipped))
-                    continue;
                 ScanFile(file);
             }
         }

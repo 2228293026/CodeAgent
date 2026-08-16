@@ -57,6 +57,39 @@ public static class SkipDirs
 
     public static bool IsSkipped(string dirName) => Names.Contains(dirName);
 
+    /// <summary>
+    /// 递归枚举文件，但剪枝掉被跳过的目录（不进入其中遍历），避免 glob/grep
+    /// 在 node_modules / bin / obj 等目录里做无用扫描。
+    /// </summary>
+    public static IEnumerable<string> EnumerateFilesPruned(string root)
+    {
+        var stack = new Stack<string>();
+        stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var dir = stack.Pop();
+            IEnumerable<string> subDirs;
+            IEnumerable<string> files;
+            try
+            {
+                subDirs = Directory.EnumerateDirectories(dir);
+                files = Directory.EnumerateFiles(dir);
+            }
+            catch (UnauthorizedAccessException) { continue; }
+            catch (IOException) { continue; }
+
+            foreach (var f in files)
+                yield return f;
+            foreach (var d in subDirs)
+            {
+                var name = Path.GetFileName(d);
+                if (IsSkipped(name))
+                    continue; // 剪枝：不进入被跳过的目录
+                stack.Push(d);
+            }
+        }
+    }
+
     /// <summary>判断文本是否疑似二进制（含 NUL 字节）。</summary>
     public static bool LooksBinary(string text)
     {
