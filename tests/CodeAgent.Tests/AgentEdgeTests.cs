@@ -115,9 +115,10 @@ public class AgentEdgeTests : IDisposable
 
         Assert.NotNull(agent.UndoLastTurn());   // 撤回第二轮
         Assert.Equal(3, agent.MessageCount);
-        // LastTurnStartCount 只记录最近一轮起点：连续第二次撤回返回 null（ESC 语义为撤回最近一轮）
-        Assert.Null(agent.UndoLastTurn());
-        Assert.Equal(3, agent.MessageCount);    // 第一轮保留
+        // 多级撤回：连续 ESC 逐轮回退，再撤掉第一轮
+        Assert.NotNull(agent.UndoLastTurn());
+        Assert.Equal(1, agent.MessageCount);     // 仅剩 system
+        Assert.Null(agent.UndoLastTurn());       // 无轮可撤
     }
 
     [Fact]

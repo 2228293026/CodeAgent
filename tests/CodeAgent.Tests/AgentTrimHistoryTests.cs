@@ -153,13 +153,39 @@ public class AgentTrimHistoryTests : IDisposable
             await agent.RunAsync($"第 {i} 轮", CancellationToken.None);
 
         var beforeUndo = agent.MessageCount;
+        // 撤回后消息数应回到本轮起点（起点随裁剪前移后定位准确）
+        var expectedAfterUndo = agent.LastTurnStartCount;
         var desc = agent.UndoLastTurn();
         Assert.NotNull(desc);
-
-        // 撤回后消息数应回到 LastTurnStartCount（撤回索引随裁剪前移后定位准确）
-        Assert.Equal(agent.LastTurnStartCount, agent.MessageCount);
+        Assert.Equal(expectedAfterUndo, agent.MessageCount);
         Assert.True(agent.MessageCount < beforeUndo, "撤回应减少消息数");
+
+        // 多级撤回：继续撤上一轮，同样回到其（已随裁剪前移的）起点
+        var expectedSecond = agent.LastTurnStartCount;
+        var desc2 = agent.UndoLastTurn();
+        Assert.NotNull(desc2);
+        Assert.Equal(expectedSecond, agent.MessageCount);
         // 兜底路径保留首条 user 锚点
         Assert.Contains(agent.Messages, m => m.Role == MessageRole.User && m.Content == "第 0 轮");
+    }
+
+    [Fact]
+    public async Task UndoAfterSummarization_StaysConsistent()
+    {
+        // 多级撤回在历史被 LLM 压缩后仍保持一致：起点随压缩前移/丢弃（不可越过压缩点），
+        // 反复撤回最终回到 null，且绝不删穿 system
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = new string('y', 1500) } };
+        var agent = MakeAgent(provider, maxHistoryChars: 2000);
+        for (int i = 0; i < 8; i++)
+            await agent.RunAsync($"第 {i} 轮请求", CancellationToken.None);
+
+        int guard = 0;
+        while (agent.UndoLastTurn() is not null)
+        {
+            Assert.True(++guard < 20, "撤回应逐层耗尽，不得无限成功");
+            Assert.Equal(MessageRole.System, agent.Messages[0].Role);
+            Assert.True(agent.MessageCount >= 1, "不得删穿 system");
+        }
+        Assert.Null(agent.UndoLastTurn()); // 最终无轮可撤
     }
 }

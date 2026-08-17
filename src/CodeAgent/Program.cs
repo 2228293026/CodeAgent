@@ -1019,7 +1019,7 @@ internal static class Program
               --models             列出当前 Provider 的可用模型
               -v, --version        显示版本号
             快捷键:
-              Esc                   撤回最后一条已发送的消息（空输入时）
+              Esc                   撤回最近一轮对话（空输入时；连按逐轮回退）
               Tab                    切换下一个工作模式（/mode next）
               Shift+Tab              切换文件访问权限模式（strict→whitelist→full）
               Alt+M / Ctrl+Shift+M   模式切换菜单

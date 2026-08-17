@@ -76,7 +76,12 @@ public sealed class Agent
     public long TurnInputTokens { get; private set; }
     public long TurnOutputTokens { get; private set; }
     public long TurnCachedTokens { get; private set; }
-    public int LastTurnStartCount { get; private set; }
+    // 各轮起点栈（ESC 多级撤回用）：RunAsync 发送前 push 一层，UndoLastTurn pop 一层，
+    // 连续 ESC 逐轮回退；历史裁剪/压缩时栈内索引同步前移
+    private readonly Stack<int> _turnStarts = new();
+
+    /// <summary>最近一轮的起点索引；无轮可撤时等于消息数（保持单值时代语义，诊断/测试用）。</summary>
+    public int LastTurnStartCount => _turnStarts.Count > 0 ? _turnStarts.Peek() : _messages.Count;
     public int MessageCount => _messages.Count;
 
     /// <summary>当前对话消息列表（只读，/history 与 /load 显示用）。</summary>
@@ -100,8 +105,8 @@ public sealed class Agent
     {
         _messages.Clear();
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
-        // 清空后没有「上一轮」可撤回：重置起点，避免 ESC 撤回按过期索引误删
-        LastTurnStartCount = _messages.Count;
+        // 清空后没有「上一轮」可撤回：清空起点栈，避免 ESC 撤回按过期索引误删
+        _turnStarts.Clear();
     }
 
     /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
@@ -116,13 +121,18 @@ public sealed class Agent
     private string EffectivePrompt(AgentMode mode) =>
         mode.Name == "code" ? _config.SystemPrompt : mode.SystemPrompt;
 
-    /// <summary>撤回最后一轮：移除最后一条用户消息及其回复，恢复发送前状态（ESC 撤回）。</summary>
+    /// <summary>撤回最后一轮：移除最后一条用户消息及其回复，恢复发送前状态（ESC 撤回）。
+    /// 连续调用逐轮回退（多级撤回），无轮可撤时返回 null。</summary>
     public string? UndoLastTurn()
     {
-        if (LastTurnStartCount <= 0 || LastTurnStartCount >= _messages.Count)
+        if (_turnStarts.Count == 0)
             return null;
-        _messages.RemoveRange(LastTurnStartCount, _messages.Count - LastTurnStartCount);
-        return $"⏪ 已撤回最后一轮（剩余 {LastTurnStartCount} 条历史消息）。";
+        var start = _turnStarts.Peek();
+        _turnStarts.Pop();
+        if (start <= 0 || start >= _messages.Count)
+            return null; // 防御：起点已越界（消息被压缩/移除），丢弃该层
+        _messages.RemoveRange(start, _messages.Count - start);
+        return $"⏪ 已撤回最后一轮（剩余 {start} 条历史消息）。";
     }
 
     public void Close()
@@ -144,8 +154,8 @@ public sealed class Agent
     {
         _messages.Clear();
         _messages.AddRange(LoadMessages(name));
-        // 加载的会话没有「上一轮」可撤回：重置起点，否则 ESC 撤回会按过期索引删掉刚加载的消息
-        LastTurnStartCount = _messages.Count;
+        // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
+        _turnStarts.Clear();
     }
 
     /// <summary>把当前对话（或指定命名会话）导出为 Markdown 记录，返回文件路径。</summary>
@@ -270,7 +280,7 @@ public sealed class Agent
         TurnThinkingSeconds = 0;
         LastTurnFailed = false;
         _turnSw.Restart(); // 本回合计时：每轮重启，spinner/定格行显示本轮用时而非整个会话的累计用时
-        LastTurnStartCount = _messages.Count; // 记录本轮起点（ESC 撤回用）
+        _turnStarts.Push(_messages.Count); // 记录本轮起点（ESC 多级撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
 
@@ -795,11 +805,26 @@ public sealed class Agent
                 if (rm.ToolCalls is not null)
                     foreach (var tc in rm.ToolCalls)
                         total -= tc.ArgumentsJson.Length;
-                // 被移除消息在本轮起点之前时，撤回索引需同步前移（ESC 撤回按 LastTurnStartCount 定位）
-                if (u1 + 1 < LastTurnStartCount)
-                    LastTurnStartCount--;
+                // 被移除消息位于各轮起点之前时，这些起点同步前移（ESC 多级撤回按栈内索引定位）
+                int removedAt = u1 + 1;
+                RemapTurnStarts(start => start > removedAt ? start - 1 : start);
                 _messages.RemoveAt(u1 + 1);
             }
+        }
+    }
+
+    /// <summary>对起点栈逐层做坐标变换（返回 null 的层被丢弃）；历史裁剪/压缩移动消息时同步修正撤回索引。</summary>
+    private void RemapTurnStarts(Func<int, int?> map)
+    {
+        if (_turnStarts.Count == 0)
+            return;
+        var starts = _turnStarts.ToArray(); // 栈顶在前
+        _turnStarts.Clear();
+        for (int s = starts.Length - 1; s >= 0; s--) // 从栈底重建，保持原顺序
+        {
+            var v = map(starts[s]);
+            if (v is { } start && start > 0 && start <= _messages.Count)
+                _turnStarts.Push(start);
         }
     }
 
@@ -848,9 +873,9 @@ public sealed class Agent
                 return false;
 
             _messages.RemoveRange(1, keepFrom - 1);
-            // 移除 keepFrom-1 条、又在位置 1 插入 1 条摘要：原索引 i >= keepFrom 的消息新位置是
-            // i - keepFrom + 2（原先按 -(keepFrom-1) 计算少算了插入的摘要，偏移差 1 会让 ESC 撤回多删一条）
-            LastTurnStartCount = Math.Clamp(LastTurnStartCount - keepFrom + 2, 1, _messages.Count);
+            // 起点栈同步：落在被压缩区间内的轮次已随消息消失（丢弃该层，撤回不可越过压缩点），
+            // 之后的起点按「移除 keepFrom-1 条 + 在位置 1 插入 1 条摘要」前移（- keepFrom + 2）
+            RemapTurnStarts(start => start < keepFrom ? null : start - keepFrom + 2);
             _messages.Insert(1, new ProviderMessage
             {
                 Role = MessageRole.System,
