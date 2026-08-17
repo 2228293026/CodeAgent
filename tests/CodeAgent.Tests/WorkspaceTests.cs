@@ -128,7 +128,9 @@ public class WorkspaceTests
     public void Resolve_SymlinkEscape_ExistingFile_IsRejected()
     {
         // 回归：目标文件已存在时（如 read_file 经过 symlink 目录读一个真实存在的文件），
-        // 旧实现只解析最深一段、对非链接叶子返回 null，中间层的链接被漏掉 → 沙箱被穿越
+        // 旧实现只解析最深一段、对非链接叶子返回 null，中间层的链接被漏掉 → 沙箱被穿越。
+        // 无符号链接权限的 Windows 上退回 junction（mklink /J 无需管理员，同为 reparse point，
+        // ResolveLinkTarget 同样解析），保证本回归测试可在 CI 上真实执行
         var outside = Path.Combine(Path.GetTempPath(), "codeagent-link-out2-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(outside);
         var wsRoot = Path.Combine(Path.GetTempPath(), "codeagent-link-ws3-" + Guid.NewGuid().ToString("N"));
@@ -139,11 +141,21 @@ public class WorkspaceTests
             var link = Path.Combine(wsRoot, "escape");
             try
             {
-                Directory.CreateSymbolicLink(link, outside); // 不支持的平台/无权限时跳过
+                Directory.CreateSymbolicLink(link, outside);
             }
             catch
             {
-                return; // 无符号链接权限（如 Windows 非开发者模式）：跳过
+                if (!OperatingSystem.IsWindows())
+                    return; // 非 Windows 且符号链接不可用：跳过
+                var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "cmd.exe", $"/c mklink /J \"{link}\" \"{outside}\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                p?.WaitForExit(5000);
+                if (!Directory.Exists(link))
+                    return; // junction 也建不了：跳过
             }
             var ws = new Workspace(wsRoot);
             Assert.Throws<ToolException>(() => ws.ResolveRead(Path.Combine("escape", "secret.txt")));
