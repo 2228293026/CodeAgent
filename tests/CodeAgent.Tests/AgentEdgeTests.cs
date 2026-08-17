@@ -105,6 +105,30 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void EditPreviewText_ShowsChangedLinesNotRawFragments()
+    {
+        // 回归：edit_file 预览曾只显示截断的 old/new 片段（共享长前缀时看不出差异）；
+        // 现在直接给行级 diff
+        var args = new System.Text.Json.Nodes.JsonObject
+        {
+            ["path"] = "a.cs",
+            ["old_string"] = "case \"/compact\":\n                // 用户主动压缩上下文",
+            ["new_string"] = "case \"/compact\":\n                // 压缩历史为摘要",
+        };
+        var preview = AgentClass.EditPreviewText(args);
+        Assert.Contains("-                 // 用户主动压缩上下文", preview); // 旧内容（红）
+        Assert.Contains("+                 // 压缩历史为摘要", preview);         // 新内容（绿）
+        Assert.DoesNotContain("old_string=", preview); // 不再是原始参数摘要
+    }
+
+    [Fact]
+    public void EditPreviewText_NoArgsOrEmpty_ReturnsEmpty()
+    {
+        Assert.Equal("", AgentClass.EditPreviewText(null));
+        Assert.Equal("", AgentClass.EditPreviewText(new System.Text.Json.Nodes.JsonObject()));
+    }
+
+    [Fact]
     public async Task UndoLastTurn_Consecutive_RemovesBothTurns()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };

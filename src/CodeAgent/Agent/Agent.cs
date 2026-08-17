@@ -551,12 +551,57 @@ public sealed class Agent
         {
             if (kv.Key == "content")
                 continue;
+            // edit_file 的 old/new 两个片段常共享长前缀，截断成 60 字符后肉眼看不出差异；
+            // 行内摘要只留 path，实际改动由 EditPreviewText 的 diff 预览展示
+            if (name == "edit_file" && kv.Key is "old_string" or "new_string")
+                continue;
             var v = (kv.Value?.ToJsonString() ?? "").Trim('"');
             if (v.Length > 60)
                 v = v[..60] + "…";
             parts.Add($"{kv.Key}={v}");
         }
         return parts.Count == 0 ? name : $"{name}({string.Join(" ", parts)})";
+    }
+
+    /// <summary>生成 edit_file 的紧凑 diff 预览文本（无差异返回空串）。
+    /// 直接对 old_string/new_string 做行级 diff，配合着色即可一眼看出改了哪里。</summary>
+    internal static string EditPreviewText(JsonObject? args)
+    {
+        if (args is null)
+            return "";
+        var oldS = ToolArgs.GetString(args, "old_string");
+        var newS = ToolArgs.GetString(args, "new_string");
+        if (oldS.Length == 0 && newS.Length == 0)
+            return "";
+        var lines = DiffUtil.Unified(oldS, newS, ToolArgs.GetString(args, "path")).Split('\n');
+        const int maxLines = 15;
+        var shown = lines.Take(maxLines).Select(l => TextUtil.TruncateLine(l, 200)).ToList();
+        if (lines.Length > maxLines)
+            shown.Add($"…(diff 共 {lines.Length} 行，仅显示前 {maxLines})");
+        return string.Join('\n', shown);
+    }
+
+    /// <summary>打印 edit_file 的 diff 预览（红删绿增，灰色文件头/hunk 头）；失败静默。</summary>
+    private static void ShowEditPreview(JsonObject? args)
+    {
+        try
+        {
+            var text = EditPreviewText(args);
+            if (text.Length == 0)
+                return;
+            foreach (var line in text.Split('\n'))
+            {
+                if (line.StartsWith('-'))
+                    SafeColor.Foreground(ConsoleColor.Red);
+                else if (line.StartsWith('+'))
+                    SafeColor.Foreground(ConsoleColor.Green);
+                else
+                    SafeColor.Foreground(ConsoleColor.DarkGray);
+                Console.WriteLine("      " + line);
+                SafeColor.Reset();
+            }
+        }
+        catch { /* 预览失败不影响工具执行 */ }
     }
 
     /// <summary>控制台输出锁：并行工具调用时防止进度日志交错。</summary>
@@ -641,6 +686,14 @@ public sealed class Agent
                 SafeColor.Foreground(ConsoleColor.DarkGray);
                 Console.WriteLine($"  🔧 {summary} …");
                 SafeColor.Reset();
+                // edit_file 附带 diff 预览：让用户在执行前就看到改动内容（而非两段截断片段）
+                if (tc.Name == "edit_file")
+                {
+                    JsonObject? previewArgs = null;
+                    try { previewArgs = JsonNode.Parse(tc.ArgumentsJson) as JsonObject; }
+                    catch { }
+                    ShowEditPreview(previewArgs);
+                }
             }
         }
         var sw = Stopwatch.StartNew();
