@@ -265,12 +265,18 @@ internal static class Program
 
         var pendingDraft = (string?)null; // 取消回合后回填到输入框的草稿
         var skipStatusBar = false; // 模式/权限切换已有一行确认：下一轮跳过状态栏（防模式名重复三处）
+        var switchBlockActive = false; // 提示符上方是「消息+空行」切换块：连续切换可原地覆盖，屏幕零增长
+        string? inlinePrompt = null; // 原地重绘后 Read 用无前导换行的提示符（空行已由切换块写好）
+        var ansiOk = config.TuiAnsi && !Console.IsOutputRedirected;
         while (true)
         {
             if (!skipStatusBar)
                 PrintStatusBar(opts, agent, config.ThinkingEffort);
             skipStatusBar = false;
-            var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
+            var line = InputLine.Read(inlinePrompt ?? PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
+            inlinePrompt = null;
+            var couldOverwriteBlock = switchBlockActive;
+            switchBlockActive = false; // 默认失效：只有本轮再次切换才重新置位（中间任何输入都会改变块上方布局）
             pendingDraft = null;
             if (line is null)
                 break; // EOF (Ctrl+Z / Ctrl+D)
@@ -296,7 +302,21 @@ internal static class Program
                 }
                 else
                 {
-                    skipStatusBar = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
+                    // 模式/权限切换（Tab/Shift+Tab 或 /mode //access）：连续切换时原地覆盖上一轮的
+                    // 「消息+空行+提示符」三行块——光标此刻在旧提示符行的下一行行首，上移 3 行即块顶
+                    var (peekCmd, peekRest) = SplitCommand(line);
+                    var isSwitch = IsSwitchCommand(peekCmd, peekRest);
+                    if (isSwitch && couldOverwriteBlock && ansiOk)
+                        Console.Write("\x1b[3A");
+                    var suppress = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
+                    skipStatusBar = suppress;
+                    if (suppress)
+                    {
+                        switchBlockActive = true;
+                        // 空行并清整行：覆盖路径下新提示符可能比旧的短（[explain|…]→[doc|…]），清掉行尾残字符
+                        Console.Write(ansiOk ? "\r\n\x1b[2K" : "\n");
+                        inlinePrompt = PromptFor(opts, agent).TrimStart('\n');
+                    }
                     continue;
                 }
             }
@@ -481,26 +501,23 @@ internal static class Program
         : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
         : "codeagent.json";
 
-    /// <summary>切换权限模式后写回配置文件（/access 与 Shift+Tab 用），使重启后保持该模式。</summary>
+    /// <summary>切换权限模式后写回配置文件（/access 与 Shift+Tab 用），使重启后保持该模式。
+    /// 成功时静默（切换确认行已反馈状态，连写两行会破坏连续切换的原地覆盖行数）；失败才提示。</summary>
     private static void PersistFileAccess(AgentConfig config)
     {
         if (config.SourceFile is null)
-        {
-            Console.WriteLine("（无配置文件，切换仅本次会话生效；用 --init 生成 codeagent.json 后可持久化）");
-            return;
-        }
+            return; // 无配置文件：仅本次会话生效（/access 查看时的提示已覆盖此说明）
         try
         {
             AgentConfig.Save(config, config.SourceFile);
-            Console.WriteLine($"已写入配置文件: {config.SourceFile}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"写入配置失败: {ex.Message}");
+            Console.WriteLine($"⚠ 写入配置失败: {ex.Message}");
         }
     }
 
-    /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）。</summary>
+    /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）——灰色 UI 层级。</summary>
     private static void PrintFileAccess(string mode, bool showHint = false)
     {
         var desc = mode.ToLowerInvariant() switch
@@ -510,9 +527,11 @@ internal static class Program
             "full" => "所有文件可读可写（完全放开）",
             _ => mode,
         };
-        Console.WriteLine($"权限模式: {mode}（{desc}）");
+        SafeColor.Foreground(ConsoleColor.DarkGray);
+        Console.WriteLine($"已切换权限: {mode}（{desc}）");
         if (showHint)
             Console.WriteLine("  Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定");
+        SafeColor.Reset();
     }
 
     /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。</summary>
@@ -1070,6 +1089,13 @@ internal static class Program
         var idx = line.IndexOf(' ');
         return idx < 0 ? (line, "") : (line[..idx], line[(idx + 1)..]);
     }
+
+    /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
+    /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
+    internal static bool IsSwitchCommand(string cmd, string rest) =>
+        rest.Equals("next", StringComparison.OrdinalIgnoreCase) && cmd is "/mode" or "/access"
+        || cmd == "/mode" && !string.IsNullOrWhiteSpace(rest)
+        || cmd == "/access" && rest.Trim().ToLowerInvariant() is "strict" or "whitelist" or "full";
 
     private static void PrintReplHelp()
     {

@@ -171,6 +171,20 @@ public class MegaEdgeTests
     public void Glob_Reject_Cases(string pattern, string path) =>
         Assert.False(CodeAgent.Glob.ToRegex(pattern).IsMatch(path.Replace('\\', '/')), $"{pattern} 不应匹配 {path}");
 
+    [Theory]
+    [InlineData("/mode", "next", true)]
+    [InlineData("/mode", "plan", true)]
+    [InlineData("/mode", "plan  extra", true)]
+    [InlineData("/mode", "", false)]          // 无参数 = 查看列表，非切换
+    [InlineData("/access", "next", true)]
+    [InlineData("/access", "FULL", true)]     // 大小写不敏感
+    [InlineData("/access", "bogus", false)]   // 非法值 = 错误提示，非切换
+    [InlineData("/access", "", false)]
+    [InlineData("/model", "next", false)]     // 其他命令即使带 next 也不是切换
+    [InlineData("/help", "", false)]
+    public void IsSwitchCommand_Classifies(string cmd, string rest, bool expected) =>
+        Assert.Equal(expected, IsSwitchCommand(cmd, rest));
+
     // ===== SplitCommand =====
 
     [Theory]
