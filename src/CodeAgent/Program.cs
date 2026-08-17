@@ -359,7 +359,9 @@ internal static class Program
         return 0;
     }
 
-    /// <summary>最近的会话日志文件（.jsonl，最新在前，最多 max 个）；无日志返回空表。</summary>
+    /// <summary>最近的会话日志文件（.jsonl，最新在前，最多 max 个）；无日志返回空表。
+    /// 跳过 0 字节文件：启动后未对话就退出会留下空日志，恢复它毫无意义（曾导致
+    /// /resume 与 --continue 报「文件可能损坏」的误导错误）。</summary>
     internal static List<string> RecentSessionLogs(AgentConfig config, int max = 10)
     {
         try
@@ -369,6 +371,7 @@ internal static class Program
                 return [];
             // 按最后写入时间排序（同秒滚动的 -2/-3 后缀文件名字典序不可靠）
             return Directory.GetFiles(dir, "*.jsonl")
+                .Where(f => new FileInfo(f).Length > 0)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .ThenByDescending(f => f, StringComparer.OrdinalIgnoreCase)
                 .Take(max)
@@ -938,7 +941,11 @@ internal static class Program
                 }
                 else
                 {
-                    Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
+                    // 数字越界时明确指出范围（静默回退到列表曾让人以为编号生效了）
+                    if (int.TryParse(rest.Trim(), out _))
+                        Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
+                    else
+                        Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
                     for (int i = 0; i < logs.Count; i++)
                         Console.WriteLine($"  {i + 1}) {Path.GetFileNameWithoutExtension(logs[i])}");
                 }

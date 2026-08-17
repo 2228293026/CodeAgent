@@ -110,6 +110,25 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.False(MakeAgent(new FakeProvider()).LoadSessionLog(Path.Combine(SessionDir, "nope.jsonl")));
 
     [Fact]
+    public void RecentSessionLogs_SkipsEmptyLogs_AndOrdersNewestFirst()
+    {
+        // 回归：启动后未对话就退出会留下 0 字节日志；曾混进 /resume 列表与 --continue 的
+        // 「最近一次」，恢复时报「文件可能损坏」的误导错误
+        var empty = Path.Combine(SessionDir, "20260817-100000.jsonl");
+        File.WriteAllText(empty, ""); // 空日志：应被跳过
+        var older = Path.Combine(SessionDir, "20260817-090000.jsonl");
+        File.WriteAllText(older, "{\"role\":\"user\",\"content\":\"a\"}\n");
+        var newer = Path.Combine(SessionDir, "20260817-110000.jsonl");
+        File.WriteAllText(newer, "{\"role\":\"user\",\"content\":\"b\"}\n");
+        File.SetLastWriteTimeUtc(newer, DateTime.UtcNow);
+        File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddMinutes(-5));
+
+        var logs = Program.RecentSessionLogs(new AgentConfig { SessionDir = SessionDir });
+        Assert.Equal([newer, older], logs); // 空文件被跳过，新的在前
+        Assert.Equal(newer, Program.LatestSessionLog(new AgentConfig { SessionDir = SessionDir }));
+    }
+
+    [Fact]
     public async Task SaveSession_CreatesJsonFile()
     {
         var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
