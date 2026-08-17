@@ -217,6 +217,7 @@ public static class InputLine
     [
         ("/help", "Show help"),
         ("/clear", "Clear conversation history"),
+        ("/compact", "Compress history into a summary"),
         ("/cls", "Clear screen (or Ctrl+L)"),
         ("/model", "View or switch model"),
         ("/config", "Show config"),

@@ -783,8 +783,11 @@ public sealed class Agent
         }
     }
 
+    /// <summary>用户主动压缩上下文（/compact 命令）：把最早的一部分对话交给 LLM 压缩成摘要。成功返回 true。</summary>
+    public async Task<bool> CompactAsync(CancellationToken ct) => await TrySummarizeAsync(ct, manual: true);
+
     /// <summary>把最早的一部分对话交给 LLM 压缩成摘要；成功返回 true。</summary>
-    private async Task<bool> TrySummarizeAsync(CancellationToken ct)
+    private async Task<bool> TrySummarizeAsync(CancellationToken ct, bool manual = false)
     {
         var keepFrom = Math.Max(2, _messages.Count * 2 / 3);
 
@@ -813,7 +816,8 @@ public sealed class Agent
 
         try
         {
-            Console.WriteLine("📝 上下文超限，正在压缩历史…");
+            // 自动裁剪时提示「上下文超限」；手动 /compact 时只说「正在压缩」
+            Console.WriteLine(manual ? "📝 正在压缩历史…" : "📝 上下文超限，正在压缩历史…");
             var resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], _ctx.Config.ThinkingEffort, ct), ct);
             var summary = resp.Text?.Trim();
             if (string.IsNullOrWhiteSpace(summary))

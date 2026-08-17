@@ -14,7 +14,7 @@ public class InputLineCommandsTests
         // 加 REPL 循环特殊处理的 /retry），防止新增命令后忘记同步菜单。
         var handled = new[]
         {
-            "/help", "/clear", "/cls", "/model", "/config", "/session", "/setup",
+            "/help", "/clear", "/compact", "/cls", "/model", "/config", "/session", "/setup",
             "/undo", "/diff", "/save", "/load", "/history", "/export", "/stats",
             "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
             "/exit", "/quit", "/retry",
@@ -65,12 +65,13 @@ public class InputLineCommandsTests
     [Fact]
     public void Commands_AreListedInLogicalOrder()
     {
-        // 常用命令应排在前部（帮助/清空/清屏/模型切换），方便数字键快速触发
+        // 常用命令应排在前部（帮助/清空/压缩/清屏/模型切换），方便数字键快速触发
         var names = InputLine.Commands.Select(c => c.Name).ToList();
         Assert.Equal("/help", names[0]);
         Assert.Equal("/clear", names[1]);
-        Assert.Equal("/cls", names[2]);
-        Assert.Equal("/model", names[3]);
+        Assert.Equal("/compact", names[2]);
+        Assert.Equal("/cls", names[3]);
+        Assert.Equal("/model", names[4]);
         Assert.Equal("/quit", names[^1]); // 退出命令在末尾（/quit 在 /exit 之后）
     }
 
@@ -82,7 +83,7 @@ public class InputLineCommandsTests
         var special = new[] { "/retry" }; // REPL 循环特殊处理
         var handled = new[]
         {
-            "/help", "/clear", "/cls", "/model", "/config", "/session", "/setup",
+            "/help", "/clear", "/compact", "/cls", "/model", "/config", "/session", "/setup",
             "/undo", "/diff", "/save", "/load", "/history", "/export", "/stats",
             "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
             "/exit", "/quit",

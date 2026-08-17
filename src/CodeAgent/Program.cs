@@ -588,6 +588,21 @@ internal static class Program
                 Console.WriteLine("已清空对话历史。");
                 break;
 
+            case "/compact":
+                // 用户主动压缩上下文：把最早的一部分对话交给 LLM 压缩成摘要（/clear 是彻底清空，本命令保留语义）
+                try
+                {
+                    // 控制台无同步上下文，GetAwaiter().GetResult() 与 PrintModelsAsync 等既有模式一致
+                    var ok = agent.CompactAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    if (!ok)
+                        Console.WriteLine("⚠ 当前对话过短，无需压缩。");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠ 压缩失败: {ex.Message}");
+                }
+                break;
+
             case "/cls":
                 try
                 {
