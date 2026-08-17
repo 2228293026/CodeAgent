@@ -245,6 +245,14 @@ public static class InputLine
     private static readonly HistoryStore History = new(Path.Combine(Environment.CurrentDirectory, ".codeagent", "history.txt"));
     private const int MenuMaxRows = 9; // 与 header 的 "1-9 run" 及数字键上限一致
 
+    /// <summary>菜单区固定高度（header + 最多 MenuMaxRows 项 + more 行 + 空行）。
+    /// 打开期间高度不变（项不足补空行），过滤/选择/滚动全部原位重绘——
+    /// 输入行只在开/关时移动一次，期间屏幕零跳动（Claude Code 式稳定面板）。</summary>
+    private const int MenuAreaRows = MenuMaxRows + 3;
+
+    /// <summary>菜单块行数：非空固定为 MenuAreaRows，空态（无匹配）缩为 3 行提示。</summary>
+    private static int BlockRows(int count) => count == 0 ? 3 : MenuAreaRows;
+
     /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
     public const string RecallMarker = "\u001bRECALL";
 
@@ -374,7 +382,7 @@ public static class InputLine
 
         // —— 绘制助手（局部函数） ——
 
-        int MenuAbove() => menuShown + 3; // header + 项 + more 行 + 空行
+        int MenuAbove() => MenuAreaRows; // 固定面板高度（MoveSelectionAnsi 行定位用）
 
         string Header() => modePicker
             ? "  Modes (up/down select, Enter switch, Esc close):"
@@ -505,38 +513,44 @@ public static class InputLine
         // —— ANSI 原地渲染（默认） ——
         void PrintListAnsi()
         {
-            menuShown = Math.Min(menuItems.Count, MenuMaxRows);
+            menuShown = Math.Min(menuItems.Count, MenuMaxRows); // 数字键可见窗口（与布局高度解耦）
             if (menuOffset > menuItems.Count - menuShown)
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
-            var above = menuShown + 3; // header + 项 + more/空态行 + 空行
+            var rows = BlockRows(menuItems.Count);
             var sb = new StringBuilder();
             // 菜单块绘制在输入行正上方（块空间已由 ResizeMenuSpace 用 IL/DL 腾出），
             // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大
-            sb.Append($"\x1b[{above}A\x1b[1G");
+            sb.Append($"\x1b[{rows}A\x1b[1G");
             sb.AppendLine(Fit(Header()) + "\x1b[K");
             if (menuItems.Count == 0)
             {
                 sb.AppendLine(Fit("  (no matching item, press Esc to close)") + "\x1b[K");
+                sb.AppendLine("\x1b[K"); // 占位到 3 行高，与 BlockRows 一致
             }
             else
             {
-                for (int i = 0; i < menuShown; i++)
+                // 固定高度项区：始终画 MenuMaxRows 行，项不足补空行（高度稳定，无跳动）
+                for (int i = 0; i < MenuMaxRows; i++)
                 {
                     var k = menuOffset + i;
-                    // 模式菜单不显示编号：数字键在模式菜单中被有意排除（防误切），编号会误导
+                    if (k >= menuItems.Count)
+                    {
+                        sb.AppendLine("\x1b[K");
+                        continue;
+                    }
                     var line = Fit(MenuLineText(k, i));
-                    // 选中项：反显高亮（\x1b[7m），缩进不变；每行末尾 \x1b[K 清除旧内容残留（防信息混合）
+                    // 选中项：反显高亮（\x1b[7m）；行尾 \x1b[K 清残留
                     sb.AppendLine((k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line) + "\x1b[K");
                 }
                 // more 计数随窗口滚动更新（下方剩余项数）
-                var remaining = menuItems.Count - menuOffset - menuShown;
+                var remaining = menuItems.Count - menuOffset - MenuMaxRows;
                 sb.AppendLine(Fit(remaining > 0 ? $"  ... (+{remaining} more)" : "") + "\x1b[K");
             }
             sb.AppendLine(); // 空行；末尾换行后光标已在输入行
             sb.Append("\x1b[1G");
             sb.Append(InputText());
             sb.Append("\x1b[K");
-            menuRows = above;
+            menuRows = rows;
             Console.Write(sb.ToString());
         }
 
@@ -685,8 +699,11 @@ public static class InputLine
                     menuIndex = menuItems.Count - 1;
                 if (ansiOk)
                 {
-                    // 先调块高（IL/DL 原地插/删行，上方内容不被覆盖），再整块重绘内容
-                    ResizeMenuSpace(Math.Min(menuItems.Count, MenuMaxRows) + 3);
+                    // 固定面板：仅「空态 ↔ 非空」切换时调整高度（输入行只在此刻移动一次），
+                    // 其余过滤/滚动全部原位重绘，屏幕零跳动
+                    var target = BlockRows(menuItems.Count);
+                    if (target != menuRows)
+                        ResizeMenuSpace(target);
                     PrintListAnsi();
                 }
                 else if (!menuListShown)
@@ -715,10 +732,16 @@ public static class InputLine
             menuOpen = true;
             modePicker = picker;
             menuIndex = -1;
+            // 打开即按目标高度一次性腾出空间（Claude Code 式稳定面板）：
+            // 命令菜单按满高预留（过滤从全量开始），之后高度只在空态边界变
+            if (ansiOk)
+            {
+                var initial = picker ? (modes?.Count ?? 0) : Commands.Length;
+                ResizeMenuSpace(BlockRows(initial));
+            }
             if (picker)
             {
                 menuItems = [.. modes ?? []];
-                ResizeMenuSpace(Math.Min(menuItems.Count, MenuMaxRows) + 3); // 与命令菜单同一套插行逻辑
                 PrintMenu();
                 lastFilter = "/";
             }
