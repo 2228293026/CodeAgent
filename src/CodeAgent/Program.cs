@@ -562,11 +562,11 @@ internal static class Program
     {
         var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        // 状态栏显示单独一次对话（上一回合）的 token 用量，与回合摘要行 in/out 格式一致；
-        // 会话累计消耗见 /stats
+        // 状态栏显示单独一次对话（上一回合）的 token 用量 + 当前上下文规模（ctx，模型实际收到的
+        // prompt_tokens，/clear /resume 后为估算值）；会话累计消耗见 /stats
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out tok{think}");
+            $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out · ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}{think}");
         SafeColor.Reset();
     }
 

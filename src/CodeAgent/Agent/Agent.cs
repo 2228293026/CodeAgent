@@ -84,6 +84,30 @@ public sealed class Agent
     public int LastTurnStartCount => _turnStarts.Count > 0 ? _turnStarts.Peek() : _messages.Count;
     public int MessageCount => _messages.Count;
 
+    /// <summary>最近一次 Provider 请求的 prompt_tokens——即模型当前实际收到的上下文规模
+    /// （含系统提示与全部历史）；Provider 未返回 usage 时为 0，显示层退回估算。</summary>
+    public int LastInputTokens { get; private set; }
+
+    /// <summary>当前上下文 token 规模（状态栏 ctx 显示用）：
+    /// 优先取最近一次请求的真实 prompt_tokens，否则按消息字符数 / 4 估算。</summary>
+    public int ContextTokens
+    {
+        get
+        {
+            if (LastInputTokens > 0)
+                return LastInputTokens;
+            long chars = 0;
+            foreach (var m in _messages)
+            {
+                chars += m.Content?.Length ?? 0;
+                if (m.ToolCalls is not null)
+                    foreach (var tc in m.ToolCalls)
+                        chars += tc.ArgumentsJson.Length;
+            }
+            return (int)(chars / 4);
+        }
+    }
+
     /// <summary>当前对话消息列表（只读，/history 与 /load 显示用）。</summary>
     public IReadOnlyList<ProviderMessage> Messages => _messages;
 
@@ -107,6 +131,7 @@ public sealed class Agent
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
         // 清空后没有「上一轮」可撤回：清空起点栈，避免 ESC 撤回按过期索引误删
         _turnStarts.Clear();
+        LastInputTokens = 0; // 上下文回到仅系统提示，ctx 退回估算口径
         // 新开一个日志文件：--continue 恢复最近会话时不会带回已清空的历史；
         // 新日志先写入当前 system 提示，保持自包含
         RollSessionLog();
@@ -160,6 +185,7 @@ public sealed class Agent
         _messages.AddRange(LoadMessages(name));
         // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
         _turnStarts.Clear();
+        LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
     }
 
     /// <summary>把当前对话（或指定命名会话）导出为 Markdown 记录，返回文件路径。</summary>
@@ -239,6 +265,7 @@ public sealed class Agent
         if (_messages[0].Role != MessageRole.System)
             _messages.Insert(0, new ProviderMessage { Role = MessageRole.System, Content = _config.SystemPrompt });
         _turnStarts.Clear(); // 恢复的会话没有「上一轮」可撤回
+        LastInputTokens = 0; // 上下文变为恢复的历史：退回估算口径
 
         RollSessionLog();
         foreach (var m in _messages)
@@ -404,6 +431,7 @@ public sealed class Agent
             TurnRounds++;
             if (resp.InputTokens is int inTokT)
                 TurnInputTokens += inTokT;
+            LastInputTokens = resp.InputTokens ?? 0; // 本轮无 usage 则归零，ctx 退回估算口径
             if (resp.OutputTokens is int outTokT)
                 TurnOutputTokens += outTokT;
             if (resp.CachedTokens is int cTokT)

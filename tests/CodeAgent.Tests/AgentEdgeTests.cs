@@ -146,6 +146,26 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task ContextTracks_UsageAndReset()
+    {
+        // ctx 口径：最近一次请求的 prompt_tokens；无 usage 或 /clear 后退回字符估算
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok", InputTokens = 4321 } };
+        var agent = MakeAgent(provider);
+        await agent.RunAsync("你好", CancellationToken.None);
+        Assert.Equal(4321, agent.ContextTokens);
+
+        agent.Reset(); // 清空后 prompt_tokens 失效，退回估算（仅系统提示，量级很小）
+        Assert.True(agent.ContextTokens < 2000, $"清空后 ctx 应为估算值（当前 {agent.ContextTokens}）");
+    }
+
+    [Fact]
+    public void ContextTokens_Estimate_WhenNoUsage()
+    {
+        var agent = MakeAgent(new FakeProvider()); // 未运行：无 usage
+        Assert.True(agent.ContextTokens > 0); // 系统提示的字符估算
+    }
+
+    [Fact]
     public async Task UndoLastTurn_Consecutive_RemovesBothTurns()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
