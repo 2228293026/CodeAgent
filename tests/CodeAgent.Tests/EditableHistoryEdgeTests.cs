@@ -236,20 +236,15 @@ public class EditableHistoryEdgeTests : IDisposable
     [Fact]
     public void Save_Failure_DoesNotThrow()
     {
-        // 只读目录下 Save 失败应静默（不影响主流程）
-        var ro = Path.Combine(_dir, "ro");
-        Directory.CreateDirectory(ro);
-        File.SetAttributes(ro, FileAttributes.ReadOnly);
-        try
-        {
-            var h = new HistoryStore(Path.Combine(ro, "h.txt"));
-            h.Remember("a"); // 不应抛异常
-            Assert.Equal(1, h.Count);
-        }
-        finally
-        {
-            File.SetAttributes(ro, FileAttributes.Normal);
-        }
+        // 写入失败应静默（不影响主流程）。用独占锁占用历史文件触发 IOException：
+        // Windows 目录只读属性其实拦不住建文件，锁不住真正的失败路径
+        var path = Path.Combine(_dir, "h.txt");
+        File.WriteAllText(path, "seed");
+        using var hold = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+        var h = new HistoryStore(path);
+        h.Remember("a"); // 不应抛异常
+        // 独占锁使构造时的 Load 也失败（seed 未加载，Count 从 0 开始），Save 静默失败但内存条目保留
+        Assert.Equal(1, h.Count);
     }
 
     [Fact]

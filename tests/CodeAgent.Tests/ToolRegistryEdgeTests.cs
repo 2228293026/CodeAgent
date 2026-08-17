@@ -105,13 +105,15 @@ public class ToolRegistryEdgeTests
     }
 
     [Fact]
-    public void Register_OverwritesByName()
+    public async Task Register_OverwritesByName()
     {
         var reg = new ToolRegistry();
         reg.Register(new FakeTool("t"));
         reg.Register(new FakeTool("t", "second"));
         Assert.Single(reg.ToToolSpecs());
-        Assert.Equal("second", reg.ToToolSpecs()[0].Description is "fake" ? "second" : "x"); // 占位校验
+        // 注册覆盖生效：执行返回第二个工具的结果而非第一个
+        var result = await reg.ExecuteAsync("t", "{}", MakeContext(), CancellationToken.None);
+        Assert.StartsWith("second:", result);
     }
 
     [Fact]
