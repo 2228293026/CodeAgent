@@ -131,4 +131,35 @@ public class ConfigTests : IDisposable
         Assert.Equal("deepseek-chat", cfg.Providers["deepseek"].Model);
         Assert.Equal("anthropic", cfg.Providers["anthropic"].Type);
     }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsFileAccess()
+    {
+        // /access 切换后写回配置文件：fileAccess 与 readOnlyDirs 应能保存并重新加载（重启保持）
+        var path = Path.Combine(_dir, "access.json");
+        var cfg = new AgentConfig
+        {
+            Provider = "hitmargin",
+            FileAccess = "whitelist",
+            ReadOnlyDirs = ["D:/Projects/adofai-libs"],
+            MaxToolIterations = 0,
+        };
+        AgentConfig.Save(cfg, path);
+
+        var loaded = AgentConfig.Load(path);
+        Assert.Equal("whitelist", loaded.FileAccess);
+        Assert.Contains("D:/Projects/adofai-libs", loaded.ReadOnlyDirs);
+        Assert.Equal(0, loaded.MaxToolIterations); // 0 = 无限，保存后不被钳制
+    }
+
+    [Fact]
+    public void Save_ThenLoad_RoundTripsFullAccess()
+    {
+        // full 模式同样能持久化（Shift+Tab 切到 full 后重启保持）
+        var path = Path.Combine(_dir, "full.json");
+        var cfg = new AgentConfig { FileAccess = "full" };
+        AgentConfig.Save(cfg, path);
+
+        Assert.Equal("full", AgentConfig.Load(path).FileAccess);
+    }
 }

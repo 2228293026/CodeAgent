@@ -425,6 +425,25 @@ internal static class Program
         SafeColor.Reset();
     }
 
+    /// <summary>切换权限模式后写回配置文件（/access 与 Shift+Tab 用），使重启后保持该模式。</summary>
+    private static void PersistFileAccess(AgentConfig config)
+    {
+        if (config.SourceFile is null)
+        {
+            Console.WriteLine("（无配置文件，切换仅本次会话生效；用 --init 生成 codeagent.json 后可持久化）");
+            return;
+        }
+        try
+        {
+            AgentConfig.Save(config, config.SourceFile);
+            Console.WriteLine($"已写入配置文件: {config.SourceFile}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"写入配置失败: {ex.Message}");
+        }
+    }
+
     /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）。</summary>
     private static void PrintFileAccess(string mode, bool showHint = false)
     {
@@ -592,6 +611,7 @@ internal static class Program
                     };
                     agent.SetFileAccess(next);
                     PrintFileAccess(next);
+                    PersistFileAccess(config); // 写回配置文件，重启后保持
                 }
                 else if (!string.IsNullOrWhiteSpace(rest))
                 {
@@ -600,6 +620,7 @@ internal static class Program
                     {
                         agent.SetFileAccess(mode);
                         PrintFileAccess(mode);
+                        PersistFileAccess(config);
                     }
                     else
                     {
