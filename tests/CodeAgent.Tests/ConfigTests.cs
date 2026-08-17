@@ -162,4 +162,17 @@ public class ConfigTests : IDisposable
 
         Assert.Equal("full", AgentConfig.Load(path).FileAccess);
     }
+
+    [Fact]
+    public void Save_KeepsChineseLiteral_NotEscaped()
+    {
+        // 回归：System.Text.Json 默认把非 ASCII 转成 \uXXXX；保存后文件应含中文原文（可读、diff 友好）
+        var path = Path.Combine(_dir, "cn.json");
+        var cfg = new AgentConfig { SystemPrompt = "你是 CodeAgent，务实、精确、诚实。" };
+        AgentConfig.Save(cfg, path);
+
+        var text = File.ReadAllText(path);
+        Assert.Contains("你是 CodeAgent", text);
+        Assert.DoesNotContain("\\u4F60", text); // 不应是 \uXXXX 转义
+    }
 }

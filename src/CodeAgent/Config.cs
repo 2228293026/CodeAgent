@@ -129,6 +129,9 @@ public sealed class AgentConfig
         WriteIndented = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
+        // 不转义非 ASCII：中文原样输出（System.Text.Json 默认会把中文转成 \uXXXX，破坏配置可读性）。
+        // 仅影响序列化（Save/WriteExample），不影响反序列化（Load）
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     /// <summary>

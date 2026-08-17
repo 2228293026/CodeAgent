@@ -236,6 +236,7 @@ public static class InputLine
         ("/history", "Show conversation history"),
         ("/thinking", "Adjust model thinking effort"),
         ("/mode", "View or switch work mode"),
+        ("/access", "Set file access mode"),
         ("/exit", "Exit (also /quit)"),
         ("/quit", "Exit"),
     ];
