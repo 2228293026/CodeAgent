@@ -100,6 +100,25 @@ public class OpenAiProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_ContentAsArray_JoinsTextBlocks()
+    {
+        // 回归：部分兼容服务把 content 返回为分块数组；原实现先对 JsonArray 调 GetValue<string>
+        // 直接抛 InvalidOperationException，后面的数组分支永远不可达
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":[{"type":"text","text":"你"},{"type":"text","text":"好"}]}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Equal("你好", resp.Text);
+    }
+
+    [Fact]
     public async Task ChatAsync_RequestTimeout_ThrowsProviderException()
     {
         // 用短超时的 HttpClient：SlowHandler 永远延迟，触发超时路径（避免等默认 100s）

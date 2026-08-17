@@ -108,6 +108,34 @@ public class AgentTrimHistoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Compact_OnEmptyHistory_ReturnsFalse()
+    {
+        // 回归：/clear 后直接 /compact（只剩 system 一条）曾因 GetRange 越界抛异常，
+        // 用户看到的是堆栈信息而非友好的「对话过短」提示
+        var agent = MakeAgent(new FakeProvider(), maxHistoryChars: 100_000);
+        agent.Reset();
+        Assert.False(await agent.CompactAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Compact_MultipleTurns_ReplacesEarlyHistoryWithSummary()
+    {
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
+        var agent = MakeAgent(provider, maxHistoryChars: 100_000);
+        for (int i = 0; i < 6; i++)
+            await agent.RunAsync($"第 {i} 轮请求", CancellationToken.None);
+        var before = agent.MessageCount;
+
+        provider.NextResponse = new ProviderResponse { Text = "这是摘要" }; // 摘要请求（单条 user）的回复
+        Assert.True(await agent.CompactAsync(CancellationToken.None));
+
+        // 最早的对话被替换为一条 system 摘要；整体消息数减少，首条原始 user 不再保留
+        Assert.True(agent.MessageCount < before, $"压缩应减少消息数（{before} → {agent.MessageCount}）");
+        Assert.Contains(agent.Messages, m => m.Role == MessageRole.System && (m.Content ?? "").Contains("这是摘要"));
+        Assert.DoesNotContain(agent.Messages, m => m.Content == "第 0 轮请求");
+    }
+
+    [Fact]
     public async Task UndoAfterTrimming_RemovesOnlyTheLastTurn()
     {
         // 回归：历史裁剪移除最早消息后，ESC 撤回（UndoLastTurn）曾按过期的 LastTurnStartCount

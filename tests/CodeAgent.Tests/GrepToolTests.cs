@@ -55,6 +55,23 @@ public class GrepToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Include_BarePattern_MatchesSubdirectories()
+    {
+        // 回归：无分隔符的 include（如 "*.cs"）应匹配任意深度（与 ripgrep --glob 一致），
+        // 原先裸 glob 只匹配根目录文件，子目录里的会被漏掉
+        Directory.CreateDirectory(Path.Combine(_dir, "src", "deep"));
+        File.WriteAllText(Path.Combine(_dir, "a.cs"), "TODO root\n");
+        File.WriteAllText(Path.Combine(_dir, "src", "deep", "b.cs"), "TODO deep\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "TODO", ["include"] = "*.cs" }, ctx, CancellationToken.None);
+        Assert.Contains("a.cs:1", output);
+        Assert.Contains("src/deep/b.cs:1", output);
+    }
+
+    [Fact]
     public async Task Grep_IncludeAsArray_Works()
     {
         File.WriteAllText(Path.Combine(_dir, "x.cs"), "FIXME\n");
