@@ -36,10 +36,11 @@ internal static class Program
             }
         };
 
-        // 流式输出即时刷新：dotnet run 等管道环境把 stdout 块缓冲，文本会等回车/退出才显示
+        // 流式输出即时刷新：dotnet run 等管道环境把 stdout 块缓冲，文本会等回车/退出才显示。
+        // 用无 BOM 的 UTF-8：默认 UTF8Encoding 会把 BOM 前导写进终端（横幅开头出现不可见字符）
         try
         {
-            Console.SetOut(new System.IO.StreamWriter(Console.OpenStandardOutput(), Console.OutputEncoding) { AutoFlush = true });
+            Console.SetOut(new System.IO.StreamWriter(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false)) { AutoFlush = true });
         }
         catch { /* 忽略 */ }
 

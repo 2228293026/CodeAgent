@@ -555,7 +555,7 @@ public static class InputLine
                 sb.Append($"\x1b[{rows}A"); // 0 行不上移：CSI 参数 0 会被终端按 1 处理，多移一行
             for (int i = 0; i < rows; i++)
             {
-                sb.Append("\x1b[K\x1b[1B");
+                sb.Append("\r\x1b[K\x1b[1B"); // \r 回列首再 EL：EL 只清「光标→行尾」，光标停在输入文本末尾列时菜单行左侧会残留
             }
             sb.Append("\x1b[1G");
             sb.Append(InputText());
