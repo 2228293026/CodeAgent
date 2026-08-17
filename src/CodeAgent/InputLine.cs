@@ -387,7 +387,7 @@ public static class InputLine
 
         string Header() => modePicker
             ? "  Modes (up/down select, Enter switch, Esc close):"
-            : "  Commands (1-9 run, up/down select, Enter run, Esc close):";
+            : "  Commands (1-9 run, up/down select, → fill, Enter run, Esc close):";
 
         int CountNewlines(string s)
         {
@@ -887,7 +887,17 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.RightArrow:
-                    if (!menuOpen)
+                    if (menuOpen && !modePicker && menuItems.Count > 0)
+                    {
+                        // → ：把选中的命令填充到输入行（不执行），可继续编辑/加参数；
+                        // 无选中时默认填第一项（顶部项即隐式高亮）。Tab 在多匹配时是循环换选，
+                        // → 是「就要这个」——补全后关菜单，回车执行或继续输入
+                        buf.Replace(menuItems[menuIndex >= 0 ? menuIndex : 0].Name);
+                        draft = null;
+                        CloseMenu();
+                        RedrawInput();
+                    }
+                    else if (!menuOpen)
                     {
                         buf.MoveRight();
                         RedrawInput();

@@ -174,7 +174,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称]` `/config` `/s
 
 运行中按 `Ctrl+C` 或 `Esc` 可**优雅取消当前轮**（停止模型思考/工具执行，中断后历史会自动回滚为合法状态，可继续对话）；空闲时按 `Ctrl+C` 退出程序。
 
-交互输入：输入 `/`（兼容全角 `／`）自动弹出**命令菜单**（**ANSI 原地渲染**：`↑`/`↓` 让 `>` 在列表内原地移动、回车执行、`Esc` 关闭、继续输入即过滤；**数字键 1-9 直接执行**；老式终端乱码时设 `"tuiAnsi": false` 退回滚动式）；**快捷键**：`Esc`（空输入时）撤回最近一轮对话（连按逐轮回退）、`Tab`（输入非 `/` 开头时）切换下一个工作模式（`/mode next`）、`Shift+Tab` 切换文件访问权限模式（strict→whitelist→full，`/access` 查看）、`Alt+M`（或 `Ctrl+Shift+M`）模式菜单、`Alt+U` 撤销、`Alt+D` 查看 diff、`Alt+N` 新建会话、`Ctrl+L` 清屏（部分终端吞 Alt 时用 Ctrl+Shift 组合）；菜单内 `Shift+Tab` 反向循环选择项；无菜单时 `↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`）。每轮提示符上方显示**状态栏**：`⏵ 模式 · 模型 · 目录 · token 用量`。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
+交互输入：输入 `/`（兼容全角 `／`）自动弹出**命令菜单**（**ANSI 原地渲染**：`↑`/`↓` 让 `>` 在列表内原地移动、`→` 把选中命令填充到输入行（不执行，可继续加参数）、回车执行、`Esc` 关闭、继续输入即过滤；**数字键 1-9 直接执行**；老式终端乱码时设 `"tuiAnsi": false` 退回滚动式）；**快捷键**：`Esc`（空输入时）撤回最近一轮对话（连按逐轮回退）、`Tab`（输入非 `/` 开头时）切换下一个工作模式（`/mode next`）、`Shift+Tab` 切换文件访问权限模式（strict→whitelist→full，`/access` 查看）、`Alt+M`（或 `Ctrl+Shift+M`）模式菜单、`Alt+U` 撤销、`Alt+D` 查看 diff、`Alt+N` 新建会话、`Ctrl+L` 清屏（部分终端吞 Alt 时用 Ctrl+Shift 组合）；菜单内 `Shift+Tab` 反向循环选择项；无菜单时 `↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`）。每轮提示符上方显示**状态栏**：`⏵ 模式 · 模型 · 目录 · token 用量`。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
 
 ## 工具一览
 
