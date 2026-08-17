@@ -1,0 +1,259 @@
+using System;
+using System.IO;
+using System.Linq;
+using CodeAgent;
+using CodeAgent.Tools;
+using Xunit;
+
+namespace CodeAgent.Tests;
+
+/// <summary>Config / ProviderOptions 的默认值与 Load/Save 边界测试（补充 ConfigTests 未覆盖的边界）。</summary>
+public class ConfigEdgeTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "codeagent-cfgedge-" + Guid.NewGuid().ToString("N"));
+
+    public ConfigEdgeTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, true); } catch { /* 忽略 */ }
+    }
+
+    private string WriteJson(string json)
+    {
+        var path = Path.Combine(_dir, "cfg-" + Guid.NewGuid().ToString("N") + ".json");
+        File.WriteAllText(path, json);
+        return path;
+    }
+
+    // ===== ProviderOptions 默认值 =====
+
+    [Fact]
+    public void ProviderOptions_HasSaneDefaults()
+    {
+        var p = new ProviderOptions();
+        Assert.Equal("openai", p.Type);
+        Assert.Equal("", p.BaseUrl);
+        Assert.Equal("", p.Model);
+        Assert.Null(p.ApiKeyEnv);
+        Assert.Null(p.ApiKey);
+        Assert.Equal(8192, p.MaxTokens);
+        Assert.Equal(0.2, p.Temperature);
+    }
+
+    // ===== AgentConfig 默认值 =====
+
+    [Fact]
+    public void AgentConfig_HasSaneDefaults()
+    {
+        var c = new AgentConfig();
+        Assert.Equal("openai", c.Provider);
+        Assert.Equal(0, c.MaxToolIterations);      // 0 = 不限制
+        Assert.Equal(160_000, c.MaxHistoryChars);
+        Assert.True(c.AllowCommands);
+        Assert.False(c.ConfirmCommands);
+        Assert.True(c.SaveSessions);
+        Assert.True(c.StreamOutput);
+        Assert.True(c.ShowToolCalls);
+        Assert.True(c.RenderMarkdown);
+        Assert.Equal("off", c.ThinkingEffort);
+        Assert.Equal("code", c.DefaultMode);
+        Assert.Equal("strict", c.FileAccess);       // 默认严格沙箱
+        Assert.Empty(c.ReadOnlyDirs);
+        Assert.Empty(c.Modes);
+        Assert.Null(c.SourceFile);
+        Assert.Equal(AgentConfig.DefaultSystemPrompt, c.SystemPrompt);
+    }
+
+    [Fact]
+    public void DefaultSystemPrompt_IsNotBlank() =>
+        Assert.False(string.IsNullOrWhiteSpace(AgentConfig.DefaultSystemPrompt));
+
+    // ===== Load 错误路径 =====
+
+    [Fact]
+    public void Load_ExplicitPathMissing_ThrowsFileNotFound()
+    {
+        var missing = Path.Combine(_dir, "nope.json");
+        Assert.Throws<FileNotFoundException>(() => AgentConfig.Load(missing));
+    }
+
+    [Fact]
+    public void Load_InvalidJson_ThrowsInvalidData()
+    {
+        var path = WriteJson("{ not valid json !!!");
+        Assert.Throws<InvalidDataException>(() => AgentConfig.Load(path));
+    }
+
+    [Fact]
+    public void Load_EmptyFile_ThrowsInvalidData()
+    {
+        var path = WriteJson("");
+        Assert.Throws<InvalidDataException>(() => AgentConfig.Load(path));
+    }
+
+    // ===== Load 容错 =====
+
+    [Fact]
+    public void Load_UnknownFields_AreIgnored()
+    {
+        var path = WriteJson("""{ "provider": "x", "noSuchField": 123, "another": [1,2] }""");
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal("x", cfg.Provider);
+    }
+
+    [Fact]
+    public void Load_PartialJson_KeepsDefaults()
+    {
+        var path = WriteJson("""{ "provider": "qwen" }""");
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal("qwen", cfg.Provider);
+        Assert.Equal(160_000, cfg.MaxHistoryChars); // 未写字段保持默认
+        Assert.Equal("strict", cfg.FileAccess);
+    }
+
+    [Fact]
+    public void Load_PropertyNameIsCaseInsensitive()
+    {
+        var path = WriteJson("""{ "PROVIDER": "deepseek", "DefaultMode": "plan" }""");
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal("deepseek", cfg.Provider);
+        Assert.Equal("plan", cfg.DefaultMode);
+    }
+
+    [Fact]
+    public void Load_ToleratesCommentsAndTrailingComma()
+    {
+        var path = WriteJson("""
+        { // 注释
+        "provider": "ollama",
+        "modes": [ { "name": "fix", }, ],
+        }
+        """);
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal("ollama", cfg.Provider);
+        Assert.Single(cfg.Modes);
+        Assert.Equal("fix", cfg.Modes[0].Name);
+    }
+
+    [Fact]
+    public void Load_SetsSourceFile()
+    {
+        var path = WriteJson("""{ "provider": "x" }""");
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal(Path.GetFullPath(path), cfg.SourceFile);
+    }
+
+    // ===== Load 钳制 =====
+
+    [Theory]
+    [InlineData(-5, 0)]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(200, 200)]
+    [InlineData(201, 200)]
+    [InlineData(9999, 200)]
+    public void Load_ClampsMaxToolIterations(int input, int expected)
+    {
+        var path = WriteJson($"{{\"maxToolIterations\": {input}}}");
+        Assert.Equal(expected, AgentConfig.Load(path).MaxToolIterations);
+    }
+
+    [Theory]
+    [InlineData(999, 1000)]
+    [InlineData(1000, 1000)]
+    [InlineData(20_000_000, 20_000_000)]
+    [InlineData(20_000_001, 20_000_000)]
+    public void Load_ClampsMaxHistoryChars(int input, int expected)
+    {
+        var path = WriteJson($"{{\"maxHistoryChars\": {input}}}");
+        Assert.Equal(expected, AgentConfig.Load(path).MaxHistoryChars);
+    }
+
+    // ===== Save 往返 =====
+
+    [Fact]
+    public void Save_RoundTripsFullConfig()
+    {
+        var path = Path.Combine(_dir, "full.json");
+        var cfg = new AgentConfig
+        {
+            Provider = "hitmargin",
+            Providers = new(System.StringComparer.OrdinalIgnoreCase)
+            {
+                ["hitmargin"] = new ProviderOptions { Type = "openai", Model = "tencent/hy3:free", ApiKey = "dummy", MaxTokens = 4096, Temperature = 0.1 },
+            },
+            MaxToolIterations = 42,
+            MaxHistoryChars = 50_000,
+            AllowCommands = false,
+            ConfirmCommands = true,
+            Shell = "bash",
+            SaveSessions = false,
+            StreamOutput = false,
+            ShowToolCalls = false,
+            RenderMarkdown = false,
+            ThinkingEffort = "high",
+            DefaultMode = "moddev",
+            FileAccess = "whitelist",
+            ReadOnlyDirs = ["D:/x", "D:/y"],
+            Modes = [new AgentModeConfig { Name = "fix", Description = "d", SystemPrompt = "p", Tools = ["read_file"] }],
+            SystemPrompt = "自定义系统提示",
+        };
+        AgentConfig.Save(cfg, path);
+
+        var loaded = AgentConfig.Load(path);
+        Assert.Equal("hitmargin", loaded.Provider);
+        Assert.Equal("tencent/hy3:free", loaded.Providers["hitmargin"].Model);
+        Assert.Equal(4096, loaded.Providers["hitmargin"].MaxTokens);
+        Assert.Equal(0.1, loaded.Providers["hitmargin"].Temperature);
+        Assert.Equal(42, loaded.MaxToolIterations);
+        Assert.Equal(50_000, loaded.MaxHistoryChars);
+        Assert.False(loaded.AllowCommands);
+        Assert.True(loaded.ConfirmCommands);
+        Assert.Equal("bash", loaded.Shell);
+        Assert.False(loaded.SaveSessions);
+        Assert.False(loaded.StreamOutput);
+        Assert.False(loaded.ShowToolCalls);
+        Assert.False(loaded.RenderMarkdown);
+        Assert.Equal("high", loaded.ThinkingEffort);
+        Assert.Equal("moddev", loaded.DefaultMode);
+        Assert.Equal("whitelist", loaded.FileAccess);
+        Assert.Equal(2, loaded.ReadOnlyDirs.Count);
+        Assert.Equal("fix", loaded.Modes[0].Name);
+        Assert.Equal(new[] { "read_file" }, loaded.Modes[0].Tools);
+        Assert.Equal("自定义系统提示", loaded.SystemPrompt);
+    }
+
+    [Fact]
+    public void Save_ToMissingDirectory_Throws()
+    {
+        var bad = Path.Combine(_dir, "no", "such", "dir", "cfg.json");
+        Assert.ThrowsAny<IOException>(() => AgentConfig.Save(new AgentConfig(), bad));
+    }
+
+    // ===== FileAccess / ReadOnlyDirs 与 Workspace 联动 =====
+
+    [Fact]
+    public void Workspace_IgnoresBlankReadOnlyDirs()
+    {
+        // 空白项被忽略：只保留有效项（不断言具体路径值，避免 Windows/Linux 路径分隔符差异）
+        var ws = new Workspace(_dir, new[] { "", "   ", "D:/real" }, "whitelist");
+        Assert.Single(ws.ReadOnlyRoots);
+    }
+
+    [Fact]
+    public void Workspace_UnknownFileAccess_IsStrictLike()
+    {
+        // 未知权限值（如 "admin"）不应意外放开：不 full、不 whitelist，等价 strict
+        var ws = new Workspace(_dir, new[] { Path.Combine(Path.GetTempPath(), "ext") }, "admin");
+        Assert.False(ws.FullAccess);
+        Assert.Throws<ToolException>(() => ws.ResolveRead(Path.Combine("..", "ext", "x.txt")));
+    }
+
+    [Fact]
+    public void Workspace_FileAccessCaseInsensitive()
+    {
+        Assert.True(new Workspace(_dir, null, "FULL").FullAccess);
+        Assert.False(new Workspace(_dir, null, "Whitelist").FullAccess); // whitelist 不是 full
+    }
+}
