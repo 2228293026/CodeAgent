@@ -271,7 +271,7 @@ internal static class Program
         while (true)
         {
             if (!skipStatusBar)
-                PrintStatusBar(opts, agent, config.ThinkingEffort);
+                PrintStatusBar(opts, agent, config.ThinkingEffort, config.ContextWindow);
             skipStatusBar = false;
             var line = InputLine.Read(inlinePrompt ?? PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
             inlinePrompt = null;
@@ -557,16 +557,18 @@ internal static class Program
         }
     }
 
-    /// <summary>状态栏：模式 · 模型 · 目录 · 上下文总量 · 思考强度（每轮提示符前显示）——灰色。</summary>
-    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort)
+    /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
+    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow)
     {
         var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
+        // ctx：模型实际收到的上下文规模；配置了 contextWindow 时附窗口占比，便于判断何时 /compact
+        var ctx = contextWindow > 0
+            ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(agent.ContextTokens, contextWindow)}%)"
+            : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        // 状态栏显示单独一次对话（上一回合）的 token 用量 + 当前上下文规模（ctx，模型实际收到的
-        // prompt_tokens，/clear /resume 后为估算值）；会话累计消耗见 /stats
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out · ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}{think}");
+            $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out · {ctx}{think}");
         SafeColor.Reset();
     }
 
@@ -786,7 +788,7 @@ internal static class Program
                 Console.WriteLine($"Model    : {opts.Model}");
                 Console.WriteLine($"BaseUrl  : {opts.BaseUrl}");
                 Console.WriteLine($"ApiKey   : {(string.IsNullOrEmpty(opts.ApiKey) ? $"env[{opts.ApiKeyEnv ?? "?"}]" : "****")}");
-                Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}");
+                Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {(config.ContextWindow > 0 ? $"{config.ContextWindow:N0}" : "未知")}");
                 Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}");
                 Console.WriteLine($"工具日志 : {(config.ShowToolCalls ? "on" : "off")}   流式输出: {(config.StreamOutput ? "on" : "off")}");
                 break;

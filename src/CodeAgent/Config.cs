@@ -54,6 +54,10 @@ public sealed class AgentConfig
     /// <summary>历史消息总字符上限，超过后从最旧处截断/裁剪。</summary>
     public int MaxHistoryChars { get; set; } = 160_000;
 
+    /// <summary>模型上下文窗口大小（token），用于状态栏 ctx 百分比显示；0 = 未知，只显示绝对值。
+    /// 各模型不同（如 32k/128k/200k/1M），按所用模型填写。</summary>
+    public int ContextWindow { get; set; } = 0;
+
     /// <summary>是否允许 run_command 执行命令。</summary>
     public bool AllowCommands { get; set; } = true;
 
@@ -176,6 +180,7 @@ public sealed class AgentConfig
             // MaxHistoryChars 过大导致历史永不裁剪、请求体无限膨胀（OOM）。
             cfg.MaxToolIterations = Math.Clamp(cfg.MaxToolIterations, 0, 200);
             cfg.MaxHistoryChars = Math.Clamp(cfg.MaxHistoryChars, 1_000, 20_000_000);
+            cfg.ContextWindow = Math.Clamp(cfg.ContextWindow, 0, 10_000_000);
             return cfg;
         }
         catch (JsonException ex)

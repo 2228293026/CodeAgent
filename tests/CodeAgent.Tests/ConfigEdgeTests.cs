@@ -170,6 +170,24 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal(expected, AgentConfig.Load(path).MaxHistoryChars);
     }
 
+    [Fact]
+    public void ContextWindow_DefaultsToZero()
+    {
+        Assert.Equal(0, new AgentConfig().ContextWindow); // 0 = 未知，仅显示绝对值
+    }
+
+    [Theory]
+    [InlineData(-5, 0)]
+    [InlineData(0, 0)]
+    [InlineData(131072, 131072)]
+    [InlineData(1_000_000, 1_000_000)]
+    [InlineData(10_000_001, 10_000_000)]
+    public void Load_ClampsContextWindow(int input, int expected)
+    {
+        var path = WriteJson($"{{\"contextWindow\": {input}}}");
+        Assert.Equal(expected, AgentConfig.Load(path).ContextWindow);
+    }
+
     // ===== Save 往返 =====
 
     [Fact]
@@ -185,6 +203,7 @@ public class ConfigEdgeTests : IDisposable
             },
             MaxToolIterations = 42,
             MaxHistoryChars = 50_000,
+            ContextWindow = 131_072,
             AllowCommands = false,
             ConfirmCommands = true,
             Shell = "bash",
@@ -208,6 +227,7 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal(0.1, loaded.Providers["hitmargin"].Temperature);
         Assert.Equal(42, loaded.MaxToolIterations);
         Assert.Equal(50_000, loaded.MaxHistoryChars);
+        Assert.Equal(131_072, loaded.ContextWindow);
         Assert.False(loaded.AllowCommands);
         Assert.True(loaded.ConfirmCommands);
         Assert.Equal("bash", loaded.Shell);
