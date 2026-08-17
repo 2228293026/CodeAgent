@@ -362,7 +362,13 @@ public static class InputLine
 
         Console.Write(prompt);
         if (!string.IsNullOrEmpty(initial))
+        {
             Console.Write(initial); // 预填文本也要显示出来
+            // 预填可能多行（取消回合回填的多行草稿）：重绘基线必须按实际行数初始化，
+            // 否则首个按键重绘时 lastInputLines=1 / lastCursorLine=0，会在预填块下方再画一份重复块
+            lastInputLines = 1 + CountNewlines(initial);
+            lastCursorLine = CountNewlines(initial); // 光标停在预填末尾（末行）
+        }
 
         // —— 绘制助手（局部函数） ——
 
@@ -776,6 +782,16 @@ public static class InputLine
                         Remember(submit);
                         return submit;
                     }
+                    if (menuOpen)
+                    {
+                        // 菜单打开但未选中任何项：关闭菜单，按原输入提交。
+                        // 必须优先于粘贴检测——否则快速输入时 Enter 会被误判为粘贴插入 \n（逻辑冲突）
+                        CloseMenu();
+                        Console.WriteLine();
+                        var raw = buf.Text;
+                        Remember(raw);
+                        return raw;
+                    }
                     // 粘贴多行内容：缓冲未空或键快速连续到达（粘贴流）时，换行是内容的一部分，插入而非提交。
                     // Windows 终端粘贴是分批注入，首个 \r 到达时后续字符可能尚未进入缓冲区，
                     // 仅靠 KeyAvailable 不可靠，需结合 ReadKey 等待时间（<30ms=粘贴流）判定。
@@ -852,15 +868,18 @@ public static class InputLine
                     {
                         MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
                     }
-                    else if (1 + CountNewlines(buf.Text) > 1 && buf.MoveLineUp())
+                    else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
                     {
-                        // 多行输入：↑ 在行内上移光标（不切换历史——历史切换会替换整个输入，逻辑错误）
-                        RedrawInput();
+                        // 多行输入且未在浏览历史：↑ 只做行内上移（已在首行行首则不移动）。
+                        // 正在浏览历史时（idx < session.Count）必须继续回溯历史，
+                        // 即使历史条目是多行文本——否则多行条目会把 ↑ 劫持成光标移动（回归）
+                        if (buf.MoveLineUp())
+                            RedrawInput();
                     }
                     else
                     {
                         if (menuOpen)
-                            CloseMenu(); // 0 匹配的菜单无意义：关闭后浏览历史
+                            break; // 0 匹配的菜单：保持空态提示，不关闭也不浏览历史（Esc 或继续输入关闭）
                         if (idx > 0)
                         {
                             if (draft is null)
@@ -877,9 +896,10 @@ public static class InputLine
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
                     }
-                    else if (1 + CountNewlines(buf.Text) > 1)
+                    else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
                     {
-                        // 多行输入：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入，逻辑错误）
+                        // 多行输入且未在浏览历史：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入）。
+                        // 正在浏览历史时（idx < session.Count）↓ 一律前进历史，即使条目是多行文本
                         if (!inputExpanded && 1 + CountNewlines(buf.Text) > 3)
                             inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
                         else
@@ -889,7 +909,7 @@ public static class InputLine
                     else
                     {
                         if (menuOpen)
-                            CloseMenu();
+                            break; // 0 匹配的菜单：保持空态提示，不关闭也不浏览历史（Esc 或继续输入关闭）
                         if (idx < session.Count)
                         {
                             idx++;
@@ -909,12 +929,13 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.Tab when (key.Modifiers & ConsoleModifiers.Shift) != 0:
-                    // Shift+Tab：菜单内反向循环选择；菜单外切换到下一个模式
+                    // Shift+Tab：菜单内（多项时）反向循环选择；菜单外或菜单仅 1 项时切换模式。
+                    // 仅 1 项时循环无意义，切换模式才是用户意图，避免按键静默失效
                     if (menuOpen && menuItems.Count > 1)
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
                     }
-                    else if (!menuOpen)
+                    else
                     {
                         CloseMenu();
                         Console.WriteLine();
@@ -945,8 +966,10 @@ public static class InputLine
 
                 case ConsoleKey.D1 or ConsoleKey.D2 or ConsoleKey.D3 or ConsoleKey.D4 or ConsoleKey.D5
                     or ConsoleKey.D6 or ConsoleKey.D7 or ConsoleKey.D8 or ConsoleKey.D9:
-                    // 命令菜单：数字键直接执行（1-9）；模式菜单不拦截数字（关闭并按普通输入，避免误触发切换）
-                    if (menuOpen && !modePicker && menuItems.Count > 0)
+                    // 命令菜单：数字键直接执行（1-9）；模式菜单不拦截数字（关闭并按普通输入，避免误触发切换）。
+                    // 输入已完整匹配某命令（如 /model）时数字视为参数输入，不再劫持（要执行直接按 Enter）
+                    if (menuOpen && !modePicker && menuItems.Count > 0
+                        && !menuItems.Any(m => m.Name.Equals(buf.Text, StringComparison.OrdinalIgnoreCase)))
                     {
                         var n = key.Key - ConsoleKey.D1 + 1;
                         // 只对可见窗口内的项生效：菜单滚动后窗口外（如第 9 项）不可见，不应被数字键触发
@@ -990,7 +1013,24 @@ public static class InputLine
                     }
                     else
                     {
-                        // ESC（空输入）：撤回最后一条已发送的消息
+                        // ESC（空输入）：撤回最后一条已发送的消息。
+                        // 二次确认防误触——连按 Esc 本会从"关菜单/清输入"一路滑到"撤回"（有副作用）
+                        var confirm = promptPlain + "(再按 Esc 撤回上一条消息，其他键继续)";
+                        if (ansiOk)
+                            Console.Write("\r\x1b[2K" + confirm);
+                        else
+                            Console.Write("\r" + confirm);
+                        var confirmKey = Console.ReadKey(intercept: true);
+                        if (confirmKey.Key != ConsoleKey.Escape)
+                        {
+                            // 取消确认：恢复输入行，按键交给主循环继续处理
+                            pendingKey = confirmKey;
+                            RedrawInput();
+                            break;
+                        }
+                        if (ansiOk)
+                            Console.Write("\r\x1b[2K");
+                        Console.WriteLine();
                         return RecallMarker;
                     }
                     break;
@@ -999,23 +1039,23 @@ public static class InputLine
                     OpenMenu(true); // Alt+M / Ctrl+Shift+M：模式选择菜单
                     break;
 
-                case ConsoleKey.U when IsShortcut(key):
+                case ConsoleKey.U when IsShortcut(key) && !menuOpen:
                     CloseMenu();
                     Console.WriteLine();
                     Remember("/undo");
-                    return "/undo"; // Alt+U / Ctrl+Shift+U：撤销最近一次修改
+                    return "/undo"; // Alt+U / Ctrl+Shift+U：撤销最近一次修改（菜单打开时不触发，避免过滤输入时误触）
 
-                case ConsoleKey.D when IsShortcut(key):
+                case ConsoleKey.D when IsShortcut(key) && !menuOpen:
                     CloseMenu();
                     Console.WriteLine();
                     Remember("/diff");
-                    return "/diff"; // Alt+D / Ctrl+Shift+D：查看最近修改的 diff
+                    return "/diff"; // Alt+D / Ctrl+Shift+D：查看最近修改的 diff（菜单打开时不触发）
 
-                case ConsoleKey.N when IsShortcut(key):
+                case ConsoleKey.N when IsShortcut(key) && !menuOpen:
                     CloseMenu();
                     Console.WriteLine();
                     Remember("/clear");
-                    return "/clear"; // Alt+N / Ctrl+Shift+N：新建会话（清空历史）
+                    return "/clear"; // Alt+N / Ctrl+Shift+N：新建会话（清空历史）（菜单打开时不触发）
 
                 case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
                     try { Console.Clear(); } catch { /* 忽略 */ }

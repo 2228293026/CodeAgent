@@ -146,17 +146,16 @@ public class ShellRunnerTests
     }
 
     [Fact]
-    public void BuildShellCommand_IsDeterministicForBash()
+    public async Task BuildShellCommand_IsDeterministicForBash()
     {
         // 通过执行验证 bash 命令构建结果：-lc 前缀 + 命令原样传递
         // （间接验证：之前 Linux CI 上单引号包裹的命令被拆坏的问题不再出现）
-        var (_, output) = ShellRunner.RunAsync(
+        var (_, output) = await ShellRunner.RunAsync(
             "bash",
             "echo 'single quoted arg'",
             System.IO.Path.GetTempPath(),
             30,
-            CancellationToken.None)
-            .GetAwaiter().GetResult();
+            CancellationToken.None);
 
         Assert.Contains("single quoted arg", output);
     }

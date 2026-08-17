@@ -443,7 +443,7 @@ public sealed class Agent
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
 
-    /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens。
+    /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens（会话全部口径）。
     /// 先换到输入行下方独立一行（spinner 专属行），\r 只更新该行，不覆盖输入框。</summary>
     private void ShowSpinner()
     {
@@ -488,7 +488,7 @@ public sealed class Agent
     {
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
-        var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
+        var total = TotalInputTokens + TotalOutputTokens + _streamTokens; // 会话累计口径（与摘要行一致）
         var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
         if (!_reasoningShown)
         {

@@ -394,7 +394,8 @@ internal static class Program
         }
     }
 
-    /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。</summary>
+    /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
+    /// token 显示会话累计（Total*），与状态栏/定格行口径一致。</summary>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
@@ -402,7 +403,7 @@ internal static class Program
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
-            $"{TextUtil.FormatElapsed(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache} ──");
+            $"{TextUtil.FormatElapsed(elapsed)} {agent.TotalInputTokens:N0} in / {agent.TotalOutputTokens:N0} out tok{think}{cache} ──");
         SafeColor.Reset();
     }
 
@@ -411,10 +412,11 @@ internal static class Program
     {
         var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        var total = agent.TotalInputTokens + agent.TotalOutputTokens;
+        // 状态栏显示单独一次对话（上一回合）的 token 用量，与回合摘要行 in/out 格式一致；
+        // 会话累计消耗见摘要行与 /stats
         Console.WriteLine(
             $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
-            $"{TextUtil.CompactTokenCount(total)}/1M tok ({TextUtil.PercentOf(total, 1_000_000)}%){think}");
+            $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out tok{think}");
         SafeColor.Reset();
     }
 
