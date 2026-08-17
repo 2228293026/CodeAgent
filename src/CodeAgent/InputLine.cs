@@ -510,9 +510,8 @@ public static class InputLine
                 menuOffset = Math.Max(0, menuItems.Count - menuShown);
             var above = menuShown + 3; // header + 项 + more/空态行 + 空行
             var sb = new StringBuilder();
-            // 菜单块始终渲染在输入行上方：不推动输入行、不触发滚动。
-            // （30 行窗口下输入行在底部（CursorTop 29）时，下方放不下 11 行的块，
-            //   溢出滚动导致输出暴增 = 卡顿，滚动错位 = 块叠加）
+            // 菜单块绘制在输入行正上方（块空间已由 ResizeMenuSpace 用 IL/DL 腾出），
+            // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大
             sb.Append($"\x1b[{above}A\x1b[1G");
             sb.AppendLine(Fit(Header()) + "\x1b[K");
             if (menuItems.Count == 0)
@@ -547,16 +546,12 @@ public static class InputLine
                 ? $"  {menuItems[listIndex].Name,-16} {menuItems[listIndex].Desc}"
                 : $"  {visibleRow + 1}) {menuItems[listIndex].Name,-16} {menuItems[listIndex].Desc}";
 
-        // 擦除菜单块（rows 行），回到输入行——单次写入
+        // 关闭菜单块（rows 行）：整块删除（DL），输入行上移回到原位，屏幕不留残影
         void EraseMenuAnsi(int rows)
         {
             var sb = new StringBuilder();
             if (rows > 0)
-                sb.Append($"\x1b[{rows}A"); // 0 行不上移：CSI 参数 0 会被终端按 1 处理，多移一行
-            for (int i = 0; i < rows; i++)
-            {
-                sb.Append("\r\x1b[K\x1b[1B"); // \r 回列首再 EL：EL 只清「光标→行尾」，光标停在输入文本末尾列时菜单行左侧会残留
-            }
+                sb.Append($"\x1b[{rows}A\x1b[{rows}M"); // 上移到块顶整块删除（0 行保护：CSI 参数 0 被按 1 处理）
             sb.Append("\x1b[1G");
             sb.Append(InputText());
             sb.Append("\x1b[K");
@@ -657,6 +652,23 @@ public static class InputLine
                 PrintListScroll();
         }
 
+        /// <summary>调整菜单块高度（menuRows → newAbove）：在块顶插入/删除行差（IL/DL 序列）。
+        /// 输入行随块整体移动，块上方的屏幕内容（横幅/历史输出）不被覆盖——
+        /// 曾用「上移后整块覆盖重绘」，菜单开在屏幕上部时会吃掉上方内容，收起后留下一片空白。
+        /// IL/DL 是单条转义序列，由终端内部滚动缓冲，无逐行重绘开销。</summary>
+        void ResizeMenuSpace(int newAbove)
+        {
+            if (newAbove == menuRows)
+                return;
+            if (menuRows > 0)
+                Console.Write($"\x1b[{menuRows}A");  // 当前块顶
+            Console.Write(newAbove > menuRows
+                ? $"\x1b[{newAbove - menuRows}L"     // 扩高：块顶插入空行，下方内容（含输入行）下移
+                : $"\x1b[{menuRows - newAbove}M");   // 缩高：块顶删除行差，下方内容上移
+            Console.Write($"\x1b[{newAbove}B");      // 回到（移动后的）输入行
+            menuRows = newAbove;
+        }
+
         void RefreshMenu()
         {
             var pat = NormalizeCommandFilter(buf.Text);
@@ -673,10 +685,8 @@ public static class InputLine
                     menuIndex = menuItems.Count - 1;
                 if (ansiOk)
                 {
-                    // 仅当菜单已绘制过才擦除（首次打开直接建立，避免擦掉状态栏等上方内容）；
-                    // 擦除高度取已绘制与新块最大值（过滤变宽时不覆盖上方）
-                    if (menuRows > 0)
-                        EraseMenuAnsi(Math.Max(menuRows, Math.Min(menuItems.Count, MenuMaxRows) + 3));
+                    // 先调块高（IL/DL 原地插/删行，上方内容不被覆盖），再整块重绘内容
+                    ResizeMenuSpace(Math.Min(menuItems.Count, MenuMaxRows) + 3);
                     PrintListAnsi();
                 }
                 else if (!menuListShown)
@@ -708,6 +718,7 @@ public static class InputLine
             if (picker)
             {
                 menuItems = [.. modes ?? []];
+                ResizeMenuSpace(Math.Min(menuItems.Count, MenuMaxRows) + 3); // 与命令菜单同一套插行逻辑
                 PrintMenu();
                 lastFilter = "/";
             }
