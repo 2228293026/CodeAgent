@@ -166,12 +166,12 @@ public class RemainingEdgeTests
     }
 
     [Fact]
-    public void Modes_Find_CustomOverridesBuiltinName()
+    public void Modes_Find_BuiltinName_WinsOverCustom()
     {
-        // 自定义模式与内置同名：自定义优先（Build 追加在后，Find 取第一个匹配——内置在前）
+        // 自定义模式与内置同名：内置在前，Find 取第一个匹配 → 内置 plan 胜出（自定义需换名）
         var cfg = new AgentConfig { Modes = [new AgentModeConfig { Name = "plan", Description = "自定义 plan" }] };
         var found = Modes.Find("plan", cfg);
-        Assert.NotNull(found);
+        Assert.Equal("规划模式：只读分析项目，输出实施计划，不修改任何文件", found.Description); // 内置描述，非「自定义 plan」
     }
 
     [Fact]

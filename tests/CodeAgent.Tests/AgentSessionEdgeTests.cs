@@ -144,8 +144,8 @@ public class AgentSessionEdgeTests : IDisposable
         await agent.RunAsync("x", CancellationToken.None);
 
         agent.SaveSession("a/b:?*");
-        var file = Path.Combine(SessionDir, "a_b___ .json".Replace(" ", "")); // 具体 sanitize 结果
         // 只验证：至少生成了某个 .json 且没有目录穿越（a/ 不被当成子目录）
         Assert.Single(Directory.GetFiles(SessionDir, "*.json"));
+        Assert.False(Directory.Exists(Path.Combine(SessionDir, "a")));
     }
 }

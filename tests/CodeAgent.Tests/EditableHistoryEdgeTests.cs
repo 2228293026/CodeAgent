@@ -125,8 +125,7 @@ public class EditableHistoryEdgeTests : IDisposable
         l.SetInitial("abcdef");
         l.MoveLeft(); l.MoveLeft(); l.Backspace(); l.Insert('z');
         l.Home(); l.Delete(); l.End(); l.MoveRight(); l.Backspace();
-        Assert.InRange(l.Cursor, 0, l.Text.Length);
-        Assert.Equal(l.Text.Length, l.Text.Length); // 语义占位：验证不越界
+        Assert.InRange(l.Cursor, 0, l.Text.Length); // 混合操作后光标仍在 [0, Length]
     }
 
     [Fact]

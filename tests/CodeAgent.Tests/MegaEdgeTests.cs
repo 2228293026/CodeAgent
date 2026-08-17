@@ -89,7 +89,7 @@ public class MegaEdgeTests
     [InlineData(0.5, "500ms")]
     [InlineData(0.999, "999ms")]
     [InlineData(1, "1.0s")]
-    [InlineData(2.25, "2.2s")]            // 2.25 的 double 表示略小于 2.25 → F1 得 "2.2"
+    [InlineData(2.25, "2.2s")]            // 恰在 0.05 中点：.NET Core 3+ 格式化按 half-to-even 舍入 → 2.2
     public void FormatDuration_Cases(double seconds, string expected) =>
         Assert.Equal(expected, TextUtil.FormatDuration(TimeSpan.FromSeconds(seconds)));
 

@@ -143,7 +143,8 @@ public class FinalWaveTests : IDisposable
         // 相对白名单落在工作区内：本来就是工作区的一部分，白名单无额外意义
         var ws = new Workspace(_dir, new[] { "sub" }, "whitelist");
         Assert.Equal(ws.Resolve("sub/x.txt"), ws.ResolveRead("sub/x.txt"));
-        Assert.Empty(ws.ReadOnlyRoots.Where(r => !r.StartsWith(Path.GetFullPath(_dir), StringComparison.OrdinalIgnoreCase)).ToList() is var outers ? outers : []);
+        // 相对白名单解析后落在工作区内：不出现在白名单根列表的外部项里
+        Assert.All(ws.ReadOnlyRoots, r => r.StartsWith(Path.GetFullPath(_dir), StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
