@@ -590,7 +590,8 @@ public sealed class Agent
                 while (!cts.IsCancellationRequested)
                 {
                     var f = SpinnerFrames[frame++ % SpinnerFrames.Length];
-                    var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
+                    // 本回合口径：/clear 后新对话从 0 起（会话累计在 /stats），与状态栏/回合摘要一致
+                    var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
                     var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
                     // 显示实际用时与 token（而非"思考中"），实时更新。
                     // 取锁后再查一次取消：ClearSpinner/FinalizeSpinner 在锁内先取消再清行，
@@ -626,7 +627,8 @@ public sealed class Agent
     {
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
-        var total = TotalInputTokens + TotalOutputTokens + _streamTokens; // 会话累计口径（与摘要行一致）
+        // 本回合口径：与本回合摘要行/状态栏一致（会话累计见 /stats）
+        var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
         var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
         lock (ConsoleLock)
         {
