@@ -746,14 +746,6 @@ public static class InputLine
             }
             if (menuOpen && !modePicker)
             {
-                // 输入不再是任何命令的前缀（打错字 / 完整命令后追加参数）：关闭菜单，
-                // 而不是常驻一块「无匹配」提示；Tab 手动打开的无匹配反馈不受影响
-                if (!IsCommandPrefix(buf.Text))
-                {
-                    CloseMenu();
-                    RedrawInput();
-                    return;
-                }
                 var pat = NormalizeCommandFilter(buf.Text);
                 if (pat != lastFilter)
                     RefreshMenu();
@@ -1110,9 +1102,9 @@ public static class InputLine
                         buf.Insert(key.KeyChar);
                         draft = null; // 输入使草稿失效
                         OnTextChanged();
-                        // 自动弹出仅在过滤仍有命中时：打错字不会弹出死菜单；
-                        // Tab 手动打开不受限（显式操作应给出无匹配反馈）
-                        if (!modePicker && SlashLike(buf.Text) && !menuOpen && IsCommandPrefix(buf.Text))
+                        // 任何斜杠输入都弹菜单：无匹配块本身是打字状态的实时反馈（打错字可见），
+                        // 菜单常驻到 ESC/Enter 或输入脱离斜杠才关闭
+                        if (!modePicker && SlashLike(buf.Text) && !menuOpen)
                             OpenMenu(false);
                     }
                     break;
@@ -1140,10 +1132,6 @@ public static class InputLine
     /// 过滤与「数字键视为参数」的完整匹配判定都必须用它，直接用原始文本会漏掉全角输入。</summary>
     internal static string NormalizeCommandFilter(string text) =>
         text.StartsWith('／') ? "/" + text[1..] : text;
-
-    /// <summary>输入是否仍为某命令的前缀（决定命令菜单是否该保持打开；空串/仅 / 视为全量前缀）。</summary>
-    internal static bool IsCommandPrefix(string text) =>
-        Commands.Any(c => c.Name.StartsWith(NormalizeCommandFilter(text), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// 数字键 1-9 在命令菜单中对应的列表下标。

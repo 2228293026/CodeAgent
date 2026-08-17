@@ -146,17 +146,4 @@ public class InputLineCommandsTests
     [InlineData("", "")]
     public void NormalizeCommandFilter_ConvertsLeadingFullWidthSlash(string input, string expected) =>
         Assert.Equal(expected, InputLine.NormalizeCommandFilter(input));
-
-    [Theory]
-    [InlineData("/", true)]      // 全量前缀：所有命令都命中
-    [InlineData("/m", true)]     // /mode /model 等
-    [InlineData("/MODE", true)]  // 前缀匹配忽略大小写
-    [InlineData("／model", true)]// 全角归一化后命中
-    [InlineData("/model", true)] // 恰等完整命令：自身即前缀（菜单保留唯一项）
-    [InlineData("/model ", false)]// 追加参数（空格）：进入参数输入，菜单应关闭让位
-    [InlineData("/modes", false)]// 不是任何命令的前缀
-    [InlineData("／zzz", false)]
-    [InlineData("model", false)] // 不以斜杠开头
-    public void IsCommandPrefix_OnlyWhileInputIsACommandPrefix(string input, bool expected) =>
-        Assert.Equal(expected, InputLine.IsCommandPrefix(input));
 }
