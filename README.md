@@ -12,13 +12,15 @@
 - 🖥️ 工具调用可视化：执行工具时实时显示动作与耗时，`run_command` 附带输出预览（`"showToolCalls": false` 可关闭）
 - 🔁 自动重试：429 / 5xx / 连接失败自动指数退避重试（最多 2 次），流式已输出文本则不重试
 - 🧠 上下文自动摘要：历史超限时先用 LLM 压缩最早对话，失败才回退丢弃旧消息
-- 🎭 多工作模式：`/mode` 切换 code / plan / explain / review，只读模式自动隐藏并拦截写工具
+- 🎭 多工作模式：`/mode` 切换 code / plan / explain / review / debug / refactor / test / doc，只读模式自动隐藏并拦截写工具
+- 🎮 ADOFAI mod 适配：检测到 mod 项目自动注入开发上下文与 moddev / harmony / assetbundle 模式
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
 - ⌨️ 终端 TUI：命令历史（↑/↓，持久化）、TAB 补全、行内编辑、Ctrl+L 清屏、`[模式]` 提示符
 - 🔧 内置 10 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `bash` / `powershell` / `stop`（命令类工具自动选用 Git Bash / PowerShell）
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
-- 🛡️ 工作区沙箱：文件工具无法访问工作区之外；命令执行可选逐个确认
+- 🛡️ 工作区沙箱：文件工具默认无法访问工作区之外；命令执行可选逐个确认
+- 🔐 文件访问分级：strict（默认沙箱）/ whitelist（沙箱 + 只读白名单）/ full（完全放开），`/access` 或 Shift+Tab 实时切换并持久化
 - 📝 会话日志：每轮对话写入 `.codeagent/sessions/*.jsonl`，可回看
 - 💬 两种用法：一次请求 `codeagent "任务"`，或交互式 REPL
 
@@ -58,7 +60,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
 {
   "provider": "deepseek",                 // 使用 Providers 中哪个键
   "providers": {
-    "openai":   { "type": "openai",   "baseUrl": "https://api.openai.com/v1", "model": "gpt-4o", "apiKeyEnv": "OPENAI_API_KEY" },
+    "openai":   { "type": "openai",   "baseUrl": "https://api.openai.com/v1", "model": "gpt-4o", "apiKeyEnv": "OPENAI_API_KEY", "maxTokens": 8192, "temperature": 0.2 },
     "deepseek": { "type": "openai",   "baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-chat", "apiKeyEnv": "DEEPSEEK_API_KEY" },
     "qwen":     { "type": "openai",   "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen3-coder-plus", "apiKeyEnv": "DASHSCOPE_API_KEY" },
     "ollama":   { "type": "openai",   "baseUrl": "http://localhost:11434/v1", "model": "qwen2.5-coder:7b", "apiKey": "ollama" },
@@ -70,13 +72,19 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "allowCommands": true,         // 是否允许 run_command
   "confirmCommands": false,      // 执行命令前是否逐个确认
   "shell": "",                   // cmd | powershell | bash（空 = Windows 用 cmd）
-  "saveSessions": true           // 是否记录会话日志
-  "streamOutput": true           // 流式输出模型回复（逐字打印）
-  "showToolCalls": true          // 终端实时显示工具调用过程
-  "renderMarkdown": true         // 模型回复 Markdown 渲染（代码块/标题等）
-  "tuiAnsi": true                // ANSI 原地渲染菜单（默认开启）；老式终端乱码时设 false 退回滚动式
-  "thinkingEffort": "off"        // 模型思考强度 off/low/medium/high（推理模型生效）
-  "defaultMode": "code"          // 启动时的默认工作模式（/mode 可切换）
+  "saveSessions": true,          // 是否记录会话日志
+  "sessionDir": ".codeagent/sessions",   // 会话日志目录（相对工作目录）
+  "exportDir": ".codeagent/exports",     // /export 导出目录（相对工作目录）
+  "streamOutput": true,          // 流式输出模型回复（逐字打印）
+  "showToolCalls": true,         // 终端实时显示工具调用过程
+  "renderMarkdown": true,        // 模型回复 Markdown 渲染（代码块/标题等）
+  "tuiAnsi": true,               // ANSI 原地渲染菜单（默认开启）；老式终端乱码时设 false 退回滚动式
+  "thinkingEffort": "off",       // 模型思考强度 off/low/medium/high（推理模型生效）
+  "defaultMode": "code",         // 启动时的默认工作模式（/mode 可切换）
+  "fileAccess": "strict",        // 文件访问权限：strict（沙箱）| whitelist（沙箱+只读白名单）| full（完全放开）
+  "readOnlyDirs": [],            // fileAccess=whitelist 时，工作区之外的只读目录（写工具与命令仍限工作区）
+  "systemPrompt": "",            // 自定义系统提示（留空用内置默认）
+  "modes": []                    // 自定义工作模式（见下方「自定义模式」）
 }
 ```
 
@@ -103,6 +111,36 @@ CODEGENT_PROVIDER=anthropic codeagent
 
 > 注意：`type: "openai"` 表示“OpenAI 兼容协议”，DeepSeek、通义、Ollama 等都走这个类型，只需换 `baseUrl` 和 `model`。若模型不支持 function calling（如纯文本模型），Agent 会无法工作。
 
+#### 文件访问权限
+
+文件工具默认被工作区沙箱限制（`fileAccess: "strict"`）。三种级别：
+
+| 级别 | 说明 |
+|------|------|
+| `strict`（默认） | 读写都限制在工作区内，无法访问工作区之外 |
+| `whitelist` | 工作区 + `readOnlyDirs` 只读白名单；读/搜索工具可访问白名单目录，但写工具与命令执行仍限工作区 |
+| `full` | 完全放开沙箱，所有文件可读可写（仅用于信任场景） |
+
+切换方式（无需重启，且会写回配置文件持久化）：
+
+```bash
+/access next          # 循环切换 strict → whitelist → full
+/access whitelist     # 直接指定级别
+# REPL 内 Shift+Tab 也可循环切换
+```
+
+`readOnlyDirs` 用于 mod 开发等场景——需要读取兄弟项目（如 `adofai-libs` 反编译库）但绝不允许改动它。路径可为绝对路径，相对路径按工作区解析。
+
+#### ADOFAI mod 项目自动适配
+
+当工作目录被识别为 ADOFAI（A Dance of Fire and Ice）mod 项目（根目录存在 `Info.json` 且含 `AssemblyName`/`EntryMethod`，或存在 `Assembly-CSharp.dll`）时，会自动：
+
+- 把 ADOFAI mod 开发专属上下文追加到系统提示（仅在未自定义 `systemPrompt` 时注入）；
+- 注入 `moddev` / `harmony` / `assetbundle` 三个专属工作模式（同名自定义模式优先保留）；
+- 若检测到 `AdofaiKnowledge.md` 知识库，提示 Agent 开发前先阅读。
+
+普通项目不受影响，无需任何配置。
+
 ## 使用
 
 ### 一次性任务
@@ -124,7 +162,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/models` `/thinking` `/mode` `/exit`。
+REPL 命令：`/help` `/clear` `/cls` `/model [名称]` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/export` `/stats` `/retry` `/tools` `/providers` `/models` `/history` `/thinking` `/mode` `/access` `/diag` `/exit` `/quit`。
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 
