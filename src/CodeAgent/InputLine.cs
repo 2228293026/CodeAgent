@@ -688,6 +688,13 @@ public static class InputLine
                     PrintFilterScroll(); // 过滤变化：单行匹配结果
                 }
             }
+            else
+            {
+                // 过滤结果未变（/mo→/mod 仍是同一批命令）：菜单块不重绘，
+                // 但输入行必须重画——曾在此直接跳过绘制，导致按下的字符不上屏、
+                // 屏幕停在旧输入（/m），直到过滤结果变化（如补一个空格）才一次性刷新
+                RedrawInput();
+            }
             lastFilter = pat;
         }
 
