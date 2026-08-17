@@ -551,6 +551,7 @@ internal static class Program
     private static void PrintBanner(AgentConfig config, ProviderOptions opts, AgentClass agent)
     {
         Console.WriteLine("── CodeAgent ─────────────────────────────────────────────");
+        Console.WriteLine($"  Version  : {InformationalVersion}");
         Console.WriteLine($"  Provider : {config.Provider} ({opts.Type})");
         Console.WriteLine($"  Model    : {opts.Model}");
         Console.WriteLine($"  Mode     : {agent.CurrentMode.Name}");
