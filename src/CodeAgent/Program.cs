@@ -48,6 +48,7 @@ internal static class Program
         var init = false;
         var setup = false;
         var listModels = false;
+        var continueLast = false;
         var positional = new List<string>();
 
         try
@@ -76,6 +77,10 @@ internal static class Program
                         break;
                     case "--models":
                         listModels = true;
+                        break;
+                    case "--continue":
+                        // 恢复本项目最近一次会话（会话日志由 saveSessions 每条消息自动落盘）
+                        continueLast = true;
                         break;
                     case "-v" or "--version":
                         Console.WriteLine($"codeagent {InformationalVersion}");
@@ -195,6 +200,19 @@ internal static class Program
         }
 
         var agent = new AgentClass(config, providerInst, tools);
+
+        // --continue：恢复最近会话。必须在 SetMode 之前加载——SetMode 会把 messages[0]
+        // 的旧 system 提示换成当前模式的提示词
+        if (continueLast)
+        {
+            var latest = LatestSessionLog(config);
+            if (latest is null)
+                Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+            else if (agent.LoadSessionLog(latest))
+                Console.WriteLine($"↩ 已恢复最近会话: {Path.GetFileName(latest)}");
+            else
+                Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
+        }
 
         // 应用配置的默认工作模式（如 "defaultMode": "debug"）
         agent.SetMode(Modes.Find(config.DefaultMode, config));
@@ -317,6 +335,31 @@ internal static class Program
         agent.Close();
         return 0;
     }
+
+    /// <summary>最近的会话日志文件（.jsonl，最新在前，最多 max 个）；无日志返回空表。</summary>
+    internal static List<string> RecentSessionLogs(AgentConfig config, int max = 10)
+    {
+        try
+        {
+            var dir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
+            if (!Directory.Exists(dir))
+                return [];
+            // 按最后写入时间排序（同秒滚动的 -2/-3 后缀文件名字典序不可靠）
+            return Directory.GetFiles(dir, "*.jsonl")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ThenByDescending(f => f, StringComparer.OrdinalIgnoreCase)
+                .Take(max)
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    /// <summary>最近一次会话日志路径；无日志返回 null（--continue 用）。</summary>
+    internal static string? LatestSessionLog(AgentConfig config) =>
+        RecentSessionLogs(config, 1).FirstOrDefault();
 
     private static ProviderOptions EnsureSelectedProvider(AgentConfig config)
     {
@@ -847,6 +890,34 @@ internal static class Program
                 }
                 break;
 
+            case "/resume":
+                // 恢复历史会话日志（每条消息自动落盘）；--continue 启动时自动恢复最近一次
+            {
+                var logs = RecentSessionLogs(config);
+                if (logs.Count == 0)
+                {
+                    Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+                    break;
+                }
+                if (int.TryParse(rest.Trim(), out var ridx) && ridx >= 1 && ridx <= logs.Count)
+                {
+                    if (agent.LoadSessionLog(logs[ridx - 1]))
+                    {
+                        Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(logs[ridx - 1])}");
+                        PrintConversation(agent);
+                    }
+                    else
+                        Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
+                }
+                else
+                {
+                    Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
+                    for (int i = 0; i < logs.Count; i++)
+                        Console.WriteLine($"  {i + 1}) {Path.GetFileNameWithoutExtension(logs[i])}");
+                }
+                break;
+            }
+
             case "/history":
                 PrintConversation(agent);
                 break;
@@ -1003,6 +1074,7 @@ internal static class Program
               /models          列出当前 Provider 的可用模型
               /diag            显示终端环境诊断
               /history         显示当前对话历史
+              /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
               /thinking        查看或设置思考强度（off/low/medium/high）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /access [模式]   查看或切换文件访问权限（strict/whitelist/full，next 循环切换）
@@ -1018,6 +1090,7 @@ internal static class Program
               --init               生成示例配置 codeagent.json
               --setup              交互式配置供应商并生成 codeagent.json
               --models             列出当前 Provider 的可用模型
+              --continue           恢复本项目最近一次会话（会话自动落盘到 .codeagent/sessions）
               -v, --version        显示版本号
             快捷键:
               Esc                   撤回最近一轮对话（空输入时；连按逐轮回退）

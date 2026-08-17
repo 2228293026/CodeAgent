@@ -227,6 +227,7 @@ public static class InputLine
         ("/diff", "Show diff of last change"),
         ("/save", "Save session snapshot"),
         ("/load", "Load a saved session"),
+        ("/resume", "Resume a previous session log"),
         ("/export", "Export session to Markdown"),
         ("/stats", "Show token usage stats"),
         ("/retry", "Re-run last request"),

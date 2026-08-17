@@ -15,7 +15,7 @@ public class InputLineCommandsTests
         var handled = new[]
         {
             "/help", "/clear", "/compact", "/cls", "/model", "/config", "/session", "/setup",
-            "/undo", "/diff", "/save", "/load", "/history", "/export", "/stats",
+            "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/stats",
             "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
             "/exit", "/quit", "/retry",
         };
@@ -84,7 +84,7 @@ public class InputLineCommandsTests
         var handled = new[]
         {
             "/help", "/clear", "/compact", "/cls", "/model", "/config", "/session", "/setup",
-            "/undo", "/diff", "/save", "/load", "/history", "/export", "/stats",
+            "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/stats",
             "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
             "/exit", "/quit",
         };

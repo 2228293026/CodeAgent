@@ -18,7 +18,7 @@ public sealed class Agent
     private readonly AgentContext _ctx;
     private readonly AgentConfig _config;
     private readonly List<ProviderMessage> _messages = [];
-    private readonly StreamWriter? _sessionLog;
+    private StreamWriter? _sessionLog; // 非 readonly：/clear 与恢复会话时会滚动到新日志文件
 
     public Agent(AgentConfig config, IAgentProvider provider, ToolRegistry tools)
     {
@@ -38,7 +38,7 @@ public sealed class Agent
             {
                 var dir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
                 Directory.CreateDirectory(dir);
-                SessionPath = Path.Combine(dir, $"{DateTime.Now:yyyyMMdd-HHmmss}.jsonl");
+                SessionPath = NewSessionLogPath(dir);
                 _sessionLog = new StreamWriter(SessionPath, append: true) { AutoFlush = true };
             }
             catch
@@ -49,7 +49,7 @@ public sealed class Agent
     }
 
     public AgentContext Context => _ctx;
-    public string? SessionPath { get; }
+    public string? SessionPath { get; private set; }
 
     /// <summary>本轮运行是否已把最终答复流式打印到控制台（Program 据此避免重复打印）。</summary>
     public bool StreamedLastRun { get; private set; }
@@ -107,6 +107,10 @@ public sealed class Agent
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
         // 清空后没有「上一轮」可撤回：清空起点栈，避免 ESC 撤回按过期索引误删
         _turnStarts.Clear();
+        // 新开一个日志文件：--continue 恢复最近会话时不会带回已清空的历史；
+        // 新日志先写入当前 system 提示，保持自包含
+        RollSessionLog();
+        LogMessage(_messages[0]);
     }
 
     /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
@@ -204,6 +208,112 @@ public sealed class Agent
         var dto = JsonSerializer.Deserialize<List<MessageDto>>(File.ReadAllText(path), JsonOpts)
                   ?? throw new InvalidDataException($"会话文件损坏: {path}");
         return dto.Select(FromDto).ToList();
+    }
+
+    /// <summary>从会话日志（.jsonl，每条消息自动写入）恢复对话：--continue / /resume 用。
+    /// 恢复后滚动新日志并把已恢复的消息写进去，新日志自包含（可再次被恢复）；
+    /// 开头的 system 若为日志旧值，会由随后的 SetMode 换成当前模式提示。</summary>
+    public bool LoadSessionLog(string path)
+    {
+        if (!File.Exists(path))
+            return false;
+        var msgs = new List<ProviderMessage>();
+        try
+        {
+            foreach (var line in ReadLogLines(path))
+            {
+                var m = ParseLogLine(line);
+                if (m is not null)
+                    msgs.Add(m);
+            }
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        if (msgs.Count == 0)
+            return false;
+
+        _messages.Clear();
+        _messages.AddRange(msgs);
+        if (_messages[0].Role != MessageRole.System)
+            _messages.Insert(0, new ProviderMessage { Role = MessageRole.System, Content = _config.SystemPrompt });
+        _turnStarts.Clear(); // 恢复的会话没有「上一轮」可撤回
+
+        RollSessionLog();
+        foreach (var m in _messages)
+            LogMessage(m);
+        return true;
+    }
+
+    /// <summary>解析一行会话日志（与 LogMessage 写出的字段对应）；损坏行返回 null 跳过。</summary>
+    private static ProviderMessage? ParseLogLine(string line)
+    {
+        try
+        {
+            var n = JsonNode.Parse(line) as JsonObject;
+            if (n is null || !Enum.TryParse(n["role"]?.GetValue<string>(), true, out MessageRole role))
+                return null;
+            return new ProviderMessage
+            {
+                Role = role,
+                Content = n["content"]?.GetValue<string>(),
+                ToolCalls = (n["toolCalls"] as JsonArray)?.Select(tc => new ToolCall
+                {
+                    Id = tc?["Id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+                    Name = tc?["Name"]?.GetValue<string>() ?? "unknown",
+                    ArgumentsJson = tc?["ArgumentsJson"]?.GetValue<string>() ?? "{}",
+                }).ToList(),
+                ToolCallId = n["toolCallId"]?.GetValue<string>(),
+                ToolName = n["tool"]?.GetValue<string>(),
+                IsError = n["error"]?.GetValue<bool>() ?? false,
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>读会话日志行。用 FileShare.ReadWrite 打开：日志文件可能正被本进程的
+    /// StreamWriter 追加持有，File.ReadLines 的 FileShare.Read 会与之共享冲突。</summary>
+    private static IEnumerable<string> ReadLogLines(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var sr = new StreamReader(fs);
+        string? line;
+        while ((line = sr.ReadLine()) is not null)
+            yield return line;
+    }
+
+    /// <summary>生成不重名的会话日志路径（同一秒内多次滚动时追加 -2/-3 序号）。</summary>
+    private string NewSessionLogPath(string dir)
+    {
+        var stamp = $"{DateTime.Now:yyyyMMdd-HHmmss}";
+        var path = Path.Combine(dir, stamp + ".jsonl");
+        for (int i = 2; File.Exists(path); i++)
+            path = Path.Combine(dir, $"{stamp}-{i}.jsonl");
+        return path;
+    }
+
+    /// <summary>切换到新的会话日志文件（/clear 与恢复会话后用，使日志与新历史一一对应）。</summary>
+    private void RollSessionLog()
+    {
+        if (_sessionLog is null)
+            return;
+        try { _sessionLog.Dispose(); } catch { /* 忽略 */ }
+        try
+        {
+            var dir = Path.Combine(Environment.CurrentDirectory, _config.SessionDir);
+            Directory.CreateDirectory(dir);
+            SessionPath = NewSessionLogPath(dir);
+            _sessionLog = new StreamWriter(SessionPath, append: true) { AutoFlush = true };
+        }
+        catch
+        {
+            _sessionLog = null;
+            SessionPath = null;
+        }
     }
 
     /// <summary>会话名/导出名 sanitize：非法文件名字符替换为 _（防目录穿越与非法文件名）。</summary>

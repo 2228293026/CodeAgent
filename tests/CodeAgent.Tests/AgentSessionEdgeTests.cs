@@ -35,6 +35,80 @@ public class AgentSessionEdgeTests : IDisposable
         provider,
         ToolRegistry.CreateDefault());
 
+    /// <summary>开启会话日志的 Agent（.jsonl 自动落盘），用于 --continue / /resume 恢复路径。</summary>
+    private AgentClass MakeLoggedAgent(FakeProvider provider) => new(
+        new AgentConfig
+        {
+            SaveSessions = true,
+            SessionDir = SessionDir,
+            ExportDir = ExportDir,
+            MaxToolIterations = 5,
+        },
+        provider,
+        ToolRegistry.CreateDefault());
+
+    [Fact]
+    public async Task SessionLog_RoundTrip_RestoresConversation()
+    {
+        // --continue 的基础：每条消息自动写 .jsonl，另一个 Agent 实例可完整恢复对话
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "回复甲" } };
+        var agent = MakeLoggedAgent(provider);
+        await agent.RunAsync("第一轮", CancellationToken.None);
+        provider.NextResponse = new ProviderResponse { Text = "回复乙" };
+        await agent.RunAsync("第二轮", CancellationToken.None);
+        agent.Close();
+        Assert.NotNull(agent.SessionPath);
+
+        var restored = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        Assert.True(restored.LoadSessionLog(agent.SessionPath!));
+        Assert.Equal(agent.MessageCount, restored.MessageCount);
+        Assert.Contains(restored.Messages, m => m.Role == MessageRole.User && m.Content == "第一轮");
+        Assert.Contains(restored.Messages, m => m.Role == MessageRole.Assistant && m.Content == "回复乙");
+        // 恢复的会话没有「上一轮」可撤回
+        Assert.Null(restored.UndoLastTurn());
+    }
+
+    [Fact]
+    public async Task SessionLog_Resume_RolledToNewLogFile()
+    {
+        // 恢复后滚动新日志：新文件自包含（再次恢复不依赖旧文件），旧文件保持原样
+        var agent = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        await agent.RunAsync("对话", CancellationToken.None);
+        agent.Close();
+        var firstPath = agent.SessionPath!;
+
+        var restored = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        Assert.True(restored.LoadSessionLog(firstPath));
+        Assert.NotEqual(firstPath, restored.SessionPath);
+
+        // 新日志可再次恢复（自包含）
+        var again = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        restored.Close();
+        Assert.True(again.LoadSessionLog(restored.SessionPath!));
+        Assert.Contains(again.Messages, m => m.Content == "对话");
+    }
+
+    [Fact]
+    public async Task Reset_RollsToNewSessionLog()
+    {
+        // /clear 后新开日志文件：--continue 恢复最近会话不会带回已清空的历史
+        var agent = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        await agent.RunAsync("旧对话", CancellationToken.None);
+        var firstPath = agent.SessionPath!;
+
+        agent.Reset();
+        Assert.NotEqual(firstPath, agent.SessionPath);
+
+        agent.Close();
+        var after = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        Assert.True(after.LoadSessionLog(agent.SessionPath!));
+        Assert.DoesNotContain(after.Messages, m => m.Content == "旧对话"); // 新日志不含清空前内容
+    }
+
+    [Fact]
+    public void LoadSessionLog_MissingFile_ReturnsFalse() =>
+        Assert.False(MakeAgent(new FakeProvider()).LoadSessionLog(Path.Combine(SessionDir, "nope.jsonl")));
+
     [Fact]
     public async Task SaveSession_CreatesJsonFile()
     {
