@@ -137,4 +137,26 @@ public class InputLineCommandsTests
         Assert.Contains("共 5 行", folded);
         Assert.Contains("c", folded);                  // 第 3 行保留（阈值 4 折前 3 行）
     }
+
+    [Theory]
+    [InlineData("/model", "/model")]
+    [InlineData("／model", "/model")] // 全角斜杠归一化
+    [InlineData("model", "model")]    // 无前导斜杠原样返回
+    [InlineData("／", "/")]
+    [InlineData("", "")]
+    public void NormalizeCommandFilter_ConvertsLeadingFullWidthSlash(string input, string expected) =>
+        Assert.Equal(expected, InputLine.NormalizeCommandFilter(input));
+
+    [Theory]
+    [InlineData("/", true)]      // 全量前缀：所有命令都命中
+    [InlineData("/m", true)]     // /mode /model 等
+    [InlineData("/MODE", true)]  // 前缀匹配忽略大小写
+    [InlineData("／model", true)]// 全角归一化后命中
+    [InlineData("/model", true)] // 恰等完整命令：自身即前缀（菜单保留唯一项）
+    [InlineData("/model ", false)]// 追加参数（空格）：进入参数输入，菜单应关闭让位
+    [InlineData("/modes", false)]// 不是任何命令的前缀
+    [InlineData("／zzz", false)]
+    [InlineData("model", false)] // 不以斜杠开头
+    public void IsCommandPrefix_OnlyWhileInputIsACommandPrefix(string input, bool expected) =>
+        Assert.Equal(expected, InputLine.IsCommandPrefix(input));
 }

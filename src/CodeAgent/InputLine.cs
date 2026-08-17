@@ -659,12 +659,9 @@ public static class InputLine
 
         void RefreshMenu()
         {
-            var pat = buf.Text;
-            if (pat.StartsWith('／'))
-                pat = "/" + pat[1..];
+            var pat = NormalizeCommandFilter(buf.Text);
             var newItems = Commands
                 .Where(c => c.Name.StartsWith(pat, StringComparison.OrdinalIgnoreCase))
-                .Select(c => c)
                 .ToList();
             // 仅当过滤结果真的变化时才重绘，避免 /m→/mo→/mod 每个按键都刷一块菜单
             var same = newItems.Count == menuItems.Count &&
@@ -749,9 +746,15 @@ public static class InputLine
             }
             if (menuOpen && !modePicker)
             {
-                var pat = buf.Text;
-                if (pat.StartsWith('／'))
-                    pat = "/" + pat[1..];
+                // 输入不再是任何命令的前缀（打错字 / 完整命令后追加参数）：关闭菜单，
+                // 而不是常驻一块「无匹配」提示；Tab 手动打开的无匹配反馈不受影响
+                if (!IsCommandPrefix(buf.Text))
+                {
+                    CloseMenu();
+                    RedrawInput();
+                    return;
+                }
+                var pat = NormalizeCommandFilter(buf.Text);
                 if (pat != lastFilter)
                     RefreshMenu();
                 else
@@ -997,9 +1000,10 @@ public static class InputLine
                 case ConsoleKey.D1 or ConsoleKey.D2 or ConsoleKey.D3 or ConsoleKey.D4 or ConsoleKey.D5
                     or ConsoleKey.D6 or ConsoleKey.D7 or ConsoleKey.D8 or ConsoleKey.D9:
                     // 命令菜单：数字键直接执行（1-9）；模式菜单不拦截数字（关闭并按普通输入，避免误触发切换）。
-                    // 输入已完整匹配某命令（如 /model）时数字视为参数输入，不再劫持（要执行直接按 Enter）
+                    // 输入已完整匹配某命令（如 /model 或全角 ／model）时数字视为参数输入，不再劫持
+                    //（要执行直接按 Enter）
                     if (menuOpen && !modePicker && menuItems.Count > 0
-                        && !menuItems.Any(m => m.Name.Equals(buf.Text, StringComparison.OrdinalIgnoreCase)))
+                        && !menuItems.Any(m => m.Name.Equals(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase)))
                     {
                         var n = key.Key - ConsoleKey.D1 + 1;
                         // 只对可见窗口内的项生效：菜单滚动后窗口外（如第 9 项）不可见，不应被数字键触发
@@ -1106,7 +1110,9 @@ public static class InputLine
                         buf.Insert(key.KeyChar);
                         draft = null; // 输入使草稿失效
                         OnTextChanged();
-                        if (!modePicker && SlashLike(buf.Text) && !menuOpen)
+                        // 自动弹出仅在过滤仍有命中时：打错字不会弹出死菜单；
+                        // Tab 手动打开不受限（显式操作应给出无匹配反馈）
+                        if (!modePicker && SlashLike(buf.Text) && !menuOpen && IsCommandPrefix(buf.Text))
                             OpenMenu(false);
                     }
                     break;
@@ -1129,6 +1135,15 @@ public static class InputLine
 
     /// <summary>输入是否以斜杠开头（兼容中文输入法的全角 ／）。</summary>
     private static bool SlashLike(string s) => s.StartsWith('/') || s.StartsWith('／');
+
+    /// <summary>归一化命令过滤串：前导全角 ／ 转 /（中文输入法兼容）。
+    /// 过滤与「数字键视为参数」的完整匹配判定都必须用它，直接用原始文本会漏掉全角输入。</summary>
+    internal static string NormalizeCommandFilter(string text) =>
+        text.StartsWith('／') ? "/" + text[1..] : text;
+
+    /// <summary>输入是否仍为某命令的前缀（决定命令菜单是否该保持打开；空串/仅 / 视为全量前缀）。</summary>
+    internal static bool IsCommandPrefix(string text) =>
+        Commands.Any(c => c.Name.StartsWith(NormalizeCommandFilter(text), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// 数字键 1-9 在命令菜单中对应的列表下标。
