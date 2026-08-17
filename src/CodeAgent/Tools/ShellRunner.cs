@@ -249,7 +249,10 @@ public sealed class BashTool : ITool
         if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
             return "用户已取消命令执行。";
 
+        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚 bash 对文件的改动）
+        var snapshot = UndoManager.SnapshotDir(cwd);
         var (_, output) = await ShellRunner.RunAsync("bash", command, cwd, timeout, ct, env);
+        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
         return output;
     }
 }
@@ -292,7 +295,10 @@ public sealed class PowerShellTool : ITool
 
         // Windows：无 pwsh 7 时用系统自带的 Windows PowerShell 5.1；其他平台需要 pwsh
         var shell = OperatingSystem.IsWindows() && ShellRunner.FindPwsh() is null ? "powershell" : "pwsh";
+        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚 powershell 对文件的改动）
+        var snapshot = UndoManager.SnapshotDir(cwd);
         var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct, env);
+        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
         return output;
     }
 }

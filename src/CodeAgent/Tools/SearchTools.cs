@@ -27,7 +27,7 @@ public sealed class GlobTool : ITool
             throw new ToolException("缺少必填参数 pattern");
 
         var basePath = ToolArgs.GetString(args, "path");
-        var start = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(basePath) ? null : basePath);
+        var start = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(basePath) ? null : basePath);
         if (!Directory.Exists(start))
             throw new ToolException($"目录不存在: {basePath}");
 
@@ -103,7 +103,7 @@ public sealed class GrepTool : ITool
             throw new ToolException($"正则表达式无效: {ex.Message}");
         }
 
-        var full = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(target) ? null : target);
+        var full = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(target) ? null : target);
         var sb = new StringBuilder();
         var hits = 0;
         var matchedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

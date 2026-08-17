@@ -31,7 +31,7 @@ public class ConfigTests : IDisposable
             """);
 
         var cfg = AgentConfig.Load(path);
-        Assert.Equal(1, cfg.MaxToolIterations);   // 0 → 1
+        Assert.Equal(0, cfg.MaxToolIterations);     // 0 → 0（0 = 无限，不钳到 1）
         Assert.Equal(1_000, cfg.MaxHistoryChars); // 10 → 1000
     }
 

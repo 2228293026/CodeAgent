@@ -148,6 +148,24 @@ internal static class Program
             return 0;
         }
 
+        // ADOFAI mod 项目自动适配：检测到项目特征（Info.json 入口声明或 Assembly-CSharp.dll 引用）时，
+        // 注入专属开发上下文（系统提示）与 moddev/harmony/assetbundle 工作模式。
+        // 仅当用户未自定义 systemPrompt 时追加知识；用户自定义的 modes 同名项优先保留。
+        if (AdofaiContext.Detect(Environment.CurrentDirectory))
+        {
+            if (config.SystemPrompt == AgentConfig.DefaultSystemPrompt)
+            {
+                config.SystemPrompt += "\n\n" + AdofaiContext.ExtraSystemPrompt;
+                // 知识库文件存在时给出明确路径，Agent 开发前先 read_file 阅读
+                var knowledge = AdofaiContext.FindKnowledgeBase(Environment.CurrentDirectory);
+                if (knowledge is not null)
+                    config.SystemPrompt += $"\n知识库文件: {knowledge}(开发前用 read_file 阅读)";
+            }
+            foreach (var m in AdofaiContext.ExtraModes)
+                if (!config.Modes.Any(x => x.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)))
+                    config.Modes.Add(m);
+        }
+
         // 命令行/环境变量覆盖：provider 与 model
         var envProvider = Environment.GetEnvironmentVariable("CODEGENT_PROVIDER");
         var envModel = Environment.GetEnvironmentVariable("CODEGENT_MODEL");
@@ -407,6 +425,41 @@ internal static class Program
         SafeColor.Reset();
     }
 
+    /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）。</summary>
+    private static void PrintFileAccess(string mode, bool showHint = false)
+    {
+        var desc = mode.ToLowerInvariant() switch
+        {
+            "strict" => "仅工作区可读写",
+            "whitelist" => "工作区读写 + 只读白名单目录",
+            "full" => "所有文件可读可写（完全放开）",
+            _ => mode,
+        };
+        Console.WriteLine($"权限模式: {mode}（{desc}）");
+        if (showHint)
+            Console.WriteLine("  Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定");
+    }
+
+    /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。</summary>
+    private static void PrintColoredDiff(string diff)
+    {
+        foreach (var line in diff.Split('\n'))
+        {
+            if (line.StartsWith("== ", StringComparison.Ordinal))
+                SafeColor.Foreground(ConsoleColor.White);       // 文件标题
+            else if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
+                SafeColor.Foreground(ConsoleColor.DarkGray);    // 文件头
+            else if (line.StartsWith("@@", StringComparison.Ordinal))
+                SafeColor.Foreground(ConsoleColor.Cyan);        // hunk 头
+            else if (line.StartsWith('+'))
+                SafeColor.Foreground(ConsoleColor.Green);       // 新增
+            else if (line.StartsWith('-'))
+                SafeColor.Foreground(ConsoleColor.Red);         // 删除
+            Console.WriteLine(line);
+            SafeColor.Reset();
+        }
+    }
+
     /// <summary>状态栏：模式 · 模型 · 目录 · 上下文总量 · 思考强度（每轮提示符前显示）——灰色。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort)
     {
@@ -527,6 +580,38 @@ internal static class Program
                 }
                 break;
 
+            case "/access":
+                // 文件访问权限模式：Shift+Tab 触发 /access next 循环切换，或 /access <strict|whitelist|full> 直接指定
+                if (rest.Equals("next", StringComparison.OrdinalIgnoreCase))
+                {
+                    var next = config.FileAccess.ToLowerInvariant() switch
+                    {
+                        "strict" => "whitelist",
+                        "whitelist" => "full",
+                        _ => "strict",
+                    };
+                    agent.SetFileAccess(next);
+                    PrintFileAccess(next);
+                }
+                else if (!string.IsNullOrWhiteSpace(rest))
+                {
+                    var mode = rest.Trim().ToLowerInvariant();
+                    if (mode is "strict" or "whitelist" or "full")
+                    {
+                        agent.SetFileAccess(mode);
+                        PrintFileAccess(mode);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"无效权限模式: {rest}(可选 strict | whitelist | full)");
+                    }
+                }
+                else
+                {
+                    PrintFileAccess(config.FileAccess, showHint: true);
+                }
+                break;
+
             case "/model":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
@@ -615,11 +700,51 @@ internal static class Program
                 break;
 
             case "/undo":
-                Console.WriteLine(agent.Context.Undo.TryUndo() ?? "没有可撤销的操作。");
+                // 用法: /undo 撤销最近一次; /undo N 撤销最近 N 次; /undo list 列出历史; 多条时可交互选择
+                if (int.TryParse(rest.Trim(), out var undoN) && undoN >= 1)
+                {
+                    Console.WriteLine(agent.Context.Undo.TryUndo(undoN) ?? "没有可撤销的操作。");
+                }
+                else if (rest.Equals("list", StringComparison.OrdinalIgnoreCase))
+                {
+                    var list = agent.Context.Undo.ListEntries();
+                    Console.WriteLine(list.Length == 0 ? "没有可撤销的操作。" : $"可撤销操作（编号 1 = 最近）:\n{list}");
+                }
+                else if (string.IsNullOrWhiteSpace(rest))
+                {
+                    var list = agent.Context.Undo.ListEntries();
+                    if (list.Length == 0)
+                    {
+                        Console.WriteLine("没有可撤销的操作。");
+                    }
+                    else if (agent.Context.Undo.Count == 1)
+                    {
+                        Console.WriteLine(agent.Context.Undo.TryUndo());
+                    }
+                    else
+                    {
+                        Console.WriteLine($"可撤销操作（编号 1 = 最近;输入编号撤销到该步,回车撤销最近一次,其他取消）:\n{list}");
+                        var pick = Console.ReadLine()?.Trim();
+                        if (int.TryParse(pick, out var sel) && sel >= 1)
+                            Console.WriteLine(agent.Context.Undo.TryUndo(sel));
+                        else if (string.IsNullOrEmpty(pick))
+                            Console.WriteLine(agent.Context.Undo.TryUndo());
+                        else
+                            Console.WriteLine("已取消。");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("用法: /undo [N|list] —— N = 撤销最近 N 次, list = 列出历史");
+                }
                 break;
 
             case "/diff":
-                Console.WriteLine(agent.Context.Undo.LastDiff() ?? "没有可显示的改动（先让 agent 修改过文件）。");
+                var diffText = agent.Context.Undo.AllDiffs();
+                if (diffText is null)
+                    Console.WriteLine("没有可显示的改动（先让 agent 修改过文件）。");
+                else
+                    PrintColoredDiff(diffText); // 着色输出：+/绿、-/红、@@/青、标题/亮白、文件头/灰
                 break;
 
             case "/save":
@@ -831,6 +956,7 @@ internal static class Program
               /history         显示当前对话历史
               /thinking        查看或设置思考强度（off/low/medium/high）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
+              /access [模式]   查看或切换文件访问权限（strict/whitelist/full，next 循环切换）
               /exit, /quit     退出
             用法:
               codeagent "帮我给项目写个 README"    一次性任务
@@ -846,7 +972,8 @@ internal static class Program
               -v, --version        显示版本号
             快捷键:
               Esc                   撤回最后一条已发送的消息（空输入时）
-              Shift+Tab              切换到下一个模式（/mode next）
+              Tab                    切换下一个工作模式（/mode next）
+              Shift+Tab              切换文件访问权限模式（strict→whitelist→full）
               Alt+M / Ctrl+Shift+M   模式切换菜单
               Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）
               Alt+D / Ctrl+Shift+D   查看最近修改的 diff（/diff）

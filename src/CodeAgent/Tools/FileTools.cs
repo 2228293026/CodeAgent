@@ -27,7 +27,7 @@ public sealed class ReadFileTool : ITool
         if (string.IsNullOrWhiteSpace(path))
             throw new ToolException("缺少必填参数 path");
 
-        var full = ctx.Workspace.Resolve(path);
+        var full = ctx.Workspace.ResolveRead(path);
         if (Directory.Exists(full))
             throw new ToolException($"'{path}' 是目录，请用 list_directory 查看目录内容。");
         if (!File.Exists(full))
@@ -237,7 +237,7 @@ public sealed class ListDirectoryTool : ITool
         var path = ToolArgs.GetString(args, "path");
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
 
-        var root = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(path) ? null : path);
+        var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
             throw new ToolException($"'{path}' 是文件，请用 read_file 查看内容。");
         if (!Directory.Exists(root))

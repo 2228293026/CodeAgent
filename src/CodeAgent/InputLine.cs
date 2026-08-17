@@ -404,7 +404,10 @@ public static class InputLine
                     // 删除文本后光标被 PositionCursor 放在中间行，从中间行上移 rows-1
                     // 到不了块首，会覆盖错位、提示符行残留重复。
                     var rows = Math.Max(lines, lastInputLines);
-                    Console.Write($"\x1b[{lastCursorLine}A");
+                    // lastCursorLine 为 0 时必须省略 CUU：多数终端（xterm/Windows Terminal/conhost）
+                    // 把参数 0 按 1 处理，"\x1b[0A" 会真的上移一行，覆盖掉输入块上方的提示符行
+                    if (lastCursorLine > 0)
+                        Console.Write($"\x1b[{lastCursorLine}A");
                     var textLines = text.Split('\n');
                     for (int i = 0; i < rows; i++)
                     {
@@ -455,16 +458,20 @@ public static class InputLine
                 if (up > 0)
                 {
                     string seg;
+                    int col;
                     if (dispLine == 2)
                     {
                         var foldLines = InputLine.FoldText(InputText()).Split('\n');
                         seg = foldLines.Length > 2 ? foldLines[2] : ""; // 折叠行文本，光标显示在末尾
+                        col = DisplayWidth(seg); // 折叠行独立成行，无提示符前缀
                     }
                     else
                     {
                         seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
+                        // 显示行首是提示符：光标列 = 提示符宽 + 行内内容宽（少算提示符会偏到其左侧）
+                        col = DisplayWidth(promptPlain) + DisplayWidth(seg);
                     }
-                    Console.Write($"\x1b[{up}A\r\x1b[{DisplayWidth(seg)}C");
+                    Console.Write($"\x1b[{up}A\r\x1b[{col}C");
                 }
                 // up == 0：光标已在折叠行末尾（重绘后块末尾即折叠行末尾），无需移动
                 return;
@@ -472,9 +479,10 @@ public static class InputLine
             var up2 = totalLines - 1 - cursorLine; // 从块末尾（末行行尾）上移到光标行
             if (up2 > 0)
             {
-                // 上移不改变列：回到列 1 后右移到光标行的行内偏移（该行到 cursor 的宽度）
+                // 上移不改变列：回到列 1 后右移到光标行的行内偏移。显示行首是提示符
+                // （首行带前缀、其余行各自成行），光标列 = 提示符宽 + 该行到 cursor 的内容宽
                 var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
-                Console.Write($"\x1b[{up2}A\r\x1b[{DisplayWidth(seg)}C");
+                Console.Write($"\x1b[{up2}A\r\x1b[{DisplayWidth(promptPlain) + DisplayWidth(seg)}C");
             }
             else
             {
@@ -514,7 +522,8 @@ public static class InputLine
                 for (int i = 0; i < menuShown; i++)
                 {
                     var k = menuOffset + i;
-                    var line = Fit($"  {i + 1}) {menuItems[k].Name,-16} {menuItems[k].Desc}");
+                    // 模式菜单不显示编号：数字键在模式菜单中被有意排除（防误切），编号会误导
+                    var line = Fit(MenuLineText(k, i));
                     // 选中项：反显高亮（\x1b[7m），缩进不变；每行末尾 \x1b[K 清除旧内容残留（防信息混合）
                     sb.AppendLine((k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line) + "\x1b[K");
                 }
@@ -530,11 +539,18 @@ public static class InputLine
             Console.Write(sb.ToString());
         }
 
+        /// <summary>菜单行文本：命令菜单带 1-9 编号（数字键可执行）；模式菜单无编号（数字键是普通输入）。</summary>
+        string MenuLineText(int listIndex, int visibleRow) =>
+            modePicker
+                ? $"  {menuItems[listIndex].Name,-16} {menuItems[listIndex].Desc}"
+                : $"  {visibleRow + 1}) {menuItems[listIndex].Name,-16} {menuItems[listIndex].Desc}";
+
         // 擦除菜单块（rows 行），回到输入行——单次写入
         void EraseMenuAnsi(int rows)
         {
             var sb = new StringBuilder();
-            sb.Append($"\x1b[{rows}A");
+            if (rows > 0)
+                sb.Append($"\x1b[{rows}A"); // 0 行不上移：CSI 参数 0 会被终端按 1 处理，多移一行
             for (int i = 0; i < rows; i++)
             {
                 sb.Append("\x1b[K\x1b[1B");
@@ -564,12 +580,12 @@ public static class InputLine
             {
                 var up = MenuAbove() - 1 - (oldIndex - menuOffset);
                 sb.Append($"\x1b[{up}A\x1b[1G\x1b[K");
-                sb.Append(Fit($"  {oldIndex - menuOffset + 1}) {menuItems[oldIndex].Name,-16} {menuItems[oldIndex].Desc}"));
+                sb.Append(Fit(MenuLineText(oldIndex, oldIndex - menuOffset)));
                 sb.Append($"\x1b[{up}B");
             }
             var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
             sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
-            sb.Append("\x1b[7m" + Fit($"  {newIndex - menuOffset + 1}) {menuItems[newIndex].Name,-16} {menuItems[newIndex].Desc}") + "\x1b[0m");
+            sb.Append("\x1b[7m" + Fit(MenuLineText(newIndex, newIndex - menuOffset)) + "\x1b[0m");
             sb.Append($"\x1b[{up2}B\x1b[1G");
             sb.Append(InputText());
             sb.Append("\x1b[K");
@@ -886,6 +902,7 @@ public static class InputLine
                                 draft = buf.Text; // 记住浏览历史前的草稿
                             idx--;
                             SetBuf(session, buf, idx);
+                            inputExpanded = false; // 新载入的内容重新按行数决定折叠
                             RedrawInput();
                         }
                     }
@@ -918,10 +935,12 @@ public static class InputLine
                                 // 回到草稿（浏览历史前的原始输入）
                                 buf.Replace(draft);
                                 draft = null;
+                                inputExpanded = false; // 回到草稿同样重新按行数决定折叠
                             }
                             else
                             {
                                 SetBuf(session, buf, idx);
+                                inputExpanded = false;
                             }
                             RedrawInput();
                         }
@@ -929,8 +948,9 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.Tab when (key.Modifiers & ConsoleModifiers.Shift) != 0:
-                    // Shift+Tab：菜单内（多项时）反向循环选择；菜单外或菜单仅 1 项时切换模式。
-                    // 仅 1 项时循环无意义，切换模式才是用户意图，避免按键静默失效
+                    // Shift+Tab：菜单内（多项时）反向循环选择；菜单外或菜单仅 1 项时切换文件访问权限模式
+                    // （strict → whitelist → full → strict，由 /access next 处理并显示）。
+                    // 仅 1 项时循环无意义，切换权限才是用户意图，避免按键静默失效
                     if (menuOpen && menuItems.Count > 1)
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
@@ -939,8 +959,8 @@ public static class InputLine
                     {
                         CloseMenu();
                         Console.WriteLine();
-                        Remember("/mode next");
-                        return "/mode next"; // Shift+Tab：切换 agent 模式
+                        Remember("/access next");
+                        return "/access next"; // Shift+Tab：切换文件访问权限模式
                     }
                     break;
 
@@ -961,6 +981,14 @@ public static class InputLine
                     {
                         // 多个匹配：循环选择
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
+                    }
+                    else if (!menuOpen)
+                    {
+                        // 菜单未开且输入不以 / 开头：Tab 切换下一个工作模式（/mode next）。
+                        // 以 / 开头时命中上面的 OpenMenu 分支打开命令菜单，两者不冲突
+                        Console.WriteLine();
+                        Remember("/mode next");
+                        return "/mode next"; // Tab：切换工作模式
                     }
                     break;
 
@@ -1009,6 +1037,7 @@ public static class InputLine
                         // ESC：清空当前输入
                         buf.Clear();
                         draft = null;
+                        inputExpanded = false; // 输入已清空：恢复自动折叠，之后粘贴长文本仍折叠
                         RedrawInput();
                     }
                     else

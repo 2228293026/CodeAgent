@@ -28,7 +28,7 @@ public sealed class Agent
         _ctx = new AgentContext
         {
             Config = config,
-            Workspace = new Workspace(Environment.CurrentDirectory),
+            Workspace = new Workspace(Environment.CurrentDirectory, config.ReadOnlyDirs, config.FileAccess),
         };
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = config.SystemPrompt });
 
@@ -86,6 +86,13 @@ public sealed class Agent
 
     /// <summary>切换 Provider（/model 命令用）。</summary>
     public void SetProvider(IAgentProvider provider) => _provider = provider;
+
+    /// <summary>运行时切换文件访问模式（strict | whitelist | full）：同步更新配置与工作区沙箱，Shift+Tab / /access 用。</summary>
+    public void SetFileAccess(string fileAccess)
+    {
+        _config.FileAccess = fileAccess;
+        _ctx.Workspace.SetFileAccess(fileAccess);
+    }
 
     /// <summary>清空对话历史（保留系统提示），/clear 命令用。</summary>
     public void Reset()
@@ -266,7 +273,8 @@ public sealed class Agent
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
         LogMessage(_messages[^1]);
 
-        for (int i = 0; i < _ctx.Config.MaxToolIterations; i++)
+        // MaxToolIterations <= 0 表示不限制（无限循环直到模型给出最终答复或 stop 工具请求结束）
+        for (int i = 0; _ctx.Config.MaxToolIterations <= 0 || i < _ctx.Config.MaxToolIterations; i++)
         {
             var resp = await CallProviderAsync(ct);
             if (_streamedThisCall)
@@ -761,7 +769,12 @@ public sealed class Agent
                 break;
             for (int i = 0; i < removeCount; i++)
             {
-                total -= _messages[u1 + 1].Content?.Length ?? 0;
+                // total 统计口径包含工具调用参数：移除时同步扣除，否则 total 虚高导致过度删除
+                var rm = _messages[u1 + 1];
+                total -= rm.Content?.Length ?? 0;
+                if (rm.ToolCalls is not null)
+                    foreach (var tc in rm.ToolCalls)
+                        total -= tc.ArgumentsJson.Length;
                 // 被移除消息在本轮起点之前时，撤回索引需同步前移（ESC 撤回按 LastTurnStartCount 定位）
                 if (u1 + 1 < LastTurnStartCount)
                     LastTurnStartCount--;
@@ -807,8 +820,9 @@ public sealed class Agent
                 return false;
 
             _messages.RemoveRange(1, keepFrom - 1);
-            // 摘要移除最早消息后索引前移：撤回起点（ESC 用）同步前移，避免定位到错误消息
-            LastTurnStartCount = Math.Max(1, LastTurnStartCount - (keepFrom - 1));
+            // 移除 keepFrom-1 条、又在位置 1 插入 1 条摘要：原索引 i >= keepFrom 的消息新位置是
+            // i - keepFrom + 2（原先按 -(keepFrom-1) 计算少算了插入的摘要，偏移差 1 会让 ESC 撤回多删一条）
+            LastTurnStartCount = Math.Clamp(LastTurnStartCount - keepFrom + 2, 1, _messages.Count);
             _messages.Insert(1, new ProviderMessage
             {
                 Role = MessageRole.System,

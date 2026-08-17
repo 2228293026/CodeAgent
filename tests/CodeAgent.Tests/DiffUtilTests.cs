@@ -51,4 +51,26 @@ public class DiffUtilTests
         Assert.Contains("3000 行", d);
         Assert.DoesNotContain("line2999", d); // 不应输出逐行内容
     }
+
+    [Fact]
+    public void Unified_NewFile_ShowsAllAdded()
+    {
+        // 新建文件：空原文 → 全部 + 行（回归：曾因 SplitLines("")=[""] 输出多余的 - 空行）
+        var d = DiffUtil.Unified("", "hello\nworld\n", "new.txt");
+        Assert.Contains("@@ -0,0 +1,2 @@", d);
+        Assert.Contains("+ hello", d);
+        Assert.Contains("+ world", d);
+        Assert.DoesNotContain("- hello", d); // 内容行不是删除行（头行 --- a/ 里含 "- " 属正常）
+    }
+
+    [Fact]
+    public void Unified_DeletedFile_ShowsAllRemoved()
+    {
+        // 文件被清空/删除：空新文 → 全部 - 行
+        var d = DiffUtil.Unified("a\nb\n", "", "gone.txt");
+        Assert.Contains("@@ -1,2 +0,0 @@", d);
+        Assert.Contains("- a", d);
+        Assert.Contains("- b", d);
+        Assert.DoesNotContain("+ a", d); // 内容行不是新增行
+    }
 }

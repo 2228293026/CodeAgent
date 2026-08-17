@@ -22,7 +22,15 @@ public class AgentLoopTests : IDisposable
     }
 
     private AgentClass MakeAgent(FakeProvider provider, bool allowCommands = true) => new(
-        new AgentConfig { SaveSessions = false, SessionDir = SessionDir, AllowCommands = allowCommands },
+        new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            AllowCommands = allowCommands,
+            // 显式设有限上限：FakeProvider 循环返回同一工具调用时靠它截断（生产默认 0=无限，
+            // 依赖默认值的测试会在 write_file 被拦截等不置 StopRequested 的场景无限循环）
+            MaxToolIterations = 5,
+        },
         provider,
         ToolRegistry.CreateDefault());
 

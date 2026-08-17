@@ -48,8 +48,8 @@ public sealed class AgentConfig
     /// <summary>已配置的 Provider 集合，键为名称。</summary>
     public Dictionary<string, ProviderOptions> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>单轮任务中最大工具调用轮数（防止死循环）。</summary>
-    public int MaxToolIterations { get; set; } = 20;
+    /// <summary>单轮任务中最大工具调用轮数；0 或负 = 不限制（无限）。</summary>
+    public int MaxToolIterations { get; set; } = 0;
 
     /// <summary>历史消息总字符上限，超过后从最旧处截断/裁剪。</summary>
     public int MaxHistoryChars { get; set; } = 160_000;
@@ -89,6 +89,19 @@ public sealed class AgentConfig
 
     /// <summary>启动时的默认工作模式（/mode 可切换），默认 code。</summary>
     public string DefaultMode { get; set; } = "code";
+
+    /// <summary>
+    /// 文件访问权限模式：strict（默认，工作区沙箱，读写都限工作区）| whitelist（工作区 + ReadOnlyDirs 只读白名单）
+    /// | full（所有文件可读可写，完全放开沙箱，仅用于信任场景）。
+    /// </summary>
+    public string FileAccess { get; set; } = "strict";
+
+    /// <summary>
+    /// 只读白名单目录（工作区之外）：fileAccess=whitelist 时，文件读/搜索工具可访问其中的文件，
+    /// 但写工具（write_file / edit_file）与命令执行仍被限制在工作区内。用于 mod 开发等场景——
+    /// 需要读取兄弟项目（如 adofai-libs 反编译库）但绝不允许改动它。路径可为绝对路径；相对路径按工作区解析。
+    /// </summary>
+    public List<string> ReadOnlyDirs { get; set; } = new();
 
     /// <summary>自定义工作模式列表（/mode 可切换，配合内置模式）。</summary>
     public List<AgentModeConfig> Modes { get; set; } = new();
@@ -156,9 +169,9 @@ public sealed class AgentConfig
             var cfg = JsonSerializer.Deserialize<AgentConfig>(text, JsonOpts) ?? new AgentConfig();
             cfg.SourceFile = found;
             // 边界校验：非法值收敛到可用范围，避免空转/异常。
-            // 上限防止误配超大值：MaxToolIterations 过大导致超长循环烧 token，
+            // 上限防止误配超大值：MaxToolIterations 过大导致超长循环烧 token（0 或负 = 不限制），
             // MaxHistoryChars 过大导致历史永不裁剪、请求体无限膨胀（OOM）。
-            cfg.MaxToolIterations = Math.Clamp(cfg.MaxToolIterations, 1, 200);
+            cfg.MaxToolIterations = Math.Clamp(cfg.MaxToolIterations, 0, 200);
             cfg.MaxHistoryChars = Math.Clamp(cfg.MaxHistoryChars, 1_000, 20_000_000);
             return cfg;
         }

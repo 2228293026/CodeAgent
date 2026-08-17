@@ -43,7 +43,10 @@ public sealed class CommandTool : ITool
             return "用户已取消命令执行。";
 
         var shell = string.IsNullOrWhiteSpace(ctx.Config.Shell) ? ShellRunner.AutoShell() : ctx.Config.Shell;
+        // 命令副作用撤销：执行前对工作区做文件快照，执行后把新增/修改/删除的文件推入撤销栈（/undo 可回滚）
+        var snapshot = UndoManager.SnapshotDir(cwd);
         var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct, env);
+        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
         return output;
     }
 }

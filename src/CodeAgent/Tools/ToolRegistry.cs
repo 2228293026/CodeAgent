@@ -10,23 +10,60 @@ public sealed class ToolException : Exception
     public ToolException(string message) : base(message) { }
 }
 
-/// <summary>工作区路径沙箱：工具只能访问工作区内的路径。</summary>
+/// <summary>工作区路径沙箱：strict 模式读写都限工作区（忽略白名单）；whitelist 模式读工具额外允许只读白名单目录；full 模式完全放开。</summary>
 public sealed class Workspace
 {
     private readonly string _rootPrefix;
+    private readonly List<(string Dir, string Prefix)> _readOnly = new();
+    private bool _fullAccess;        // 非 readonly：运行时可用 SetFileAccess 切换（Shift+Tab / /access）
+    private bool _whitelistEnabled;  // strict 模式下白名单不生效，只有 whitelist/full 模式读工具才放行白名单目录
 
-    public Workspace(string root)
+    /// <param name="readOnlyDirs">只读白名单目录（whitelist 模式生效；工作区之外也可，相对路径按工作区解析）；读工具可访问，写工具仍被拦截。</param>
+    /// <param name="fileAccess">strict（默认）| whitelist | full——full 表示所有文件可读可写，完全放开沙箱。</param>
+    public Workspace(string root, IReadOnlyList<string>? readOnlyDirs = null, string fileAccess = "strict")
     {
         Root = Path.GetFullPath(root);
         _rootPrefix = Root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                       + Path.DirectorySeparatorChar;
+        _fullAccess = string.Equals(fileAccess, "full", StringComparison.OrdinalIgnoreCase);
+        _whitelistEnabled = string.Equals(fileAccess, "whitelist", StringComparison.OrdinalIgnoreCase);
+        if (readOnlyDirs is not null)
+        {
+            foreach (var d in readOnlyDirs)
+            {
+                if (string.IsNullOrWhiteSpace(d))
+                    continue;
+                var full = Path.GetFullPath(Path.Combine(Root, d));
+                var prefix = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                             + Path.DirectorySeparatorChar;
+                _readOnly.Add((full, prefix));
+            }
+        }
     }
 
     /// <summary>规范化的工作区根路径。</summary>
     public string Root { get; }
 
-    /// <summary>把相对路径解析为工作区内的绝对路径；越界或非法则抛 ToolException。</summary>
-    public string Resolve(string? path)
+    /// <summary>只读白名单目录（读工具可用，写工具不可用）。</summary>
+    public IReadOnlyList<string> ReadOnlyRoots => _readOnly.Select(x => x.Dir).ToList();
+
+    /// <summary>是否完全放开沙箱（fileAccess=full）：所有文件可读可写。</summary>
+    public bool FullAccess => _fullAccess;
+
+    /// <summary>运行时切换文件访问模式（strict | whitelist | full）——Shift+Tab 与 /access 命令用，无需重启。</summary>
+    public void SetFileAccess(string fileAccess)
+    {
+        _fullAccess = string.Equals(fileAccess, "full", StringComparison.OrdinalIgnoreCase);
+        _whitelistEnabled = string.Equals(fileAccess, "whitelist", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>把路径解析为工作区内的绝对路径（写工具/命令用）：whitelist 的白名单目录也会被拒绝；full 模式放行一切。</summary>
+    public string Resolve(string? path) => ResolveCore(path, allowReadOnly: false);
+
+    /// <summary>把路径解析为可读绝对路径（读/搜索工具用）：工作区 + 只读白名单目录（whitelist）均可；full 模式放行一切。</summary>
+    public string ResolveRead(string? path) => ResolveCore(path, allowReadOnly: true);
+
+    private string ResolveCore(string? path, bool allowReadOnly)
     {
         if (string.IsNullOrWhiteSpace(path))
             return Root;
@@ -41,10 +78,29 @@ public sealed class Workspace
             // 非法字符（如 NUL）、空段等会让 Path 抛异常，应转为清晰的工具错误而非裸异常
             throw new ToolException($"路径非法: '{path}'（{ex.Message}）");
         }
+        if (_fullAccess)
+            return full; // full 模式：所有文件可读可写，不做沙箱检查（Path.GetFullPath 已做规范化）
         // 解析符号链接后的真实路径再检查沙箱：工作区内的 symlink 可能指向外部
-        if (!IsWithin(ResolveRealPath(full)))
-            throw new ToolException($"路径 '{path}' 位于工作区之外，已拒绝访问。");
-        return full;
+        var real = ResolveRealPath(full);
+        if (IsWithin(real))
+            return full;
+        if (allowReadOnly && _whitelistEnabled && IsInReadOnly(real))
+            return full;
+        throw new ToolException($"路径 '{path}' 位于工作区之外，已拒绝访问。");
+    }
+
+    /// <summary>判断真实路径是否在任一只读白名单目录内。</summary>
+    private bool IsInReadOnly(string fullPath)
+    {
+        var cmp = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (var (dir, prefix) in _readOnly)
+        {
+            if (string.Equals(fullPath, dir, cmp))
+                return true;
+            if (fullPath.StartsWith(prefix, cmp))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

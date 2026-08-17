@@ -207,4 +207,118 @@ public class WorkspaceTests
         var full = ws.Resolve(Path.Combine("..", parentName, "x.txt"));
         Assert.Equal(Path.GetFullPath(Path.Combine(Root, "x.txt")), full);
     }
+
+    // ===== 只读白名单（readOnlyDirs）=====
+
+    private static readonly string Outside = Path.Combine(Path.GetTempPath(), "codeagent-ws-outside");
+
+    [Fact]
+    public void ResolveRead_ReadOnlyDir_AllowsRead()
+    {
+        // whitelist 模式：白名单目录（如兄弟项目 adofai-libs）内的路径，读工具（ResolveRead）应放行
+        var ws = new Workspace(Root, new[] { Outside }, "whitelist");
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(Outside, "AdofaiKnowledge.md")),
+            ws.ResolveRead(Path.Combine("..", Path.GetFileName(Outside), "AdofaiKnowledge.md")));
+    }
+
+    [Fact]
+    public void Resolve_ReadOnlyDir_StillRejectsWrite()
+    {
+        // whitelist 模式：同一白名单目录，写工具（Resolve）必须拒绝——白名单只读，不可写
+        var ws = new Workspace(Root, new[] { Outside }, "whitelist");
+        Assert.Throws<ToolException>(() =>
+            ws.Resolve(Path.Combine("..", Path.GetFileName(Outside), "mod.cs")));
+    }
+
+    [Fact]
+    public void ResolveRead_OutsideWhitelist_StillRejected()
+    {
+        // whitelist 模式：白名单之外的目录（未配置的兄弟项目）读工具也要拒绝，不能整体放开
+        var ws = new Workspace(Root, new[] { Outside }, "whitelist");
+        var other = Path.Combine(Path.GetTempPath(), "codeagent-ws-other-" + Guid.NewGuid().ToString("N"));
+        Assert.Throws<ToolException>(() =>
+            ws.ResolveRead(Path.Combine("..", Path.GetFileName(other), "x.txt")));
+    }
+
+    [Fact]
+    public void ResolveRead_RelativeReadOnlyDir_ResolvesFromRoot()
+    {
+        // whitelist 模式：相对路径白名单（如 ../adofai-libs）按工作区解析；其内部读放行、写拒绝。
+        // 注意：落在工作区内的相对路径（如 "ext"）本就在工作区内，Resolve 放行是正确的，不算白名单场景
+        var ws = new Workspace(Root, new[] { Path.Combine("..", "ext") }, "whitelist");
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(Root, "..", "ext", "kb.md")),
+            ws.ResolveRead(Path.Combine("..", "ext", "kb.md")));
+        Assert.Throws<ToolException>(() => ws.Resolve(Path.Combine("..", "ext", "kb.md")));
+    }
+
+    [Fact]
+    public void Strict_IgnoresReadOnlyDirs()
+    {
+        // strict 模式（默认）：即使配置了白名单，读工具也不放行白名单目录——严格模式就是纯工作区沙箱
+        var ws = new Workspace(Root, new[] { Outside });
+        Assert.Throws<ToolException>(() =>
+            ws.ResolveRead(Path.Combine("..", Path.GetFileName(Outside), "kb.md")));
+    }
+
+    // ===== 权限模式（fileAccess: strict / whitelist / full）=====
+
+    [Fact]
+    public void FullAccess_ReadWriteOutside_AllAllowed()
+    {
+        // full 模式：工作区之外的路径，读（ResolveRead）与写（Resolve）都放行
+        var ws = new Workspace(Root, null, "full");
+        var outside = Path.Combine(Path.GetTempPath(), "codeagent-full-" + Guid.NewGuid().ToString("N"), "x.cs");
+        Assert.Equal(
+            Path.GetFullPath(outside),
+            ws.Resolve(Path.Combine("..", Path.GetTempPath(), outside))); // 路径以 .. 开头到工作区外
+        Assert.Equal(
+            Path.GetFullPath(outside),
+            ws.ResolveRead(Path.Combine("..", Path.GetTempPath(), outside)));
+    }
+
+    [Fact]
+    public void FullAccess_AbsolutePath_Allowed()
+    {
+        // full 模式：绝对路径（如 C:\Windows）不再被沙箱拦截
+        var ws = new Workspace(Root, null, "full");
+        var absolute = Path.Combine(Path.GetTempPath(), "codeagent-full-abs-" + Guid.NewGuid().ToString("N"));
+        Assert.Equal(Path.GetFullPath(absolute), ws.Resolve(absolute));
+    }
+
+    [Fact]
+    public void Strict_Default_RejectsOutside()
+    {
+        // 默认 strict：未配置白名单时工作区外读写都拒绝（回归默认安全）
+        var ws = new Workspace(Root);
+        Assert.Throws<ToolException>(() => ws.Resolve(Path.Combine("..", "secret.txt")));
+        Assert.Throws<ToolException>(() => ws.ResolveRead(Path.Combine("..", "secret.txt")));
+    }
+
+    [Fact]
+    public void FullAccess_FlagExposed()
+    {
+        Assert.False(new Workspace(Root).FullAccess);
+        Assert.False(new Workspace(Root, null, "whitelist").FullAccess);
+        Assert.True(new Workspace(Root, null, "full").FullAccess);
+        Assert.True(new Workspace(Root, null, "FULL").FullAccess); // 大小写不敏感
+    }
+
+    [Fact]
+    public void SetFileAccess_SwitchesAtRuntime()
+    {
+        // Shift+Tab / /access 运行时切换：strict → full 后工作区外路径放行，切回 strict 恢复拒绝
+        var ws = new Workspace(Root);
+        Assert.Throws<ToolException>(() => ws.Resolve(Path.Combine("..", "x.txt")));
+
+        ws.SetFileAccess("full");
+        Assert.True(ws.FullAccess);
+        var outside = Path.Combine(Path.GetTempPath(), "codeagent-runtime-" + Guid.NewGuid().ToString("N"));
+        Assert.Equal(Path.GetFullPath(outside), ws.Resolve(outside)); // 绝对路径放行
+
+        ws.SetFileAccess("strict");
+        Assert.False(ws.FullAccess);
+        Assert.Throws<ToolException>(() => ws.Resolve(outside));
+    }
 }
