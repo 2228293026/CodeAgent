@@ -255,6 +255,25 @@ internal static class Program
         PrintBanner(config, opts, agent);
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
 
+        // 后台探测一次模型上下文窗口（OpenRouter 风格 /models 元数据）：失败静默、不阻塞启动，
+        // 完成后状态栏即可用（优先级：contextWindow 配置 > 内置模型表 > 此探测）
+        var ctxProbeModel = opts.Model;
+        var ctxProbe = providerInst.GetContextWindowAsync(opts.Model, CancellationToken.None);
+
+        // 有效上下文窗口：0 = 未知（状态栏只显示 ctx 绝对值）
+        int EffectiveContextWindow()
+        {
+            if (config.ContextWindow > 0)
+                return config.ContextWindow;
+            if (KnownContextWindows.TryGet(opts.Model) is { } fromTable)
+                return fromTable;
+            // 探测结果只对探测时的模型有效（/model 换模型后作废，重启后重新探测）
+            if (ctxProbe.IsCompletedSuccessfully && ctxProbe.Result is { } fromApi
+                && string.Equals(opts.Model, ctxProbeModel, StringComparison.OrdinalIgnoreCase))
+                return fromApi;
+            return 0;
+        }
+
         // 清掉上一会话遗留的输入缓冲（否则新会话一启动就被旧按键触发菜单/命令，显得"诡异"）
         try
         {
@@ -271,7 +290,7 @@ internal static class Program
         while (true)
         {
             if (!skipStatusBar)
-                PrintStatusBar(opts, agent, config.ThinkingEffort, config.ContextWindow);
+                PrintStatusBar(opts, agent, config.ThinkingEffort, EffectiveContextWindow());
             skipStatusBar = false;
             var line = InputLine.Read(inlinePrompt ?? PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
             inlinePrompt = null;
@@ -788,7 +807,11 @@ internal static class Program
                 Console.WriteLine($"Model    : {opts.Model}");
                 Console.WriteLine($"BaseUrl  : {opts.BaseUrl}");
                 Console.WriteLine($"ApiKey   : {(string.IsNullOrEmpty(opts.ApiKey) ? $"env[{opts.ApiKeyEnv ?? "?"}]" : "****")}");
-                Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {(config.ContextWindow > 0 ? $"{config.ContextWindow:N0}" : "未知")}");
+                var ctxDesc = config.ContextWindow > 0
+                    ? $"{config.ContextWindow:N0}（配置）"
+                    : KnownContextWindows.TryGet(opts.Model) is { } known ? $"{known:N0}（按模型名自动识别）"
+                    : "未知（可配置 contextWindow）";
+                Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {ctxDesc}");
                 Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}");
                 Console.WriteLine($"工具日志 : {(config.ShowToolCalls ? "on" : "off")}   流式输出: {(config.StreamOutput ? "on" : "off")}");
                 break;

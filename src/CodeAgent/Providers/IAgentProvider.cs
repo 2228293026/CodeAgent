@@ -31,4 +31,8 @@ public interface IAgentProvider
 
     /// <summary>列出当前 Provider 可用的模型 ID（--models / /models 用）。</summary>
     Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct);
+
+    /// <summary>尝试获取模型的上下文窗口大小（token），探测不到返回 null。
+    /// 默认不探测；实现的 API 若在模型元数据中携带窗口信息则覆写（如 OpenRouter 的 context_length）。</summary>
+    Task<int?> GetContextWindowAsync(string model, CancellationToken ct) => Task.FromResult<int?>(null);
 }

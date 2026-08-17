@@ -119,6 +119,45 @@ public class OpenAiProviderTests
     }
 
     [Fact]
+    public async Task GetContextWindowAsync_ReadsMetadataFields()
+    {
+        // OpenRouter 风格 /models 元数据带窗口字段时可自动探测
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"hy3:free","context_length":131072,"top_provider":{"context_length":131072}}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Equal(131072, await provider.GetContextWindowAsync("hy3:free", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetContextWindowAsync_TopProviderFallback()
+    {
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"m1","top_provider":{"context_length":65536}}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Equal(65536, await provider.GetContextWindowAsync("m1", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetContextWindowAsync_NoFieldsOrNullModel_ReturnsNull()
+    {
+        // 标准 OpenAI 协议 /models 无窗口字段：返回 null（显示层回退到模型表/纯数字）
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"gpt-4o","object":"model","created":1}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Null(await provider.GetContextWindowAsync("gpt-4o", CancellationToken.None));
+        Assert.Null(await provider.GetContextWindowAsync("not-in-list", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ChatAsync_RequestTimeout_ThrowsProviderException()
     {
         // 用短超时的 HttpClient：SlowHandler 永远延迟，触发超时路径（避免等默认 100s）

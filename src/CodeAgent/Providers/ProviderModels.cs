@@ -73,6 +73,68 @@ public sealed class ProviderException : Exception
     public bool Retryable { get; init; }
 }
 
+/// <summary>常见模型的上下文窗口近似值（token），按名称前缀最长匹配。
+/// 仅用于状态栏 ctx 百分比提示（精确值以各模型文档为准，contextWindow 配置可覆盖）。</summary>
+public static class KnownContextWindows
+{
+    private static readonly (string Prefix, int Tokens)[] Table =
+    [
+        ("gpt-5", 400_000),
+        ("gpt-4.1", 1_000_000),
+        ("gpt-4o", 128_000),
+        ("gpt-4-turbo", 128_000),
+        ("o3", 200_000),
+        ("o4-mini", 200_000),
+        ("deepseek-reasoner", 128_000),
+        ("deepseek-chat", 128_000),
+        ("deepseek-v3", 128_000),
+        ("qwen3-coder", 262_144),
+        ("qwen3", 131_072),
+        ("qwen2.5-coder", 131_072),
+        ("qwen-max", 131_072),
+        ("claude-opus-4", 200_000),
+        ("claude-sonnet-4", 200_000),
+        ("claude-haiku-4", 200_000),
+        ("claude-3-5", 200_000),
+        ("claude-3", 200_000),
+        ("gemini-2.5-pro", 1_000_000),
+        ("gemini-2.5-flash", 1_000_000),
+        ("gemini-2.0", 1_000_000),
+        ("llama-3.1", 128_000),
+        ("llama-3.3", 128_000),
+        ("kimi-k2", 128_000),
+        ("glm-4.5", 128_000),
+        ("mistral-large", 128_000),
+    ];
+
+    /// <summary>按模型名识别上下文窗口；无法识别返回 null。
+    /// 自动去掉厂商前缀（tencent/hy3）与 OpenRouter 后缀（:free）后做前缀匹配。</summary>
+    public static int? TryGet(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return null;
+        var name = model.ToLowerInvariant().Trim();
+        var slash = name.LastIndexOf('/');
+        if (slash >= 0)
+            name = name[(slash + 1)..]; // 去厂商前缀
+        var colon = name.IndexOf(':');
+        if (colon > 0)
+            name = name[..colon]; // 去 OpenRouter 变体后缀（:free 等）
+        int? best = null;
+        var bestLen = 0;
+        foreach (var (prefix, tokens) in Table)
+        {
+            // 最长前缀优先：gpt-4.1-mini 命中 gpt-4.1 而非更短键
+            if (name.StartsWith(prefix, StringComparison.Ordinal) && prefix.Length > bestLen)
+            {
+                best = tokens;
+                bestLen = prefix.Length;
+            }
+        }
+        return best;
+    }
+}
+
 /// <summary>SSE 流式解析时按 index 累积的工具调用增量（openai/anthropic 通用）。</summary>
 internal sealed class StreamToolAccum
 {

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using CodeAgent;
+using CodeAgent.Providers;
 using CodeAgent.Tools;
 using Xunit;
 
@@ -187,6 +188,31 @@ public class ConfigEdgeTests : IDisposable
         var path = WriteJson($"{{\"contextWindow\": {input}}}");
         Assert.Equal(expected, AgentConfig.Load(path).ContextWindow);
     }
+
+    // ===== KnownContextWindows（状态栏 ctx 百分比的自动识别表）=====
+
+    [Theory]
+    [InlineData("gpt-4o", 128_000)]
+    [InlineData("gpt-4o-2024-08-13", 128_000)]        // 带日期后缀仍命中
+    [InlineData("gpt-4.1-mini", 1_000_000)]           // 最长前缀优先（4.1 而非 4o）
+    [InlineData("openai/gpt-4.1", 1_000_000)]         // 去厂商前缀
+    [InlineData("deepseek-chat", 128_000)]
+    [InlineData("deepseek/deepseek-reasoner", 128_000)]
+    [InlineData("qwen3-coder-plus", 262_144)]
+    [InlineData("claude-sonnet-4-5", 200_000)]
+    [InlineData("anthropic/claude-opus-4-5", 200_000)]
+    [InlineData("gemini-2.5-flash", 1_000_000)]
+    public void KnownContextWindows_RecognizesCommonModels(string model, int expected) =>
+        Assert.Equal(expected, KnownContextWindows.TryGet(model));
+
+    [Theory]
+    [InlineData("hy3:free")]   // OpenRouter 后缀剥离后未知
+    [InlineData("hy3")]
+    [InlineData("my-private-model")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void KnownContextWindows_UnknownReturnsNull(string? model) =>
+        Assert.Null(KnownContextWindows.TryGet(model));
 
     // ===== Save 往返 =====
 

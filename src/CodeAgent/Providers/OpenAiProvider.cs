@@ -314,21 +314,53 @@ public sealed class OpenAiProvider : IAgentProvider
     /// <summary>列出 OpenAI 兼容服务的可用模型（GET /models）。</summary>
     public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/models");
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
-        using var resp = await _http.SendAsync(req, ct);
-        var body = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode)
-            throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {Truncate(body, 400)}");
-
         var ids = new List<string>();
-        foreach (var m in JsonNode.Parse(body)?["data"]?.AsArray() ?? [])
+        foreach (var m in await FetchModelsArrayAsync(ct) ?? [])
         {
             var id = m?["id"]?.GetValue<string>();
             if (!string.IsNullOrEmpty(id))
                 ids.Add(id);
         }
         return ids;
+    }
+
+    /// <summary>从 /models 元数据探测模型上下文窗口：OpenRouter 的 context_length /
+    /// top_provider.context_length、LM Studio 的 max_context_length 等。
+    /// 标准 OpenAI 协议不带窗口信息时返回 null（由状态栏回退到内置模型表或纯数字）。</summary>
+    public async Task<int?> GetContextWindowAsync(string model, CancellationToken ct)
+    {
+        try
+        {
+            var arr = await FetchModelsArrayAsync(ct);
+            foreach (var m in arr ?? [])
+            {
+                if (!string.Equals(m?["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                foreach (var key in new[] { "context_length", "context_window", "max_context_length", "max_model_len", "max_input_tokens", "input_token_limit" })
+                    if (m[key] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0)
+                        return n;
+                if (m["top_provider"]?["context_length"] is JsonValue tv && tv.TryGetValue<int>(out var n2) && n2 > 0)
+                    return n2;
+                return null; // 找到模型但元数据无窗口字段
+            }
+            return null;
+        }
+        catch
+        {
+            return null; // 探测失败不影响主流程
+        }
+    }
+
+    /// <summary>GET /models 的 data 数组；失败抛 ProviderException（与 ListModelsAsync 的错误契约一致）。</summary>
+    private async Task<JsonArray?> FetchModelsArrayAsync(CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/models");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
+        using var resp = await _http.SendAsync(req, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode)
+            throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {Truncate(body, 400)}");
+        return JsonNode.Parse(body)?["data"]?.AsArray();
     }
 
     private static JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)
