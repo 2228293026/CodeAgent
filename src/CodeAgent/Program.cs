@@ -138,8 +138,8 @@ internal static class Program
         {
             try
             {
-                // 尊重 -c 指定的配置文件路径；未指定时向导保存到当前目录 codeagent.json
-                SetupWizard.Run(config, Console.In, Console.Out, configPath);
+                // 尊重 -c 指定的配置文件路径；未指定时写回实际加载的来源文件（可能是 ~/.codeagent/config.json）
+                SetupWizard.Run(config, Console.In, Console.Out, ConfigSavePath(configPath, config));
             }
             catch (OperationCanceledException)
             {
@@ -425,6 +425,15 @@ internal static class Program
         SafeColor.Reset();
     }
 
+    /// <summary>
+    /// 配置写回路径：-c 显式路径 → 实际加载的来源文件（可能是 ~/.codeagent/config.json）→ 默认当前目录。
+    /// 忽略来源文件时，从主目录配置启动的 /model 会把半份配置写进 cwd 的新 codeagent.json，配置被一分为二。
+    /// </summary>
+    private static string ConfigSavePath(string? configPath, AgentConfig config) =>
+        !string.IsNullOrWhiteSpace(configPath) ? configPath
+        : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
+        : "codeagent.json";
+
     /// <summary>切换权限模式后写回配置文件（/access 与 Shift+Tab 用），使重启后保持该模式。</summary>
     private static void PersistFileAccess(AgentConfig config)
     {
@@ -687,7 +696,7 @@ internal static class Program
                         // 同步回配置并持久化，重启后仍然生效
                         if (config.Providers.TryGetValue(config.Provider, out var po))
                             po.Model = opts.Model;
-                        var savePath = string.IsNullOrWhiteSpace(configPath) ? "codeagent.json" : configPath;
+                        var savePath = ConfigSavePath(configPath, config);
                         AgentConfig.Save(config, savePath);
                         Console.WriteLine($"已切换模型: {opts.Model}，已保存到 {savePath}");
                     }
@@ -715,8 +724,8 @@ internal static class Program
             case "/setup":
                 try
                 {
-                    // 尊重 -c 指定的配置文件路径；未指定时向导保存到当前目录 codeagent.json
-                    SetupWizard.Run(config, Console.In, Console.Out, configPath);
+                    // 尊重 -c 指定的配置文件路径；未指定时写回实际加载的来源文件（可能是 ~/.codeagent/config.json）
+                    SetupWizard.Run(config, Console.In, Console.Out, ConfigSavePath(configPath, config));
                 }
                 catch (OperationCanceledException)
                 {
@@ -933,7 +942,7 @@ internal static class Program
                         // 持久化到配置文件，重启后仍然生效
                         try
                         {
-                            var savePath = string.IsNullOrWhiteSpace(configPath) ? "codeagent.json" : configPath;
+                            var savePath = ConfigSavePath(configPath, config);
                             AgentConfig.Save(config, savePath);
                             Console.WriteLine($"思考强度已设为: {v}，已保存到 {savePath}");
                         }
@@ -975,6 +984,7 @@ internal static class Program
             命令:
               /help            显示本帮助
               /clear           清空对话历史
+              /compact         压缩对话历史为摘要（/clear 是彻底清空）
               /cls             清空屏幕（或按 Ctrl+L）
               /model [名称]    查看或切换模型
               /config          显示当前配置
@@ -990,6 +1000,7 @@ internal static class Program
               /tools           列出可用工具
               /providers       显示已配置的 Provider
               /models          列出当前 Provider 的可用模型
+              /diag            显示终端环境诊断
               /history         显示当前对话历史
               /thinking        查看或设置思考强度（off/low/medium/high）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）

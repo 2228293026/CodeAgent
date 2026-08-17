@@ -86,8 +86,11 @@ public sealed class GrepTool : ITool
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var include = ToolArgs.GetStringList(args, "include");
         var exclude = ToolArgs.GetStringList(args, "exclude");
-        var includeRes = include?.Select(Glob.ToRegex).ToList();
-        var excludeRes = exclude?.Select(Glob.ToRegex).ToList();
+        // 无分隔符的 include/exclude（如 "*.cs"）按「任意深度」匹配（与 ripgrep --glob 语义一致）：
+        // 裸 glob 只会匹配根目录文件，子目录里的 src/a.cs 会被漏掉；含分隔符的模式（src/**/*.cs）保持原样
+        static string AsFilePattern(string p) => p.Contains('/') || p.Contains('\\') ? p : "**/" + p;
+        var includeRes = include?.Select(p => Glob.ToRegex(AsFilePattern(p))).ToList();
+        var excludeRes = exclude?.Select(p => Glob.ToRegex(AsFilePattern(p))).ToList();
 
         RegexOptions opts = RegexOptions.Compiled;
         if (pattern == pattern.ToLowerInvariant())
@@ -115,7 +118,7 @@ public sealed class GrepTool : ITool
             try
             {
                 var rel = ctx.Workspace.ToRelative(path).Replace('\\', '/');
-                // include/exclude 仅作用于目录扫描（单文件目标视为用户显式指定）
+                // include/exclude 对每个扫描到的文件生效（含单文件目标）
                 if (includeRes is not null && includeRes.Count > 0 && !includeRes.Any(r => r.IsMatch(rel)))
                     return;
                 if (excludeRes is not null && excludeRes.Any(r => r.IsMatch(rel)))

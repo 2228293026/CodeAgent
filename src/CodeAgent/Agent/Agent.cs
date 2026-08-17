@@ -71,7 +71,8 @@ public sealed class Agent
 
     // 单轮统计（回合结束后用于摘要行）
     public int TurnRounds { get; private set; }
-    public int TurnToolCalls { get; private set; }
+    private int _turnToolCalls; // 并行工具调用会并发自增：底层字段 + Interlocked 保证计数原子
+    public int TurnToolCalls => _turnToolCalls;
     public long TurnInputTokens { get; private set; }
     public long TurnOutputTokens { get; private set; }
     public long TurnCachedTokens { get; private set; }
@@ -262,7 +263,7 @@ public sealed class Agent
         LastPrompt = userPrompt;
         _renderer = new ConsoleRenderer(_ctx.Config.RenderMarkdown);
         TurnRounds = 0;
-        TurnToolCalls = 0;
+        _turnToolCalls = 0;
         TurnInputTokens = 0;
         TurnOutputTokens = 0;
         TurnCachedTokens = 0;
@@ -460,7 +461,8 @@ public sealed class Agent
         _spinnerCts = new System.Threading.CancellationTokenSource();
         var cts = _spinnerCts;
         var frame = 0;
-        Console.WriteLine(); // 输入行下方新行：spinner 独立显示，避免与输入框/输出混在一起
+        lock (ConsoleLock)
+            Console.WriteLine(); // 输入行下方新行：spinner 独立显示，避免与输入框/输出混在一起
         _ = Task.Run(async () =>
         {
             try
@@ -470,9 +472,15 @@ public sealed class Agent
                     var f = SpinnerFrames[frame++ % SpinnerFrames.Length];
                     var total = TotalInputTokens + TotalOutputTokens + _streamTokens;
                     var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
-                    // 显示实际用时与 token（而非"思考中"），实时更新
+                    // 显示实际用时与 token（而非"思考中"），实时更新。
+                    // 取锁后再查一次取消：ClearSpinner/FinalizeSpinner 在锁内先取消再清行，
+                    // 若已取消就不再画帧——否则清行之后又落下一帧动画残留在屏幕上
                     lock (ConsoleLock)
+                    {
+                        if (cts.IsCancellationRequested)
+                            break;
                         Console.Write($"\r{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
+                    }
                     await Task.Delay(120, cts.Token);
                 }
             }
@@ -486,8 +494,10 @@ public sealed class Agent
         _spinnerCts?.Cancel();
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
         // 清空 spinner 行并回到行首：不留常驻文本（思考时长由回合摘要行显示），
-        // 流式输出/工具日志从该行继续，输入行保持在上方
-        Console.Write("\r" + new string(' ', 60) + "\r");
+        // 流式输出/工具日志从该行继续，输入行保持在上方。
+        // 锁内「先取消再清行」：与动画任务的锁互斥，保证清行后不会再有帧写进来
+        lock (ConsoleLock)
+            Console.Write("\r" + new string(' ', 60) + "\r");
     }
 
     /// <summary>思考结束（首个文本到达）：把 spinner 行定格为「用时 X · ↑ tokens」统计行并换行。
@@ -498,13 +508,16 @@ public sealed class Agent
         TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
         var total = TotalInputTokens + TotalOutputTokens + _streamTokens; // 会话累计口径（与摘要行一致）
         var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
-        if (!_reasoningShown)
+        lock (ConsoleLock)
         {
-            // spinner 动画行还在：先清掉再定格（避免残留帧字符）
-            Console.Write("\r" + new string(' ', 60) + "\r");
+            if (!_reasoningShown)
+            {
+                // spinner 动画行还在：先清掉再定格（避免残留帧字符）
+                Console.Write("\r" + new string(' ', 60) + "\r");
+            }
+            // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
+            Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
         }
-        // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
-        Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
     }
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
@@ -606,7 +619,8 @@ public sealed class Agent
             };
         }
 
-        TurnToolCalls++;
+        // 工具可能并行执行（SemaphoreSlim(8)）：自增必须原子，否则计数丢失
+        System.Threading.Interlocked.Increment(ref _turnToolCalls);
         var summary = SummarizeCall(tc.Name, tc.ArgumentsJson);
         var showLog = _ctx.Config.ShowToolCalls;
 
@@ -631,6 +645,12 @@ public sealed class Agent
         {
             output = $"工具错误: {ex.Message}";
             isError = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // 用户取消（ESC / Ctrl+C）应立即中止整轮并向上传播——
+            // 曾被下面的通用 catch 吞成「工具异常」结果，回合还会再发一次注定失败的请求
+            throw;
         }
         catch (Exception ex)
         {
@@ -789,6 +809,10 @@ public sealed class Agent
     /// <summary>把最早的一部分对话交给 LLM 压缩成摘要；成功返回 true。</summary>
     private async Task<bool> TrySummarizeAsync(CancellationToken ct, bool manual = false)
     {
+        // 只有 system 一条（/clear 后直接 /compact）时 GetRange 会越界抛异常：
+        // 对话过短直接返回 false，让 /compact 显示友好的「无需压缩」而不是堆栈信息
+        if (_messages.Count < 2)
+            return false;
         var keepFrom = Math.Max(2, _messages.Count * 2 / 3);
 
         // 避免把 tool_calls 与它的结果截断：分界前一条是带工具调用的 assistant 时，把它留在保留区

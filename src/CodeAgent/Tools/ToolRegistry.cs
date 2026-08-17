@@ -104,41 +104,32 @@ public sealed class Workspace
     }
 
     /// <summary>
-    /// 解析路径的真实位置（跟随符号链接）。逐级向上找到最深已存在的组件，
-    /// 解析其链接目标后拼回未存在的尾部，用于沙箱越界检查。
+    /// 解析路径的真实位置（从根开始逐段跟随符号链接）。只解析最深一段时，
+    /// 若路径本身已存在（如 read_file 经过 symlink 目录读取一个已存在的文件），
+    /// 对非链接的叶子调 ResolveLinkTarget 返回 null，中间层的链接不会被发现，沙箱可被穿越。
     /// </summary>
     private static string ResolveRealPath(string fullPath)
     {
-        var current = fullPath;
-        var tail = new Stack<string>();
-        while (!File.Exists(current) && !Directory.Exists(current))
+        var root = Path.GetPathRoot(fullPath) ?? fullPath;
+        var segments = fullPath.Substring(root.Length)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar,
+                StringSplitOptions.RemoveEmptyEntries);
+        var current = root;
+        foreach (var seg in segments)
         {
-            var name = Path.GetFileName(current);
-            if (name.Length == 0)
-                break;
-            tail.Push(name);
-            var parent = Path.GetDirectoryName(current);
-            if (string.IsNullOrEmpty(parent) || parent == current)
-                break;
-            current = parent;
+            var next = Path.Combine(current, seg);
+            string? resolved = null;
+            try
+            {
+                FileSystemInfo info = File.Exists(next) ? new FileInfo(next) : new DirectoryInfo(next);
+                resolved = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName;
+            }
+            catch
+            {
+                // 解析失败（无权限等）按字面路径继续，后续段仍会尝试
+            }
+            current = resolved ?? next;
         }
-
-        try
-        {
-            FileSystemInfo info = File.Exists(current)
-                ? new FileInfo(current)
-                : new DirectoryInfo(current);
-            var target = info.ResolveLinkTarget(true);
-            if (target is not null)
-                current = target.FullName;
-        }
-        catch
-        {
-            // 无法解析时按字面路径处理（IsWithin 仍会拦截明显的越界）
-        }
-
-        foreach (var seg in tail)
-            current = Path.Combine(current, seg);
         return current;
     }
 

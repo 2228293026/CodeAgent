@@ -23,6 +23,10 @@ public sealed class OpenAiProvider : IAgentProvider
     private readonly int _maxTokens;
     private readonly double _temperature;
 
+    /// <summary>未注入 HttpClient 时的共享实例：/model 每次切换都会新建 Provider，
+    /// 逐实例 new HttpClient 会各自持有连接池不释放（套接字耗尽），必须全局复用。</summary>
+    private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(300) };
+
     public OpenAiProvider(ProviderOptions opts, HttpClient? http = null)
     {
         _baseUrl = (string.IsNullOrWhiteSpace(opts.BaseUrl) ? DefaultBaseUrl : opts.BaseUrl).TrimEnd('/');
@@ -30,7 +34,7 @@ public sealed class OpenAiProvider : IAgentProvider
         _maxTokens = opts.MaxTokens <= 0 ? 8192 : opts.MaxTokens;
         _temperature = opts.Temperature;
         _apiKey = ResolveApiKey(opts, DefaultApiKeyEnv);
-        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(300) };
+        _http = http ?? SharedHttp;
     }
 
     public string Name => "openai";
@@ -104,9 +108,14 @@ public sealed class OpenAiProvider : IAgentProvider
         }
 
         var choice = root?["choices"]?[0]?["message"];
-        var text = choice?["content"]?.GetValue<string>() ?? "";
-        if (choice?["content"] is JsonArray)
-            text = string.Join("", choice["content"]!.AsArray().Select(b => b?["text"]?.GetValue<string>() ?? ""));
+        // content 可能是分块数组（部分兼容服务返回 [{"type":"text","text":…}]）：
+        // 必须先判数组再取字符串——对 JsonArray 调 GetValue<string> 会直接抛 InvalidOperationException，
+        // 原来的「先取字符串再 if 判数组」写法让数组分支永远不可达
+        string text;
+        if (choice?["content"] is JsonArray parts)
+            text = string.Join("", parts.Select(b => b?["text"]?.GetValue<string>() ?? ""));
+        else
+            text = choice?["content"]?.GetValue<string>() ?? "";
 
         var toolCalls = new List<ToolCall>();
         var arr = choice?["tool_calls"]?.AsArray();

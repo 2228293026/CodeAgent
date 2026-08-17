@@ -24,6 +24,9 @@ public sealed class AnthropicProvider : IAgentProvider
     private readonly int _maxTokens;
     private readonly double _temperature;
 
+    /// <summary>未注入 HttpClient 时的共享实例（同 OpenAiProvider：避免逐实例连接池泄漏）。</summary>
+    private static readonly HttpClient SharedHttp = new() { Timeout = TimeSpan.FromSeconds(300) };
+
     public AnthropicProvider(ProviderOptions opts, HttpClient? http = null)
     {
         _baseUrl = (string.IsNullOrWhiteSpace(opts.BaseUrl) ? DefaultBaseUrl : opts.BaseUrl).TrimEnd('/');
@@ -31,7 +34,7 @@ public sealed class AnthropicProvider : IAgentProvider
         _maxTokens = opts.MaxTokens <= 0 ? 8192 : opts.MaxTokens;
         _temperature = opts.Temperature;
         _apiKey = OpenAiProvider.ResolveApiKey(opts, DefaultApiKeyEnv);
-        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(300) };
+        _http = http ?? SharedHttp;
     }
 
     public string Name => "anthropic";
@@ -106,7 +109,7 @@ public sealed class AnthropicProvider : IAgentProvider
             {
                 var type = b?["type"]?.GetValue<string>();
                 if (type == "text")
-                    text.Append(b?["text"]?.GetValue<string>());
+                    text.Append(b?["text"]?.GetValue<string>() ?? ""); // text 为 null/缺失时 Append(null) 会抛 ArgumentNullException
                 else if (type == "tool_use")
                 {
                     toolCalls.Add(new ToolCall
