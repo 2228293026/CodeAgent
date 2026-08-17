@@ -531,7 +531,7 @@ public sealed class Agent
     }
 
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
-    private static string SummarizeCall(string name, string argsJson)
+    internal static string SummarizeCall(string name, string argsJson)
     {
         JsonObject? args;
         try
@@ -555,7 +555,9 @@ public sealed class Agent
             // 行内摘要只留 path，实际改动由 EditPreviewText 的 diff 预览展示
             if (name == "edit_file" && kv.Key is "old_string" or "new_string")
                 continue;
-            var v = (kv.Value?.ToJsonString() ?? "").Trim('"');
+            // 用 ToolArgs 取原始字符串值：JsonNode.ToJsonString() 默认编码器会把中文
+            // 转义成 \uXXXX（曾导致工具摘要行显示 docs/项目… 而非 docs/项目介绍）
+            var v = ToolArgs.GetString(args, kv.Key);
             if (v.Length > 60)
                 v = v[..60] + "…";
             parts.Add($"{kv.Key}={v}");

@@ -129,6 +129,23 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void SummarizeCall_ChineseArg_ShownAsIs()
+    {
+        // 回归：参数值曾用 JsonNode.ToJsonString() 提取，默认编码器把中文转义成 \uXXXX，
+        // 工具摘要行显示 docs/项目… 而非 docs/项目介绍
+        var s = AgentClass.SummarizeCall("read_file", """{"path":"docs/项目介绍.md"}""");
+        Assert.Contains("docs/项目介绍.md", s);
+        Assert.DoesNotContain("\\u", s);
+    }
+
+    [Fact]
+    public void SummarizeCall_NumericArg_Stringified()
+    {
+        var s = AgentClass.SummarizeCall("read_file", """{"path":"a.cs","offset":10}""");
+        Assert.Contains("offset=10", s); // 非字符串标量仍显示为其 JSON 文本
+    }
+
+    [Fact]
     public async Task UndoLastTurn_Consecutive_RemovesBothTurns()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
