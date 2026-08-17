@@ -264,9 +264,12 @@ internal static class Program
         catch { /* 管道/重定向环境忽略 */ }
 
         var pendingDraft = (string?)null; // 取消回合后回填到输入框的草稿
+        var skipStatusBar = false; // 模式/权限切换已有一行确认：下一轮跳过状态栏（防模式名重复三处）
         while (true)
         {
-            PrintStatusBar(opts, agent, config.ThinkingEffort);
+            if (!skipStatusBar)
+                PrintStatusBar(opts, agent, config.ThinkingEffort);
+            skipStatusBar = false;
             var line = InputLine.Read(PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
             pendingDraft = null;
             if (line is null)
@@ -293,7 +296,7 @@ internal static class Program
                 }
                 else
                 {
-                    HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
+                    skipStatusBar = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
                     continue;
                 }
             }
@@ -618,7 +621,9 @@ internal static class Program
         Console.WriteLine("──────────────────────────────────────────────────────────");
     }
 
-    private static void HandleCommand(
+    /// <summary>处理 REPL 斜杠命令。返回 true = 该命令已展示过状态信息，本轮跳过状态栏
+    /// （模式/权限切换只需一行灰色确认，避免「消息 + 状态栏 + 提示符」三处重复模式名）。</summary>
+    private static bool HandleCommand(
         string line,
         AgentConfig config,
         string? configPath,
@@ -628,6 +633,7 @@ internal static class Program
         ToolRegistry tools)
     {
         var (cmd, rest) = SplitCommand(line);
+        var suppressStatusBar = false;
 
         switch (cmd)
         {
@@ -681,6 +687,7 @@ internal static class Program
                     agent.SetFileAccess(next);
                     PrintFileAccess(next);
                     PersistFileAccess(config); // 写回配置文件，重启后保持
+                    suppressStatusBar = true; // 同模式切换：一行确认，跳过状态栏
                 }
                 else if (!string.IsNullOrWhiteSpace(rest))
                 {
@@ -690,6 +697,7 @@ internal static class Program
                         agent.SetFileAccess(mode);
                         PrintFileAccess(mode);
                         PersistFileAccess(config);
+                        suppressStatusBar = true;
                     }
                     else
                     {
@@ -961,20 +969,24 @@ internal static class Program
                 }
                 else if (rest.Equals("next", StringComparison.OrdinalIgnoreCase))
                 {
-                    // /mode next：循环切换到下一个模式（Shift+Tab 快捷键映射到这里）
+                    // /mode next：循环切换到下一个模式（Shift+Tab 快捷键映射到这里）。
+                    // 只打一行灰色确认并跳过状态栏：Tab 连续切换时曾产出
+                    // 「消息 + 状态栏 + 提示符」4 行、模式名重复 3 次的刷屏
                     var modes = Modes.Build(config);
                     var idx = modes.FindIndex(m => m.Name.Equals(agent.CurrentMode.Name, StringComparison.OrdinalIgnoreCase));
                     if (idx < 0)
                         idx = 0;
                     var next = modes[(idx + 1) % modes.Count];
                     agent.SetMode(next);
-                    Console.WriteLine($"已切换模式: {next.Name} — {next.Description}");
+                    PrintModeSwitched(next);
+                    suppressStatusBar = true;
                 }
                 else
                 {
                     var mode = Modes.Find(rest, config);
                     agent.SetMode(mode);
-                    Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
+                    PrintModeSwitched(mode);
+                    suppressStatusBar = true;
                 }
                 break;
 
@@ -1042,6 +1054,15 @@ internal static class Program
                 Console.WriteLine($"未知命令: {cmd}（输入 /help 查看命令，Tab 可补全）");
                 break;
         }
+        return suppressStatusBar;
+    }
+
+    /// <summary>模式切换的灰色单行确认（Tab / /mode 用；状态栏本轮跳过，避免模式名重复三处）。</summary>
+    private static void PrintModeSwitched(AgentMode mode)
+    {
+        SafeColor.Foreground(ConsoleColor.DarkGray);
+        Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
+        SafeColor.Reset();
     }
 
     internal static (string cmd, string rest) SplitCommand(string line)
