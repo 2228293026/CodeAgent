@@ -1011,9 +1011,12 @@ internal static class Program
                 Console.WriteLine($"Model    : {opts.Model}");
                 Console.WriteLine($"BaseUrl  : {opts.BaseUrl}");
                 Console.WriteLine($"ApiKey   : {(string.IsNullOrEmpty(opts.ApiKey) ? $"env[{opts.ApiKeyEnv ?? "?"}]" : "****")}");
-                var ctxDesc = config.ContextWindow > 0
-                    ? $"{config.ContextWindow:N0}（配置）"
-                    : KnownContextWindows.TryGet(opts.Model) is { } known ? $"{known:N0}（按模型名自动识别）"
+                // 与状态栏/\/stats 同口径：配置 > 内置表 > 后台探测（探测完成后 /config 能显示 API 元数据值）
+                var effWin = EffectiveContextWindow(config, opts, ctxProbe);
+                var ctxDesc = effWin > 0
+                    ? config.ContextWindow > 0 ? $"{effWin:N0}（配置）"
+                    : KnownContextWindows.TryGet(opts.Model) is { } known && known == effWin ? $"{known:N0}（按模型名自动识别）"
+                    : $"{effWin:N0}（/models 元数据探测）"
                     : "未知（可配置 contextWindow）";
                 Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {ctxDesc}");
                 Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}   超时: {config.CommandTimeoutSeconds}s");
