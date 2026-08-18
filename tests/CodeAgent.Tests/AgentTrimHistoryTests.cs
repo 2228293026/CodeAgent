@@ -222,7 +222,10 @@ public class AgentTrimHistoryTests : IDisposable
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "回复内容" } };
         var agent = new AgentClass(new AgentConfig
         {
-            SaveSessions = true, SessionDir = SessionDir, MaxHistoryChars = 100_000, MaxToolIterations = 10,
+            SaveSessions = true,
+            SessionDir = SessionDir,
+            MaxHistoryChars = 100_000,
+            MaxToolIterations = 10,
         }, provider, ToolRegistry.CreateDefault());
         await agent.RunAsync("历史问题", CancellationToken.None);
         agent.Close();

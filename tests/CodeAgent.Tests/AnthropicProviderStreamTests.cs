@@ -210,7 +210,7 @@ public class AnthropicProviderStreamTests
         Assert.Equal("max_tokens", resp.FinishReason);
     }
     [Theory]
-    [InlineData("overloaded_error", true)]   // 过载：可自动重试
+
     [InlineData("overloaded_error", true)]       // 过载：可自动重试
     [InlineData("rate_limit_error", true)]       // 限速：可自动重试
     [InlineData("invalid_request_error", false)] // 请求错误：重试无意义
