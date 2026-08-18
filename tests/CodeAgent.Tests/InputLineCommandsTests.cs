@@ -83,8 +83,8 @@ public class InputLineCommandsTests
         var special = new[] { "/retry" }; // REPL 循环特殊处理
         var handled = new[]
         {
-            "/help", "/clear", "/compact", "/cls", "/model", "/config", "/session", "/setup",
-            "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/stats",
+            "/help", "/clear", "/compact", "/cls", "/model", "/provider", "/config", "/session", "/setup",
+            "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/copy", "/stats",
             "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
             "/exit", "/quit",
         };
