@@ -66,6 +66,13 @@ public static class ShellRunner
             try { proc.Kill(entireProcessTree: true); } catch { /* 尽力而为 */ }
             return (124, $"[命令超时（{timeoutSeconds}s），已终止]\n$ {command}\n\n" + (await stdout) + (await stderr));
         }
+        catch (OperationCanceledException)
+        {
+            // 用户取消（ESC / Ctrl+C）：必须杀掉子进程树，否则 dotnet build 之类会变成
+            // 脱管后台进程继续跑完，占 CPU 且可能继续写文件
+            try { proc.Kill(entireProcessTree: true); } catch { /* 进程可能刚好退出 */ }
+            throw;
+        }
 
         var outText = (await stdout).TrimEnd();
         var errText = (await stderr).TrimEnd();

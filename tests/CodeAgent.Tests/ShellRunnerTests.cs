@@ -174,4 +174,17 @@ public class ShellRunnerTests
         Assert.False(ShellRunner.IsWslBash(@"C:\Program Files\Git\bin\bash.exe"));
         Assert.False(ShellRunner.IsWslBash(@"C:\msys64\usr\bin\bash.exe"));
     }
+
+    [Fact]
+    public async Task RunAsync_UserCancel_PropagatesFast()
+    {
+        // 回归：用户取消（ESC）曾不杀子进程，长命令变成脱管后台进程继续跑；
+        // 现在取消立即向上传播（杀进程树在实现内尽力而为）
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ShellRunner.RunAsync("bash", "sleep 30", System.IO.Path.GetTempPath(), 60, cts.Token));
+        sw.Stop();
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"取消应快速传播，实际 {sw.Elapsed}");
+    }
 }
