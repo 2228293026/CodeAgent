@@ -215,4 +215,29 @@ public class AgentTrimHistoryTests : IDisposable
         Assert.True(File.Exists(Path.Combine(dir, "a.jsonl")));
     }
 
+    [Fact]
+    public async Task ExportSessionLogMarkdown_ExportsWithoutTouchingCurrent()
+    {
+        // 第一个 agent 开日志落盘（fixture 默认 SaveSessions=false 不写 jsonl）
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "回复内容" } };
+        var agent = new AgentClass(new AgentConfig
+        {
+            SaveSessions = true, SessionDir = SessionDir, MaxHistoryChars = 100_000, MaxToolIterations = 10,
+        }, provider, ToolRegistry.CreateDefault());
+        await agent.RunAsync("历史问题", CancellationToken.None);
+        agent.Close();
+        var log = Directory.GetFiles(SessionDir, "*.jsonl").Single();
+
+        // 新会话（模拟重启后按编号导出旧日志）：当前对话不含「历史问题」
+        var agent2 = MakeAgent(new FakeProvider(), 100_000);
+        await agent2.RunAsync("新对话", CancellationToken.None);
+        var before = agent2.MessageCount;
+        var file = agent2.ExportSessionLogMarkdown(log);
+
+        Assert.True(File.Exists(file));
+        Assert.Contains("历史问题", File.ReadAllText(file)); // 旧日志内容完整导出
+        Assert.DoesNotContain("新对话", File.ReadAllText(file)); // 不混入当前对话
+        Assert.Equal(before, agent2.MessageCount); // 当前对话未被替换
+    }
+
 }

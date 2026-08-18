@@ -31,14 +31,28 @@ public sealed partial class Agent
     public string ExportMarkdown(string? name)
     {
         IReadOnlyList<ProviderMessage> msgs = name is null ? _messages : LoadMessages(name);
+        var safeName = name is null ? $"chat-{DateTime.Now:yyyyMMdd-HHmmss}" : SanitizeName(name);
+        return ExportMessages(msgs, safeName, name);
+    }
+
+    /// <summary>把指定会话日志（/resume 列表中的编号对应文件）导出为 Markdown，不动当前对话。</summary>
+    public string ExportSessionLogMarkdown(string logPath)
+    {
+        var msgs = ReadSessionLogFile(logPath);
+        if (msgs.Count == 0)
+            throw new FileNotFoundException($"会话日志为空或损坏: {logPath}");
+        return ExportMessages(msgs, SanitizeName(Path.GetFileNameWithoutExtension(logPath)), null);
+    }
+
+    private string ExportMessages(IReadOnlyList<ProviderMessage> msgs, string safeName, string? title)
+    {
         var dir = Path.Combine(Environment.CurrentDirectory, _ctx.Config.ExportDir);
         Directory.CreateDirectory(dir);
         // name 同样需 sanitize：/export ../evil 曾写入 ExportDir 父目录（路径穿越）
-        var safeName = name is null ? $"chat-{DateTime.Now:yyyyMMdd-HHmmss}" : SanitizeName(name);
         var file = Path.Combine(dir, safeName + ".md");
 
         var sb = new StringBuilder();
-        sb.AppendLine($"# CodeAgent 会话{(name is null ? "" : $"：{name}")}");
+        sb.AppendLine($"# CodeAgent 会话{(title is null ? "" : $"：{title}")}");
         sb.AppendLine();
         foreach (var m in msgs)
         {
@@ -82,10 +96,10 @@ public sealed partial class Agent
     /// <summary>从会话日志（.jsonl，每条消息自动写入）恢复对话：--continue / /resume 用。
     /// 恢复后滚动新日志并把已恢复的消息写进去，新日志自包含（可再次被恢复）；
     /// 开头的 system 若为日志旧值，会由随后的 SetMode 换成当前模式提示。</summary>
-    public bool LoadSessionLog(string path)
+    /// <summary>解析会话日志文件为消息列表（不改当前对话）；IO 错误返回已解析部分。
+    /// LoadSessionLog 与 /export &lt;编号&gt; 共用。</summary>
+    internal static List<ProviderMessage> ReadSessionLogFile(string path)
     {
-        if (!File.Exists(path))
-            return false;
         var msgs = new List<ProviderMessage>();
         try
         {
@@ -98,8 +112,21 @@ public sealed partial class Agent
         }
         catch (IOException)
         {
-            return false;
+            // 读取中断：返回已解析部分（LoadSessionLog 视为空 → false）
         }
+        return msgs;
+    }
+
+    /// <summary>从会话日志（.jsonl，每条消息自动写入）恢复对话：--continue / /resume 用。
+    /// 恢复后滚动新日志并把已恢复的消息写进去，新日志自包含（可再次被恢复）；
+    /// 开头的 system 若为日志旧值，会由随后的 SetMode 换成当前模式提示。</summary>
+    public bool LoadSessionLog(string path)
+    {
+        if (!File.Exists(path))
+            return false;
+        var msgs = ReadSessionLogFile(path);
+        if (msgs.Count == 0)
+            return false;
         // 丢弃末尾未完成的工具轮（ESC 取消/进程中断时，assistant(toolCalls) 已写日志、
         // 工具结果没写全）：带着孤儿 tool_calls 恢复会让下次请求被 API 拒绝（400）。
         // 从尾向前删掉 tool 结果与带 toolCalls 的 assistant，停在完整边界

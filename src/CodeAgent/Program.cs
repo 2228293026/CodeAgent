@@ -1109,9 +1109,27 @@ internal static class Program
                 break;
 
             case "/export":
+                // /export            导出当前对话
+                // /export <名>       导出命名快照（/save 保存的）
+                // /export <编号>     导出 /resume 列表中的历史会话日志（编号与 /resume 一致）
                 try
                 {
-                    var file = agent.ExportMarkdown(string.IsNullOrWhiteSpace(rest) ? null : rest.Trim());
+                    var arg = rest.Trim();
+                    string file;
+                    if (int.TryParse(arg, out var eidx) && eidx >= 1)
+                    {
+                        var logs = RecentSessionLogs(config);
+                        if (eidx > logs.Count)
+                        {
+                            Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。");
+                            break;
+                        }
+                        file = agent.ExportSessionLogMarkdown(logs[eidx - 1]);
+                    }
+                    else
+                    {
+                        file = agent.ExportMarkdown(arg.Length == 0 ? null : arg);
+                    }
                     Console.WriteLine($"✔ 已导出: {file}");
                 }
                 catch (Exception ex)
@@ -1307,7 +1325,7 @@ internal static class Program
               /diff            显示最近一次修改的 diff
               /save <名>       保存当前会话（命名快照）
               /load <名>       恢复已保存的会话
-              /export [名]     导出会话为 Markdown
+              /export [名/编号] 导出会话为 Markdown（编号为 /resume 列表中的历史会话）
               /stats           显示 token 用量统计
               /retry           重新执行上一条请求
               /tools           列出可用工具
