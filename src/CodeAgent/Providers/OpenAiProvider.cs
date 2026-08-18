@@ -14,6 +14,32 @@ public sealed class OpenAiProvider : IAgentProvider
 {
     public const string DefaultBaseUrl = "https://api.openai.com/v1";
     public const string DefaultModel = "gpt-4o";
+    /// <summary>OpenAI 推理系列（o1/o3/o4/gpt-5）：不接受 temperature 与 max_tokens，
+    /// 需改用 max_completion_tokens 且不传温度，否则 400（模型名先去掉厂商前缀再判断）。</summary>
+    private bool IsReasoningSeries
+    {
+        get
+        {
+            var name = _model.ToLowerInvariant();
+            var slash = name.LastIndexOf('/');
+            if (slash >= 0)
+                name = name[(slash + 1)..];
+            return name.StartsWith("o1") || name.StartsWith("o3") || name.StartsWith("o4") || name.StartsWith("gpt-5");
+        }
+    }
+
+    /// <summary>按模型系列写入输出上限/温度（推理系列用 max_completion_tokens 且不带 temperature）。</summary>
+    private void ApplyLimits(JsonObject payload)
+    {
+        if (IsReasoningSeries)
+            payload["max_completion_tokens"] = _maxTokens;
+        else
+        {
+            payload["temperature"] = _temperature;
+            payload["max_tokens"] = _maxTokens;
+        }
+    }
+
     public const string DefaultApiKeyEnv = "OPENAI_API_KEY";
 
     private readonly HttpClient _http;
@@ -63,9 +89,8 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             ["model"] = _model,
             ["messages"] = BuildMessages(messages),
-            ["temperature"] = _temperature,
-            ["max_tokens"] = _maxTokens,
         };
+        ApplyLimits(payload);
         if (tools.Count > 0)
         {
             // 空工具列表整体省略（/compact 摘要调用）：tools:[] 与 tool_choice 同时省略，
@@ -167,11 +192,10 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             ["model"] = _model,
             ["messages"] = BuildMessages(messages),
-            ["temperature"] = _temperature,
-            ["max_tokens"] = _maxTokens,
             ["stream"] = true,
             ["stream_options"] = new JsonObject { ["include_usage"] = true },
         };
+        ApplyLimits(payload);
         if (tools.Count > 0)
         {
             // 空工具列表整体省略（/compact 摘要调用）：tools:[] 与 tool_choice 同时省略

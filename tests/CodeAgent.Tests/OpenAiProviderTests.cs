@@ -191,4 +191,45 @@ public class OpenAiProviderTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
             Task.Delay(Timeout.Infinite, ct).ContinueWith(_ => new HttpResponseMessage(), ct);
     }
+
+    [Fact]
+    public async Task ChatAsync_ReasoningModel_UsesMaxCompletionTokens_NoTemperature()
+    {
+        // 回归：o1/o3/o4/gpt-5 系列不接受 temperature 与 max_tokens，曾直接 400
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k", Model = "openai/o3-mini" }, new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!)!;
+        Assert.Null(body["temperature"]);
+        Assert.Null(body["max_tokens"]);
+        Assert.Equal(8192, (int)body["max_completion_tokens"]!);
+    }
+
+    [Fact]
+    public async Task ChatAsync_RegularModel_KeepsTemperatureAndMaxTokens()
+    {
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k", Model = "deepseek-chat", Temperature = 0.3 }, new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!)!;
+        Assert.Equal(0.3, (double)body["temperature"]!, 5);
+        Assert.Equal(8192, (int)body["max_tokens"]!);
+        Assert.Null(body["max_completion_tokens"]);
+    }
 }
