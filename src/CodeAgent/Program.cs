@@ -725,6 +725,33 @@ internal static class Program
         }
     }
 
+    /// <summary>把文本写入系统剪贴板：Windows 用 clip.exe、macOS 用 pbcopy、Linux 用 xclip。
+    /// 找不到工具或写入失败返回 false（调用方给出手动复制提示）。</summary>
+    private static async Task<bool> TryCopyToClipboardAsync(string text)
+    {
+        try
+        {
+            System.Diagnostics.ProcessStartInfo psi = OperatingSystem.IsWindows()
+                ? new("clip.exe")
+                : OperatingSystem.IsMacOS() ? new("pbcopy") : new("xclip", "-selection clipboard");
+            psi.UseShellExecute = false;
+            psi.RedirectStandardInput = true;
+            psi.CreateNoWindow = true;
+            using var p = System.Diagnostics.Process.Start(psi);
+            if (p is null)
+                return false;
+            await p.StandardInput.WriteAsync(text);
+            await p.StandardInput.FlushAsync();
+            p.StandardInput.Close();
+            await p.WaitForExitAsync();
+            return p.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void PrintBanner(AgentConfig config, ProviderOptions opts, AgentClass agent)
     {
         try
@@ -1275,6 +1302,23 @@ internal static class Program
                 }
                 break;
 
+            case "/copy":
+                {
+                    // 复制最近一条助手回复到剪贴板（贴 issue/聊天不用手动选中滚动输出）
+                    var lastReply = agent.Messages.LastOrDefault(m =>
+                        m.Role == MessageRole.Assistant && !string.IsNullOrWhiteSpace(m.Content));
+                    if (lastReply is null)
+                    {
+                        Console.WriteLine("没有可复制的助手回复。");
+                        break;
+                    }
+                    var ok = TryCopyToClipboardAsync(lastReply.Content!).GetAwaiter().GetResult(); // HandleCommand 同步上下文
+                    Console.WriteLine(ok
+                        ? $"已复制最近一条回复（{TextUtil.TruncateLine(lastReply.Content!, 40)}…）到剪贴板。"
+                        : "⚠ 无法访问剪贴板（需要 clip.exe / pbcopy / xclip）。");
+                }
+                break;
+
             case "/diag":
                 // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
                 Console.WriteLine("终端诊断:");
@@ -1397,6 +1441,7 @@ internal static class Program
               /cls             清空屏幕（或按 Ctrl+L）
               /model [名称|编号] 查看或切换模型（编号按完整列表）
               /provider [名]   查看或切换供应商（无需重启）
+              /copy            复制最近一条助手回复到剪贴板
               /config          显示当前配置
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导
