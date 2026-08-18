@@ -190,8 +190,9 @@ public sealed class GrepTool : ITool
 
         if (hits == 0)
             return $"(无匹配: {pattern})";
+        var notice = hits >= max ? $"\n…(已达 max_results={max} 上限，可能还有更多匹配；可用 max_results 参数提高)" : "";
         return filesOnly
-            ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd()
-            : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd();
+            ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd() + notice
+            : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;
     }
 }

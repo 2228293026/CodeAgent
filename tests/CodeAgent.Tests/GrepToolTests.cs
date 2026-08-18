@@ -153,4 +153,24 @@ public class GrepToolTests : IDisposable
         var count = output.Split('\n').Count(l => l.Contains("4| line4"));
         Assert.Equal(1, count);
     }
+
+    [Fact]
+    public async Task Grep_MaxResultsReached_ShowsTruncationNotice()
+    {
+        // 回归：命中数达到上限时曾静默截断，模型可能误以为已穷尽全部匹配
+        File.WriteAllText(Path.Combine(_dir, "g.txt"), string.Join("\n", Enumerable.Range(0, 30).Select(i => $"hit{i}")));
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var out1 = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "hit", ["max_results"] = 5 }, ctx, CancellationToken.None);
+        Assert.Contains("max_results=5", out1);
+        Assert.Contains("hit4", out1);
+        Assert.DoesNotContain("hit5\n", out1 + "\n"); // 上限外的内容不出现
+
+        // 未达上限：无提示
+        var out2 = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "hit", ["max_results"] = 50 }, ctx, CancellationToken.None);
+        Assert.DoesNotContain("max_results", out2);
+    }
 }
