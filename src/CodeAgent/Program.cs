@@ -511,15 +511,24 @@ internal static class Program
     }
 
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
-    /// token 显示本回合用量（与状态栏、spinner 定格行同口径）；会话累计见 /stats。</summary>
+    /// token 显示本回合用量（与状态栏、spinner 定格行同口径）；会话累计见 /stats。
+    /// 配置了单价时附本回合费用估算（≈$x.xx）。</summary>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
+        var cost = TextUtil.UsdCost(agent.TurnInputTokens, agent.TurnOutputTokens,
+            agent.Context.Config.PricePerMillionInput, agent.Context.Config.PricePerMillionOutput);
+        string costText = "";
+        if (cost is { } c)
+        {
+            var shown = c < 0.01 ? c.ToString("F4") : c.ToString("F2"); // 小额保留 4 位小数避免 $0.00
+            costText = $" ≈${shown}";
+        }
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
-            $"{TextUtil.FormatElapsed(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache} ──");
+            $"{TextUtil.FormatElapsed(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache}{costText} ──");
         SafeColor.Reset();
     }
 
@@ -1003,11 +1012,16 @@ internal static class Program
                 break;
 
             case "/stats":
+            {
+                var cost = TextUtil.UsdCost(agent.TotalInputTokens, agent.TotalOutputTokens,
+                    config.PricePerMillionInput, config.PricePerMillionOutput);
                 Console.WriteLine(
                     $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
                     $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，" +
-                    $"当前上下文 ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}");
+                    $"当前上下文 ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}" +
+                    (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
                 break;
+            }
 
             case "/tools":
                 Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}）:");

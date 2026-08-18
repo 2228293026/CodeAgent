@@ -58,6 +58,12 @@ public sealed class AgentConfig
     /// 各模型不同（如 32k/128k/200k/1M），按所用模型填写。</summary>
     public int ContextWindow { get; set; } = 0;
 
+    /// <summary>输入单价（美元/百万 token），用于成本估算；0 = 不显示费用。</summary>
+    public double PricePerMillionInput { get; set; } = 0;
+
+    /// <summary>输出单价（美元/百万 token）；0 = 不显示费用。</summary>
+    public double PricePerMillionOutput { get; set; } = 0;
+
     /// <summary>是否允许 run_command 执行命令。</summary>
     public bool AllowCommands { get; set; } = true;
 

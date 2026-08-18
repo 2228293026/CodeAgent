@@ -75,6 +75,8 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "maxToolIterations": 0,        // 单轮任务最大工具调用轮数，0 = 不限制（无限）
   "maxHistoryChars": 160000,     // 历史消息字符上限，超出自动裁剪
   "contextWindow": 0,             // 模型上下文窗口（token），状态栏 ctx 百分比用；0 = 自动识别（内置模型表 + /models 元数据），识别不到显示绝对值
+  "pricePerMillionInput": 0,     // 输入单价（$/百万 token），>0 时回合摘要与 /stats 显示费用估算
+  "pricePerMillionOutput": 0,    // 输出单价（$/百万 token）
   "allowCommands": true,         // 是否允许 run_command
   "confirmCommands": false,      // 执行命令前是否逐个确认
   "commandTimeoutSeconds": 60,   // 命令默认超时秒数（模型可按调用覆盖，上限 300）

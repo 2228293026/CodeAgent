@@ -98,6 +98,25 @@ public class TextUtilEdgeTests : IDisposable
     public void CompactTokenCount_Boundaries(long n, string expected) =>
         Assert.Equal(expected, TextUtil.CompactTokenCount(n));
 
+    // ===== UsdCost =====
+
+    [Fact]
+    public void UsdCost_BasicMath()
+    {
+        // 1M in * $1 + 1M out * $2 = $3
+        Assert.Equal(3.0, TextUtil.UsdCost(1_000_000, 1_000_000, 1.0, 2.0)!.Value, 10);
+        // 100k in * $0.27 + 50k out * $1.1 = 0.027 + 0.055 = 0.082
+        Assert.Equal(0.082, TextUtil.UsdCost(100_000, 50_000, 0.27, 1.10)!.Value, 10);
+    }
+
+    [Theory]
+    [InlineData(0, 2)]
+    [InlineData(1, 0)]
+    [InlineData(-1, 2)]
+    [InlineData(1, -2)]
+    public void UsdCost_AnyPriceMissing_ReturnsNull(double inPrice, double outPrice) =>
+        Assert.Null(TextUtil.UsdCost(1000, 1000, inPrice, outPrice));
+
     // ===== FormatSessionTime / FormatElapsed / FormatDuration =====
 
     [Fact]

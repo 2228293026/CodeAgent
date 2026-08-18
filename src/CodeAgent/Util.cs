@@ -79,6 +79,15 @@ public static class TextUtil
     /// <summary>百分比（0-100 收敛）：part/total 的整数百分比，total ≤ 0 时返回 0，负值收敛到 0。</summary>
     public static int PercentOf(long part, long total) =>
         total <= 0 ? 0 : (int)Math.Clamp(part * 100.0 / total, 0, 100);
+
+    /// <summary>token 成本（美元）：单价按每百万 token 计；任一单价 ≤ 0 时返回 null（不显示费用）。</summary>
+    public static double? UsdCost(long inputTokens, long outputTokens, double pricePerMillionInput, double pricePerMillionOutput)
+    {
+        if (pricePerMillionInput <= 0 || pricePerMillionOutput <= 0)
+            return null;
+        return inputTokens * pricePerMillionInput / 1_000_000.0
+             + outputTokens * pricePerMillionOutput / 1_000_000.0;
+    }
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>
