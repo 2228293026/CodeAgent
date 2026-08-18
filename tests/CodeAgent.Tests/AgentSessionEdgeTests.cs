@@ -267,7 +267,10 @@ public class AgentSessionEdgeTests : IDisposable
         // 回归：/load 曾不滚动日志——加载命名快照后 --continue 恢复的是旧对话
         AgentClass Logged(FakeProvider p) => new(new AgentConfig
         {
-            SaveSessions = true, SessionDir = SessionDir, ExportDir = ExportDir, MaxToolIterations = 5,
+            SaveSessions = true,
+            SessionDir = SessionDir,
+            ExportDir = ExportDir,
+            MaxToolIterations = 5,
         }, p, ToolRegistry.CreateDefault());
         var agent = Logged(new FakeProvider { NextResponse = new ProviderResponse { Text = "旧对话内容" } });
         await agent.RunAsync("旧问题", CancellationToken.None);

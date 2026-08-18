@@ -512,8 +512,8 @@ internal static class Program
                 content = (content.Length > 0 ? content + " " : "") + $"[调用 {calls}]";
             }
             if (content.Length > 300)
-            if (content.Length > 300)
-                content = TextUtil.TruncateLine(content, 300);
+                if (content.Length > 300)
+                    content = TextUtil.TruncateLine(content, 300);
             // 多行内容折叠为一行（工具结果常带换行，否则会打乱逐条列表）
             content = content.Replace("\r", "").Replace("\n", " ⏎ ");
             Console.WriteLine($"  [{role}] {content}");
