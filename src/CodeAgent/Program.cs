@@ -1236,7 +1236,7 @@ internal static class Program
               /retry           重新执行上一条请求
               /tools           列出可用工具
               /providers       显示已配置的 Provider
-              /models          列出当前 Provider 的可用模型
+              /models [关键字]  列出/过滤当前 Provider 的可用模型
               /diag            显示终端环境诊断
               /history         显示当前对话历史
               /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
