@@ -276,4 +276,17 @@ public class TextUtilEdgeTests : IDisposable
         var s = new string('x', 100) + "\u0000" + new string('y', 100);
         Assert.True(SkipDirs.LooksBinary(s));
     }
+
+    [Fact]
+    public void Truncate_SurrogatePairAtCut_NotSplit()
+    {
+        // 回归：切点落在代理对中间会产生半个码点（终端显示乱码）
+        var s = "😀😀😀😀"; // 8 个 char
+        var t = TextUtil.Truncate(s, 5);
+        Assert.DoesNotContain("�", t);
+        Assert.True(t.StartsWith("😀😀")); // 第三个 emoji 完整保留或整体让位，不劈半
+
+        var tl = TextUtil.TruncateLine(s, 5);
+        Assert.DoesNotContain("�", tl);
+    }
 }

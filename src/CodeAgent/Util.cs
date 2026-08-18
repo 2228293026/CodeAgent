@@ -24,13 +24,25 @@ public static class SafeColor
 /// <summary>通用小工具。</summary>
 public static class TextUtil
 {
-    public static string Truncate(string s, int max) =>
-        s.Length <= max ? s : s[..max] + $"\n…(共 {s.Length} 字符，已截断)";
+    public static string Truncate(string s, int max)
+    {
+        if (s.Length <= max)
+            return s;
+        return SafeCut(s, max) + $"\n…(共 {s.Length} 字符，已截断)";
+    }
 
     public static string TruncateLine(string s, int max)
     {
         s = s.Replace("\t", "    ");
-        return s.Length <= max ? s : s[..max] + " …";
+        return s.Length <= max ? s : SafeCut(s, max) + " …";
+    }
+
+    /// <summary>按字符数截断，但不劈开 UTF-16 代理对（emoji 半个码点会显示为乱码）。</summary>
+    private static string SafeCut(string s, int max)
+    {
+        if (max > 0 && max < s.Length && char.IsHighSurrogate(s[max - 1]))
+            max--; // 切点落在高位代理上：后退一位，保持代理对完整
+        return s[..max];
     }
 
     public static int CountOccurrences(string text, string sub)
