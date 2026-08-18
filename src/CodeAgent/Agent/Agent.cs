@@ -96,15 +96,23 @@ public sealed class Agent
         {
             if (LastInputTokens > 0)
                 return LastInputTokens;
-            long chars = 0;
+            // 估算口径：ASCII 段按 4 字符/token，CJK/全角按每字 1 token
+            //（中文会话 chars/4 会大幅低估，ctx 百分比与压缩时机判断失真）
+            long chars = 0, cjk = 0;
             foreach (var m in _messages)
             {
-                chars += m.Content?.Length ?? 0;
+                if (m.Content is { Length: > 0 } c)
+                {
+                    chars += c.Length;
+                    foreach (var ch in c)
+                        if (ch >= 0x2E80)
+                            cjk++;
+                }
                 if (m.ToolCalls is not null)
                     foreach (var tc in m.ToolCalls)
                         chars += tc.ArgumentsJson.Length;
             }
-            return (int)(chars / 4);
+            return (int)((chars - cjk) / 4 + cjk);
         }
     }
 

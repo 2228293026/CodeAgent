@@ -267,4 +267,16 @@ public class AgentEdgeTests : IDisposable
         Assert.DoesNotContain(rolled, l => l.Contains("第一轮"));
         Assert.Contains(rolled, l => l.Contains("system")); // 自包含：system 提示在
     }
+
+    [Fact]
+    public void ContextTokens_CjkHeavyContent_EstimatesPerChar()
+    {
+        // 中文按每字 ~1 token 估算：chars/4 会把纯中文会话的 ctx 低估约 4 倍
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false, SystemPrompt = "中文系统提示一二三四五" },
+            new FakeProvider(), ToolRegistry.CreateDefault(), workingDirectory: _dir);
+
+        // 无 usage → 走估算分支；系统提示 11 个全角字 → ≥ 11
+        Assert.True(agent.ContextTokens >= 11, $"CJK 估算 {agent.ContextTokens} 应接近字数而非字数/4");
+    }
 }
