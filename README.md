@@ -231,7 +231,8 @@ src/CodeAgent/
 │   ├── CommandTool.cs      # run_command
 │   └── SessionTools.cs     # stop
 └── Agent/
-    └── Agent.cs            # Agent 主循环：调用 → 执行工具 → 回填 → 直至完成
+    ├── Agent.cs              # Agent 主循环：调用 → 执行工具 → 回填 → 直至完成；上下文裁剪/压缩
+    └── Agent.Session.cs      # 会话持久化：jsonl 逐条日志、命名快照、Markdown 导出
 ```
 
 ## 安全说明
