@@ -696,10 +696,6 @@ internal static class Program
         Console.WriteLine("  输入 /help 查看命令；直接输入任务描述即可开始。");
         Console.WriteLine("──────────────────────────────────────────────────────────");
     }
-
-    /// <summary>处理 REPL 斜杠命令。返回 true = 该命令已展示过状态信息，本轮跳过状态栏
-    /// （模式/权限切换只需一行灰色确认，避免「消息 + 状态栏 + 提示符」三处重复模式名）。</summary>
-
     /// <summary>后台上下文窗口探测状态：/model 换模型后旧结果作废并重启探测。</summary>
     internal sealed class ContextProbeState
     {
@@ -709,6 +705,8 @@ internal static class Program
         public void Restart(string model, IAgentProvider provider) =>
             (Model, Task) = (model, provider.GetContextWindowAsync(model, CancellationToken.None));
     }
+    /// <summary>处理 REPL 斜杠命令。返回 true = 该命令已展示过状态信息，本轮跳过状态栏
+    /// （模式/权限切换只需一行灰色确认，避免「消息 + 状态栏 + 提示符」三处重复模式名）。</summary>
     private static bool HandleCommand(
         string line,
         AgentConfig config,
