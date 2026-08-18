@@ -535,4 +535,21 @@ public class FileToolsTests : IDisposable
             tool.ExecuteAsync(new JsonObject { ["path"] = "adir" }, ctx, CancellationToken.None));
         Assert.Contains("是目录", ex.Message);
     }
+
+    [Fact]
+    public async Task WriteFile_IdenticalContent_SkipsWriteAndUndo()
+    {
+        // 回归：内容未变时曾照样重写文件并塞撤销条目；现在直接跳过
+        File.WriteAllText(Path.Combine(_dir, "same.txt"), "stable");
+        var before = File.GetLastWriteTimeUtc(Path.Combine(_dir, "same.txt"));
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "same.txt", ["content"] = "stable" }, ctx, CancellationToken.None);
+
+        Assert.Contains("跳过写入", result);
+        Assert.Equal(0, ctx.Undo.Count); // 无撤销条目
+        Assert.Equal(before, File.GetLastWriteTimeUtc(Path.Combine(_dir, "same.txt"))); // mtime 未变
+    }
 }

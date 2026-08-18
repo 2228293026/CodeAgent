@@ -117,6 +117,10 @@ public sealed class WriteFileTool : ITool
                 old = await File.ReadAllTextAsync(full, ct);
         }
 
+        // 内容与现状完全一致：跳过写入（不刷 mtime、不污染撤销栈）
+        if (hadFile && old == content)
+            return $"内容未变化，跳过写入: {path}（{TextUtil.TruncateLine(content, 60)}）";
+
         try
         {
             await File.WriteAllTextAsync(full, content, ct);
