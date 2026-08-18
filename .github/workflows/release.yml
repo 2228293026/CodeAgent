@@ -26,14 +26,21 @@ jobs:
         run: >
           dotnet publish src/CodeAgent -c Release -r linux-x64
           --self-contained false -o dist/linux-x64
+      - name: Publish win-x64 (self-contained single file)
+        run: >
+          dotnet publish src/CodeAgent -c Release -r win-x64
+          --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false
+          -o dist/win-x64-sc
       - name: Package
         shell: pwsh
         run: |
           Compress-Archive -Path dist/win-x64 -DestinationPath dist/codeagent-win-x64.zip
           Compress-Archive -Path dist/linux-x64 -DestinationPath dist/codeagent-linux-x64.zip
+          Compress-Archive -Path dist/win-x64-sc/codeagent.exe -DestinationPath dist/codeagent-win-x64-selfcontained.zip
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/codeagent-win-x64.zip
             dist/codeagent-linux-x64.zip
+            dist/codeagent-win-x64-selfcontained.zip
