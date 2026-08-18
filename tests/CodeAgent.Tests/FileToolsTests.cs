@@ -608,4 +608,27 @@ public class FileToolsTests : IDisposable
         Assert.Contains(" бом", text); // 替换内容也正确写入
     }
 
+    [Fact]
+    public async Task EditFile_GbkFile_StaysGbkEncoded()
+    {
+        // 回归：edit_file 曾把 GBK 文件重编码为 UTF-8——内容可读但编码被静默转换，
+        // 依赖 ANSI 编码的旧工具链（老编译器/批处理）会读到乱码
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var path = Path.Combine(_dir, "legacy-gbk.txt");
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(path, gbk.GetBytes("第一行旧内容\n第二行旧内容\n"));
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "legacy-gbk.txt", ["old_string"] = "第一行旧内容", ["new_string"] = "第一行新内容" },
+            ctx, CancellationToken.None);
+
+        var bytes = await File.ReadAllBytesAsync(path);
+        Assert.Equal("第一行新内容\n第二行旧内容\n", gbk.GetString(bytes)); // 仍是 GBK，可原样解码
+        // 且不能是合法 UTF-8 编码的同一文本（证明真的按 GB18030 写回）
+        Assert.Throws<System.Text.DecoderFallbackException>(
+            () => new System.Text.UTF8Encoding(false, true).GetString(bytes));
+    }
+
 }

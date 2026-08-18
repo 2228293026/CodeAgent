@@ -551,7 +551,7 @@ public sealed partial class Agent
             var fi = new FileInfo(full);
             if (fi.Length > 1_000_000)
                 return $"~ 覆盖现有文件（{fi.Length / 1024 / 1024} MB，过大不预览 diff）";
-            var old = File.ReadAllText(full);
+            var old = TextUtil.ReadTextSmart(full); // GBK 等旧编码文件的 diff 预览不乱码
             var diff = DiffUtil.Unified(old, content, path);
             return diff.Length == 0 ? "（内容无差异）" : CapDiff(diff);
         }

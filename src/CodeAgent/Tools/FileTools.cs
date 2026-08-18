@@ -123,7 +123,7 @@ public sealed class WriteFileTool : ITool
 
         try
         {
-            await TextUtil.WriteTextPreserveBomAsync(full, content, ct);
+            await TextUtil.WriteTextPreserveEncodingAsync(full, content, ct); // 保原编码：GBK 文件不被动转 UTF-8
         }
         catch (IOException ex)
         {
@@ -208,7 +208,7 @@ public sealed class EditFileTool : ITool
         // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对；
         // 先写入成功再入栈，失败不污染撤销历史
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
-        await TextUtil.WriteTextPreserveBomAsync(full, result, ct);
+        await TextUtil.WriteTextPreserveEncodingAsync(full, result, ct);
 
         ctx.Undo.Push(new UndoEntry
         {

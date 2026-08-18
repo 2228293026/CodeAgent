@@ -75,7 +75,37 @@ public static class TextUtil
         await File.WriteAllTextAsync(path, content, new System.Text.UTF8Encoding(keepBom), ct);
     }
 
-    /// <summary>WriteTextPreserveBomAsync 的同步版本（撤销恢复在同步路径调用）。</summary>
+    /// <summary>改写文件时保持原编码（edit/write 工具用）：
+    /// 带 BOM 的 UTF-8 保留 BOM；无 BOM 且非合法 UTF-8（GBK 旧文件）按 GB18030 写回，文件编码不被静默转换；
+    /// 新建文件一律无 BOM UTF-8。撤销恢复仍走 UTF-8（OldText 是解码后的文本，内容无损）。</summary>
+    public static async Task WriteTextPreserveEncodingAsync(string path, string content, CancellationToken ct = default)
+    {
+        System.Text.Encoding enc = new System.Text.UTF8Encoding(false);
+        if (File.Exists(path))
+        {
+            var head = new byte[4096];
+            int n;
+            using (var fs = File.OpenRead(path))
+                n = await fs.ReadAsync(head.AsMemory(0, head.Length), ct);
+            var prefix = head[..n];
+            if (n >= 3 && prefix[0] == 0xEF && prefix[1] == 0xBB && prefix[2] == 0xBF)
+                enc = new System.Text.UTF8Encoding(true); // 原 BOM 保留
+            else
+            {
+                // 前缀可能截在多字节序列中间：先回退边界再做严格 UTF-8 校验
+                var end = TrimPartialTail(prefix, prefix.Length);
+                try
+                {
+                    _ = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true).GetString(prefix[..end]);
+                }
+                catch (System.Text.DecoderFallbackException)
+                {
+                    enc = System.Text.Encoding.GetEncoding("GB18030"); // 原 GBK：按 GB18030 写回
+                }
+            }
+        }
+        await File.WriteAllTextAsync(path, content, enc, ct);
+    }
     public static void WriteTextPreserveBom(string path, string content)
     {
         bool keepBom = false;
