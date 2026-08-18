@@ -326,12 +326,15 @@ public sealed class OpenAiProvider : IAgentProvider
             var arr = await FetchModelsArrayAsync(ct);
             foreach (var m in arr ?? [])
             {
-                if (!string.Equals(m?["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
+                // 只看对象项：null/标量项没有元数据，且对非对象索引会抛异常
+                if (m is not JsonObject entry)
+                    continue;
+                if (!string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
                     continue;
                 foreach (var key in new[] { "context_length", "context_window", "max_context_length", "max_model_len", "max_input_tokens", "input_token_limit" })
-                    if (m[key] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0)
+                    if (entry[key] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0)
                         return n;
-                if (m["top_provider"]?["context_length"] is JsonValue tv && tv.TryGetValue<int>(out var n2) && n2 > 0)
+                if (entry["top_provider"]?["context_length"] is JsonValue tv && tv.TryGetValue<int>(out var n2) && n2 > 0)
                     return n2;
                 return null; // 找到模型但元数据无窗口字段
             }

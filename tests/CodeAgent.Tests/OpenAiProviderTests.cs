@@ -158,6 +158,20 @@ public class OpenAiProviderTests
     }
 
     [Fact]
+    public async Task GetContextWindowAsync_SkipsNullAndScalarEntries()
+    {
+        // 回归：data 混入 null / 标量项时曾对 null 解引用（被 catch 吞掉误报 null），
+        // 对标量项索引会抛 InvalidOperationException；非对象项应被跳过而不是中断探测
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[null,"stray",{"id":"m2","context_length":8192}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Equal(8192, await provider.GetContextWindowAsync("m2", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ChatAsync_RequestTimeout_ThrowsProviderException()
     {
         // 用短超时的 HttpClient：SlowHandler 永远延迟，触发超时路径（避免等默认 100s）
