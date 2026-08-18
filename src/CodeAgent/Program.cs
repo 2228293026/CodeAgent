@@ -263,6 +263,8 @@ internal static class Program
         }
 
         // 交互式 REPL
+        if (NeedsGitignoreHint(Environment.CurrentDirectory))
+            Console.WriteLine("提示: .codeagent/ 未被 .gitignore 忽略——会话日志含代码内容，建议加入 .gitignore");
         PrintBanner(config, opts, agent);
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
 
@@ -776,6 +778,31 @@ internal static class Program
             p.StandardInput.Close();
             await p.WaitForExitAsync();
             return p.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>git 仓库中存在 .codeagent/ 但 .gitignore 未忽略它时返回 true：
+    /// 会话日志/导出含代码内容与可能的 Key 片段，误提交有泄露风险。</summary>
+    internal static bool NeedsGitignoreHint(string cwd)
+    {
+        try
+        {
+            var git = Path.Combine(cwd, ".git");
+            if (!Directory.Exists(git) && !File.Exists(git))
+                return false; // 非 git 仓库不管
+            if (!Directory.Exists(Path.Combine(cwd, ".codeagent")))
+                return false;
+            var gi = Path.Combine(cwd, ".gitignore");
+            if (!File.Exists(gi))
+                return true;
+            foreach (var line in File.ReadAllLines(gi).Where(l => !l.TrimStart().StartsWith('#'))) // 注释行不算忽略
+                if (line.Trim().TrimEnd('/').EndsWith(".codeagent", StringComparison.OrdinalIgnoreCase))
+                    return false;
+            return true;
         }
         catch
         {
