@@ -188,4 +188,31 @@ public class AgentTrimHistoryTests : IDisposable
         }
         Assert.Null(agent.UndoLastTurn()); // 最终无轮可撤
     }
+    [Fact]
+    public void PruneSessionLogs_KeepsNewest_AndSkipsCurrent()
+    {
+        var dir = Path.Combine(_dir, "sess");
+        Directory.CreateDirectory(dir);
+        for (int i = 1; i <= 5; i++)
+            File.WriteAllText(Path.Combine(dir, $"20260101-00000{i}.jsonl"), "{}");
+
+        var deleted = AgentClass.PruneSessionLogs(dir, keep: 3,
+            exceptPath: Path.Combine(dir, "20260101-000001.jsonl")); // 最旧的恰是「当前」日志
+
+        Assert.Equal(1, deleted); // 只删掉 000002（000001 受保护，000004/5 保留凑满 keep+1）
+        Assert.True(File.Exists(Path.Combine(dir, "20260101-000001.jsonl")));
+        Assert.False(File.Exists(Path.Combine(dir, "20260101-000002.jsonl")));
+        Assert.True(File.Exists(Path.Combine(dir, "20260101-000005.jsonl")));
+    }
+
+    [Fact]
+    public void PruneSessionLogs_ZeroKeep_Disabled()
+    {
+        var dir = Path.Combine(_dir, "sess0");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "a.jsonl"), "{}");
+        Assert.Equal(0, AgentClass.PruneSessionLogs(dir, keep: 0));
+        Assert.True(File.Exists(Path.Combine(dir, "a.jsonl")));
+    }
+
 }

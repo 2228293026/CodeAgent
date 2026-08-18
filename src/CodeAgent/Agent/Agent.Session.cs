@@ -185,11 +185,46 @@ public sealed partial class Agent
             Directory.CreateDirectory(dir);
             SessionPath = NewSessionLogPath(dir);
             _sessionLog = new StreamWriter(SessionPath, append: true) { AutoFlush = true };
+            PruneSessionLogs(dir, _ctx.Config.MaxSessionLogs, SessionPath);
         }
         catch
         {
             _sessionLog = null;
             SessionPath = null;
+        }
+    }
+
+    /// <summary>删除超出保留数量的最旧会话日志（文件名 = 时间戳，字典序即时间序）。
+    /// keep &lt;= 0 不清理；正在使用的当前日志跳过；单个删除失败忽略。</summary>
+    internal static int PruneSessionLogs(string dir, int keep, string? exceptPath = null)
+    {
+        if (keep <= 0)
+            return 0;
+        try
+        {
+            var logs = Directory.GetFiles(dir, "*.jsonl")
+                .OrderBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var extra = logs.Count - keep;
+            if (extra <= 0)
+                return 0;
+            var deleted = 0;
+            foreach (var p in logs.Take(extra))
+            {
+                if (string.Equals(p, exceptPath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                try
+                {
+                    File.Delete(p);
+                    deleted++;
+                }
+                catch { /* 被占用/权限：跳过该文件 */ }
+            }
+            return deleted;
+        }
+        catch
+        {
+            return 0;
         }
     }
 

@@ -78,7 +78,10 @@ public sealed class AgentConfig
     public string Shell { get; set; } = "";
 
     /// <summary>是否把每轮对话写入会话日志（.codeagent/sessions/*.jsonl）。</summary>
+    /// <summary>会话日志保留数量：.codeagent/sessions/*.jsonl 滚动新日志时删除最旧的超出部分（磁盘卫生）。
+    /// 0 = 不清理（保留全部）。</summary>
     public bool SaveSessions { get; set; } = true;
+    public int MaxSessionLogs { get; set; } = 30;
 
     /// <summary>会话日志目录（相对工作目录）。</summary>
     public string SessionDir { get; set; } = ".codeagent/sessions";
@@ -193,6 +196,7 @@ public sealed class AgentConfig
             cfg.MaxHistoryChars = Math.Clamp(cfg.MaxHistoryChars, 1_000, 20_000_000);
             cfg.ContextWindow = Math.Clamp(cfg.ContextWindow, 0, 10_000_000);
             cfg.CommandTimeoutSeconds = Math.Clamp(cfg.CommandTimeoutSeconds, 1, 300);
+            cfg.MaxSessionLogs = Math.Clamp(cfg.MaxSessionLogs, 0, 1000);
             // 字符串枚举归一化：手写配置的大小写/空白差异曾让同一值在不同 Provider 上行为分叉
             //（如 "High" 在 OpenAI 侧静默不发送 reasoning_effort、在 Anthropic 侧却按默认预算开启 thinking）
             cfg.ThinkingEffort = NormalizeChoice(cfg.ThinkingEffort, "off", "low", "medium", "high", "auto");
