@@ -119,7 +119,6 @@ internal static class Program
             if (File.Exists(target))
             {
                 Console.WriteLine($"codeagent.json 已存在: {target}");
-                return 1;
             }
             AgentConfig.WriteExample(target);
             Console.WriteLine($"已生成示例配置: {target}");
@@ -1248,5 +1247,28 @@ internal static class Program
             """);
     }
 
-    private static void PrintHelp() => PrintReplHelp();
+    private static void PrintHelp()
+    {
+        Console.WriteLine($"""
+            codeagent {InformationalVersion} — LLM 驱动的编码助手 CLI
+
+            用法:
+              codeagent [选项] ["任务描述"]     交互式 REPL（默认）；带任务则一次性执行后退出
+              codeagent --continue ["接续任务"] 恢复本项目最近一次会话
+
+            选项:
+              -c, --config <路径>    指定配置文件
+              -p, --provider <名称>  使用配置中的指定供应商
+              -m, --model <模型>     覆盖本次使用的模型
+              --cwd <目录>           切换工作目录（先于 --init/--setup 生效）
+              --init                 在当前目录生成示例配置 codeagent.json
+              --setup                交互式供应商配置向导（保存前自动测试连接）
+              --models               列出当前供应商的可用模型
+              --continue             恢复最近一次会话
+              -v, --version          显示版本
+              -h, --help             显示本帮助
+
+            """);
+        PrintReplHelp();
+    }
 }
