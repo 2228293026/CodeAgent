@@ -289,4 +289,14 @@ public class TextUtilEdgeTests : IDisposable
         var tl = TextUtil.TruncateLine(s, 5);
         Assert.DoesNotContain("�", tl);
     }
+
+    [Theory]
+    [InlineData("", 0)]
+    [InlineData("abcd", 1)]        // 4 ASCII = 1 token
+    [InlineData("abc", 0)]         // 3 ASCII = 0（整除向下）
+    [InlineData("中文", 2)]         // 每个全角字 1 token
+    [InlineData("a中b文", 2)]       // 混合：2 ASCII/4=0 + 2 CJK
+    [InlineData("😀", 2)]          // emoji 代理对按 2 计（与简单口径一致，误差可接受）
+    public void EstimateTokens_MixedScript(string s, long expected) =>
+        Assert.Equal(expected, TextUtil.EstimateTokens(s));
 }
