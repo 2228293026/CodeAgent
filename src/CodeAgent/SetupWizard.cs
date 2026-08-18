@@ -21,13 +21,13 @@ public static class SetupWizard
     ];
 
     /// <summary>运行向导：就地更新 config 并保存到当前目录的 codeagent.json。</summary>
-    public static void Run(AgentConfig config) => Run(config, Console.In, Console.Out, null);
+    public static void Run(AgentConfig config) => Run(config, Console.In, Console.Out, null, testConnection: true);
 
     /// <summary>
     /// 运行向导（可注入输入输出以便测试）：就地更新 config。
     /// savePath 为保存路径；null 时保存到当前目录的 codeagent.json。
     /// </summary>
-    internal static void Run(AgentConfig config, TextReader input, TextWriter output, string? savePath)
+    internal static void Run(AgentConfig config, TextReader input, TextWriter output, string? savePath, bool testConnection = false)
     {
         var path = savePath ?? Path.Combine(Environment.CurrentDirectory, "codeagent.json");
 
@@ -104,10 +104,56 @@ public static class SetupWizard
         config.Provider = p.Name;
         config.Providers[p.Name] = opts;
 
+        // 连接测试：保存前用 /models 验证 baseUrl/key 可用，拼错的地址或坏 Key 立刻暴露，
+        // 而不是等到第一次对话才报错。失败不阻断保存（可能是临时网络问题），只提示。
+        if (testConnection)
+            TestConnection(p.Name, opts, output);
+
         AgentConfig.Save(config, path);
         output.WriteLine($"\n✔ 配置已保存: {path}");
         output.WriteLine($"当前供应商: {p.Name}   模型: {opts.Model}");
         output.WriteLine("运行 codeagent 即可开始使用。");
+    }
+
+    /// <summary>连接测试：列出 Provider 模型验证 baseUrl/Key；失败或无 Key 只提示，不阻断保存。</summary>
+    internal static void TestConnection(string providerName, ProviderOptions opts, TextWriter output)
+    {
+        // Key 未落配置且环境变量也未设置：无法测试，给出明确提示而不是含糊的 401
+        var hasKey = !string.IsNullOrWhiteSpace(opts.ApiKey)
+                     || (opts.ApiKeyEnv is { Length: > 0 } && Environment.GetEnvironmentVariable(opts.ApiKeyEnv) is { Length: > 0 });
+        if (!hasKey && providerName is not ("ollama" or "hitmargin"))
+        {
+            output.WriteLine($"\n⏭ 跳过连接测试（{opts.ApiKeyEnv ?? "API Key"} 未设置）");
+            return;
+        }
+
+        output.Write("\n⏳ 测试连接…");
+        try
+        {
+            var probe = new AgentConfig { Provider = providerName };
+            probe.Providers[providerName] = opts;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var models = ProviderFactory.Create(probe).ListModelsAsync(cts.Token).GetAwaiter().GetResult();
+            output.WriteLine();
+            if (models.Count == 0)
+            {
+                output.WriteLine("⚠ 服务未返回任何模型，请检查 API 地址。");
+            }
+            else if (!models.Contains(opts.Model ?? "", StringComparer.OrdinalIgnoreCase))
+            {
+                output.WriteLine($"⚠ 可连接，但模型列表中没有「{opts.Model}」（共 {models.Count} 个模型，可能拼写有误或无权限）。");
+            }
+            else
+            {
+                output.WriteLine($"✔ 连接成功，模型 {opts.Model} 可用（服务共 {models.Count} 个模型）。");
+            }
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine();
+            output.WriteLine($"⚠ 连接失败: {ex.Message}");
+            output.WriteLine("  配置仍会保存；请检查地址/Key，或稍后用 /models 复查。");
+        }
     }
 
     /// <summary>带默认值的文本输入：回车使用默认值；输入被中断（EOF）时返回 null。</summary>

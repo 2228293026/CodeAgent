@@ -96,4 +96,15 @@ public class SetupWizardTests
         var p = SetupWizard.Presets.First(x => x.Name == name);
         Assert.Equal(expectedEnv, p.Env);
     }
+
+    [Fact]
+    public void TestConnection_NoKeyAndEnvUnset_SkipsWithHint()
+    {
+        // 无 Key 且环境变量未设置：跳过测试并给出明确提示（而不是含糊的 401）
+        var envName = "CODEAGENT_NEVER_SET_" + Guid.NewGuid().ToString("N")[..8];
+        var sw = new System.IO.StringWriter();
+        SetupWizard.TestConnection("openai", new ProviderOptions { ApiKeyEnv = envName }, sw);
+        Assert.Contains("跳过连接测试", sw.ToString());
+        Assert.Contains(envName, sw.ToString());
+    }
 }

@@ -145,7 +145,7 @@ internal static class Program
             try
             {
                 // 尊重 -c 指定的配置文件路径；未指定时写回实际加载的来源文件（可能是 ~/.codeagent/config.json）
-                SetupWizard.Run(config, Console.In, Console.Out, ConfigSavePath(configPath, config));
+                SetupWizard.Run(config, Console.In, Console.Out, ConfigSavePath(configPath, config), testConnection: true);
             }
             catch (OperationCanceledException)
             {
@@ -842,7 +842,7 @@ internal static class Program
                 try
                 {
                     // 尊重 -c 指定的配置文件路径；未指定时写回实际加载的来源文件（可能是 ~/.codeagent/config.json）
-                    SetupWizard.Run(config, Console.In, Console.Out, ConfigSavePath(configPath, config));
+                    SetupWizard.Run(config, Console.In, Console.Out, ConfigSavePath(configPath, config), testConnection: true);
                 }
                 catch (OperationCanceledException)
                 {
