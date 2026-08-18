@@ -118,7 +118,11 @@ public sealed partial class Agent
     public bool LastTurnFailed { get; private set; }
 
     /// <summary>切换 Provider（/model 命令用）。</summary>
-    public void SetProvider(IAgentProvider provider) => _provider = provider;
+    public void SetProvider(IAgentProvider provider)
+    {
+        _provider = provider;
+        LastInputTokens = 0; // 换模型/供应商后旧 prompt_tokens 失效：ctx 退回估算口径，避免显示旧模型的上下文
+    }
 
     /// <summary>运行时切换文件访问模式（strict | whitelist | full）：同步更新配置与工作区沙箱，Shift+Tab / /access 用。</summary>
     public void SetFileAccess(string fileAccess)
