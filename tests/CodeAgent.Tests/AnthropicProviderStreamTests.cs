@@ -209,4 +209,27 @@ public class AnthropicProviderStreamTests
 
         Assert.Equal("max_tokens", resp.FinishReason);
     }
+    [Theory]
+    [InlineData("overloaded_error", true)]   // 过载：可自动重试
+    [InlineData("overloaded_error", true)]       // 过载：可自动重试
+    [InlineData("rate_limit_error", true)]       // 限速：可自动重试
+    [InlineData("invalid_request_error", false)] // 请求错误：重试无意义
+    public async Task ChatStreamAsync_ErrorEvent_SetsRetryableByType(string errType, bool expected)
+    {
+        // 回归：流中 error 事件此前不带 Retryable——过载错误也不会自动重试（与 OpenAI 口径不一致）
+        var body = """
+            event: error
+            data: {"type":"error","error":{"type":"__TYPE__","message":"boom"}}
+            """.Replace("__TYPE__", errType);
+        var handler = new SseHandler { Body = body };
+        var provider = MakeProvider(handler);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(() =>
+            provider.ChatStreamAsync(
+                [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+                [], "off", null, null, null, CancellationToken.None));
+
+        Assert.Equal(expected, ex.Retryable);
+    }
+
 }

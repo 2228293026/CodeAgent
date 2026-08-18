@@ -328,10 +328,16 @@ public sealed class AnthropicProvider : IAgentProvider
 
                 case "error":
                     {
-                        var msg = root?["error"]?["message"]?.GetValue<string>() ?? "未知错误";
-                        throw new ProviderException($"Anthropic 流式错误: {msg}");
+                        var errObj = root?["error"] as JsonObject;
+                        var errType = errObj?["type"]?.GetValue<string>() ?? "";
+                        var msg = errObj?["message"]?.GetValue<string>() ?? "未知错误";
+                        // 过载/限速可自动重试（与 OpenAI 流式错误事件的口径一致）
+                        throw new ProviderException($"Anthropic 流式错误: {msg}")
+                        {
+                            Retryable = errType.Contains("overloaded", StringComparison.OrdinalIgnoreCase)
+                                        || errType.Contains("rate", StringComparison.OrdinalIgnoreCase),
+                        };
                     }
-
                 case "message_stop":
                     done = true;
                     break;
