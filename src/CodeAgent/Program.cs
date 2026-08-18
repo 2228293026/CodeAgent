@@ -549,7 +549,7 @@ internal static class Program
                     content = TextUtil.TruncateLine(content, 300);
             // 多行内容折叠为一行（工具结果常带换行，否则会打乱逐条列表）
             content = content.Replace("\r", "").Replace("\n", " ⏎ ");
-            Console.WriteLine($"  [{role}] {content}");
+            Console.WriteLine(m.IsError ? $"  [{role}] ❗ {content}" : $"  [{role}] {content}"); // 工具错误加标记
         }
     }
 
