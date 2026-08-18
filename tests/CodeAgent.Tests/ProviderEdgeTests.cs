@@ -174,4 +174,27 @@ public class ProviderEdgeTests
             Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
         }
     }
+
+    // ===== KnownReasoningModels 前缀表 =====
+
+    [Theory]
+    [InlineData("o3-mini")]          // 命中 → 返回升序档位列表
+    [InlineData("openai/o4-mini")]   // 去厂商前缀后命中
+    [InlineData("deepseek-r1")]
+    [InlineData("deepseek-reasoner")]
+    [InlineData("claude-sonnet-4-5")]
+    public void KnownReasoningModels_ReasoningPrefixes_ReturnEfforts(string model)
+    {
+        Assert.Equal(["low", "medium", "high"], KnownReasoningModels.TryGet(model));
+    }
+
+    [Theory]
+    [InlineData("gpt-4o")]           // 普通模型：不在表中
+    [InlineData("qwen2.5-coder:7b")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void KnownReasoningModels_OtherModels_ReturnNull(string? model)
+    {
+        Assert.Null(KnownReasoningModels.TryGet(model));
+    }
 }

@@ -98,7 +98,8 @@ public sealed class AgentConfig
     /// <summary>是否用 ANSI 转义做菜单原地渲染（过滤在基础列表上原地更新、方向键高亮移动）；Windows Terminal 等支持 ANSI 的终端默认开启，老式终端设 false 用滚动式。</summary>
     public bool TuiAnsi { get; set; } = true;
 
-    /// <summary>模型思考强度（reasoning effort）：off / low / medium / high，默认 off（不启用）。</summary>
+    /// <summary>模型思考强度（reasoning effort）：off / low / medium / high / auto，默认 off（不启用）。
+    /// auto 不指定强度，由模型/供应商按自身默认行为思考。</summary>
     public string ThinkingEffort { get; set; } = "off";
 
     /// <summary>启动时的默认工作模式（/mode 可切换），默认 code。</summary>

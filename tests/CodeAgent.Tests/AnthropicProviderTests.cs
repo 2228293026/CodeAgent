@@ -111,6 +111,47 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_ThinkingAuto_ClaudeModel_EnablesThinking()
+    {
+        // auto + claude 系列（前缀表命中）→ 取最高档 high（thinking 启用，预算收敛到 max_tokens-1024）
+        var handler = new CaptureHandler();
+        var provider = MakeProvider(handler);
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "hi" },
+        };
+
+        await provider.ChatAsync(messages, [], "auto", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!);
+        Assert.NotNull(body?["thinking"]);
+        Assert.Equal(7168, (int)body!["thinking"]!["budget_tokens"]!); // high 预算 16384 收敛到 8192-1024
+    }
+
+    [Fact]
+    public async Task ChatAsync_ThinkingAuto_NonClaudeModel_TreatedLikeOff()
+    {
+        // auto + 非 claude 模型（不在推理表）→ 不发 thinking，回退 temperature
+        var handler = new CaptureHandler();
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "test-key", Model = "gpt-4o" }, new HttpClient(handler));
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "hi" },
+        };
+
+        await provider.ChatAsync(messages, [], "auto", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!);
+        Assert.Null(body!["thinking"]);
+        Assert.NotNull(body?["temperature"]);
+    }
+
+    [Fact]
     public async Task ChatAsync_ConsecutiveSameRoleMessages_AreMerged()
     {
         // 回归：Anthropic 要求角色交替；连续同角色（如两条 user）应合并为一个消息的内容块

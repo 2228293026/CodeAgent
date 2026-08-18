@@ -31,17 +31,45 @@ public static class SetupWizard
     {
         var path = savePath ?? Path.Combine(Environment.CurrentDirectory, "codeagent.json");
 
+        // 配置中已存在、但不在预设表里的 provider（如手工编辑 codeagent.json 加的自定义项），
+        // 一并列出，选中后直接沿用原设置而不重新询问。
+        var presetNames = Presets.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var extras = config.Providers.Keys
+            .Where(k => !presetNames.Contains(k))
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
         output.WriteLine("── CodeAgent 供应商配置向导 ──────────────");
         output.WriteLine($"将更新配置文件: {path}\n");
         output.WriteLine("请选择供应商:");
         for (int i = 0; i < Presets.Length; i++)
             output.WriteLine($"  {i + 1}) {Presets[i].Label}");
+        for (int i = 0; i < extras.Count; i++)
+            output.WriteLine($"  {Presets.Length + i + 1}) {extras[i]}（已配置）");
         output.WriteLine();
 
-        var idx = AskChoice(input, output, "选择", Presets.Length, 1);
+        var idx = AskChoice(input, output, "选择", Presets.Length + extras.Count, 1);
+        output.WriteLine();
+
+        // 选中已配置的自定义 provider：沿用原设置（模型/地址/Key 都不再询问）
+        if (idx > Presets.Length)
+        {
+            var name = extras[idx - Presets.Length - 1];
+            var existing = config.Providers[name];
+            config.Provider = name;
+            output.WriteLine($"沿用已有配置: {name}");
+
+            if (testConnection)
+                TestConnection(name, existing, output);
+
+            AgentConfig.Save(config, path);
+            output.WriteLine($"\n✔ 配置已保存: {path}");
+            output.WriteLine($"当前供应商: {name}   模型: {existing.Model}");
+            output.WriteLine("运行 codeagent 即可开始使用。");
+            return;
+        }
+
         var p = Presets[idx - 1];
-
-        output.WriteLine();
         var opts = new ProviderOptions { Type = p.Type };
 
         // 模型名

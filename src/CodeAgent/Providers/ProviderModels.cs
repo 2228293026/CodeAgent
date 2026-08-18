@@ -144,6 +144,40 @@ public static class KnownContextWindows
     }
 }
 
+/// <summary>已知支持推理参数（reasoning_effort / thinking）的模型名前缀表。
+/// 仅用于 auto 思考强度的兜底判断（精确能力以 /models 元数据为准）；
+/// 只列「几乎肯定支持」的系列，避免对不支持的服务发错参数。无法判断返回 null（=按不支持处理）。
+/// 返回按强度升序的档位列表，供 auto 取最高可用档。</summary>
+public static class KnownReasoningModels
+{
+    /// <summary>推理系列默认支持的档位（升序），供 auto 取最高档。</summary>
+    public static readonly IReadOnlyList<string> DefaultEfforts = ["low", "medium", "high"];
+
+    private static readonly string[] ReasoningPrefixes =
+    [
+        "o1", "o3", "o4", "gpt-5", "deepseek-r1", "deepseek-reasoner", "claude",
+    ];
+
+    /// <summary>按模型名判断支持的推理档位；无法判断返回 null。
+    /// 自动去掉厂商前缀（tencent/hy3）与 OpenRouter 后缀（:free）后做前缀匹配。</summary>
+    public static IReadOnlyList<string>? TryGet(string? model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+            return null;
+        var name = model.ToLowerInvariant().Trim();
+        var slash = name.LastIndexOf('/');
+        if (slash >= 0)
+            name = name[(slash + 1)..]; // 去厂商前缀
+        var colon = name.IndexOf(':');
+        if (colon > 0)
+            name = name[..colon]; // 去 OpenRouter 变体后缀（:free 等）
+        foreach (var prefix in ReasoningPrefixes)
+            if (name.StartsWith(prefix, StringComparison.Ordinal))
+                return DefaultEfforts;
+        return null;
+    }
+}
+
 /// <summary>SSE 流式解析时按 index 累积的工具调用增量（openai/anthropic 通用）。</summary>
 internal sealed class StreamToolAccum
 {

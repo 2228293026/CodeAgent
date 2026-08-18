@@ -202,6 +202,32 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_EmptyChoicesUsageChunk_NotThrown()
+    {
+        // 回归：new-api 等网关在结束/usage chunk 返回 {"choices":[],"usage":…}，
+        // 曾对空数组 [0] 抛 ArgumentOutOfRangeException，导致整个流失败
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"content":"答案"}}]}
+
+                data: {"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":5}}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "q" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("答案", resp.Text);
+        Assert.Equal(12, resp.InputTokens);
+        Assert.Equal(5, resp.OutputTokens);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_RateLimitError_IsRetryable()
     {
         // 限流类型的流中错误应标记 Retryable（Agent 在未输出文本时会自动退避重试）

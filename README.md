@@ -87,7 +87,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "showToolCalls": true,         // 终端实时显示工具调用过程
   "renderMarkdown": true,        // 模型回复 Markdown 渲染（代码块/标题等）
   "tuiAnsi": true,               // ANSI 原地渲染菜单（默认开启）；老式终端乱码时设 false 退回滚动式
-  "thinkingEffort": "off",       // 模型思考强度 off/low/medium/high（推理模型生效）
+  "thinkingEffort": "off",       // 模型思考强度 off/low/medium/high/auto（auto 探测模型支持的档位并取最高可用）
   "defaultMode": "code",         // 启动时的默认工作模式（/mode 可切换）
   "fileAccess": "strict",        // 文件访问权限：strict（沙箱）| whitelist（沙箱+只读白名单）| full（完全放开）
   "readOnlyDirs": [],            // fileAccess=whitelist 时，工作区之外的只读目录（写工具与命令仍限工作区）

@@ -66,6 +66,28 @@ public class OpenAiProviderTests
         Assert.NotNull(asst["tool_calls"]);
     }
 
+    [Fact]
+    public async Task ChatAsync_EmptyChoices_NotThrown()
+    {
+        // 回归：choices 为空数组的响应曾抛 ArgumentOutOfRangeException，
+        // 现在应安全返回空响应并解析 usage
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Null(resp.Text);
+        Assert.Empty(resp.ToolCalls);
+        Assert.Equal(3, resp.InputTokens);
+        Assert.Equal(1, resp.OutputTokens);
+    }
+
     /// <summary>返回指定状态码响应的假 HttpClient 处理器。</summary>
     private sealed class StatusHandler : HttpMessageHandler
     {
@@ -231,5 +253,108 @@ public class OpenAiProviderTests
         Assert.Equal(0.3, (double)body["temperature"]!, 5);
         Assert.Equal(8192, (int)body["max_tokens"]!);
         Assert.Null(body["max_completion_tokens"]);
+    }
+
+    [Theory]
+    [InlineData("off", false)]
+    [InlineData("auto", false)] // auto：模型 gpt-4o 不在推理表且 /models 无 reasoning 字段 → 不发送
+    [InlineData("low", true)]
+    [InlineData("medium", true)]
+    [InlineData("high", true)]
+    public async Task ChatAsync_ThinkingEffort_ControlsReasoningEffort(string effort, bool expectSent)
+    {
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k" }, new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], effort, CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!)!;
+        if (expectSent)
+            Assert.Equal(effort, (string)body["reasoning_effort"]!);
+        else
+            Assert.Null(body["reasoning_effort"]);
+    }
+
+    [Fact]
+    public async Task GetSupportedEffortsAsync_MetadataEffortField_ReturnsEfforts()
+    {
+        // OpenRouter 风格：/models 元数据 reasoning.effort 声明档位 → 返回升序档位列表
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"hy3:free","reasoning":{"effort":{"low":true,"medium":true,"high":false}}}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key", Model = "hy3:free" }, new HttpClient(handler));
+        Assert.Equal(["low", "medium"], await provider.GetSupportedEffortsAsync("hy3:free", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetSupportedEffortsAsync_NoMetadataField_FallsBackToPrefixTable()
+    {
+        // /models 元数据无 effort 字段（标准 OpenAI 协议）→ 回退内置前缀表
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"o3-mini","object":"model","created":1}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Equal(["low", "medium", "high"], await provider.GetSupportedEffortsAsync("o3-mini", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetSupportedEffortsAsync_UnknownModel_ReturnsNull()
+    {
+        // 元数据无能力字段且不在前缀表 → null（按不支持处理，但语义上"无法确定"）
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"gpt-4o","object":"model","created":1}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Null(await provider.GetSupportedEffortsAsync("gpt-4o", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ChatAsync_AutoEffort_SupportedModel_SendsHighestEffort()
+    {
+        // auto + 模型支持推理（前缀表命中 o3-mini）→ 取最高可用档 high
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k", Model = "o3-mini" }, new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "auto", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!)!;
+        Assert.Equal("high", (string)body["reasoning_effort"]!);
+    }
+
+    [Fact]
+    public async Task ChatAsync_AutoEffort_UnsupportedModel_DoesNotSend()
+    {
+        // auto + 模型不支持推理（前缀表未命中）→ 不发 reasoning_effort，避免 400
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k", Model = "deepseek-chat" }, new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "auto", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!)!;
+        Assert.Null(body["reasoning_effort"]);
     }
 }

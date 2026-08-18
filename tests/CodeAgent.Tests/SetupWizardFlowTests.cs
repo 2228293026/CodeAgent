@@ -95,6 +95,54 @@ public class SetupWizardFlowTests : IDisposable
     }
 
     [Fact]
+    public void ExistingCustomProvider_IsListedAndReused()
+    {
+        // 配置中已存在、不在预设表里的 provider（如手工编辑 codeagent.json 加的自定义项）：
+        // 应显示为「已配置」选项，选中后直接沿用原设置（模型/地址/Key 都不再询问）
+        var config = new AgentConfig();
+        config.Providers["freescdn"] = new ProviderOptions
+        {
+            Type = "openai",
+            BaseUrl = "https://ai.freescdn.com/v1",
+            Model = "DeepSeek-V4-Flash",
+            ApiKey = "sk-test",
+        };
+        var writer = new StringWriter();
+        using var reader = new StringReader("8\n"); // 预设 7 项之后是第 8 项 freescdn
+
+        SetupWizard.Run(config, reader, writer, null);
+
+        Assert.Contains("freescdn（已配置）", writer.ToString());
+        Assert.Contains("沿用已有配置: freescdn", writer.ToString());
+        Assert.Equal("freescdn", config.Provider);
+        var opts = config.Providers["freescdn"];
+        Assert.Equal("https://ai.freescdn.com/v1", opts.BaseUrl); // 原设置原样保留
+        Assert.Equal("DeepSeek-V4-Flash", opts.Model);
+        Assert.Equal("sk-test", opts.ApiKey);
+    }
+
+    [Fact]
+    public void ExistingCustomProviders_AreSortedAfterPresets()
+    {
+        // 多个自定义 provider 按名称排序，统一排在预设之后（编号从 8 起）
+        var config = new AgentConfig();
+        config.Providers["zproxy"] = new ProviderOptions { Type = "openai", BaseUrl = "https://z/v1", Model = "m1" };
+        config.Providers["alpha"] = new ProviderOptions { Type = "openai", BaseUrl = "https://a/v1", Model = "m2" };
+        var writer = new StringWriter();
+        using var reader = new StringReader("8\n"); // 排序后第 8 项是 alpha
+
+        SetupWizard.Run(config, reader, writer, null);
+
+        var output = writer.ToString();
+        var alphaIdx = output.IndexOf("alpha（已配置）", StringComparison.Ordinal);
+        var zIdx = output.IndexOf("zproxy（已配置）", StringComparison.Ordinal);
+        Assert.True(alphaIdx > 0 && zIdx > alphaIdx, "自定义项应按名称排序且排在预设之后");
+        Assert.Contains("8) alpha（已配置）", output);
+        Assert.Contains("9) zproxy（已配置）", output);
+        Assert.Equal("alpha", config.Provider); // 选中排序后的第一项
+    }
+
+    [Fact]
     public void CustomSavePath_IsRespected()
     {
         // 回归：曾硬编码保存到当前目录 codeagent.json，-c 指定的配置路径被忽略；

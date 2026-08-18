@@ -262,6 +262,14 @@ internal static class Program
             Task = providerInst.GetContextWindowAsync(opts.Model, CancellationToken.None),
         };
 
+        // 后台探测一次模型推理能力（/models 元数据 reasoning.effort 字段 > 内置模型名前缀表）：
+        // 供 /thinking 与状态栏显示 auto 的实际生效值；失败静默、不阻塞启动
+        var reasoningProbe = new ReasoningProbeState
+        {
+            Model = opts.Model,
+            Task = providerInst.GetSupportedEffortsAsync(opts.Model, CancellationToken.None),
+        };
+
         // 有效上下文窗口：0 = 未知（状态栏只显示 ctx 绝对值）
         int EffectiveContextWindow() => Program.EffectiveContextWindow(config, opts, ctxProbe);
 
@@ -289,7 +297,7 @@ internal static class Program
         while (true)
         {
             if (!skipStatusBar)
-                PrintStatusBar(opts, agent, config.ThinkingEffort, EffectiveContextWindow());
+                PrintStatusBar(opts, agent, config.ThinkingEffort, EffectiveContextWindow(), reasoningProbe);
             skipStatusBar = false;
             var line = InputLine.Read(inlinePrompt ?? PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
             inlinePrompt = null;
@@ -328,7 +336,7 @@ internal static class Program
                     var isSwitch = IsSwitchCommand(peekCmd, peekRest);
                     if (isSwitch && couldOverwriteBlock && ansiOk && PromptFitsOneRow())
                         Console.Write("\x1b[3A");
-                    var suppress = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools, ctxProbe);
+                    var suppress = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools, ctxProbe, reasoningProbe);
                     skipStatusBar = suppress;
                     if (suppress)
                     {
@@ -594,9 +602,22 @@ internal static class Program
     internal static string TruncatePathHead(string path, int max = 42) =>
         path.Length <= max ? path : "…" + path[^(max - 1)..];
 
-    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow)
+    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow, ReasoningProbeState? reasoningProbe)
     {
-        var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
+        // auto：探测完成后显示实际生效档位（最高可用档），探测中显示 auto
+        string think;
+        if (thinkingEffort == "auto")
+        {
+            var t = reasoningProbe?.Task;
+            var efforts = t?.IsCompletedSuccessfully == true ? t.Result : null;
+            var resolved = efforts is { Count: > 0 }
+                && string.Equals(opts.Model, reasoningProbe!.Model, StringComparison.OrdinalIgnoreCase);
+            think = resolved ? $" · think:auto→{efforts![^1]}" : " · think:auto";
+        }
+        else
+        {
+            think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
+        }
         var ctx = contextWindow > 0
             ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(agent.ContextTokens, contextWindow)}%)"
             : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
@@ -734,6 +755,15 @@ internal static class Program
         public void Restart(string model, IAgentProvider provider) =>
             (Model, Task) = (model, provider.GetContextWindowAsync(model, CancellationToken.None));
     }
+    /// <summary>后台推理能力探测状态：/model 换模型后旧结果作废并重启探测。</summary>
+    internal sealed class ReasoningProbeState
+    {
+        public string? Model;
+        public Task<IReadOnlyList<string>?>? Task;
+
+        public void Restart(string model, IAgentProvider provider) =>
+            (Model, Task) = (model, provider.GetSupportedEffortsAsync(model, CancellationToken.None));
+    }
     /// <summary>处理 REPL 斜杠命令。返回 true = 该命令已展示过状态信息，本轮跳过状态栏
     /// （模式/权限切换只需一行灰色确认，避免「消息 + 状态栏 + 提示符」三处重复模式名）。</summary>
     private static bool HandleCommand(
@@ -744,7 +774,8 @@ internal static class Program
         AgentClass agent,
         ref IAgentProvider providerInst,
         ToolRegistry tools,
-        ContextProbeState? ctxProbe = null)
+        ContextProbeState? ctxProbe = null,
+        ReasoningProbeState? reasoningProbe = null)
     {
         var (cmd, rest) = SplitCommand(line);
         var suppressStatusBar = false;
@@ -874,8 +905,9 @@ internal static class Program
                     {
                         providerInst = ProviderFactory.Create(config);
                         agent.SetProvider(providerInst);
-                        // 重新后台探测新模型的上下文窗口（启动时的探测只对旧模型有效）
+                        // 重新后台探测新模型的上下文窗口与推理能力（启动时的探测只对旧模型有效）
                         ctxProbe?.Restart(opts.Model, providerInst);
+                        reasoningProbe?.Restart(opts.Model, providerInst);
                         // 同步回配置并持久化，重启后仍然生效
                         // 重新后台探测新模型的上下文窗口（启动时的探测只对旧模型有效）
                         if (config.Providers.TryGetValue(config.Provider, out var po))
@@ -1169,13 +1201,28 @@ internal static class Program
             case "/thinking":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    Console.WriteLine($"思考强度: {config.ThinkingEffort}（可选: off / low / medium / high）");
-                    Console.WriteLine("提示: 仅对支持推理参数的模型生效（OpenAI o 系列 / OpenRouter reasoning，Anthropic thinking）");
+                    Console.WriteLine($"思考强度: {config.ThinkingEffort}（可选: off / low / medium / high / auto）");
+                    Console.WriteLine("auto: 自动探测模型支持的档位并取最高可用（供应商声明支持 high 就用 high，只支持 low 就用 low）");
+                    if (config.ThinkingEffort == "auto" && reasoningProbe is not null)
+                    {
+                        var t = reasoningProbe.Task;
+                        if (t?.IsCompletedSuccessfully == true && string.Equals(opts.Model, reasoningProbe.Model, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var efforts = t.Result;
+                            Console.WriteLine(efforts is { Count: > 0 }
+                                ? $"当前模型 {opts.Model}: 支持推理参数（可用档位: {string.Join(" / ", efforts)}）→ auto 生效为 {efforts[^1]}"
+                                : $"当前模型 {opts.Model}: 不支持/无法判断推理参数 → auto 生效为 off（不发送）");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"当前模型 {opts.Model}: 探测中…（稍后重新运行 /thinking 查看结果）");
+                        }
+                    }
                 }
                 else
                 {
                     var v = rest.Trim().ToLowerInvariant();
-                    if (v is "off" or "low" or "medium" or "high")
+                    if (v is "off" or "low" or "medium" or "high" or "auto")
                     {
                         config.ThinkingEffort = v;
                         // 持久化到配置文件，重启后仍然生效
@@ -1192,7 +1239,7 @@ internal static class Program
                     }
                     else
                     {
-                        Console.WriteLine($"无效值: {rest}（可选: off / low / medium / high）");
+                        Console.WriteLine($"无效值: {rest}（可选: off / low / medium / high / auto）");
                     }
                 }
                 break;

@@ -39,6 +39,21 @@ public sealed class AnthropicProvider : IAgentProvider
 
     public string Name => "anthropic";
 
+    /// <summary>Anthropic 消息 API 的 /models 不带能力字段，直接用内置前缀表判断
+    /// （claude 系列均支持 extended thinking，返回默认档位列表）。</summary>
+    public Task<IReadOnlyList<string>?> GetSupportedEffortsAsync(string model, CancellationToken ct) =>
+        Task.FromResult(KnownReasoningModels.TryGet(model));
+
+    /// <summary>解析思考强度：auto 时按模型能力取最高可用档（claude 系列 → high），
+    /// 不支持/无法判断则按 off 处理。</summary>
+    private async Task<string> ResolveEffortAsync(string thinkingEffort, CancellationToken ct)
+    {
+        if (thinkingEffort != "auto")
+            return thinkingEffort;
+        var efforts = await GetSupportedEffortsAsync(_model, ct);
+        return efforts is { Count: > 0 } ? efforts[^1] : "off";
+    }
+
     public async Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
@@ -60,7 +75,7 @@ public sealed class AnthropicProvider : IAgentProvider
         var systemText = system.ToString().TrimEnd();
         if (systemText.Length > 0)
             payload["system"] = systemText;
-        ApplyThinking(payload, thinkingEffort);
+        ApplyThinking(payload, await ResolveEffortAsync(thinkingEffort, ct));
         // 工具列表为空时省略 tools 字段（/compact 的摘要调用不带工具）：
         // Anthropic 对 "tools": [] 返回 400，空列表必须整体不发
         if (tools.Count > 0)
@@ -172,7 +187,7 @@ public sealed class AnthropicProvider : IAgentProvider
         var systemText = system.ToString().TrimEnd();
         if (systemText.Length > 0)
             payload["system"] = systemText;
-        ApplyThinking(payload, thinkingEffort);
+        ApplyThinking(payload, await ResolveEffortAsync(thinkingEffort, ct));
         // 工具列表为空时省略 tools 字段（/compact 的摘要调用不带工具）：
         // Anthropic 对 "tools": [] 返回 400，空列表必须整体不发
         if (tools.Count > 0)
@@ -453,10 +468,11 @@ public sealed class AnthropicProvider : IAgentProvider
     /// <summary>
     /// 应用思考强度。Anthropic 约束：thinking 启用时 temperature 必须省略（默认 1），
     /// 且 max_tokens 必须大于思考预算（至少多 1024）；这里按 max_tokens 收敛预算并省略 temperature。
+    /// off / auto 都不启用 thinking：auto 表示由模型默认行为决定。
     /// </summary>
     private void ApplyThinking(JsonObject payload, string thinkingEffort)
     {
-        if (thinkingEffort == "off")
+        if (thinkingEffort is "off" or "auto")
         {
             payload["temperature"] = _temperature;
             return;

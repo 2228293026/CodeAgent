@@ -79,6 +79,24 @@ public sealed class OpenAiProvider : IAgentProvider
         return key.Trim();
     }
 
+    /// <summary>auto 思考强度的探测结果缓存（key = baseUrl|model，值为升序档位列表），避免每轮调用重复探测。</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<string>?> ReasoningSupportCache = new();
+
+    /// <summary>解析思考强度：auto 时探测模型支持的档位（结果缓存），
+    /// 取最高可用档（供应商声明支持 high 就用 high，只支持 low 就用 low）；不支持/无法判断则按 off 处理。</summary>
+    private async Task<string> ResolveEffortAsync(string thinkingEffort, CancellationToken ct)
+    {
+        if (thinkingEffort != "auto")
+            return thinkingEffort;
+        var key = _baseUrl + "|" + _model;
+        if (!ReasoningSupportCache.TryGetValue(key, out var efforts))
+        {
+            efforts = await GetSupportedEffortsAsync(_model, ct);
+            ReasoningSupportCache[key] = efforts;
+        }
+        return efforts is { Count: > 0 } ? efforts[^1] : "off";
+    }
+
     public async Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
@@ -98,8 +116,9 @@ public sealed class OpenAiProvider : IAgentProvider
             payload["tools"] = BuildTools(tools);
             payload["tool_choice"] = "auto";
         }
-        if (thinkingEffort != "off")
-            payload["reasoning_effort"] = thinkingEffort; // OpenAI o 系列 / OpenRouter 推理模型
+        var effort = await ResolveEffortAsync(thinkingEffort, ct);
+        if (effort is "low" or "medium" or "high")
+            payload["reasoning_effort"] = effort; // OpenAI o 系列 / OpenRouter 推理模型；off/auto 不支持时不发
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -137,7 +156,10 @@ public sealed class OpenAiProvider : IAgentProvider
             throw new ProviderException($"响应不是合法 JSON: {Truncate(body, 300)}", ex);
         }
 
-        var choice = root?["choices"]?[0]?["message"];
+        // choices 可能为空数组（部分网关在仅带 usage 或无内容时返回 []），
+        // 直接 [0] 会对空数组抛 ArgumentOutOfRangeException
+        var choicesArr = root?["choices"] as JsonArray;
+        var choice = choicesArr is { Count: > 0 } ? choicesArr[0]?["message"] : null;
         // content 可能是分块数组（部分兼容服务返回 [{"type":"text","text":…}]）：
         // 必须先判数组再取字符串——对 JsonArray 调 GetValue<string> 会直接抛 InvalidOperationException，
         // 原来的「先取字符串再 if 判数组」写法让数组分支永远不可达
@@ -202,8 +224,9 @@ public sealed class OpenAiProvider : IAgentProvider
             payload["tools"] = BuildTools(tools);
             payload["tool_choice"] = "auto";
         }
-        if (thinkingEffort != "off")
-            payload["reasoning_effort"] = thinkingEffort; // OpenAI o 系列 / OpenRouter 推理模型
+        var effort = await ResolveEffortAsync(thinkingEffort, ct);
+        if (effort is "low" or "medium" or "high")
+            payload["reasoning_effort"] = effort; // OpenAI o 系列 / OpenRouter 推理模型；off/auto 不支持时不发
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -274,7 +297,10 @@ public sealed class OpenAiProvider : IAgentProvider
                 };
             }
 
-            var delta = root?["choices"]?[0]?["delta"];
+            // 同非流式：空 choices 数组直接 [0] 会抛 ArgumentOutOfRangeException
+            // （new-api 等网关在结束/usage chunk 返回 {"choices":[],"usage":…}）
+            var choicesArr = root?["choices"] as JsonArray;
+            var delta = choicesArr is { Count: > 0 } ? choicesArr[0]?["delta"] : null;
 
             // usage 可能随任意 chunk 到达（hitmargin 在带 delta 的最后一个 chunk 里返回 usage）
             if (root?["usage"] is JsonObject u)
@@ -391,6 +417,39 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             return null; // 探测失败不影响主流程
         }
+    }
+
+    /// <summary>探测模型支持的推理档位：优先 /models 元数据（OpenRouter 等网关带 reasoning.effort 字段，
+    /// 值为 true 的键即支持的档位，按 low→high 升序返回）；元数据无能力信息时回退到内置模型名前缀表；
+    /// 仍无法判断返回 null（=按不支持处理）。</summary>
+    public async Task<IReadOnlyList<string>?> GetSupportedEffortsAsync(string model, CancellationToken ct)
+    {
+        try
+        {
+            var arr = await FetchModelsArrayAsync(ct);
+            foreach (var m in arr ?? [])
+            {
+                if (m is not JsonObject entry)
+                    continue;
+                if (!string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                // OpenRouter 等网关在 reasoning.effort 里显式声明支持的档位
+                if (entry["reasoning"]?["effort"] is JsonObject effort)
+                {
+                    var levels = new List<string>();
+                    foreach (var lvl in new[] { "low", "medium", "high" }) // 升序
+                        if (effort[lvl] is JsonValue v && v.TryGetValue<bool>(out var b) && b)
+                            levels.Add(lvl);
+                    return levels.Count > 0 ? levels : null; // effort 存在但全 false → 不支持
+                }
+                return KnownReasoningModels.TryGet(model); // 找到模型但元数据无 effort 字段 → 回退前缀表
+            }
+        }
+        catch
+        {
+            // 探测失败（网络/鉴权/非 JSON）：不影响主流程，回退前缀表
+        }
+        return KnownReasoningModels.TryGet(model);
     }
 
     /// <summary>GET /models 的 data 数组；失败抛 ProviderException（与 ListModelsAsync 的错误契约一致）。</summary>

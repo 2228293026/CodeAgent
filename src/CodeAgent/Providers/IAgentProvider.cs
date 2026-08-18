@@ -35,4 +35,9 @@ public interface IAgentProvider
     /// <summary>尝试获取模型的上下文窗口大小（token），探测不到返回 null。
     /// 默认不探测；实现的 API 若在模型元数据中携带窗口信息则覆写（如 OpenRouter 的 context_length）。</summary>
     Task<int?> GetContextWindowAsync(string model, CancellationToken ct) => Task.FromResult<int?>(null);
+
+    /// <summary>探测模型支持的推理强度档位（reasoning_effort / thinking 预算档），
+    /// 返回按强度升序的可用级别列表（如 ["low","medium","high"]）；null = 不支持/无法确定。
+    /// 默认不探测（null）；实现的 API 若在模型元数据中携带能力信息则覆写（如 OpenRouter 的 reasoning.effort）。</summary>
+    Task<IReadOnlyList<string>?> GetSupportedEffortsAsync(string model, CancellationToken ct) => Task.FromResult<IReadOnlyList<string>?>(null);
 }
