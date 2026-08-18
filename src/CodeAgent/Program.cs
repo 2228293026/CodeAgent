@@ -318,6 +318,8 @@ internal static class Program
                 continue;
             }
             line = line.Trim();
+            // 全角斜杠归一化：CJK 输入法打出的 ／model 与 /model 同义（菜单过滤已兼容，这里补上执行路径）
+            line = InputLine.NormalizeCommandFilter(line);
             if (line.Length == 0)
                 continue;
             if (line.StartsWith('/'))
