@@ -263,19 +263,7 @@ internal static class Program
         };
 
         // 有效上下文窗口：0 = 未知（状态栏只显示 ctx 绝对值）
-        int EffectiveContextWindow()
-        {
-            if (config.ContextWindow > 0)
-                return config.ContextWindow;
-            if (KnownContextWindows.TryGet(opts.Model) is { } fromTable)
-                return fromTable;
-            // 探测结果只对探测时的模型有效（/model 换模型后会重启探测）
-            var t = ctxProbe.Task;
-            if (t?.IsCompletedSuccessfully == true && t.Result is { } fromApi
-                && string.Equals(opts.Model, ctxProbe.Model, StringComparison.OrdinalIgnoreCase))
-                return fromApi;
-            return 0;
-        }
+        int EffectiveContextWindow() => Program.EffectiveContextWindow(config, opts, ctxProbe);
 
         // 切换块原地覆盖按「提示符占一行」计算：窄终端 + 长模式/模型/目录名会让提示符折行，
         // 此时退回追加模式，避免错位覆盖（留 8 列余量吸收目录里的 CJK 双宽字符）
@@ -709,6 +697,22 @@ internal static class Program
         Console.WriteLine("  输入 /help 查看命令；直接输入任务描述即可开始。");
         Console.WriteLine("──────────────────────────────────────────────────────────");
     }
+    /// <summary>有效上下文窗口：contextWindow 配置 > 内置模型表 > /models 元数据探测（仅对探测时模型有效）。
+    /// 0 = 未知（显示层退回绝对值）。REPL 状态栏与 /stats 共用。</summary>
+    internal static int EffectiveContextWindow(AgentConfig config, ProviderOptions opts, ContextProbeState? probe)
+    {
+        if (config.ContextWindow > 0)
+            return config.ContextWindow;
+        if (KnownContextWindows.TryGet(opts.Model) is { } fromTable)
+            return fromTable;
+        var t = probe?.Task;
+        if (t?.IsCompletedSuccessfully == true && t.Result is { } fromApi
+            && string.Equals(opts.Model, probe!.Model, StringComparison.OrdinalIgnoreCase))
+            return fromApi;
+        return 0;
+    }
+
+    /// <summary>后台上下文窗口探测状态：/model 换模型后旧结果作废并重启探测。</summary>
     /// <summary>后台上下文窗口探测状态：/model 换模型后旧结果作废并重启探测。</summary>
     internal sealed class ContextProbeState
     {
@@ -1072,13 +1076,16 @@ internal static class Program
                 {
                     var cost = TextUtil.UsdCost(agent.TotalInputTokens, agent.TotalOutputTokens,
                         config.PricePerMillionInput, config.PricePerMillionOutput);
+                    var win = EffectiveContextWindow(config, opts, ctxProbe);
+                    var ctxText = win > 0
+                        ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)} ({TextUtil.PercentOf(agent.ContextTokens, win)}%)"
+                        : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
                     Console.WriteLine(
                         $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
-                        $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，" +
-                        $"当前上下文 ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}" +
+                        $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，当前上下文 {ctxText}" +
                         (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
-                    break;
                 }
+                    break;
 
             case "/tools":
                 Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}）:");
