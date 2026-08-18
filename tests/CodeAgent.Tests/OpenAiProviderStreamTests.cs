@@ -244,4 +244,27 @@ public class OpenAiProviderStreamTests
         Assert.True(ex.Retryable);
         Assert.Equal(429, ex.StatusCode);
     }
+    [Fact]
+    public async Task ChatStreamAsync_FinishReasonLength_IsCaptured()
+    {
+        // 截断提示（Agent 的 ⚠ max_tokens 警告）依赖流式也能拿到 finish_reason
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"content":"半句话"}}]}
+
+                data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("半句话", resp.Text);
+        Assert.Equal("length", resp.FinishReason);
+    }
 }

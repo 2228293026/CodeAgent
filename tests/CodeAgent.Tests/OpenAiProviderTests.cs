@@ -402,4 +402,20 @@ public class OpenAiProviderTests
             [], "auto", CancellationToken.None);
         Assert.Equal("high", (string)JsonNode.Parse(handler.LastBody!)!["reasoning_effort"]!);
     }
+    [Fact]
+    public async Task ChatAsync_FinishReasonLength_IsSurfaced()
+    {
+        // 截断（finish_reason=length）必须暴露给调用方：Agent 据此显示 ⚠ 提示，否则半句话静默呈现
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":"半句话"},"finish_reason":"length"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Equal("length", resp.FinishReason);
+    }
 }

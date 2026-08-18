@@ -47,9 +47,12 @@ public sealed class ProviderResponse
 {
     public string? Text { get; init; }
     public IReadOnlyList<ToolCall> ToolCalls { get; init; } = [];
-    public int? InputTokens { get; init; }
     public int? OutputTokens { get; init; }
     public int? CachedTokens { get; init; }
+    public int? InputTokens { get; init; }
+    /// <summary>结束原因（openai finish_reason / anthropic stop_reason）：
+    /// "length"/"max_tokens" = 输出被 max_tokens 截断，调用方需提示用户。</summary>
+    public string? FinishReason { get; init; }
 }
 
 /// <summary>暴露给模型的工具规范（JSON Schema 形式的参数）。</summary>

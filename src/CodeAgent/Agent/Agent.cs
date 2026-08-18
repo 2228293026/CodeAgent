@@ -218,6 +218,16 @@ public sealed partial class Agent
                 TurnOutputTokens += outTokT;
             if (resp.CachedTokens is int cTokT)
                 TurnCachedTokens += cTokT;
+            // 输出被 max_tokens 截断：必须提示（否则模型话说一半、工具参数残缺，用户不知原因）
+            if (resp.FinishReason is "length" or "max_tokens")
+            {
+                lock (ConsoleLock)
+                {
+                    SafeColor.Foreground(ConsoleColor.Yellow);
+                    Console.WriteLine($"⚠ 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整，可在配置调大 maxTokens");
+                    SafeColor.Reset();
+                }
+            }
             if (resp.InputTokens is int inTok)
                 TotalInputTokens += inTok;
             if (resp.OutputTokens is int outTok)

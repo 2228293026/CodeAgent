@@ -50,6 +50,7 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal("off", c.ThinkingEffort);
         Assert.Equal("strict", c.FileAccess);
     }
+    [Fact]
     public void ProviderOptions_HasSaneDefaults()
     {
         var p = new ProviderOptions();

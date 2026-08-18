@@ -199,6 +199,7 @@ public sealed class OpenAiProvider : IAgentProvider
         int? inTok = root?["usage"]?["prompt_tokens"]?.GetValue<int>();
         int? outTok = root?["usage"]?["completion_tokens"]?.GetValue<int>();
         int? cachedTok = root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]?.GetValue<int>();
+        var finish = choicesArr is { Count: > 0 } ? choicesArr[0]?["finish_reason"]?.GetValue<string>() : null; // "length" = 被 max_tokens 截断
 
         return new ProviderResponse
         {
@@ -207,6 +208,7 @@ public sealed class OpenAiProvider : IAgentProvider
             InputTokens = inTok,
             OutputTokens = outTok,
             CachedTokens = cachedTok,
+            FinishReason = finish,
         };
     }
 
@@ -271,6 +273,7 @@ public sealed class OpenAiProvider : IAgentProvider
         var text = new StringBuilder();
         var toolAccum = new Dictionary<int, StreamToolAccum>();
         int? inTok = null, outTok = null, cachedTok = null;
+        string? finishReason = null; // 最后一个非空 finish_reason（"length" = 输出被截断）
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
@@ -325,6 +328,10 @@ public sealed class OpenAiProvider : IAgentProvider
                     cachedTok = u["prompt_tokens_details"]!["cached_tokens"]!.GetValue<int>();
             }
 
+            // finish_reason 随结束 chunk 到达（可能不带 delta）：取最后一个非空值
+            var fr = choicesArr is { Count: > 0 } ? choicesArr[0]?["finish_reason"]?.GetValue<string>() : null;
+            if (!string.IsNullOrEmpty(fr))
+                finishReason = fr;
             if (delta is null)
                 continue;
 
@@ -385,6 +392,7 @@ public sealed class OpenAiProvider : IAgentProvider
             InputTokens = inTok,
             OutputTokens = outTok,
             CachedTokens = cachedTok,
+            FinishReason = finishReason,
         };
     }
 

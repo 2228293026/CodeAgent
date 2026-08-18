@@ -147,6 +147,7 @@ public sealed class AnthropicProvider : IAgentProvider
         int? inTok = root?["usage"]?["input_tokens"]?.GetValue<int>();
         int? outTok = root?["usage"]?["output_tokens"]?.GetValue<int>();
         int? cachedTok = root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
+        var stopReason = root?["stop_reason"]?.GetValue<string>(); // "max_tokens" = 输出被截断
 
         return new ProviderResponse
         {
@@ -155,6 +156,7 @@ public sealed class AnthropicProvider : IAgentProvider
             InputTokens = inTok,
             OutputTokens = outTok,
             CachedTokens = cachedTok,
+            FinishReason = stopReason,
         };
     }
 
@@ -233,6 +235,7 @@ public sealed class AnthropicProvider : IAgentProvider
         var evt = "";
         int? inputTokens = null;
         int? outputTokens = null;
+        string? finishReason = null; // message_delta 的 stop_reason（"max_tokens" = 被截断）
         int? cachedTokens = null;
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
@@ -318,6 +321,9 @@ public sealed class AnthropicProvider : IAgentProvider
 
                 case "message_delta":
                     outputTokens = root?["usage"]?["output_tokens"]?.GetValue<int>();
+                    var sr = root?["delta"]?["stop_reason"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(sr))
+                        finishReason = sr; // "max_tokens" 表示输出被截断
                     break;
 
                 case "error":
@@ -349,6 +355,7 @@ public sealed class AnthropicProvider : IAgentProvider
             InputTokens = inputTokens,
             OutputTokens = outputTokens,
             CachedTokens = cachedTokens,
+            FinishReason = finishReason,
         };
     }
 

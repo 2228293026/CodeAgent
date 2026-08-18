@@ -181,4 +181,32 @@ public class AnthropicProviderStreamTests
         Assert.Equal("sys", body["system"]!.GetValue<string>());
         Assert.True(body["stream"]!.GetValue<bool>());
     }
+    [Fact]
+    public async Task ChatStreamAsync_MaxTokensStopReason_IsCaptured()
+    {
+        // Anthropic 的截断信号在 message_delta.delta.stop_reason；Agent 依赖它提示 max_tokens 截断
+        var handler = new SseHandler
+        {
+            Body = """
+                event: content_block_start
+                data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"半句话"}}
+
+                event: message_delta
+                data: {"type":"message_delta","delta":{"stop_reason":"max_tokens"},"usage":{"output_tokens":9}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("max_tokens", resp.FinishReason);
+    }
 }
