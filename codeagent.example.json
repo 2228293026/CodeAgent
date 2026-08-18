@@ -49,6 +49,7 @@
   "commandTimeoutSeconds": 60,
   "shell": "",
   "saveSessions": true,
+  "maxSessionLogs": 30,
   "streamOutput": true,
   "showToolCalls": true,
   "renderMarkdown": true,
