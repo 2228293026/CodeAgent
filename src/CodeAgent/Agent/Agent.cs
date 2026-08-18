@@ -221,18 +221,19 @@ public sealed partial class Agent
             TurnRounds++;
             if (resp.InputTokens is int inTokT)
                 TurnInputTokens += inTokT;
-            LastInputTokens = resp.InputTokens ?? 0; // 本轮无 usage 则归零，ctx 退回估算口径
             if (resp.OutputTokens is int outTokT)
                 TurnOutputTokens += outTokT;
             if (resp.CachedTokens is int cTokT)
                 TurnCachedTokens += cTokT;
+            LastInputTokens = resp.InputTokens ?? 0; // 本轮无 usage 则归零，ctx 退回估算口径
             // 输出被 max_tokens 截断：必须提示（否则模型话说一半、工具参数残缺，用户不知原因）
             if (resp.FinishReason is "length" or "max_tokens")
             {
+                var truncatedTools = resp.ToolCalls.Count > 0 ? "，工具调用参数可能残缺" : "";
                 lock (ConsoleLock)
                 {
                     SafeColor.Foreground(ConsoleColor.Yellow);
-                    Console.WriteLine($"⚠ 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整，可在配置调大 maxTokens");
+                    Console.WriteLine($"⚠ 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens");
                     SafeColor.Reset();
                 }
             }
