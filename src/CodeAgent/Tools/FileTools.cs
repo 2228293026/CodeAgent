@@ -41,7 +41,7 @@ public sealed class ReadFileTool : ITool
         var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
 
-        var text = await File.ReadAllTextAsync(full, ct);
+        var text = await TextUtil.ReadTextSmartAsync(full, ct);
         if (SkipDirs.LooksBinary(text))
             throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
 
@@ -114,7 +114,7 @@ public sealed class WriteFileTool : ITool
         {
             var info = new FileInfo(full);
             if (info.Length <= 4 * 1024 * 1024)
-                old = await File.ReadAllTextAsync(full, ct);
+                old = await TextUtil.ReadTextSmartAsync(full, ct);
         }
 
         // 内容与现状完全一致：跳过写入（不刷 mtime、不污染撤销栈）
@@ -181,7 +181,7 @@ public sealed class EditFileTool : ITool
         if (!File.Exists(full))
             throw new ToolException($"文件不存在: {path}");
 
-        var text = await File.ReadAllTextAsync(full, ct);
+        var text = await TextUtil.ReadTextSmartAsync(full, ct);
         var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
 
         // 先统一做未命中检查：replace_all 模式下未命中也不允许静默写回原文件

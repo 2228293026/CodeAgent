@@ -24,6 +24,37 @@ public static class SafeColor
 /// <summary>通用小工具。</summary>
 public static class TextUtil
 {
+    static TextUtil() =>
+        // GB18030/GBK 等本地代码页在 .NET（Core）需显式注册，ReadTextSmart 的兜底解码依赖它
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+    /// <summary>读文本文件：BOM 优先；无 BOM 时严格校验 UTF-8，非法则按 GB18030 兜底。
+    /// 老 Windows 工具保存的 ANSI（GBK）中文文件若按 UTF-8 读会出现乱码，
+    /// grep 搜不到中文、read_file 显示 &#65533; 替换符。</summary>
+    public static string ReadTextSmart(string path) => DecodeSmart(File.ReadAllBytes(path));
+
+    /// <summary>ReadTextSmart 的异步版本。</summary>
+    public static async Task<string> ReadTextSmartAsync(string path, CancellationToken ct = default) =>
+        DecodeSmart(await File.ReadAllBytesAsync(path, ct));
+
+    private static string DecodeSmart(byte[] bytes)
+    {
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+            return System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
+            return System.Text.Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
+            return System.Text.Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        try
+        {
+            // 严格 UTF-8：非法序列抛 DecoderFallbackException → 说明不是 UTF-8，走 GB18030
+            return new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true).GetString(bytes);
+        }
+        catch (System.Text.DecoderFallbackException)
+        {
+            return System.Text.Encoding.GetEncoding("GB18030").GetString(bytes);
+        }
+    }
     /// <summary>粗略 token 估算：ASCII 段按 4 字符/token，CJK/全角按每字 1 token
     ///（spinner ↑ 与 ctx 无 usage 时的回退口径，中文会话 chars/4 会低估约 4 倍）。</summary>
     public static long EstimateTokens(string s)

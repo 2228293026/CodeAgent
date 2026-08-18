@@ -568,4 +568,24 @@ public class FileToolsTests : IDisposable
         Assert.Contains("相同", ex.Message);
         Assert.Equal(0, ctx.Undo.Count);
     }
+    [Fact]
+    public async Task ReadFile_GbkEncoded_DecodesViaFallback()
+    {
+        // 无 BOM 的 GBK 文件：UTF-8 严格校验失败 → GB18030 兜底，内容可读而非替换符
+        _ = TextUtil.EstimateTokens("");
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(Path.Combine(_dir, "ansi.txt"), gbk.GetBytes("中文内容"));
+        var tool = new ReadFileTool();
+        var ctx = new AgentContext
+        {
+            Config = new AgentConfig(),
+            Workspace = new Workspace(_dir),
+        };
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ansi.txt" }, ctx, CancellationToken.None);
+
+        Assert.Contains("中文内容", output);
+    }
+
 }

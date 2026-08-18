@@ -174,4 +174,21 @@ public class GrepToolTests : IDisposable
             new JsonObject { ["pattern"] = "hit", ["max_results"] = 50 }, ctx, CancellationToken.None);
         Assert.DoesNotContain("max_results", out2);
     }
+    [Fact]
+    public async Task Grep_GbkEncodedChineseFile_StillMatches()
+    {
+        // 回归：老 Windows 工具保存的 ANSI（GBK）中文文件按 UTF-8 读全是替换符，中文 pattern 永远搜不到
+        _ = TextUtil.EstimateTokens(""); // 触发 TextUtil 静态构造：注册 GB18030 代码页
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(Path.Combine(_dir, "legacy.txt"), gbk.GetBytes("这是老编码的中文内容\nplain ascii line\n"));
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "老编码" }, ctx, CancellationToken.None);
+
+        Assert.Contains("legacy.txt:1", output);
+        Assert.Contains("这是老编码的中文内容", output);
+    }
+
 }

@@ -133,7 +133,7 @@ public sealed class GrepTool : ITool
                 var fi = new FileInfo(path);
                 if (fi.Length > 2_000_000)
                     return;
-                var text = File.ReadAllText(path);
+                var text = TextUtil.ReadTextSmart(path); // GBK/ANSI 兜底，避免中文文件乱码
                 if (SkipDirs.LooksBinary(text))
                     return;
 
