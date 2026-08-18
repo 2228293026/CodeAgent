@@ -183,4 +183,21 @@ public class OpenAiProviderStreamTests
 
         Assert.Equal("好的", resp.Text); // 非字符串增量被跳过，合法增量照常累积
     }
+
+    [Fact]
+    public async Task ChatStreamAsync_MidStreamErrorEvent_ThrowsWithMessage()
+    {
+        // 回归：流中途的 data:{"error":...} 曾被静默跳过，用户只看到空回复
+        var http = new HttpClient(new SseHandler
+        {
+            Body = "data: {\"error\":{\"message\":\"rate limited\",\"type\":\"rate_limit_error\"}}\n\ndata: [DONE]\n\n",
+        });
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "k" }, http);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(() =>
+            provider.ChatStreamAsync(
+                [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+                [], "off", null, null, null, CancellationToken.None));
+        Assert.Contains("rate limited", ex.Message);
+    }
 }

@@ -260,6 +260,14 @@ public sealed class OpenAiProvider : IAgentProvider
                 continue;
             }
 
+            // 流中途的错误事件（限流/配额等以 data:{"error":...} 形式出现）：
+            // 静默忽略会得到空回复的「模型未返回内容」，这里明确抛出原因
+            if (root?["error"] is JsonObject errObj)
+            {
+                throw new ProviderException(
+                    $"流式响应中断: {errObj["message"]?.GetValue<string>() ?? Truncate(errObj.ToJsonString(), 300)}");
+            }
+
             var delta = root?["choices"]?[0]?["delta"];
 
             // usage 可能随任意 chunk 到达（hitmargin 在带 delta 的最后一个 chunk 里返回 usage）
