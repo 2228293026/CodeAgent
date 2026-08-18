@@ -372,6 +372,17 @@ internal static class Program
                     PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
                 }
                 PrintTurnSummary(agent, sw.Elapsed, opts);
+                // 上下文占用 ≥90%：提示可 /compact（状态栏百分比小、易被忽略）
+                {
+                    var win = EffectiveContextWindow();
+                    if (win > 0 && agent.ContextTokens > 0)
+                    {
+                        var pct = TextUtil.PercentOf(agent.ContextTokens, win);
+                        if (pct >= 90)
+                            Console.WriteLine($"⚠ 上下文已用 {pct}%（{TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)}）：建议 /compact 压缩历史，否则即将自动裁剪最旧对话。");
+                    }
+                }
+                PrintTurnSummary(agent, sw.Elapsed, opts);
             }
             catch (ProviderException ex)
             {
