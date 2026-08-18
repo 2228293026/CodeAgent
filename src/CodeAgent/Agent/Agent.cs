@@ -214,7 +214,8 @@ public sealed class Agent
             if (m.Role == MessageRole.Assistant && m.ToolCalls is { Count: > 0 })
             {
                 foreach (var tc in m.ToolCalls)
-                    sb.AppendLine($"- 调用工具 `{tc.Name}`：`{tc.ArgumentsJson}`");
+                    // 参数可能携带大段 content（write_file）：截断预览，导出文件不被单个调用撑爆
+                    sb.AppendLine($"- 调用工具 `{tc.Name}`：`{(tc.ArgumentsJson.Length > 200 ? tc.ArgumentsJson[..200] + "…" : tc.ArgumentsJson)}`");
             }
             if (!string.IsNullOrEmpty(m.Content))
                 sb.AppendLine();

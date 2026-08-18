@@ -245,22 +245,14 @@ public sealed class OpenAiProvider : IAgentProvider
 
             // 思考内容（DeepSeek-R1 用 reasoning_content，OpenRouter 用 reasoning）
             var reasoning = delta["reasoning_content"] ?? delta["reasoning"];
-            if (reasoning is not null)
-            {
-                var r = reasoning.GetValue<string>() ?? "";
-                if (r.Length > 0)
-                    onReasoning?.Invoke(r);
-            }
+            if (reasoning is JsonValue rv && rv.TryGetValue<string>(out var r) && r.Length > 0)
+                onReasoning?.Invoke(r);
 
             var content = delta["content"];
-            if (content is not null)
+            if (content is JsonValue cv && cv.TryGetValue<string>(out var t) && t.Length > 0)
             {
-                var t = content.GetValue<string>() ?? "";
-                if (t.Length > 0)
-                {
-                    text.Append(t);
-                    onText?.Invoke(t);
-                }
+                text.Append(t);
+                onText?.Invoke(t);
             }
 
             var tcs = delta["tool_calls"]?.AsArray();
