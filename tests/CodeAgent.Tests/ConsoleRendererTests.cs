@@ -406,6 +406,22 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Table_EscapedPipe_StaysInsideCell()
+    {
+        // 回归：\| 是表格内转义竖线，曾被当作单元格分隔劈开成多余列，且内容残留反斜杠
+        var output = Render("| cmd | desc |\n|---|---|\n| grep a \\| b | find |\n");
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var data = lines[^1].Trim();
+        // 仍应是 2 列：数据行只有 1 条分隔竖线，且竖线数与表头一致
+        var headPipes = CountPipes(lines[0]);
+        var dataPipes = CountPipes(data);
+        Assert.Equal(headPipes, dataPipes);
+        Assert.Contains("grep a | b", data); // 转义还原为字面 |，不带反斜杠
+        Assert.DoesNotContain("\\|", data);
+    }
+
+    private static int CountPipes(string s) =>
+        s.Split("│").Length - 1;
     public void Table_EmptyCell_DoesNotCrash()
     {
         var output = Render("| a | b |\n|---|---|\n| 1 |  |\n");

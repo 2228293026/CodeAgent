@@ -312,7 +312,29 @@ public sealed class ConsoleRenderer
     private static List<string> SplitCells(string row)
     {
         var s = row.Trim().TrimStart('|').TrimEnd('|');
-        return s.Split('|').Select(c => c.Trim()).ToList();
+        // \| 是表格内的转义竖线（如 "a \| b"、正则片段 \|regex\|）：不能作为单元格分隔，
+        // 且渲染时应还原为字面 |，否则列数会多、内容被劈开
+        var cells = new List<string>();
+        var sb = new StringBuilder();
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (s[i] == '\\' && i + 1 < s.Length && s[i + 1] == '|')
+            {
+                sb.Append('|');
+                i++;
+            }
+            else if (s[i] == '|')
+            {
+                cells.Add(sb.ToString().Trim());
+                sb.Clear();
+            }
+            else
+            {
+                sb.Append(s[i]);
+            }
+        }
+        cells.Add(sb.ToString().Trim());
+        return cells;
     }
 
     private static string PadToWidth(string s, int width)
