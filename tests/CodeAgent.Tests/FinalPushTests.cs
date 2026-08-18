@@ -144,6 +144,9 @@ public class FinalPushTests
     [InlineData("logs")]
     [InlineData(".venv")]
     [InlineData(".vs")]
+    [InlineData("__pycache__")]
+    [InlineData(".tox")]
+    [InlineData("DerivedData")]
     [InlineData(".idea")]
     [InlineData(".vscode")]
     public void SkipDirs_MoreSkipped(string dir) =>
