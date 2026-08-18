@@ -194,6 +194,7 @@ public sealed partial class Agent
     public void Close()
     {
         try { _sessionLog?.Flush(); _sessionLog?.Dispose(); } catch { }
+        _sessionLog = null; // 关闭后 LogMessage 静默跳过：不再写已释放的 writer
     }
 
 
