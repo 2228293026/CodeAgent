@@ -23,6 +23,11 @@ public sealed partial class Agent
         var msgs = LoadMessages(name);
         _messages.Clear();
         _messages.AddRange(msgs);
+        // 快照可能在别的模式下保存：system 换成当前模式提示（与 LoadSessionLog 后 SetMode 的语义一致）
+        if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
+            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) };
+        // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
+        _turnStarts.Clear();
         // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
         _turnStarts.Clear();
         LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
