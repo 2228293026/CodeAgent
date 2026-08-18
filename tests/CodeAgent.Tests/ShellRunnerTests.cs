@@ -159,4 +159,16 @@ public class ShellRunnerTests
 
         Assert.Contains("single quoted arg", output);
     }
+
+    [Fact]
+    public void IsWslBash_DistinguishesSystem32FromGitBash()
+    {
+        // 回归：System32 下的 bash.exe 是 WSL 启动器，Git Bash 检测必须跳过，
+        // 否则装了 WSL 的机器上 where.exe/PATH 会优先命中它，命令被带进 Linux 子系统
+        var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        Assert.True(ShellRunner.IsWslBash(System.IO.Path.Combine(system, "bash.exe")));
+
+        Assert.False(ShellRunner.IsWslBash(@"C:\Program Files\Git\bin\bash.exe"));
+        Assert.False(ShellRunner.IsWslBash(@"C:\msys64\usr\bin\bash.exe"));
+    }
 }

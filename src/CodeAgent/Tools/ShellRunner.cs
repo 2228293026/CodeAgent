@@ -162,14 +162,31 @@ public static class ShellRunner
             });
             if (p is not null)
             {
-                var first = p.StandardOutput.ReadLine()?.Trim();
-                if (!string.IsNullOrEmpty(first) && File.Exists(first))
-                    return first;
+                string? line;
+                while ((line = p.StandardOutput.ReadLine()) is not null)
+                {
+                    line = line.Trim();
+                    if (line.Length == 0 || !File.Exists(line) || IsWslBash(line))
+                        continue;
+                    return line;
+                }
             }
         }
         catch { /* 忽略 */ }
 
-        return FindOnPath("bash.exe") ?? FindOnPath("bash");
+        var onPath = FindOnPath("bash.exe") ?? FindOnPath("bash");
+        return onPath is not null && !IsWslBash(onPath) ? onPath : null;
+    }
+
+    /// <summary>System32 下的 bash.exe 是 WSL 启动器：用它执行会把命令带进 Linux 子系统
+    /// （错误的工具链与文件系统视图），Git Bash 检测必须跳过。</summary>
+    internal static bool IsWslBash(string path)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+        var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        var systemX86 = Environment.GetFolderPath(Environment.SpecialFolder.SystemX86);
+        return string.Equals(dir, system, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(dir, systemX86, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>在 PATH 中查找 pwsh（PowerShell 7）；找不到返回 null。</summary>
