@@ -236,4 +236,35 @@ public class AgentEdgeTests : IDisposable
         Assert.Equal(MessageRole.System, agent.Messages[0].Role);
         Assert.Equal(10, agent.TotalInputTokens); // 会话级累计不清零（/stats 口径）
     }
+
+    [Fact]
+    public async Task UndoLastTurn_RollsSessionLog()
+    {
+        // 撤回曾只改内存不落盘，--continue 会把已撤回的轮次带回来；
+        // 现在撤回滚动新日志并重写剩余消息
+        static string[] ReadShared(string p)
+        {
+            using var fs = new FileStream(p, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var sr = new StreamReader(fs);
+            return sr.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        }
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse { Text = "ok" },
+        };
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = true, SessionDir = SessionDir, MaxToolIterations = 5 },
+            provider, ToolRegistry.CreateDefault(), workingDirectory: _dir);
+        await agent.RunAsync("第一轮", CancellationToken.None);
+        var firstLog = agent.SessionPath;
+        Assert.NotNull(firstLog);
+
+        Assert.NotNull(agent.UndoLastTurn());
+
+        // 新日志已滚动，且内容不含被撤回的「第一轮」
+        Assert.NotEqual(firstLog, agent.SessionPath);
+        var rolled = ReadShared(agent.SessionPath!);
+        Assert.DoesNotContain(rolled, l => l.Contains("第一轮"));
+        Assert.Contains(rolled, l => l.Contains("system")); // 自包含：system 提示在
+    }
 }

@@ -162,6 +162,10 @@ public sealed class Agent
             return null; // 防御：起点已越界（消息被压缩/移除），丢弃该层
         _messages.RemoveRange(start, _messages.Count - start);
         LastInputTokens = 0; // 撤回后历史变短：真实 prompt_tokens 已过期，ctx 退回估算
+        // 撤回同步落盘：滚动新日志并重写剩余消息，否则 --continue 会把已撤回的轮次带回来
+        RollSessionLog();
+        foreach (var m in _messages)
+            LogMessage(m);
         return $"⏪ 已撤回最后一轮（剩余 {start} 条历史消息）。";
     }
 
