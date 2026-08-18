@@ -175,7 +175,7 @@ public sealed class UndoManager
                         continue;
                     if (total + fi.Length > SnapshotMaxTotalBytes)
                         break;
-                    var text = File.ReadAllText(file);
+                    var text = TextUtil.ReadTextSmart(file); // GBK 等旧编码快照内容不乱码
                     total += fi.Length;
                     snap[Path.GetRelativePath(cwd, file).Replace('\\', '/')] = text;
                 }
@@ -211,6 +211,8 @@ public sealed class UndoManager
                 Path = full,
                 OldText = had ? old : null, // 新增文件无旧内容（撤销=删除）；修改/删除则记录执行前内容
                 HadFile = had,
+                // 命令副作用无法拿到执行前文件的编码：按当前文件尽力推断（命令未改编码时即原编码）
+                EncodingName = had && has ? TextUtil.DetectFileEncoding(full) : null,
             });
         }
     }
