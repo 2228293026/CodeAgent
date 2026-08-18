@@ -280,8 +280,7 @@ public class AgentSessionEdgeTests : IDisposable
 
         // --continue 读取最新日志：应包含加载的「旧对话内容」
         var latest = System.Linq.Enumerable.Single(Program.RecentSessionLogs(new AgentConfig { SessionDir = SessionDir }, 1));
-        var escaped = System.Text.Json.JsonSerializer.Serialize("旧对话内容").Trim('"'); // 日志默认转义非 ASCII
-        Assert.Contains(escaped, File.ReadAllText(latest));
+        Assert.Contains("旧对话内容", File.ReadAllText(latest)); // 中文明文落盘
     }
 
 }

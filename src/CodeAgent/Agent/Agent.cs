@@ -190,6 +190,14 @@ public sealed partial class Agent
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
+        // 中文明文落盘：默认编码器会把非 ASCII 转义成 \uXXXX，日志/快照文件没法直接阅读与 grep
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    /// <summary>jsonl 日志行序列化：单行 + 中文明文（与 JsonOpts 同理）。</summary>
+    private static readonly JsonSerializerOptions LogJsonOpts = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
     /// <summary>执行一轮用户请求，返回模型最终答复文本。</summary>
@@ -972,7 +980,7 @@ public sealed partial class Agent
                 toolCalls = m.ToolCalls?.Select(tc => new { tc.Id, tc.Name, tc.ArgumentsJson }).ToList(),
                 error = m.IsError,
             };
-            _sessionLog.WriteLine(JsonSerializer.Serialize(entry));
+            _sessionLog.WriteLine(JsonSerializer.Serialize(entry, LogJsonOpts));
         }
         catch
         {
