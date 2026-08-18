@@ -135,13 +135,12 @@ public sealed partial class Agent
         // 清空后没有「上一轮」可撤回：清空起点栈，避免 ESC 撤回按过期索引误删
         _turnStarts.Clear();
         LastInputTokens = 0; // 上下文回到仅系统提示，ctx 退回估算口径
+        LastPrompt = null; // 对话已清空：/retry 不应把旧问题复活进新会话
         // 新开一个日志文件：--continue 恢复最近会话时不会带回已清空的历史；
         // 新日志先写入当前 system 提示，保持自包含
         RollSessionLog();
         LogMessage(_messages[0]);
     }
-
-    /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
     public void SetMode(AgentMode mode)
     {
         CurrentMode = mode;

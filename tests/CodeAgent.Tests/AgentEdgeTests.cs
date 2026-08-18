@@ -293,4 +293,18 @@ public class AgentEdgeTests : IDisposable
         Assert.Single(tools); // 只有合法的 read_file 生效
     }
 
+    [Fact]
+    public async Task Reset_ClearsLastPrompt()
+    {
+        // /clear 后 /retry 不应把旧问题复活进新会话：LastPrompt 随对话一起清空
+        var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
+        var agent = MakeAgent(provider);
+        await agent.RunAsync("旧问题", CancellationToken.None);
+        Assert.NotNull(agent.LastPrompt);
+
+        agent.Reset();
+
+        Assert.Null(agent.LastPrompt);
+    }
+
 }
