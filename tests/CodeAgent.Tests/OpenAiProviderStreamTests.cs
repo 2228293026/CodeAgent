@@ -267,4 +267,27 @@ public class OpenAiProviderStreamTests
         Assert.Equal("半句话", resp.Text);
         Assert.Equal("length", resp.FinishReason);
     }
+    [Fact]
+    public async Task ChatStreamAsync_RefusalDelta_IsSurfacedAsText()
+    {
+        // 回归：o 系列安全拒绝走 delta.refusal，此前被静默丢弃——回合以「模型未返回内容」结束
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"refusal":"我不能协助这个请求。"}}]}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+        var text = new System.Text.StringBuilder();
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", t => text.Append(t), null, null, CancellationToken.None);
+
+        Assert.Equal("我不能协助这个请求。", resp.Text);
+        Assert.Equal("我不能协助这个请求。", text.ToString());
+    }
+
 }

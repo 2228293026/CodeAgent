@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CodeAgent.Providers;
 
@@ -340,6 +342,13 @@ public sealed class OpenAiProvider : IAgentProvider
             if (reasoning is JsonValue rv && rv.TryGetValue<string>(out var r) && r.Length > 0)
                 onReasoning?.Invoke(r);
 
+            var refusal = delta["refusal"];
+            // o 系列安全拒绝走 delta.refusal：不处理会被静默丢弃，回合以「模型未返回内容」结束
+            if (refusal is JsonValue refv && refv.TryGetValue<string>(out var refusalText) && refusalText.Length > 0)
+            {
+                text.Append(refusalText);
+                onText?.Invoke(refusalText);
+            }
             var content = delta["content"];
             if (content is JsonValue cv && cv.TryGetValue<string>(out var t) && t.Length > 0)
             {
