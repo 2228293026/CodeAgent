@@ -850,6 +850,7 @@ internal static class Program
         {
             case "/exit" or "/quit":
                 Console.WriteLine("再见！");
+                agent.Close(); // Flush and close the session log before exiting
                 Environment.Exit(0);
                 break;
 
