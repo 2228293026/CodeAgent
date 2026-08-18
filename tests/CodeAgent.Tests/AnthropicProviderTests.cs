@@ -268,4 +268,31 @@ public class AnthropicProviderTests
         var body = JsonNode.Parse(handler.LastBody!);
         Assert.NotNull(body?["tools"]);
     }
+    [Fact]
+    public async Task ListModelsAsync_FollowsPagination()
+    {
+        // Anthropic /models 每页默认 20 条：has_more + after_id 必须翻页，否则大账号只见第一页
+        var page = 0;
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "k" },
+            new HttpClient(new PagedHandler(() => page++ switch
+            {
+                0 => """{"data":[{"id":"claude-a"},{"id":"claude-b"}],"has_more":true,"last_id":"claude-b"}""",
+                _ => """{"data":[{"id":"claude-c"}],"has_more":false}""",
+            })));
+
+        var models = await provider.ListModelsAsync(CancellationToken.None);
+
+        Assert.Equal(["claude-a", "claude-b", "claude-c"], models);
+        Assert.Equal(2, page); // 确实请求了第二页
+    }
+
+    private sealed class PagedHandler(Func<string> body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body(), Encoding.UTF8, "application/json"),
+            });
+    }
 }

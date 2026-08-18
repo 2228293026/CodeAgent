@@ -364,28 +364,40 @@ public sealed class AnthropicProvider : IAgentProvider
             FinishReason = finishReason,
         };
     }
-
-    /// <summary>列出 Anthropic 可用模型（GET /v1/models）。</summary>
+    /// <summary>列出 Anthropic 可用模型（GET /v1/models，跟随 has_more/after_id 分页——
+    /// 每页默认 20 条，不分页时账号模型多于 20 个只能看到第一页）。</summary>
     public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, _baseUrl + "/v1/models");
-        req.Headers.Add("x-api-key", _apiKey);
-        req.Headers.Add("anthropic-version", "2023-06-01");
-        using var resp = await _http.SendAsync(req, ct);
-        var body = await resp.Content.ReadAsStringAsync(ct);
-        if (!resp.IsSuccessStatusCode)
-            throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {OpenAiProvider.Truncate(body, 400)}");
-
         var ids = new List<string>();
-        foreach (var m in JsonNode.Parse(body)?["data"]?.AsArray() ?? [])
+        string? after = null;
+        while (true)
         {
-            var id = m?["id"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(id))
-                ids.Add(id);
-        }
-        return ids;
-    }
+            var url = _baseUrl + "/v1/models?limit=1000" + (after is null ? "" : $"&after_id={after}");
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Add("x-api-key", _apiKey);
+            req.Headers.Add("anthropic-version", "2023-06-01");
+            using var resp = await _http.SendAsync(req, ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            if (!resp.IsSuccessStatusCode)
+                throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {OpenAiProvider.Truncate(body, 400)}");
 
+            var root = JsonNode.Parse(body);
+            var lastId = (string?)null;
+            foreach (var m in root?["data"]?.AsArray() ?? [])
+            {
+                var id = m?["id"]?.GetValue<string>();
+                if (!string.IsNullOrEmpty(id))
+                {
+                    ids.Add(id);
+                    lastId = id;
+                }
+            }
+            // has_more 时用最后一条 id 翻页；空页或游标未前进则停止（防服务端异常导致的死循环）
+            if (root?["has_more"]?.GetValue<bool>() != true || lastId is null || lastId == after)
+                return ids;
+            after = lastId;
+        }
+    }
     private JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)
     {
         var arr = new JsonArray();
