@@ -1,5 +1,7 @@
 # CodeAgent
 
+[![CI](https://github.com/2228293026/CodeAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/2228293026/CodeAgent/actions/workflows/ci.yml)
+
 一个用 C#（.NET 10）编写的 LLM 驱动编码助手 CLI。它像 Claude Code / Aider 一样，在终端里理解你的任务，自主地**读取文件、搜索代码、修改代码、执行命令**，直到完成任务。
 
 同时支持 **OpenAI 兼容协议**（OpenAI / DeepSeek / 通义千问 / Ollama / Moonshot / 智谱 等）与 **Anthropic Claude**，通过配置文件随时切换，无需改代码。
