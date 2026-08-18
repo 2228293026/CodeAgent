@@ -123,11 +123,11 @@ public class RemainingEdgeTests
     }
 
     [Fact]
-    public void SplitCommand_Tab_NotTreatedAsSeparator()
+    public void SplitCommand_Tab_IsSeparator()
     {
         var (cmd, rest) = SplitCommand("/mode\tnext");
-        Assert.Equal("/mode\tnext", cmd); // 只按空格切，Tab 保留在 cmd
-        Assert.Equal("", rest);
+        Assert.Equal("/mode", cmd);
+        Assert.Equal("next", rest); // Tab 与空格同为分隔符
     }
 
     // ===== Modes =====

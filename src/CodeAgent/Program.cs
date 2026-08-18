@@ -1160,10 +1160,13 @@ internal static class Program
 
     internal static (string cmd, string rest) SplitCommand(string line)
     {
-        var idx = line.IndexOf(' ');
+        // 分隔符取最早出现者：空格、Tab、全角空格（CJK 输入法常打全角空格，曾导致 /model　gpt 无法识别）
+        var idx = new[] { line.IndexOf(' '), line.IndexOf('\t'), line.IndexOf('　') }
+            .Where(i => i >= 0)
+            .DefaultIfEmpty(-1)
+            .Min();
         return idx < 0 ? (line, "") : (line[..idx], line[(idx + 1)..]);
     }
-
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
     /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
     internal static bool IsSwitchCommand(string cmd, string rest) =>

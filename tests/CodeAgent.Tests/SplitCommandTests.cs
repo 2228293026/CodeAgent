@@ -57,12 +57,12 @@ public class SplitCommandTests
     }
 
     [Fact]
-    public void TabSeparated_IsTreatedAsSingleToken()
+    public void TabSeparated_SplitsCommand()
     {
-        // 只按空格拆分：Tab 分隔的命令不会被拆开
+        // Tab 也作为分隔符（粘贴的命令行常用 Tab 缩进）；曾只按空格拆导致无法识别
         var (cmd, rest) = Program.SplitCommand("/model\tgpt-4o");
-        Assert.Equal("/model\tgpt-4o", cmd);
-        Assert.Equal("", rest);
+        Assert.Equal("/model", cmd);
+        Assert.Equal("gpt-4o", rest);
     }
 
     [Fact]
@@ -91,5 +91,17 @@ public class SplitCommandTests
         var i = 0;
         Assert.Equal("-p", Program.NextArg(args, ref i, "--config"));
         Assert.Equal(1, i);
+    }
+
+    [Theory]
+    [InlineData("/model\tgpt-4o", "/model", "gpt-4o")]       // Tab 分隔
+    [InlineData("/save　名称", "/save", "名称")]               // 全角空格分隔（CJK 输入法）
+    [InlineData("/mode\t next", "/mode", " next")]           // 分隔符后保留原样（与空格语义一致）
+    public void SplitCommand_TabAndFullWidthSpace_Separate(string line, string cmd, string rest)
+    {
+        // 回归：只按半角空格拆分时，Tab/全角空格分隔的命令无法识别
+        var (c, r) = Program.SplitCommand(line);
+        Assert.Equal(cmd, c);
+        Assert.Equal(rest, r);
     }
 }
