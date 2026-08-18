@@ -1068,7 +1068,6 @@ internal static class Program
                         ctxProbe?.Restart(opts.Model, providerInst);
                         reasoningProbe?.Restart(opts.Model, providerInst);
                         // 同步回配置并持久化，重启后仍然生效
-                        // 重新后台探测新模型的上下文窗口（启动时的探测只对旧模型有效）
                         if (config.Providers.TryGetValue(config.Provider, out var po))
                             po.Model = opts.Model;
                         var savePath = ConfigSavePath(configPath, config);
