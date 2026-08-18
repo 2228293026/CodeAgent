@@ -157,8 +157,9 @@ public class InputLineCommandsTests
     [Fact]
     public void FitToWidth_EmojiSurrogatePair_CountsTwoColumns()
     {
-        // 代理对按 2 列：1 个 emoji + 省略号恰好用满 4 列
-        Assert.Equal("😀…", InputLine.FitToWidth("😀中", 4));
+        // emoji 按整对 2 列：宽度 3 时放不下第二个 CJK（2+2=4>3），保留整对不劈半 + 省略号
+        Assert.Equal("😀…", InputLine.FitToWidth("😀中", 3));
+        Assert.Equal("😀中", InputLine.FitToWidth("😀中", 4)); // 恰好 4 列原样保留
     }
 
     [Theory]
