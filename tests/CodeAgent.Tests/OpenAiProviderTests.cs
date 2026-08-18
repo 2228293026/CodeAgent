@@ -357,4 +357,49 @@ public class OpenAiProviderTests
         var body = JsonNode.Parse(handler.LastBody!)!;
         Assert.Null(body["reasoning_effort"]);
     }
+
+    /// <summary>/models 先失败后成功的可变处理器：模拟瞬时网络故障恢复。</summary>
+    private sealed class FlakyModelsHandler : HttpMessageHandler
+    {
+        public bool ModelsFailing = true;
+        public string? LastBody;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            HttpResponseMessage Resp(string json) => new(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+            if (request.RequestUri!.AbsolutePath.EndsWith("/models"))
+            {
+                return Task.FromResult(ModelsFailing
+                    ? new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("boom") }
+                    : Resp("""{"data":[{"id":"qwen3-max","reasoning":{"effort":{"low":true,"high":true}}}]}"""));
+            }
+            LastBody = request.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            return Task.FromResult(Resp("""{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"""));
+        }
+    }
+
+    [Fact]
+    public async Task ChatAsync_AutoEffort_TransientProbeFailure_IsNotCached()
+    {
+        // 回归：探测失败曾把「回退前缀表」的结果也写进缓存——qwen3-max 不在前缀表，
+        // 一次断网后 auto 永远 off，网络恢复也不重试。失败结果不得缓存。
+        var handler = new FlakyModelsHandler();
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k", Model = "qwen3-max", BaseUrl = "http://effort-cache-test.local/v1" },
+            new HttpClient(handler));
+
+        // 第一次：/models 500 → 探测失败 → 回退前缀表（未命中）→ off
+        await provider.ChatAsync([new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "auto", CancellationToken.None);
+        Assert.Null(JsonNode.Parse(handler.LastBody!)!["reasoning_effort"]);
+
+        // 网络恢复：/models 返回 reasoning.effort 元数据 → 未被缓存污染，重新探测 → high
+        handler.ModelsFailing = false;
+        await provider.ChatAsync([new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "auto", CancellationToken.None);
+        Assert.Equal("high", (string)JsonNode.Parse(handler.LastBody!)!["reasoning_effort"]!);
+    }
 }

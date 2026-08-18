@@ -83,7 +83,9 @@ public sealed class OpenAiProvider : IAgentProvider
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<string>?> ReasoningSupportCache = new();
 
     /// <summary>解析思考强度：auto 时探测模型支持的档位（结果缓存），
-    /// 取最高可用档（供应商声明支持 high 就用 high，只支持 low 就用 low）；不支持/无法判断则按 off 处理。</summary>
+    /// 取最高可用档（供应商声明支持 high 就用 high，只支持 low 就用 low）；不支持/无法判断则按 off 处理。
+    /// 探测失败（网络/5xx）不缓存：瞬时断网回退前缀表的结果若被缓存，
+    /// 断网恢复后 auto 仍按旧结果处理直到重启。</summary>
     private async Task<string> ResolveEffortAsync(string thinkingEffort, CancellationToken ct)
     {
         if (thinkingEffort != "auto")
@@ -91,8 +93,18 @@ public sealed class OpenAiProvider : IAgentProvider
         var key = _baseUrl + "|" + _model;
         if (!ReasoningSupportCache.TryGetValue(key, out var efforts))
         {
-            efforts = await GetSupportedEffortsAsync(_model, ct);
-            ReasoningSupportCache[key] = efforts;
+            var ok = true;
+            try
+            {
+                efforts = await ProbeEffortsAsync(_model, ct);
+            }
+            catch
+            {
+                ok = false; // 探测失败：回退前缀表，但不进缓存（下次调用重试探测）
+                efforts = KnownReasoningModels.TryGet(_model);
+            }
+            if (ok)
+                ReasoningSupportCache[key] = efforts;
         }
         return efforts is { Count: > 0 } ? efforts[^1] : "off";
     }
@@ -421,33 +433,40 @@ public sealed class OpenAiProvider : IAgentProvider
 
     /// <summary>探测模型支持的推理档位：优先 /models 元数据（OpenRouter 等网关带 reasoning.effort 字段，
     /// 值为 true 的键即支持的档位，按 low→high 升序返回）；元数据无能力信息时回退到内置模型名前缀表；
-    /// 仍无法判断返回 null（=按不支持处理）。</summary>
     public async Task<IReadOnlyList<string>?> GetSupportedEffortsAsync(string model, CancellationToken ct)
     {
         try
         {
-            var arr = await FetchModelsArrayAsync(ct);
-            foreach (var m in arr ?? [])
-            {
-                if (m is not JsonObject entry)
-                    continue;
-                if (!string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                // OpenRouter 等网关在 reasoning.effort 里显式声明支持的档位
-                if (entry["reasoning"]?["effort"] is JsonObject effort)
-                {
-                    var levels = new List<string>();
-                    foreach (var lvl in new[] { "low", "medium", "high" }) // 升序
-                        if (effort[lvl] is JsonValue v && v.TryGetValue<bool>(out var b) && b)
-                            levels.Add(lvl);
-                    return levels.Count > 0 ? levels : null; // effort 存在但全 false → 不支持
-                }
-                return KnownReasoningModels.TryGet(model); // 找到模型但元数据无 effort 字段 → 回退前缀表
-            }
+            return await ProbeEffortsAsync(model, ct);
         }
         catch
         {
             // 探测失败（网络/鉴权/非 JSON）：不影响主流程，回退前缀表
+            return KnownReasoningModels.TryGet(model);
+        }
+    }
+
+    /// <summary>真实探测（不吞异常）：ResolveEffortAsync 据此区分「探测完成」与「失败回退」，
+    /// 失败结果不进缓存（否则瞬时断网让 auto 整个会话按回退值处理）。</summary>
+    internal async Task<IReadOnlyList<string>?> ProbeEffortsAsync(string model, CancellationToken ct)
+    {
+        var arr = await FetchModelsArrayAsync(ct);
+        foreach (var m in arr ?? [])
+        {
+            if (m is not JsonObject entry)
+                continue;
+            if (!string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
+                continue;
+            // OpenRouter 等网关在 reasoning.effort 里显式声明支持的档位
+            if (entry["reasoning"]?["effort"] is JsonObject effort)
+            {
+                var levels = new List<string>();
+                foreach (var lvl in new[] { "low", "medium", "high" }) // 升序
+                    if (effort[lvl] is JsonValue v && v.TryGetValue<bool>(out var b) && b)
+                        levels.Add(lvl);
+                return levels.Count > 0 ? levels : null; // effort 存在但全 false → 不支持
+            }
+            return KnownReasoningModels.TryGet(model); // 找到模型但元数据无 effort 字段 → 回退前缀表
         }
         return KnownReasoningModels.TryGet(model);
     }
