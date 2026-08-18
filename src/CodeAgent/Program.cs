@@ -1272,7 +1272,6 @@ internal static class Program
             case "/history":
                 PrintConversation(agent, int.TryParse(rest.Trim(), out var histN) && histN >= 1 ? histN : null);
                 break;
-                break;
 
             case "/export":
                 // /export            导出当前对话
@@ -1339,7 +1338,6 @@ internal static class Program
                         : "";
                     Console.WriteLine($"  {kv.Key} ({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}{price}{cur}");
                 }
-                break;
                 break;
 
             case "/mode":
@@ -1418,6 +1416,7 @@ internal static class Program
                 // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
                 Console.WriteLine("终端诊断:");
                 Console.WriteLine($"  IsInputRedirected : {Console.IsInputRedirected}");
+                Console.WriteLine($"  OutputEncoding    : {W(() => (int)Console.OutputEncoding.CodePage)}（代码页；GBK 输出问题排查用）");
                 static string W(Func<int> f)
                 {
                     try { return f().ToString(); }
