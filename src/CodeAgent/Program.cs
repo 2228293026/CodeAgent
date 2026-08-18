@@ -825,6 +825,22 @@ internal static class Program
                             break;
                         }
                     }
+                    // 拼写检查：名称不在模型列表时提示相近候选（不阻断——代理服务可能隐藏列表）
+                    if (!int.TryParse(modelArg, out _))
+                        try
+                        {
+                            var knownModels = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                            if (knownModels.Count > 0 && !knownModels.Contains(modelArg, StringComparer.OrdinalIgnoreCase))
+                            {
+                                var near = knownModels.Where(m => m.Contains(modelArg.Split('-', '.')[0], StringComparison.OrdinalIgnoreCase))
+                                                .Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+                                Console.WriteLine($"⚠ 模型列表中没有「{modelArg}」（共 {knownModels.Count} 个模型）");
+                                if (near.Count > 0)
+                                    Console.WriteLine($"  相近的模型: {string.Join("、", near)}");
+                                Console.WriteLine("  仍将按输入保存；/models [关键字] 可查列表");
+                            }
+                        }
+                        catch { /* 离线/接口不支持时跳过检查 */ }
                     opts.Model = modelArg;
                     try
                     {
