@@ -41,6 +41,9 @@
   },
   "maxToolIterations": 20,
   "maxHistoryChars": 160000,
+  "contextWindow": 131072,
+  "fileAccess": "strict",
+  "readOnlyDirs": [],
   "allowCommands": true,
   "confirmCommands": false,
   "shell": "",
@@ -48,7 +51,7 @@
   "streamOutput": true,
   "showToolCalls": true,
   "renderMarkdown": true,
-  "tuiAnsi": false,
+  "tuiAnsi": true,
   "thinkingEffort": "off",
   "defaultMode": "code",
   "modes": [
@@ -56,7 +59,7 @@
       "name": "fix",
       "description": "修复模式：定位并修复 bug",
       "systemPrompt": "You are CodeAgent in FIX mode. Reproduce the bug, find the root cause, apply a minimal fix, then verify with the build/tests.",
-      "tools": []
+      "tools": ["read_file", "glob", "grep", "run_command", "stop"]
     }
   ]
 }
