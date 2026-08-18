@@ -887,6 +887,8 @@ internal static class Program
                 Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {ctxDesc}");
                 Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}   超时: {config.CommandTimeoutSeconds}s");
                 Console.WriteLine($"工具日志 : {(config.ShowToolCalls ? "on" : "off")}   流式输出: {(config.StreamOutput ? "on" : "off")}");
+                var roDirs = config.ReadOnlyDirs.Count == 0 ? "" : $"  只读白名单: {string.Join(", ", config.ReadOnlyDirs)}";
+                Console.WriteLine($"Access   : {config.FileAccess}{roDirs}");
                 break;
 
             case "/session":
