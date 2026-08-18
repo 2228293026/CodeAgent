@@ -417,4 +417,21 @@ public class UndoManagerTests : IDisposable
         var um = new UndoManager();
         Assert.Null(um.AllDiffs());
     }
+
+    [Fact]
+    public void TryUndo_CmdEntryWithoutSnapshot_HonestFailureNotFakeSuccess()
+    {
+        // 回归：cmd 条目指向存在但未入快照的文件（>1MB）时，曾静默不动却报「恢复原内容」
+        var path = Path.Combine(_dir, "big-target.txt");
+        File.WriteAllText(path, "modified-by-command");
+        var undo = new UndoManager();
+        undo.Push(new UndoEntry { Kind = "cmd", Path = path, OldText = null, HadFile = true, NewText = null });
+
+        var result = undo.TryUndo();
+
+        Assert.Contains("无法撤销", result);
+        Assert.Contains("快照", result);
+        Assert.Equal("modified-by-command", File.ReadAllText(path)); // 文件未被误动
+        Assert.Equal(0, undo.Count); // 条目已消费
+    }
 }

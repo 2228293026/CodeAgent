@@ -55,10 +55,12 @@ public sealed class UndoManager
                 var e = _entries[^1];
                 _entries.RemoveAt(_entries.Count - 1);
 
-                // 大文件（>4MB）未记录原内容，无法恢复：如实说明而非谎报成功
-                if (e.Kind == "write" && e.HadFile && e.OldText is null)
+                // 大文件（>4MB write / 未入快照的 cmd）没有原内容，无法恢复：如实说明而非谎报成功
+                if (e.Kind is "write" or "cmd" && e.HadFile && e.OldText is null)
                 {
-                    sb.AppendLine($"无法撤销: {Path.GetFileName(e.Path)} 过大，未记录原内容（仅限 ≤4MB 的文件可撤销覆盖）。");
+                    sb.AppendLine(e.Kind == "write"
+                        ? $"无法撤销: {Path.GetFileName(e.Path)} 过大，未记录原内容（仅限 ≤4MB 的文件可撤销覆盖）。"
+                        : $"无法撤销: {Path.GetFileName(e.Path)} 超出命令快照范围（单文件 >1MB 或快照总容量已满），原内容未记录。");
                     continue;
                 }
 
