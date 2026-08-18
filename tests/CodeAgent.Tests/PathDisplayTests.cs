@@ -24,4 +24,23 @@ public class PathDisplayTests
         // 恰好等于上限：原样返回
         Assert.Equal(longPath, Program.TruncatePathHead(longPath, longPath.Length));
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void FilterModels_BlankFilter_ReturnsAll(string? filter)
+    {
+        var models = new[] { "gpt-4o", "deepseek-chat", "claude-sonnet-4-5" };
+        Assert.Equal(3, Program.FilterModels(models, filter).Count);
+    }
+
+    [Fact]
+    public void FilterModels_SubstringCaseInsensitive()
+    {
+        var models = new[] { "gpt-4o", "GPT-4.1-mini", "deepseek-chat", "openai/gpt-5" };
+        var hit = Program.FilterModels(models, "gpt");
+        Assert.Equal(3, hit.Count); // openai/gpt-5 也命中（子串）
+        Assert.DoesNotContain("deepseek-chat", hit);
+    }
 }

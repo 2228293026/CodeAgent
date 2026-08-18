@@ -644,12 +644,16 @@ internal static class Program
     }
 
     /// <summary>列出当前 Provider 的可用模型，并用 * 标记当前配置的模型。</summary>
-    private static async Task PrintModelsAsync(IAgentProvider provider, string? currentModel)
+    /// <summary>按关键字过滤模型列表（忽略大小写子串）；null/空 = 不过滤。</summary>
+    internal static IReadOnlyList<string> FilterModels(IReadOnlyList<string> models, string? filter) =>
+        string.IsNullOrWhiteSpace(filter) ? models : models.Where(m => m.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private static async Task PrintModelsAsync(IAgentProvider provider, string? currentModel, string? filter = null)
     {
         try
         {
-            var models = await provider.ListModelsAsync(CancellationToken.None);
-            Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个）:");
+            var models = FilterModels(await provider.ListModelsAsync(CancellationToken.None), filter);
+            Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个{(filter is null ? "" : $"，过滤 “{filter.Trim()}”")}）:");
             var marked = false;
             for (int i = 0; i < models.Count; i++)
             {
@@ -1113,7 +1117,7 @@ internal static class Program
                 break;
 
             case "/models":
-                PrintModelsAsync(providerInst, opts.Model).GetAwaiter().GetResult();
+                PrintModelsAsync(providerInst, opts.Model, rest).GetAwaiter().GetResult();
                 break;
 
             case "/thinking":
