@@ -247,7 +247,7 @@ public sealed class UndoManager
     {
         try
         {
-            var current = File.Exists(e.Path) ? File.ReadAllText(e.Path) : "";
+            var current = File.Exists(e.Path) ? TextUtil.ReadTextSmart(e.Path) : ""; // GBK 文件的 diff 不乱码
             string original;
             if (e.Kind == "write")
                 original = e.HadFile ? e.OldText ?? "" : "";
