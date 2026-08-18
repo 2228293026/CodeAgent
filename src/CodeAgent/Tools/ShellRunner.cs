@@ -270,11 +270,11 @@ public static class ShellRunner
     }
 }
 
-/// <summary>在 bash（Windows 上为 Git Bash）中执行命令，支持管道、环境变量与 Unix 工具链。</summary>
+/// <summary>在 PowerShell（优先 pwsh 7，否则 Windows PowerShell 5.1）中执行命令，支持管道、对象与 .NET 集成。</summary>
 public sealed class BashTool : ITool
 {
     public string Name => "bash";
-    public string Description => "在 bash（Windows 上为 Git Bash）中执行命令，支持管道、环境变量与 Unix 工具链，适合脚本化操作。";
+    public string Description => "在 bash（Windows 上为 Git Bash）中执行命令，支持管道、环境变量与 Unix 工具链，适合脚本化操作。每次调用都是独立进程：目录切换不保留，请用 cwd 参数或 && 串联。";
 
     public JsonObject Parameters { get; } = new()
     {
@@ -297,7 +297,7 @@ public sealed class BashTool : ITool
 public sealed class PowerShellTool : ITool
 {
     public string Name => "powershell";
-    public string Description => "在 PowerShell（优先 pwsh 7，否则 Windows PowerShell 5.1）中执行命令，支持管道、对象与 .NET 集成。";
+    public string Description => "在 PowerShell（优先 pwsh 7，否则 Windows PowerShell 5.1）中执行命令，支持管道、对象与 .NET 集成。每次调用都是独立进程：目录切换不保留，请用 cwd 参数或 ; 串联。";
 
     public JsonObject Parameters { get; } = new()
     {
