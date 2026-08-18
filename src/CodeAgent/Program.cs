@@ -179,6 +179,14 @@ internal static class Program
         else if (!string.IsNullOrWhiteSpace(envProvider))
             config.Provider = envProvider;
 
+        // 拼错的 provider 名此前会静默落到空的 openai 配置，报错变成误导性的「缺 API Key」。
+        // 在创建 Provider 前先校验名字，给出可用列表
+        if (config.Providers.Count > 0 && !config.Providers.ContainsKey(config.Provider)) // 空配置走默认，不误伤
+        {
+            Console.Error.WriteLine($"未知 provider「{config.Provider}」（可用: {string.Join(", ", config.Providers.Keys)}）");
+            return 2;
+        }
+
         var opts = EnsureSelectedProvider(config);
         if (model is not null)
             opts.Model = model;
