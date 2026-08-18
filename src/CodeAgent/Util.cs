@@ -52,6 +52,20 @@ public static class TextUtil
         }
         await File.WriteAllTextAsync(path, content, new System.Text.UTF8Encoding(keepBom), ct);
     }
+
+    /// <summary>WriteTextPreserveBomAsync 的同步版本（撤销恢复在同步路径调用）。</summary>
+    public static void WriteTextPreserveBom(string path, string content)
+    {
+        bool keepBom = false;
+        if (File.Exists(path))
+        {
+            using var fs = File.OpenRead(path);
+            Span<byte> head = stackalloc byte[3];
+            keepBom = fs.Read(head) == 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
+        }
+        File.WriteAllText(path, content, new System.Text.UTF8Encoding(keepBom));
+    }
+
     private static string DecodeSmart(byte[] bytes)
     {
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)

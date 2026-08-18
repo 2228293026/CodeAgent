@@ -102,7 +102,7 @@ public sealed class UndoManager
         {
             // cmd 与 write 的恢复逻辑一致：修改=写回旧内容、新增=删除、删除=重建
             if (e.HadFile && e.OldText is not null)
-                File.WriteAllText(e.Path, e.OldText);
+                TextUtil.WriteTextPreserveBom(e.Path, e.OldText);
             else if (!e.HadFile && File.Exists(e.Path))
                 File.Delete(e.Path);
         }
@@ -113,13 +113,13 @@ public sealed class UndoManager
             if (e.NewText is null)
             {
                 // 小文件：记录了完整原文，直接写回（精确恢复）
-                File.WriteAllText(e.Path, e.OldText ?? "");
+                TextUtil.WriteTextPreserveBom(e.Path, e.OldText ?? "");
             }
             else
             {
                 // 大文件退化：仅替换 old/new 片段（可能有精度损失，但避免整文件内存开销）
                 var text = File.ReadAllText(e.Path);
-                File.WriteAllText(e.Path, text.Replace(e.NewText, e.OldText ?? ""));
+                TextUtil.WriteTextPreserveBom(e.Path, text.Replace(e.NewText, e.OldText ?? ""));
             }
         }
     }

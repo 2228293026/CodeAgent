@@ -434,4 +434,24 @@ public class UndoManagerTests : IDisposable
         Assert.Equal("modified-by-command", File.ReadAllText(path)); // 文件未被误动
         Assert.Equal(0, undo.Count); // 条目已消费
     }
+    [Fact]
+    public void TryUndo_RestoresUtf8BomFile_WithBomIntact()
+    {
+        // 回归：撤销曾用无 BOM 写回——带 BOM 的文件撤销一次就丢 BOM，
+        // 与 edit/write 主路径的 BOM 保留行为不一致
+        var path = Path.Combine(_dir, "bom.txt");
+        File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("中文内容")]);
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "中文内容", HadFile = true });
+        CodeAgent.TextUtil.WriteTextPreserveBom(path, "被改掉的内容"); // 走真实改写路径（保 BOM），撤销应同样保住
+
+        var desc = um.TryUndo();
+
+        Assert.NotNull(desc);
+        var bytes = File.ReadAllBytes(path);
+        Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF,
+            "撤销恢复后应保留 UTF-8 BOM");
+        Assert.Equal("中文内容", System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3));
+    }
+
 }
