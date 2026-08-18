@@ -505,6 +505,13 @@ internal static class Program
                 _ => m.Role.ToString(),
             };
             var content = m.Content ?? "";
+            if (m.Role == MessageRole.Assistant && m.ToolCalls is { Count: > 0 })
+            {
+                // 纯工具调用轮无文本：显示调用了哪些工具（否则 [助手] 后空白，像丢了消息）
+                var calls = string.Join(", ", m.ToolCalls.Select(tc => tc.Name));
+                content = (content.Length > 0 ? content + " " : "") + $"[调用 {calls}]";
+            }
+            if (content.Length > 300)
             if (content.Length > 300)
                 content = TextUtil.TruncateLine(content, 300);
             // 多行内容折叠为一行（工具结果常带换行，否则会打乱逐条列表）
