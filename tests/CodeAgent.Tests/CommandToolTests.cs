@@ -19,9 +19,9 @@ public class CommandToolTests : IDisposable
         try { Directory.Delete(_dir, true); } catch { /* 忽略 */ }
     }
 
-    private static AgentContext MakeContext(string dir) => new()
+    private static AgentContext MakeContext(string dir, bool allowCommands = true) => new()
     {
-        Config = new AgentConfig { AllowCommands = true, Shell = "bash" },
+        Config = new AgentConfig { AllowCommands = allowCommands, Shell = "bash" },
         Workspace = new Workspace(dir),
     };
 
@@ -83,5 +83,46 @@ public class CommandToolTests : IDisposable
             ctx, CancellationToken.None);
 
         Assert.Contains("ok-no-env", output);
+    }
+
+    [Fact]
+    public async Task BashTool_SharedPipeline_HonorsEnv()
+    {
+        // 管线统一后锁定：bash 工具同样接受 env 注入与退出码格式
+        var ctx = MakeContext(_dir);
+        var output = await new BashTool().ExecuteAsync(
+            new JsonObject
+            {
+                ["command"] = "echo b-$CA_B",
+                ["env"] = new JsonObject { ["CA_B"] = "x" },
+            },
+            ctx, CancellationToken.None);
+        Assert.Contains("b-x", output);
+        Assert.Contains("退出码 0", output);
+    }
+
+    [Fact]
+    public async Task PowerShellTool_SharedPipeline_HonorsEnv()
+    {
+        var ctx = MakeContext(_dir);
+        var output = await new PowerShellTool().ExecuteAsync(
+            new JsonObject
+            {
+                ["command"] = "Write-Output \"ps-$env:CA_P\"",
+                ["env"] = new JsonObject { ["CA_P"] = "y" },
+            },
+            ctx, CancellationToken.None);
+        Assert.Contains("ps-y", output);
+        Assert.Contains("退出码 0", output);
+    }
+
+    [Fact]
+    public async Task CommandTool_Disabled_ReturnsNoticeWithoutExecuting()
+    {
+        var ctx = MakeContext(_dir, allowCommands: false);
+        var output = await new CommandTool().ExecuteAsync(
+            new JsonObject { ["command"] = "echo should-not-run" }, ctx, CancellationToken.None);
+        Assert.Contains("被禁用", output);
+        Assert.DoesNotContain("should-not-run", output);
     }
 }

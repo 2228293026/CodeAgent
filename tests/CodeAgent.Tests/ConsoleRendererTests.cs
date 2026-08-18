@@ -422,6 +422,8 @@ public class ConsoleRendererTests : IDisposable
 
     private static int CountPipes(string s) =>
         s.Split("│").Length - 1;
+
+    [Fact]
     public void Table_EmptyCell_DoesNotCrash()
     {
         var output = Render("| a | b |\n|---|---|\n| 1 |  |\n");
