@@ -112,8 +112,9 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
 切换 Provider 的三种方式：
 
 ```bash
-codeagent -p deepseek "任务..."
-CODEGENT_PROVIDER=anthropic codeagent
+codeagent -p deepseek "任务..."        # 命令行指定
+CODEGENT_PROVIDER=anthropic codeagent  # 环境变量指定（-p 优先）
+CODEGENT_MODEL=gpt-4o codeagent        # 只换模型（-m 优先）
 # REPL 内: /model gpt-4o-mini  （切模型）
 ```
 
