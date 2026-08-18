@@ -1198,10 +1198,26 @@ internal static class Program
                 }
                 else
                 {
-                    var mode = Modes.Find(rest, config);
-                    agent.SetMode(mode);
-                    PrintModeSwitched(mode);
-                    suppressStatusBar = true;
+                    // 拼错的模式名曾静默回退到 code 并打印「已切换」——用户以为生效了。
+                    // 明确报错 + 列出相近候选（与 /model 的拼写提示一致）
+                    var wanted = rest.Trim();
+                    var modes = Modes.Build(config);
+                    var mode = modes.FirstOrDefault(m => m.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+                    if (mode is null)
+                    {
+                        Console.WriteLine($"⚠ 没有模式「{wanted}」，可用: {string.Join(", ", modes.Select(m => m.Name))}");
+                        var near = modes.Where(m => m.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)
+                                                    || wanted.Contains(m.Name, StringComparison.OrdinalIgnoreCase))
+                                        .Select(m => m.Name).Take(3).ToList();
+                        if (near.Count > 0)
+                            Console.WriteLine($"  相近的模式: {string.Join("、", near)}");
+                    }
+                    else
+                    {
+                        agent.SetMode(mode);
+                        PrintModeSwitched(mode);
+                        suppressStatusBar = true;
+                    }
                 }
                 break;
 
