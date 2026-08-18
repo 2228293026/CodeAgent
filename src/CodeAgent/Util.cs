@@ -24,6 +24,17 @@ public static class SafeColor
 /// <summary>通用小工具。</summary>
 public static class TextUtil
 {
+    /// <summary>粗略 token 估算：ASCII 段按 4 字符/token，CJK/全角按每字 1 token
+    ///（spinner ↑ 与 ctx 无 usage 时的回退口径，中文会话 chars/4 会低估约 4 倍）。</summary>
+    public static long EstimateTokens(string s)
+    {
+        long cjk = 0;
+        foreach (var ch in s)
+            if (ch >= 0x2E80)
+                cjk++;
+        return (s.Length - cjk) / 4 + cjk;
+    }
+
     public static string Truncate(string s, int max)
     {
         if (s.Length <= max)

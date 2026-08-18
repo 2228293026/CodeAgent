@@ -96,23 +96,17 @@ public sealed partial class Agent
         {
             if (LastInputTokens > 0)
                 return LastInputTokens;
-            // 估算口径：ASCII 段按 4 字符/token，CJK/全角按每字 1 token
-            //（中文会话 chars/4 会大幅低估，ctx 百分比与压缩时机判断失真）
-            long chars = 0, cjk = 0;
+            // 估算口径：无 usage 时按消息内容/工具参数的 token 估算
+            long total = 0;
             foreach (var m in _messages)
             {
                 if (m.Content is { Length: > 0 } c)
-                {
-                    chars += c.Length;
-                    foreach (var ch in c)
-                        if (ch >= 0x2E80)
-                            cjk++;
-                }
+                    total += TextUtil.EstimateTokens(c);
                 if (m.ToolCalls is not null)
                     foreach (var tc in m.ToolCalls)
-                        chars += tc.ArgumentsJson.Length;
+                        total += TextUtil.EstimateTokens(tc.ArgumentsJson);
             }
-            return (int)((chars - cjk) / 4 + cjk);
+            return (int)total;
         }
     }
 
@@ -310,7 +304,7 @@ public sealed partial class Agent
                         _streamedThisCall = true;
                     }
                     _renderer?.Append(delta);
-                    _streamTokens += delta.Length / 4; // 内容 token 计数（spinner 尚在时继续 ↑）
+                    _streamTokens += TextUtil.EstimateTokens(delta); // 内容 token 计数（spinner 尚在时继续 ↑）
                 }, reason =>
                 {
                     // 思考内容：实时流式输出（暗色），而非缓冲到最后一次性显示
@@ -319,7 +313,7 @@ public sealed partial class Agent
                         ClearSpinner(); // 思考内容开始显示：清掉 spinner 行
                         _reasoningShown = true;
                     }
-                    _streamTokens += reason.Length / 4; // 估算已生成 token（spinner ↑ 显示）
+                    _streamTokens += TextUtil.EstimateTokens(reason); // 估算已生成 token（spinner ↑ 显示）
                     lock (ConsoleLock)
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
@@ -328,7 +322,7 @@ public sealed partial class Agent
                     }
                 }, frag =>
                 {
-                    _streamTokens += frag.Length / 4; // 工具调用参数也计入 ↑ tokens
+                    _streamTokens += TextUtil.EstimateTokens(frag); // 工具调用参数也计入 ↑ tokens
                 }, ct), ct);
 
             if (!_streamedThisCall && !_reasoningShown)
