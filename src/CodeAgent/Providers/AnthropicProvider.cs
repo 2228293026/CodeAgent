@@ -53,10 +53,13 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             ["model"] = _model,
             ["max_tokens"] = _maxTokens,
-            ["system"] = system.ToString().TrimEnd(),
             ["messages"] = BuildMessages(messages),
 
         };
+        // system 为空时整体省略（/compact 摘要调用等场景）：字段空串对部分网关是多余噪音
+        var systemText = system.ToString().TrimEnd();
+        if (systemText.Length > 0)
+            payload["system"] = systemText;
         ApplyThinking(payload, thinkingEffort);
         // 工具列表为空时省略 tools 字段（/compact 的摘要调用不带工具）：
         // Anthropic 对 "tools": [] 返回 400，空列表必须整体不发
@@ -161,11 +164,13 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             ["model"] = _model,
             ["max_tokens"] = _maxTokens,
-            ["system"] = system.ToString().TrimEnd(),
-            ["messages"] = BuildMessages(messages),
 
             ["stream"] = true,
         };
+        // system 为空时整体省略（/compact 摘要调用等场景）：字段空串对部分网关是多余噪音
+        var systemText = system.ToString().TrimEnd();
+        if (systemText.Length > 0)
+            payload["system"] = systemText;
         ApplyThinking(payload, thinkingEffort);
         // 工具列表为空时省略 tools 字段（/compact 的摘要调用不带工具）：
         // Anthropic 对 "tools": [] 返回 400，空列表必须整体不发
