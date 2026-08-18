@@ -1181,9 +1181,16 @@ internal static class Program
                 break;
 
             case "/providers":
-                Console.WriteLine("已配置的 Provider:");
+                Console.WriteLine($"已配置的 Provider（当前: {config.Provider}，-p <名> 或改 provider 切换）:");
                 foreach (var kv in config.Providers)
-                    Console.WriteLine($"  {kv.Key} ({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}");
+                {
+                    var cur = string.Equals(kv.Key, config.Provider, StringComparison.OrdinalIgnoreCase) ? " ←" : "";
+                    var price = kv.Value.PricePerMillionInput > 0
+                        ? $"  单价: ${kv.Value.PricePerMillionInput:F2}/${kv.Value.PricePerMillionOutput:F2} per M"
+                        : "";
+                    Console.WriteLine($"  {kv.Key} ({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}{price}{cur}");
+                }
+                break;
                 break;
 
             case "/mode":
