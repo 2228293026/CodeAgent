@@ -55,9 +55,13 @@ public sealed class AnthropicProvider : IAgentProvider
             ["max_tokens"] = _maxTokens,
             ["system"] = system.ToString().TrimEnd(),
             ["messages"] = BuildMessages(messages),
-            ["tools"] = BuildTools(tools),
+
         };
         ApplyThinking(payload, thinkingEffort);
+        // 工具列表为空时省略 tools 字段（/compact 的摘要调用不带工具）：
+        // Anthropic 对 "tools": [] 返回 400，空列表必须整体不发
+        if (tools.Count > 0)
+            payload["tools"] = BuildTools(tools);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);
@@ -159,10 +163,14 @@ public sealed class AnthropicProvider : IAgentProvider
             ["max_tokens"] = _maxTokens,
             ["system"] = system.ToString().TrimEnd(),
             ["messages"] = BuildMessages(messages),
-            ["tools"] = BuildTools(tools),
+
             ["stream"] = true,
         };
         ApplyThinking(payload, thinkingEffort);
+        // 工具列表为空时省略 tools 字段（/compact 的摘要调用不带工具）：
+        // Anthropic 对 "tools": [] 返回 400，空列表必须整体不发
+        if (tools.Count > 0)
+            payload["tools"] = BuildTools(tools);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + "/v1/messages");
         req.Headers.Add("x-api-key", _apiKey);

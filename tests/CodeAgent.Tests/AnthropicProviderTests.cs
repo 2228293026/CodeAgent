@@ -184,4 +184,47 @@ public class AnthropicProviderTests
 
         Assert.Equal(["claude-sonnet-4-5", "claude-opus-4"], models);
     }
+
+    [Fact]
+    public async Task ChatAsync_NoTools_OmitsToolsField()
+    {
+        // 回归：空工具列表曾发送 "tools": []（/compact 摘要调用），Anthropic 对此返回 400
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}""",
+        };
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!);
+        Assert.Null(body?["tools"]); // 无工具时整个字段不发
+    }
+
+    [Fact]
+    public async Task ChatAsync_WithTools_IncludesToolsField()
+    {
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}""",
+        };
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var spec = new ToolSpec
+        {
+            Name = "stop",
+            Description = "end",
+            Parameters = new JsonObject { ["type"] = "object" },
+        };
+        await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [spec], "off", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!);
+        Assert.NotNull(body?["tools"]);
+    }
 }
