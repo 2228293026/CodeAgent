@@ -235,52 +235,52 @@ public sealed class AnthropicProvider : IAgentProvider
             switch (evt)
             {
                 case "content_block_start":
-                {
-                    var block = root?["content_block"];
-                    var type = block?["type"]?.GetValue<string>();
-                    var index = root?["index"]?.GetValue<int>() ?? 0;
-                    if (type == "tool_use")
                     {
-                        toolAccum[index] = new StreamToolAccum
+                        var block = root?["content_block"];
+                        var type = block?["type"]?.GetValue<string>();
+                        var index = root?["index"]?.GetValue<int>() ?? 0;
+                        if (type == "tool_use")
                         {
-                            Id = block?["id"]?.GetValue<string>() ?? "",
-                            Name = block?["name"]?.GetValue<string>() ?? "",
-                        };
+                            toolAccum[index] = new StreamToolAccum
+                            {
+                                Id = block?["id"]?.GetValue<string>() ?? "",
+                                Name = block?["name"]?.GetValue<string>() ?? "",
+                            };
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case "content_block_delta":
-                {
-                    var delta = root?["delta"];
-                    var dtype = delta?["type"]?.GetValue<string>();
-                    var index = root?["index"]?.GetValue<int>() ?? 0;
-                    if (dtype == "thinking_delta")
                     {
-                        // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示
-                        if (delta?["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var t) && t.Length > 0)
-                            onReasoning?.Invoke(t);
-                    }
-                    else if (dtype == "text_delta")
-                    {
-                        // TryGetValue：非字符串形态（不合规代理）跳过该增量而不是抛异常中断流
-                        if (delta?["text"] is JsonValue tv && tv.TryGetValue<string>(out var t) && t.Length > 0)
+                        var delta = root?["delta"];
+                        var dtype = delta?["type"]?.GetValue<string>();
+                        var index = root?["index"]?.GetValue<int>() ?? 0;
+                        if (dtype == "thinking_delta")
                         {
-                            text.Append(t);
-                            onText?.Invoke(t);
+                            // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示
+                            if (delta?["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var t) && t.Length > 0)
+                                onReasoning?.Invoke(t);
                         }
-                    }
-                    else if (dtype == "input_json_delta")
-                    {
-                        var frag = delta?["partial_json"]?.GetValue<string>() ?? "";
-                        if (frag.Length > 0 && toolAccum.TryGetValue(index, out var acc))
+                        else if (dtype == "text_delta")
                         {
-                            acc.Args.Append(frag);
-                            onToolFragment?.Invoke(frag); // 工具参数计入 ↑ tokens
+                            // TryGetValue：非字符串形态（不合规代理）跳过该增量而不是抛异常中断流
+                            if (delta?["text"] is JsonValue tv && tv.TryGetValue<string>(out var t) && t.Length > 0)
+                            {
+                                text.Append(t);
+                                onText?.Invoke(t);
+                            }
                         }
+                        else if (dtype == "input_json_delta")
+                        {
+                            var frag = delta?["partial_json"]?.GetValue<string>() ?? "";
+                            if (frag.Length > 0 && toolAccum.TryGetValue(index, out var acc))
+                            {
+                                acc.Args.Append(frag);
+                                onToolFragment?.Invoke(frag); // 工具参数计入 ↑ tokens
+                            }
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case "message_start":
                     inputTokens = root?["message"]?["usage"]?["input_tokens"]?.GetValue<int>();
@@ -292,10 +292,10 @@ public sealed class AnthropicProvider : IAgentProvider
                     break;
 
                 case "error":
-                {
-                    var msg = root?["error"]?["message"]?.GetValue<string>() ?? "未知错误";
-                    throw new ProviderException($"Anthropic 流式错误: {msg}");
-                }
+                    {
+                        var msg = root?["error"]?["message"]?.GetValue<string>() ?? "未知错误";
+                        throw new ProviderException($"Anthropic 流式错误: {msg}");
+                    }
 
                 case "message_stop":
                     done = true;
@@ -383,18 +383,18 @@ public sealed class AnthropicProvider : IAgentProvider
                     break; // 已作为顶层 system 发送
 
                 case MessageRole.User:
-                {
-                    var content = new JsonArray();
-                    if (!string.IsNullOrEmpty(m.Content))
-                        content.Add(TextBlock(m.Content));
-                    if (content.Count > 0)
-                        Append(new JsonObject { ["role"] = "user", ["content"] = content });
-                    break;
-                }
+                    {
+                        var content = new JsonArray();
+                        if (!string.IsNullOrEmpty(m.Content))
+                            content.Add(TextBlock(m.Content));
+                        if (content.Count > 0)
+                            Append(new JsonObject { ["role"] = "user", ["content"] = content });
+                        break;
+                    }
 
                 case MessageRole.Tool:
-                {
-                    var content = new JsonArray
+                    {
+                        var content = new JsonArray
                     {
                         new JsonObject
                         {
@@ -404,30 +404,30 @@ public sealed class AnthropicProvider : IAgentProvider
                             ["is_error"] = m.IsError,
                         },
                     };
-                    Append(new JsonObject { ["role"] = "user", ["content"] = content });
-                    break;
-                }
+                        Append(new JsonObject { ["role"] = "user", ["content"] = content });
+                        break;
+                    }
 
                 case MessageRole.Assistant:
-                {
-                    var content = new JsonArray();
-                    if (!string.IsNullOrEmpty(m.Content))
-                        content.Add(TextBlock(m.Content));
-                    foreach (var tc in m.ToolCalls ?? [])
                     {
-                        content.Add(new JsonObject
+                        var content = new JsonArray();
+                        if (!string.IsNullOrEmpty(m.Content))
+                            content.Add(TextBlock(m.Content));
+                        foreach (var tc in m.ToolCalls ?? [])
                         {
-                            ["type"] = "tool_use",
-                            ["id"] = tc.Id,
-                            ["name"] = tc.Name,
-                            ["input"] = ParseInput(tc.ArgumentsJson),
-                        });
+                            content.Add(new JsonObject
+                            {
+                                ["type"] = "tool_use",
+                                ["id"] = tc.Id,
+                                ["name"] = tc.Name,
+                                ["input"] = ParseInput(tc.ArgumentsJson),
+                            });
+                        }
+                        if (content.Count == 0)
+                            content.Add(TextBlock(""));
+                        Append(new JsonObject { ["role"] = "assistant", ["content"] = content });
+                        break;
                     }
-                    if (content.Count == 0)
-                        content.Add(TextBlock(""));
-                    Append(new JsonObject { ["role"] = "assistant", ["content"] = content });
-                    break;
-                }
             }
         }
 

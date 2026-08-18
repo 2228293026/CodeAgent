@@ -965,35 +965,35 @@ internal static class Program
 
             case "/resume":
                 // 恢复历史会话日志（每条消息自动落盘）；--continue 启动时自动恢复最近一次
-            {
-                var logs = RecentSessionLogs(config);
-                if (logs.Count == 0)
                 {
-                    Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
-                    break;
-                }
-                if (int.TryParse(rest.Trim(), out var ridx) && ridx >= 1 && ridx <= logs.Count)
-                {
-                    if (agent.LoadSessionLog(logs[ridx - 1]))
+                    var logs = RecentSessionLogs(config);
+                    if (logs.Count == 0)
                     {
-                        Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(logs[ridx - 1])}");
-                        PrintConversation(agent);
+                        Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+                        break;
+                    }
+                    if (int.TryParse(rest.Trim(), out var ridx) && ridx >= 1 && ridx <= logs.Count)
+                    {
+                        if (agent.LoadSessionLog(logs[ridx - 1]))
+                        {
+                            Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(logs[ridx - 1])}");
+                            PrintConversation(agent);
+                        }
+                        else
+                            Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
                     }
                     else
-                        Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
+                    {
+                        // 数字越界时明确指出范围（静默回退到列表曾让人以为编号生效了）
+                        if (int.TryParse(rest.Trim(), out _))
+                            Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
+                        else
+                            Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
+                        for (int i = 0; i < logs.Count; i++)
+                            Console.WriteLine($"  {i + 1}) {Path.GetFileNameWithoutExtension(logs[i])}");
+                    }
+                    break;
                 }
-                else
-                {
-                    // 数字越界时明确指出范围（静默回退到列表曾让人以为编号生效了）
-                    if (int.TryParse(rest.Trim(), out _))
-                        Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
-                    else
-                        Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
-                    for (int i = 0; i < logs.Count; i++)
-                        Console.WriteLine($"  {i + 1}) {Path.GetFileNameWithoutExtension(logs[i])}");
-                }
-                break;
-            }
 
             case "/history":
                 PrintConversation(agent);
@@ -1012,16 +1012,16 @@ internal static class Program
                 break;
 
             case "/stats":
-            {
-                var cost = TextUtil.UsdCost(agent.TotalInputTokens, agent.TotalOutputTokens,
-                    config.PricePerMillionInput, config.PricePerMillionOutput);
-                Console.WriteLine(
-                    $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
-                    $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，" +
-                    $"当前上下文 ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}" +
-                    (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
-                break;
-            }
+                {
+                    var cost = TextUtil.UsdCost(agent.TotalInputTokens, agent.TotalOutputTokens,
+                        config.PricePerMillionInput, config.PricePerMillionOutput);
+                    Console.WriteLine(
+                        $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
+                        $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，" +
+                        $"当前上下文 ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}" +
+                        (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
+                    break;
+                }
 
             case "/tools":
                 Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}）:");

@@ -374,34 +374,34 @@ public sealed class OpenAiProvider : IAgentProvider
                     break;
 
                 case MessageRole.Assistant:
-                {
-                    var obj = new JsonObject { ["role"] = "assistant" };
-                    // 带 tool_calls 且无文本时传 null content：部分 OpenAI 兼容 API 会拒绝空字符串
-                    if (m.ToolCalls is { Count: > 0 } && string.IsNullOrEmpty(m.Content))
-                        obj["content"] = null;
-                    else
-                        obj["content"] = m.Content ?? "";
-                    if (m.ToolCalls is { Count: > 0 })
                     {
-                        var calls = new JsonArray();
-                        foreach (var tc in m.ToolCalls)
+                        var obj = new JsonObject { ["role"] = "assistant" };
+                        // 带 tool_calls 且无文本时传 null content：部分 OpenAI 兼容 API 会拒绝空字符串
+                        if (m.ToolCalls is { Count: > 0 } && string.IsNullOrEmpty(m.Content))
+                            obj["content"] = null;
+                        else
+                            obj["content"] = m.Content ?? "";
+                        if (m.ToolCalls is { Count: > 0 })
                         {
-                            calls.Add(new JsonObject
+                            var calls = new JsonArray();
+                            foreach (var tc in m.ToolCalls)
                             {
-                                ["id"] = tc.Id,
-                                ["type"] = "function",
-                                ["function"] = new JsonObject
+                                calls.Add(new JsonObject
                                 {
-                                    ["name"] = tc.Name,
-                                    ["arguments"] = tc.ArgumentsJson,
-                                },
-                            });
+                                    ["id"] = tc.Id,
+                                    ["type"] = "function",
+                                    ["function"] = new JsonObject
+                                    {
+                                        ["name"] = tc.Name,
+                                        ["arguments"] = tc.ArgumentsJson,
+                                    },
+                                });
+                            }
+                            obj["tool_calls"] = calls;
                         }
-                        obj["tool_calls"] = calls;
+                        arr.Add(obj);
+                        break;
                     }
-                    arr.Add(obj);
-                    break;
-                }
 
                 case MessageRole.Tool:
                     arr.Add(new JsonObject
