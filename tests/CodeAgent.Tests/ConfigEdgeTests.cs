@@ -179,6 +179,19 @@ public class ConfigEdgeTests : IDisposable
     }
 
     [Theory]
+    [InlineData(0, 1)]
+    [InlineData(1, 1)]
+    [InlineData(60, 60)]
+    [InlineData(300, 300)]
+    [InlineData(999, 300)]
+    [InlineData(-3, 1)]
+    public void Load_ClampsCommandTimeoutSeconds(int input, int expected)
+    {
+        var path = WriteJson($"{{\"commandTimeoutSeconds\": {input}}}");
+        Assert.Equal(expected, AgentConfig.Load(path).CommandTimeoutSeconds);
+    }
+
+    [Theory]
     [InlineData(-5, 0)]
     [InlineData(0, 0)]
     [InlineData(131072, 131072)]

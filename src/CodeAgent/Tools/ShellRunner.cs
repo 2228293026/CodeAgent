@@ -254,7 +254,7 @@ public sealed class BashTool : ITool
         if (!ctx.Config.AllowCommands)
             return "命令执行被禁用（config.AllowCommands = false）。";
 
-        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 60), 1, 300);
+        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", ctx.Config.CommandTimeoutSeconds), 1, 300);
         var cwdArg = ToolArgs.GetString(args, "cwd");
         var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
         var env = ToolArgs.GetStringDict(args, "env");
@@ -298,7 +298,7 @@ public sealed class PowerShellTool : ITool
         if (!ctx.Config.AllowCommands)
             return "命令执行被禁用（config.AllowCommands = false）。";
 
-        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 60), 1, 300);
+        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", ctx.Config.CommandTimeoutSeconds), 1, 300);
         var cwdArg = ToolArgs.GetString(args, "cwd");
         var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
         var env = ToolArgs.GetStringDict(args, "env");

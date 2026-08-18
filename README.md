@@ -75,6 +75,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
   "contextWindow": 0,             // 模型上下文窗口（token），状态栏 ctx 百分比用；0 = 自动识别（内置模型表 + /models 元数据），识别不到显示绝对值
   "allowCommands": true,         // 是否允许 run_command
   "confirmCommands": false,      // 执行命令前是否逐个确认
+  "commandTimeoutSeconds": 60,   // 命令默认超时秒数（模型可按调用覆盖，上限 300）
   "shell": "",                   // cmd | powershell | bash（空 = Windows 用 cmd）
   "saveSessions": true,          // 是否记录会话日志
   "sessionDir": ".codeagent/sessions",   // 会话日志目录（相对工作目录）

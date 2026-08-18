@@ -64,6 +64,10 @@ public sealed class AgentConfig
     /// <summary>执行命令前是否逐个询问确认。</summary>
     public bool ConfirmCommands { get; set; } = false;
 
+    /// <summary>命令默认超时秒数（run_command / bash / powershell 未显式传 timeout_seconds 时用）。
+    /// 模型可按调用覆盖（1-300）；全局上限 300。</summary>
+    public int CommandTimeoutSeconds { get; set; } = 60;
+
     /// <summary>命令使用的 shell：cmd | powershell | bash；留空自动（Windows 用 cmd）。</summary>
     public string Shell { get; set; } = "";
 
@@ -181,6 +185,7 @@ public sealed class AgentConfig
             cfg.MaxToolIterations = Math.Clamp(cfg.MaxToolIterations, 0, 200);
             cfg.MaxHistoryChars = Math.Clamp(cfg.MaxHistoryChars, 1_000, 20_000_000);
             cfg.ContextWindow = Math.Clamp(cfg.ContextWindow, 0, 10_000_000);
+            cfg.CommandTimeoutSeconds = Math.Clamp(cfg.CommandTimeoutSeconds, 1, 300);
             return cfg;
         }
         catch (JsonException ex)

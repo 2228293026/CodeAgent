@@ -46,6 +46,7 @@
   "readOnlyDirs": [],
   "allowCommands": true,
   "confirmCommands": false,
+  "commandTimeoutSeconds": 60,
   "shell": "",
   "saveSessions": true,
   "streamOutput": true,
