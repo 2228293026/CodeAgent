@@ -13,10 +13,11 @@ internal static class Program
 
     /// <summary>回合被用户取消的哨兵返回（区别于模型回复文本：模型内容可能含"已取消"字样）。</summary>
     private const string CancelledTurnMarker = "\u001bCANCELLED_TURN";
+    /// <summary>会话总时长（/stats 显示用；从进程启动计）。/clear 不重置——统计的是会话进程本身。</summary>
+    private static readonly System.Diagnostics.Stopwatch SessionStopwatch = System.Diagnostics.Stopwatch.StartNew();
 
     /// <summary>判断结果是否为「用户取消」哨兵（精确匹配，防止模型文本含"已取消"被误判）。</summary>
     internal static bool IsCancelledTurn(string? result) => result == CancelledTurnMarker;
-
     private static string InformationalVersion =>
         Assembly.GetEntryAssembly()?
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
@@ -1290,7 +1291,7 @@ internal static class Program
                         $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
                         $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens" +
                         (agent.TotalCachedTokens > 0 ? $"（其中缓存命中 {agent.TotalCachedTokens:N0}）" : "") +
-                        $"，当前上下文 {ctxText}" +
+                        $"，当前上下文 {ctxText}，会话时长 {TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)}" +
                         (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
                 }
                 break;
