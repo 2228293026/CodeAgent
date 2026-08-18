@@ -499,7 +499,7 @@ internal static class Program
     }
 
     /// <summary>显示当前对话历史（系统提示不计入条数，内容截断）。</summary>
-    private static void PrintConversation(AgentClass agent)
+    private static void PrintConversation(AgentClass agent, int? last = null)
     {
         var msgs = agent.Messages.Where(m => m.Role != MessageRole.System).ToList();
         if (msgs.Count == 0)
@@ -507,6 +507,14 @@ internal static class Program
             Console.WriteLine("对话历史为空（还没有对话消息，直接输入内容开始对话）。");
             return;
         }
+        // /history N 只看最近 N 条：长对话全量打印会刷屏
+        if (last is { } n && n < msgs.Count)
+        {
+            msgs = msgs[^n..];
+            Console.WriteLine($"对话历史（最近 {n} 条，共 {agent.Messages.Count(m => m.Role != MessageRole.System)} 条）:");
+        }
+        else
+            Console.WriteLine($"对话历史（{msgs.Count} 条）:");
         Console.WriteLine($"对话历史（{msgs.Count} 条）:");
         foreach (var m in msgs)
         {
@@ -1226,7 +1234,8 @@ internal static class Program
                 }
 
             case "/history":
-                PrintConversation(agent);
+                PrintConversation(agent, int.TryParse(rest.Trim(), out var histN) && histN >= 1 ? histN : null);
+                break;
                 break;
 
             case "/export":
@@ -1497,7 +1506,7 @@ internal static class Program
               /providers       显示已配置的 Provider
               /models [关键字]  列出/过滤模型（过滤时编号不变）
               /diag            显示终端环境诊断
-              /history         显示当前对话历史
+/history [N]      显示对话历史（N = 最近 N 条）
               /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
               /thinking        查看或设置思考强度（off/low/medium/high/auto）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
