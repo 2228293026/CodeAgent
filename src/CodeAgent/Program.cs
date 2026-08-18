@@ -50,6 +50,7 @@ internal static class Program
         var setup = false;
         var listModels = false;
         var continueLast = false;
+        var resumeIndex = 0; // --resume <编号>：按 /resume 列表编号恢复历史会话
         var positional = new List<string>();
 
         try
@@ -80,8 +81,13 @@ internal static class Program
                         listModels = true;
                         break;
                     case "--continue":
-                        // 恢复本项目最近一次会话（会话日志由 saveSessions 每条消息自动落盘）
                         continueLast = true;
+                        break;
+
+                    case "--resume":
+                        resumeIndex = int.TryParse(NextArg(args, ref i, "--resume"), out var ri) && ri >= 1 ? ri : 0;
+                        if (resumeIndex == 0)
+                            throw new ArgumentException("--resume 需要一个 ≥1 的编号（/resume 查看列表）");
                         break;
                     case "-v" or "--version":
                         Console.WriteLine($"codeagent {InformationalVersion}");
@@ -212,17 +218,26 @@ internal static class Program
 
         // --continue：恢复最近会话。必须在 SetMode 之前加载——SetMode 会把 messages[0]
         // 的旧 system 提示换成当前模式的提示词
-        if (continueLast)
+        if (continueLast || resumeIndex > 0)
         {
-            var latest = LatestSessionLog(config);
-            if (latest is null)
+            var logs = RecentSessionLogs(config, Math.Max(resumeIndex, 1));
+            string? target = null;
+            if (resumeIndex > 0)
+            {
+                if (resumeIndex <= logs.Count)
+                    target = logs[resumeIndex - 1];
+                else
+                    Console.WriteLine($"⚠ --resume 编号超出范围（可用 1-{logs.Count}）。");
+            }
+            else if (logs.Count > 0)
+                target = logs[0];
+            if (target is null)
                 Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
-            else if (agent.LoadSessionLog(latest))
-                Console.WriteLine($"↩ 已恢复最近会话: {Path.GetFileName(latest)}");
+            else if (agent.LoadSessionLog(target))
+                Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(target)}");
             else
                 Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
         }
-
         // 应用配置的默认工作模式（如 "defaultMode": "debug"）
         agent.SetMode(Modes.Find(config.DefaultMode, config));
 
@@ -1607,6 +1622,7 @@ internal static class Program
             用法:
               codeagent [选项] ["任务描述"]     交互式 REPL（默认）；带任务则一次性执行后退出
               codeagent --continue ["接续任务"] 恢复本项目最近一次会话
+              codeagent --resume <编号> ["任务"] 按编号恢复历史会话（编号见 /resume 列表）
 
             选项:
               -c, --config <路径>    指定配置文件

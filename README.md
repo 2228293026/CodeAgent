@@ -163,6 +163,8 @@ codeagent "把 Program.cs 里的 TODO 都实现掉"
 codeagent --cwd ../some-project "解释一下这个项目怎么构建"
 codeagent --models                    # 列出当前 Provider 的可用模型
 codeagent --continue                  # 恢复本项目最近一次会话继续对话
+codeagent --resume 3                  # 按 /resume 列表编号恢复历史会话
+codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
 codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
 ```
 
