@@ -863,19 +863,21 @@ internal static class Program
                 else
                 {
                     var modelArg = rest.Trim();
+                    // 模型列表在编号解析与拼写检查间共用：/model 5 原先对刚取出的名字二次请求模型接口
+                    IReadOnlyList<string>? knownModels = null;
                     // 数字参数：从 /models 列表按编号选择（如 /model 5）
                     if (int.TryParse(modelArg, out var idx) && idx >= 1)
                     {
                         try
                         {
-                            var models = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
-                            if (idx <= models.Count)
+                            knownModels = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                            if (idx <= knownModels.Count)
                             {
-                                modelArg = models[idx - 1];
+                                modelArg = knownModels[idx - 1];
                             }
                             else
                             {
-                                Console.WriteLine($"无效编号（可选 1-{models.Count}，/models 查看）");
+                                Console.WriteLine($"无效编号（可选 1-{knownModels.Count}，/models 查看）");
                                 break;
                             }
                         }
@@ -889,7 +891,7 @@ internal static class Program
                     if (!int.TryParse(modelArg, out _))
                         try
                         {
-                            var knownModels = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                            knownModels ??= providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult(); // 编号选择时已取回，直接复用
                             if (knownModels.Count > 0 && !knownModels.Contains(modelArg, StringComparer.OrdinalIgnoreCase))
                             {
                                 var near = SuggestModels(knownModels, modelArg);
