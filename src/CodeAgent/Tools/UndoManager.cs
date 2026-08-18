@@ -18,7 +18,11 @@ public sealed class UndoEntry
     public string? NewText { get; init; }
 
     /// <summary>write：修改前文件是否已存在。</summary>
+    /// <summary>write：修改前文件是否已存在。</summary>
     public bool HadFile { get; init; }
+
+    /// <summary>撤销时按原编码写回（"utf8-bom" | "gb18030" | null=无 BOM UTF-8）：GBK 文件撤销后仍是 GBK。</summary>
+    public string? EncodingName { get; init; }
 }
 
 /// <summary>文件修改撤销栈（REPL 的 /undo 命令）。</summary>
@@ -96,13 +100,29 @@ public sealed class UndoManager
         }
     }
 
+    /// <summary>按撤销条目记录的原编码写回：GBK 文件撤销后仍是 GBK，BOM 文件保 BOM。</summary>
+    private static void WriteEntryText(UndoEntry e, string text)
+    {
+        switch (e.EncodingName)
+        {
+            case "gb18030":
+                File.WriteAllText(e.Path, text, System.Text.Encoding.GetEncoding("GB18030"));
+                break;
+            case "utf8-bom":
+                File.WriteAllText(e.Path, text, new System.Text.UTF8Encoding(true));
+                break;
+            default:
+                TextUtil.WriteTextPreserveBom(e.Path, text); // 未知/纯 UTF-8：保 BOM 逻辑
+                break;
+        }
+    }
     private static void Apply(UndoEntry e)
     {
         if (e.Kind is "write" or "cmd")
         {
             // cmd 与 write 的恢复逻辑一致：修改=写回旧内容、新增=删除、删除=重建
             if (e.HadFile && e.OldText is not null)
-                TextUtil.WriteTextPreserveBom(e.Path, e.OldText);
+                WriteEntryText(e, e.OldText);
             else if (!e.HadFile && File.Exists(e.Path))
                 File.Delete(e.Path);
         }
@@ -113,13 +133,13 @@ public sealed class UndoManager
             if (e.NewText is null)
             {
                 // 小文件：记录了完整原文，直接写回（精确恢复）
-                TextUtil.WriteTextPreserveBom(e.Path, e.OldText ?? "");
+                WriteEntryText(e, e.OldText ?? "");
             }
             else
             {
                 // 大文件退化：仅替换 old/new 片段（可能有精度损失，但避免整文件内存开销）
                 var text = File.ReadAllText(e.Path);
-                TextUtil.WriteTextPreserveBom(e.Path, text.Replace(e.NewText, e.OldText ?? ""));
+                WriteEntryText(e, text.Replace(e.NewText, e.OldText ?? ""));
             }
         }
     }

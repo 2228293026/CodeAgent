@@ -78,6 +78,33 @@ public static class TextUtil
     /// <summary>改写文件时保持原编码（edit/write 工具用）：
     /// 带 BOM 的 UTF-8 保留 BOM；无 BOM 且非合法 UTF-8（GBK 旧文件）按 GB18030 写回，文件编码不被静默转换；
     /// 新建文件一律无 BOM UTF-8。撤销恢复仍走 UTF-8（OldText 是解码后的文本，内容无损）。</summary>
+    /// <summary>探测文件编码（撤销原样恢复用）："utf8-bom"（带 BOM）| "gb18030"（非 UTF-8 的旧编码）
+    /// | null（无 BOM 的 UTF-8 / 新文件）。只读前 4KB 做判定，不整读大文件。</summary>
+    public static string? DetectFileEncoding(string path)
+    {
+        try
+        {
+            using var fs = File.OpenRead(path);
+            var head = new byte[4096];
+            var n = fs.Read(head);
+            if (n >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF)
+                return "utf8-bom";
+            var end = TrimPartialTail(head, n);
+            try
+            {
+                _ = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true).GetString(head[..end]);
+                return null;
+            }
+            catch (System.Text.DecoderFallbackException)
+            {
+                return "gb18030";
+            }
+        }
+        catch
+        {
+            return null; // 读不到按 UTF-8 处理
+        }
+    }
     public static async Task WriteTextPreserveEncodingAsync(string path, string content, CancellationToken ct = default)
     {
         System.Text.Encoding enc = new System.Text.UTF8Encoding(false);

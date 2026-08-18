@@ -631,4 +631,27 @@ public class FileToolsTests : IDisposable
             () => new System.Text.UTF8Encoding(false, true).GetString(bytes));
     }
 
+    [Fact]
+    public async Task Undo_AfterGbkEdit_RestoresGbkEncoding()
+    {
+        // 撤销条目记录原编码：GBK 文件改错后 /undo，恢复的仍是 GBK（而非被转成 UTF-8）
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        var path = Path.Combine(_dir, "u-gbk.txt");
+        File.WriteAllBytes(path, gbk.GetBytes("旧内容"));
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "u-gbk.txt", ["old_string"] = "旧内容", ["new_string"] = "新内容" },
+            ctx, CancellationToken.None);
+        Assert.Equal("新内容", gbk.GetString(File.ReadAllBytes(path))); // 编辑后仍 GBK
+
+        Assert.NotNull(ctx.Undo.TryUndo());
+
+        var restored = File.ReadAllBytes(path);
+        Assert.Equal("旧内容", gbk.GetString(restored)); // 撤销后仍是 GBK
+        Assert.Throws<System.Text.DecoderFallbackException>(() =>
+            new System.Text.UTF8Encoding(false, true).GetString(restored)); // 不是 UTF-8
+    }
+
 }

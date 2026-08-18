@@ -129,13 +129,13 @@ public sealed class WriteFileTool : ITool
         {
             throw new ToolException($"写入失败: {ex.Message}");
         }
-
         ctx.Undo.Push(new UndoEntry
         {
             Kind = "write",
             Path = full,
             OldText = old,
             HadFile = hadFile,
+            EncodingName = hadFile ? TextUtil.DetectFileEncoding(full) : null, // 撤销按原编码写回
         });
 
         var bytes = Encoding.UTF8.GetByteCount(content);
@@ -215,6 +215,7 @@ public sealed class EditFileTool : ITool
             Kind = "edit",
             Path = full,
             OldText = fullOld ?? oldString, // 完整原文（小文件）或修改前的原文片段（大文件）
+            EncodingName = TextUtil.DetectFileEncoding(full), // 撤销按原编码写回
             NewText = fullOld is null ? newString : null, // 仅大文件退化时使用
         });
 
