@@ -69,7 +69,6 @@ public sealed class AnthropicProvider : IAgentProvider
             ["model"] = _model,
             ["max_tokens"] = _maxTokens,
             ["messages"] = BuildMessages(messages),
-
         };
         // system 为空时整体省略（/compact 摘要调用等场景）：字段空串对部分网关是多余噪音
         var systemText = system.ToString().TrimEnd();
