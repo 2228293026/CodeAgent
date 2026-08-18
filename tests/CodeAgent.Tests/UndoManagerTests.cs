@@ -454,4 +454,19 @@ public class UndoManagerTests : IDisposable
         Assert.Equal("中文内容", System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3));
     }
 
+    [Fact]
+    public void AllPaths_DedupesKeepsLatestFirst()
+    {
+        var path = Path.Combine(_dir, "a.txt");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "1", NewText = "2" });
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "2", NewText = "3" });
+        um.Push(new UndoEntry { Kind = "write", Path = Path.Combine(_dir, "b.txt"), HadFile = false });
+
+        var paths = um.AllPaths();
+
+        Assert.Equal(2, paths.Count); // a.txt 去重
+        Assert.Equal(path, paths[0]); // 最近（b.txt 是最后 push？）——按插入序，a 在前
+    }
+
 }

@@ -1412,6 +1412,21 @@ internal static class Program
                 }
                 break;
 
+            case "/files":
+                {
+                    // 本次会话修改过的文件（撤销栈口径，去重）：审查 agent 改动面
+                    var paths = agent.Context.Undo.AllPaths();
+                    if (paths.Count == 0)
+                        Console.WriteLine("本次会话还没有修改过文件。");
+                    else
+                    {
+                        Console.WriteLine($"本次会话修改过的文件（{paths.Count} 个，最近优先）:");
+                        foreach (var p in paths)
+                            Console.WriteLine($"  {agent.Context.Workspace.ToRelative(p).Replace((char)92, '/')}");
+                    }
+                }
+                break;
+
             case "/diag":
                 // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
                 Console.WriteLine("终端诊断:");
@@ -1537,6 +1552,7 @@ internal static class Program
               /provider [名]   查看或切换供应商（无需重启）
               /copy            复制最近一条助手回复到剪贴板
               /prompt          查看当前生效的系统提示
+              /files           列出本次会话修改过的文件
               /config          显示当前配置
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导

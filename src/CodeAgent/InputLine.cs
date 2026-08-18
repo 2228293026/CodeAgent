@@ -45,6 +45,7 @@ public static class InputLine
         ("/export", "导出会话为 Markdown"),
         ("/copy", "复制最近回复到剪贴板"),
         ("/prompt", "查看当前生效的系统提示"),
+        ("/files", "列出本次会话修改过的文件"),
         ("/stats", "显示 token 用量统计"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具"),

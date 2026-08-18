@@ -217,7 +217,17 @@ public sealed class UndoManager
         }
     }
 
-    /// <summary>显示最近一次修改的 diff（结合撤销快照与当前文件内容）；无记录时返回 null。</summary>
+    /// <summary>栈内所有涉及过的文件路径（去重，最近优先）——/files 审查本次会话改动面。</summary>
+    public IReadOnlyList<string> AllPaths()
+    {
+        lock (_lock)
+            return _entries
+                .Select(e => e.Path)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+    }
+
+    /// <summary>显示最近一次修改的 diff（结合撤销快照与当前文件内容对比）；无记录时返回 null。</summary>
     public string? LastDiff() => AllDiffs(max: 1);
 
     /// <summary>显示所有待撤销改动的 diff（最多 max 条，最近优先，含新建/删除文件）；无记录时返回 null。</summary>
