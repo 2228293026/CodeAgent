@@ -45,6 +45,31 @@ public class PathDisplayTests
     }
 
     [Fact]
+    public void NumberedModels_Filtered_KeepsFullListIndices()
+    {
+        // 回归：/models <过滤> 曾把过滤后的列表重编号为 1..N，
+        // 而 /model <编号> 按完整列表解析——编号错位。编号必须保留完整列表下标。
+        var models = new[] { "gpt-4o", "deepseek-chat", "gpt-4.1", "deepseek-reasoner", "claude-sonnet-4-5" };
+        var rows = Program.NumberedModels(models, "deepseek");
+        Assert.Equal([(2, "deepseek-chat"), (4, "deepseek-reasoner")], rows);
+    }
+
+    [Fact]
+    public void NumberedModels_NoFilter_NumbersSequentially()
+    {
+        var models = new[] { "gpt-4o", "deepseek-chat", "claude-sonnet-4-5" };
+        var rows = Program.NumberedModels(models, null);
+        Assert.Equal([(1, "gpt-4o"), (2, "deepseek-chat"), (3, "claude-sonnet-4-5")], rows);
+    }
+
+    [Fact]
+    public void NumberedModels_NoMatches_ReturnsEmpty()
+    {
+        var rows = Program.NumberedModels(["gpt-4o"], "gemini");
+        Assert.Empty(rows);
+    }
+
+    [Fact]
     public void SuggestModels_FamilyPrefix_FindsCandidates()
     {
         var models = new[] { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "deepseek-chat", "deepseek-reasoner" };

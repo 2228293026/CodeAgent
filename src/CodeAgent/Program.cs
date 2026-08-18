@@ -645,6 +645,18 @@ internal static class Program
             .ToList();
     }
 
+    /// <summary>带编号的模型展示行：编号始终按完整列表（/model &lt;编号&gt; 按完整列表解析），
+    /// 过滤只影响显示哪些行——否则过滤后的编号与 /model 解析错位。</summary>
+    internal static IReadOnlyList<(int Num, string Model)> NumberedModels(IReadOnlyList<string> models, string? filter)
+    {
+        var shown = FilterModels(models, filter);
+        var result = new List<(int, string)>(shown.Count);
+        for (int i = 0; i < models.Count; i++)
+            if (shown.Contains(models[i]))
+                result.Add((i + 1, models[i]));
+        return result;
+    }
+
     internal static IReadOnlyList<string> FilterModels(IReadOnlyList<string> models, string? filter) =>
         string.IsNullOrWhiteSpace(filter) ? models : models.Where(m => m.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
@@ -652,21 +664,21 @@ internal static class Program
     {
         try
         {
-            var models = FilterModels(await provider.ListModelsAsync(CancellationToken.None), filter);
-            Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个{(filter is null ? "" : $"，过滤 “{filter.Trim()}”")}）:");
+            var models = await provider.ListModelsAsync(CancellationToken.None);
+            var rows = NumberedModels(models, filter);
+            Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个，显示 {rows.Count} 条{(filter is null ? "" : $"，过滤 “{filter.Trim()}”")}）:");
             var marked = false;
-            for (int i = 0; i < models.Count; i++)
+            foreach (var (num, m) in rows)
             {
-                var m = models[i];
-                var num = $"{i + 1}) ";
+                var numText = $"{num}) ";
                 if (string.Equals(m, currentModel, StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine($"  {num}{m}  *");
+                    Console.WriteLine($"  {numText}{m}  *");
                     marked = true;
                 }
                 else
                 {
-                    Console.WriteLine($"  {num}{m}");
+                    Console.WriteLine($"  {numText}{m}");
                 }
             }
             Console.WriteLine("  提示: /model <编号> 可直接切换");
