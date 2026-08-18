@@ -1106,6 +1106,10 @@ internal static class Program
                 Console.WriteLine($"  CursorLeft/Top    : {W(() => Console.CursorLeft)}/{W(() => Console.CursorTop)}");
                 Console.WriteLine($"  TuiAnsi           : {config.TuiAnsi}");
                 Console.WriteLine($"  OutputEncoding    : {Console.OutputEncoding.WebName}");
+                Console.WriteLine($"  IsOutputRedirected: {Console.IsOutputRedirected}");
+                var wt = Environment.GetEnvironmentVariable("WT_SESSION");
+                var term = Environment.GetEnvironmentVariable("TERM_PROGRAM");
+                Console.WriteLine($"  Terminal          : {(wt is not null ? "Windows Terminal" : term is not null ? term : "未知（conhost 或其他）")}");
                 break;
 
             case "/models":
