@@ -72,7 +72,7 @@ public sealed partial class Agent
                 MessageRole.System => "## 系统",
                 MessageRole.User => "## 用户",
                 MessageRole.Assistant => "## 助手",
-                _ => $"## 工具：{m.ToolName}",
+                _ => m.IsError ? $"## 工具（失败）：{m.ToolName}" : $"## 工具：{m.ToolName}",
             });
             if (m.Role == MessageRole.Assistant && m.ToolCalls is { Count: > 0 })
             {
