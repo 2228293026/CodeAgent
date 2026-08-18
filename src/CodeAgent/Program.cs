@@ -1193,7 +1193,7 @@ internal static class Program
                         idx = 0;
                     var next = modes[(idx + 1) % modes.Count];
                     agent.SetMode(next);
-                    PrintModeSwitched(next);
+                    PrintModeSwitched(next, opts.Model);
                     suppressStatusBar = true;
                 }
                 else
@@ -1215,7 +1215,7 @@ internal static class Program
                     else
                     {
                         agent.SetMode(mode);
-                        PrintModeSwitched(mode);
+                        PrintModeSwitched(mode, opts.Model);
                         suppressStatusBar = true;
                     }
                 }
@@ -1308,13 +1308,13 @@ internal static class Program
     }
 
     /// <summary>模式切换的灰色单行确认（Tab / /mode 用；状态栏本轮跳过，避免模式名重复三处）。</summary>
-    private static void PrintModeSwitched(AgentMode mode)
+    private static void PrintModeSwitched(AgentMode mode, string model)
     {
+        try { Console.Title = $"CodeAgent · {mode.Name} · {model}"; } catch { /* 部分终端不支持标题 */ }
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
         SafeColor.Reset();
     }
-
     internal static (string cmd, string rest) SplitCommand(string line)
     {
         // 分隔符取最早出现者：空格、Tab、全角空格（CJK 输入法常打全角空格，曾导致 /model　gpt 无法识别）
