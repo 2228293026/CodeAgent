@@ -371,7 +371,7 @@ internal static class Program
                 {
                     PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
                 }
-                PrintTurnSummary(agent, sw.Elapsed);
+                PrintTurnSummary(agent, sw.Elapsed, opts);
             }
             catch (ProviderException ex)
             {
@@ -523,12 +523,14 @@ internal static class Program
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
     /// token 显示本回合用量（与状态栏、spinner 定格行同口径）；会话累计见 /stats。
     /// 配置了单价时附本回合费用估算（≈$x.xx）。</summary>
-    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed)
+    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
+        // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
         var cost = TextUtil.UsdCost(agent.TurnInputTokens, agent.TurnOutputTokens,
-            agent.Context.Config.PricePerMillionInput, agent.Context.Config.PricePerMillionOutput);
+            opts.PricePerMillionInput > 0 ? opts.PricePerMillionInput : agent.Context.Config.PricePerMillionInput,
+            opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : agent.Context.Config.PricePerMillionOutput);
         string costText = "";
         if (cost is { } c)
         {
@@ -1155,8 +1157,10 @@ internal static class Program
 
             case "/stats":
                 {
+                    // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
                     var cost = TextUtil.UsdCost(agent.TotalInputTokens, agent.TotalOutputTokens,
-                        config.PricePerMillionInput, config.PricePerMillionOutput);
+                        opts.PricePerMillionInput > 0 ? opts.PricePerMillionInput : config.PricePerMillionInput,
+                        opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : config.PricePerMillionOutput);
                     var win = EffectiveContextWindow(config, opts, ctxProbe);
                     var ctxText = win > 0
                         ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)} ({TextUtil.PercentOf(agent.ContextTokens, win)}%)"

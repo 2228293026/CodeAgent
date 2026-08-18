@@ -26,6 +26,11 @@ public sealed class ProviderOptions
 
     /// <summary>采样温度。</summary>
     public double Temperature { get; set; } = 0.2;
+
+    /// <summary>该供应商的输入单价（美元 / 百万 token）；0 = 未配置（费用估算回退全局 pricePerMillionInput）。</summary>
+    public double PricePerMillionInput { get; set; } = 0;
+    /// <summary>该供应商的输出单价（美元 / 百万 token）；0 = 未配置（回退全局 pricePerMillionOutput）。</summary>
+    public double PricePerMillionOutput { get; set; } = 0;
 }
 
 /// <summary>自定义模式定义（codeagent.json 的 modes 列表项）。</summary>

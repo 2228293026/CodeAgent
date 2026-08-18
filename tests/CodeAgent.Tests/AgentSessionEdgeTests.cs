@@ -272,6 +272,7 @@ public class AgentSessionEdgeTests : IDisposable
         var agent = Logged(new FakeProvider { NextResponse = new ProviderResponse { Text = "旧对话内容" } });
         await agent.RunAsync("旧问题", CancellationToken.None);
         agent.SaveSession("snap");
+        agent.Close(); // 释放日志句柄，避免与 agent2 同目录滚动时的共享冲突
 
         var agent2 = Logged(new FakeProvider { NextResponse = new ProviderResponse { Text = "回复" } });
         await agent2.RunAsync("新问题", CancellationToken.None); // agent2 当前日志 = 新问题
