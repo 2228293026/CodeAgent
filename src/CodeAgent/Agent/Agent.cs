@@ -723,7 +723,39 @@ public sealed class Agent
         var newS = ToolArgs.GetString(args, "new_string");
         if (oldS.Length == 0 && newS.Length == 0)
             return "";
-        var lines = DiffUtil.Unified(oldS, newS, ToolArgs.GetString(args, "path")).Split('\n');
+        return CapDiff(DiffUtil.Unified(oldS, newS, ToolArgs.GetString(args, "path")));
+    }
+
+    /// <summary>生成 write_file 的预览文本：覆盖已有文件时给出与现有内容的 diff，
+    /// 新文件给出规模摘要（+N 行 / 字节）；超大文件跳过 diff。</summary>
+    internal static string WritePreviewText(JsonObject? args)
+    {
+        if (args is null)
+            return "";
+        var path = ToolArgs.GetString(args, "path");
+        var content = ToolArgs.GetString(args, "content");
+        var full = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, path));
+        if (!File.Exists(full))
+            return content.Length == 0 ? "" : $"+ 新文件：{content.Split('\n').Length} 行 / {Encoding.UTF8.GetByteCount(content):N0} 字节";
+        try
+        {
+            var fi = new FileInfo(full);
+            if (fi.Length > 1_000_000)
+                return $"~ 覆盖现有文件（{fi.Length / 1024 / 1024} MB，过大不预览 diff）";
+            var old = File.ReadAllText(full);
+            var diff = DiffUtil.Unified(old, content, path);
+            return diff.Length == 0 ? "（内容无差异）" : CapDiff(diff);
+        }
+        catch
+        {
+            return ""; // 预览失败（读取受限等）静默
+        }
+    }
+
+    /// <summary>diff 文本截断：最多 15 行、每行 200 字符，超出提示总行数。</summary>
+    private static string CapDiff(string diff)
+    {
+        var lines = diff.Split('\n');
         const int maxLines = 15;
         var shown = lines.Take(maxLines).Select(l => TextUtil.TruncateLine(l, 200)).ToList();
         if (lines.Length > maxLines)
@@ -731,12 +763,12 @@ public sealed class Agent
         return string.Join('\n', shown);
     }
 
-    /// <summary>打印 edit_file 的 diff 预览（红删绿增，灰色文件头/hunk 头）；失败静默。</summary>
-    private static void ShowEditPreview(JsonObject? args)
+    /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
+    private static void ShowFilePreview(string name, JsonObject? args)
     {
         try
         {
-            var text = EditPreviewText(args);
+            var text = name == "write_file" ? WritePreviewText(args) : EditPreviewText(args);
             if (text.Length == 0)
                 return;
             foreach (var line in text.Split('\n'))
@@ -841,13 +873,13 @@ public sealed class Agent
                 SafeColor.Foreground(ConsoleColor.DarkGray);
                 Console.WriteLine($"  🔧 {summary} …");
                 SafeColor.Reset();
-                // edit_file 附带 diff 预览：让用户在执行前就看到改动内容（而非两段截断片段）
-                if (tc.Name == "edit_file")
+                // edit_file / write_file 附带 diff 预览：执行前就看到改动内容（而非两段截断片段）
+                if (tc.Name is "edit_file" or "write_file")
                 {
                     JsonObject? previewArgs = null;
                     try { previewArgs = JsonNode.Parse(tc.ArgumentsJson) as JsonObject; }
                     catch { }
-                    ShowEditPreview(previewArgs);
+                    ShowFilePreview(tc.Name, previewArgs);
                 }
             }
         }

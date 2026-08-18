@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent.Tools;
 using Xunit;
+using AgentClass = CodeAgent.Agent.Agent;
 
 namespace CodeAgent.Tests;
 
@@ -139,6 +140,41 @@ public class FileToolsEdgeTests : IDisposable
         var result = await new WriteFileTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("字节", result);
         Assert.Contains("bytes.txt", result);
+    }
+
+    // ===== write_file / edit_file 预览 =====
+
+    [Fact]
+    public void WritePreviewText_NewFile_ShowsScale()
+    {
+        var args = new JsonObject
+        {
+            ["path"] = Path.Combine(_dir, "brand-new.txt"),
+            ["content"] = "line1\nline2\nline3",
+        };
+        var preview = AgentClass.WritePreviewText(args);
+        Assert.Contains("新文件", preview);
+        Assert.Contains("3 行", preview);
+    }
+
+    [Fact]
+    public void WritePreviewText_Overwrite_ShowsDiff()
+    {
+        var path = PathOf("over-preview.txt");
+        File.WriteAllText(path, "old line");
+        var args = new JsonObject { ["path"] = path, ["content"] = "new line" };
+        var preview = AgentClass.WritePreviewText(args);
+        Assert.Contains("- old line", preview);
+        Assert.Contains("+ new line", preview);
+    }
+
+    [Fact]
+    public void WritePreviewText_IdenticalContent_NotesNoDiff()
+    {
+        var path = PathOf("same.txt");
+        File.WriteAllText(path, "same");
+        var args = new JsonObject { ["path"] = path, ["content"] = "same" };
+        Assert.Contains("无差异", AgentClass.WritePreviewText(args));
     }
 
     // ===== edit_file =====
