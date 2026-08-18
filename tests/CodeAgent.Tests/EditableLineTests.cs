@@ -252,4 +252,79 @@ public class EditableLineTests
         Assert.Equal(3, line.Cursor);
         Assert.False(line.MoveLineDown()); // 已在行尾
     }
+
+    private static EditableLine MakeLine(string text)
+    {
+        var b = new EditableLine();
+        b.SetInitial(text);
+        return b;
+    }
+}
+
+public class WordNavTests
+{
+    [Fact]
+    public void MoveWordLeft_SkipsSpacesThenWord()
+    {
+        var b = new EditableLine();
+        b.SetInitial("hello  world");
+        b.End();
+        b.MoveWordLeft();
+        Assert.Equal(7, b.Cursor); // 回到 world 的 w
+        b.MoveWordLeft();
+        Assert.Equal(0, b.Cursor); // 再回到 hello 的 h
+        b.MoveWordLeft();
+        Assert.Equal(0, b.Cursor); // 行首不动
+    }
+
+    [Fact]
+    public void MoveWordRight_SkipsSpacesThenWord()
+    {
+        var b = new EditableLine();
+        b.SetInitial("hello  world");
+        b.Home(); // SetInitial 光标在末尾：先回到行首
+        b.MoveWordRight();
+        Assert.Equal(5, b.Cursor);
+        b.MoveWordRight();
+        Assert.Equal(12, b.Cursor); // 行尾
+        b.MoveWordRight();
+        Assert.Equal(12, b.Cursor);
+    }
+
+    [Fact]
+    public void DeleteWordForward_RemovesWordAndTrailingSpaces()
+    {
+        var b = new EditableLine();
+        b.SetInitial("hello  world");
+        b.Home();
+        Assert.True(b.DeleteWordForward());
+        Assert.Equal("  world", b.Text); // 只删 hello（右侧空白留给下一词删除时清理）
+        Assert.Equal(0, b.Cursor);
+    }
+
+    [Fact]
+    public void DeleteWordBackward_RemovesWordAndLeadingSpaces()
+    {
+        var b = new EditableLine();
+        b.SetInitial("hello  world");
+        b.End();
+        Assert.True(b.DeleteWordBackward());
+        Assert.Equal("hello", b.Text); // 连同前导空格一起删
+        Assert.Equal(5, b.Cursor);
+        Assert.True(b.DeleteWordBackward());
+        Assert.Equal("", b.Text); // 再删一次：最后一个词也被删掉
+    }
+    [Fact]
+    public void WordOps_CjkText_TreatsRunAsOneWord()
+    {
+        // 连续中文（无空格）视为一个单词：跳/删整段
+        var b = new EditableLine();
+        b.SetInitial("你好 世界");
+        b.End();
+        b.MoveWordLeft();
+        Assert.Equal(3, b.Cursor); // 「世」的位置（跨过空格后落在词首）
+        b.End();
+        Assert.True(b.DeleteWordBackward()); // 删「 世界」
+        Assert.Equal("你好", b.Text);
+    }
 }

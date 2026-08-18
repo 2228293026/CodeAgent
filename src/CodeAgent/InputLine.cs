@@ -67,6 +67,51 @@ public sealed class EditableLine
             Cursor++;
     }
 
+    /// <summary>光标左移一个单词：跳过左侧空白，再跳过一个连续非空白段（Ctrl+←）。</summary>
+    public void MoveWordLeft()
+    {
+        var text = _text.ToString();
+        var i = Cursor;
+        while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
+        while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
+        Cursor = i;
+    }
+
+    /// <summary>光标右移一个单词：跳过右侧空白，再跳过一个连续非空白段（Ctrl+→）。</summary>
+    public void MoveWordRight()
+    {
+        var text = _text.ToString();
+        var i = Cursor;
+        while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
+        while (i < text.Length && !char.IsWhiteSpace(text[i])) i++;
+        Cursor = i;
+    }
+
+    /// <summary>删除光标前一个单词（Ctrl+Backspace，边界与 Ctrl+← 一致）；返回是否删除。</summary>
+    public bool DeleteWordBackward()
+    {
+        var text = _text.ToString();
+        var i = Cursor;
+        while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
+        while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
+        while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--; // 连同单词前的空白一起删
+        if (i == Cursor)
+            return false;
+        _text.Remove(i, Cursor - i);
+        Cursor = i;
+        return true;
+    }
+    public bool DeleteWordForward()
+    {
+        var text = _text.ToString();
+        var i = Cursor;
+        while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
+        while (i < text.Length && !char.IsWhiteSpace(text[i])) i++;
+        if (i == Cursor)
+            return false;
+        _text.Remove(Cursor, i - Cursor);
+        return true;
+    }
     /// <summary>光标向上移一行（多行输入）：移到上一行行首；已在首行则移到行首。返回是否移动。</summary>
     public bool MoveLineUp()
     {
@@ -927,6 +972,12 @@ public static class InputLine
                     }
                     if (menuOpen && modePicker)
                         CloseMenu();
+                    if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                    {
+                        if (buf.DeleteWordBackward()) // Ctrl+Backspace：删前一个单词
+                            OnTextChanged();
+                        break;
+                    }
                     if (buf.Backspace())
                         OnTextChanged();
                     break;
@@ -934,13 +985,15 @@ public static class InputLine
                 case ConsoleKey.LeftArrow:
                     if (!menuOpen)
                     {
-                        buf.MoveLeft();
+                        if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                            buf.MoveWordLeft(); // Ctrl+←：按单词移动
+                        else
+                            buf.MoveLeft();
                         RedrawInput();
                     }
                     break;
-
                 case ConsoleKey.RightArrow:
-                    if (menuOpen && !modePicker && menuItems.Count > 0)
+                    if (menuOpen && !modePicker && menuItems.Count > 0 && (key.Modifiers & ConsoleModifiers.Control) == 0)
                     {
                         // → ：把选中的命令填充到输入行（不执行），可继续编辑/加参数；
                         // 无选中时默认填第一项（顶部项即隐式高亮）。Tab 在多匹配时是循环换选，
@@ -952,11 +1005,13 @@ public static class InputLine
                     }
                     else if (!menuOpen)
                     {
-                        buf.MoveRight();
+                        if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                            buf.MoveWordRight(); // Ctrl+→：按单词移动
+                        else
+                            buf.MoveRight();
                         RedrawInput();
                     }
                     break;
-
                 case ConsoleKey.Home:
                     if (!menuOpen)
                     {
@@ -977,10 +1032,15 @@ public static class InputLine
                     // 与 Backspace 一致：命令菜单打开时也应删字符并刷新过滤（曾因 !menuOpen 守卫被完全忽略）
                     if (menuOpen && modePicker)
                         CloseMenu();
+                    if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                    {
+                        if (buf.DeleteWordForward()) // Ctrl+Delete：删光标处一个单词
+                            OnTextChanged();
+                        break;
+                    }
                     if (buf.Delete())
                         OnTextChanged();
                     break;
-
                 case ConsoleKey.UpArrow:
                     searching = false; // 方向键退出搜索，回到普通历史浏览
                     if (menuOpen && menuItems.Count > 0)
