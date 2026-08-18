@@ -1025,6 +1025,11 @@ internal static class Program
 
             case "/session":
                 Console.WriteLine(agent.SessionPath ?? "会话日志未启用（config.SaveSessions=false）。");
+                {
+                    var logs = RecentSessionLogs(config, int.MaxValue);
+                    if (logs.Count > 0)
+                        Console.WriteLine($"目录内共 {logs.Count} 个会话日志（保留上限 maxSessionLogs={config.MaxSessionLogs}，滚动新日志时自动清理最旧的；0 = 不清理）。");
+                }
                 break;
 
             case "/setup":
