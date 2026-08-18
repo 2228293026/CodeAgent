@@ -173,9 +173,18 @@ public static class KnownReasoningModels
             name = name[..colon]; // 去 OpenRouter 变体后缀（:free 等）
         foreach (var prefix in ReasoningPrefixes)
             if (name.StartsWith(prefix, StringComparison.Ordinal))
-                return DefaultEfforts;
+                // claude 系列只有 3.7 及以上支持 extended thinking：3.0/3.5/2.x 若返回档位，
+                // auto 会给它们发 thinking 预算，Anthropic 直接 400
+                return prefix != "claude" || ClaudeSupportsThinking(name) ? DefaultEfforts : null;
         return null;
     }
+
+    /// <summary>claude 3.7 及以上支持 thinking；3.0/3.5（含 haiku/sonnet 变体）与 2.x 不支持。</summary>
+    private static bool ClaudeSupportsThinking(string name) =>
+        name.StartsWith("claude-3-7", StringComparison.Ordinal) ||
+        name.StartsWith("claude-3.7", StringComparison.Ordinal) ||
+        !(name.StartsWith("claude-2", StringComparison.Ordinal) ||
+          name.StartsWith("claude-3", StringComparison.Ordinal));
 }
 
 /// <summary>SSE 流式解析时按 index 累积的工具调用增量（openai/anthropic 通用）。</summary>

@@ -182,6 +182,8 @@ public class ProviderEdgeTests
     [InlineData("openai/o4-mini")]   // 去厂商前缀后命中
     [InlineData("deepseek-r1")]
     [InlineData("deepseek-reasoner")]
+    [InlineData("claude-3-7-sonnet-latest")] // 3.7 起支持 thinking
+    [InlineData("claude-opus-4-1")]
     [InlineData("claude-sonnet-4-5")]
     public void KnownReasoningModels_ReasoningPrefixes_ReturnEfforts(string model)
     {
@@ -190,6 +192,9 @@ public class ProviderEdgeTests
 
     [Theory]
     [InlineData("gpt-4o")]           // 普通模型：不在表中
+    [InlineData("claude-3-5-sonnet-latest")] // 3.5 系列不支持 thinking：返回 null 而非档位
+    [InlineData("anthropic/claude-3-5-haiku")]
+    [InlineData("claude-2.1")]
     [InlineData("qwen2.5-coder:7b")]
     [InlineData("")]
     [InlineData(null)]
