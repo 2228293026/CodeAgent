@@ -210,7 +210,14 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/conf
 src/CodeAgent/
 ├── Program.cs              # CLI 入口：参数解析 + 交互式 REPL
 ├── Config.cs               # 配置模型与加载（codeagent.json / 环境变量）
-├── Util.cs                 # 通用工具（glob 转换、二进制检测等）
+├── InputLine.cs            # 输入行：斜杠命令菜单 / 历史浏览 / 快捷键分发
+├── EditableLine.cs         # 可编辑文本缓冲（光标移动、插入删除、词导航）
+├── HistoryStore.cs         # 命令历史持久化（.codeagent/history.txt）
+├── ConsoleRenderer.cs      # 模型回复 Markdown 终端渲染
+├── Modes.cs                # 工作模式目录（内置 8 种 + 自定义）
+├── SetupWizard.cs          # 交互式供应商配置向导
+├── AdofaiContext.cs        # ADOFAI mod 项目自动适配
+├── Util.cs                 # 通用工具（glob 转换、diff、文本截断等）
 ├── Providers/
 │   ├── ProviderModels.cs   # 与 Provider 无关的消息/工具调用中间表示
 │   ├── IAgentProvider.cs   # Provider 抽象
