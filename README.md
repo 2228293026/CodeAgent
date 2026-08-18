@@ -1,6 +1,7 @@
 # CodeAgent
 
 [![CI](https://github.com/2228293026/CodeAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/2228293026/CodeAgent/actions/workflows/ci.yml)
+[![build (ubuntu)](https://github.com/2228293026/CodeAgent/actions/workflows/build.yml/badge.svg)](https://github.com/2228293026/CodeAgent/actions/workflows/build.yml)
 
 一个用 C#（.NET 10）编写的 LLM 驱动编码助手 CLI。它像 Claude Code / Aider 一样，在终端里理解你的任务，自主地**读取文件、搜索代码、修改代码、执行命令**，直到完成任务。
 
