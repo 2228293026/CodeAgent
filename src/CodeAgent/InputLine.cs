@@ -1,7 +1,6 @@
 using System.Text;
 
 namespace CodeAgent;
-
 /// <summary>
 /// 可编辑输入行：文本 + 光标位置（行内编辑的基础单元）。
 /// 支持左右移动、Home/End、在光标处插入/删除；所有操作都在内存中进行，
@@ -171,94 +170,6 @@ public sealed class EditableLine
 }
 
 /// <summary>
-/// 输入历史存储：去重（连续重复不入）、上限 100、持久化到文件。
-/// 独立成类以便单测（此前逻辑在 InputLine 内部且依赖硬编码路径，无法测试）。
-/// </summary>
-public sealed class HistoryStore
-{
-    public const int MaxEntries = 100;
-
-    private readonly string _path;
-    private readonly List<string> _entries;
-
-    public HistoryStore(string path)
-    {
-        _path = path;
-        _entries = Load();
-    }
-
-    /// <summary>历史条目（旧 → 新）。</summary>
-    public IReadOnlyList<string> Entries => _entries;
-
-    public int Count => _entries.Count;
-
-    /// <summary>记录一条输入：空白忽略、与末尾重复忽略、超上限丢最旧。</summary>
-    public void Remember(string line)
-    {
-        if (string.IsNullOrWhiteSpace(line))
-            return;
-        if (_entries.Count > 0 && _entries[^1] == line)
-            return;
-        _entries.Add(line);
-        if (_entries.Count > MaxEntries)
-            _entries.RemoveAt(0);
-        Save();
-    }
-
-    private List<string> Load()
-    {
-        try
-        {
-            if (!File.Exists(_path))
-                return [];
-            return File.ReadAllLines(_path)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .TakeLast(MaxEntries)
-                .Select(Decode)
-                .ToList();
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private void Save()
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllLines(_path, _entries.TakeLast(MaxEntries).Select(Encode));
-        }
-        catch
-        {
-            // 历史保存失败不影响主流程
-        }
-    }
-
-    // 多行输入（粘贴的代码块等）会进入历史：文件按行存储，内嵌换行必须转义，
-    // 否则一条多行历史会被拆成多条碎片，污染 ↑/↓ 与 Ctrl+R。旧版写入的单行条目
-    // （可能含反斜杠路径）必须原样兼容：未识别的转义序列保持字面。
-
-    private static string Encode(string s) =>
-        s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n");
-
-    private static string Decode(string s)
-    {
-        if (!s.Contains('\\'))
-            return s;
-        return HistoryEscapeRe.Replace(s, m => m.Groups[1].Value switch
-        {
-            "n" => "\n",
-            "r" => "\r",
-            "\\" => "\\",
-            _ => m.Value, // 未识别的转义（旧版文件里的 \P 等）保持原样
-        });
-    }
-
-    private static readonly System.Text.RegularExpressions.Regex HistoryEscapeRe =
-        new(@"\\(.)", System.Text.RegularExpressions.RegexOptions.Compiled);
-}
 
 /// <summary>
 /// 终端输入行：斜杠命令菜单（**ANSI 原地渲染**：方向键让 ">" 在列表内上下移动，
