@@ -63,11 +63,16 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             ["model"] = _model,
             ["messages"] = BuildMessages(messages),
-            ["tools"] = BuildTools(tools),
-            ["tool_choice"] = "auto",
             ["temperature"] = _temperature,
             ["max_tokens"] = _maxTokens,
         };
+        if (tools.Count > 0)
+        {
+            // 空工具列表整体省略（/compact 摘要调用）：tools:[] 与 tool_choice 同时省略，
+            // 兼容性最好（部分 OpenAI 兼容服务对空数组报错）
+            payload["tools"] = BuildTools(tools);
+            payload["tool_choice"] = "auto";
+        }
         if (thinkingEffort != "off")
             payload["reasoning_effort"] = thinkingEffort; // OpenAI o 系列 / OpenRouter 推理模型
 
@@ -162,13 +167,17 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             ["model"] = _model,
             ["messages"] = BuildMessages(messages),
-            ["tools"] = BuildTools(tools),
-            ["tool_choice"] = "auto",
             ["temperature"] = _temperature,
             ["max_tokens"] = _maxTokens,
             ["stream"] = true,
             ["stream_options"] = new JsonObject { ["include_usage"] = true },
         };
+        if (tools.Count > 0)
+        {
+            // 空工具列表整体省略（/compact 摘要调用）：tools:[] 与 tool_choice 同时省略
+            payload["tools"] = BuildTools(tools);
+            payload["tool_choice"] = "auto";
+        }
         if (thinkingEffort != "off")
             payload["reasoning_effort"] = thinkingEffort; // OpenAI o 系列 / OpenRouter 推理模型
 
