@@ -257,8 +257,11 @@ internal static class Program
 
         // 后台探测一次模型上下文窗口（OpenRouter 风格 /models 元数据）：失败静默、不阻塞启动，
         // 完成后状态栏即可用（优先级：contextWindow 配置 > 内置模型表 > 此探测）
-        var ctxProbeModel = opts.Model;
-        var ctxProbe = providerInst.GetContextWindowAsync(opts.Model, CancellationToken.None);
+        var ctxProbe = new ContextProbeState
+        {
+            Model = opts.Model,
+            Task = providerInst.GetContextWindowAsync(opts.Model, CancellationToken.None),
+        };
 
         // 有效上下文窗口：0 = 未知（状态栏只显示 ctx 绝对值）
         int EffectiveContextWindow()
@@ -267,9 +270,10 @@ internal static class Program
                 return config.ContextWindow;
             if (KnownContextWindows.TryGet(opts.Model) is { } fromTable)
                 return fromTable;
-            // 探测结果只对探测时的模型有效（/model 换模型后作废，重启后重新探测）
-            if (ctxProbe.IsCompletedSuccessfully && ctxProbe.Result is { } fromApi
-                && string.Equals(opts.Model, ctxProbeModel, StringComparison.OrdinalIgnoreCase))
+            // 探测结果只对探测时的模型有效（/model 换模型后会重启探测）
+            var t = ctxProbe.Task;
+            if (t?.IsCompletedSuccessfully == true && t.Result is { } fromApi
+                && string.Equals(opts.Model, ctxProbe.Model, StringComparison.OrdinalIgnoreCase))
                 return fromApi;
             return 0;
         }
@@ -335,7 +339,7 @@ internal static class Program
                     var isSwitch = IsSwitchCommand(peekCmd, peekRest);
                     if (isSwitch && couldOverwriteBlock && ansiOk && PromptFitsOneRow())
                         Console.Write("\x1b[3A");
-                    var suppress = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
+                    var suppress = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools, ctxProbe);
                     skipStatusBar = suppress;
                     if (suppress)
                     {
@@ -684,6 +688,16 @@ internal static class Program
 
     /// <summary>处理 REPL 斜杠命令。返回 true = 该命令已展示过状态信息，本轮跳过状态栏
     /// （模式/权限切换只需一行灰色确认，避免「消息 + 状态栏 + 提示符」三处重复模式名）。</summary>
+
+    /// <summary>后台上下文窗口探测状态：/model 换模型后旧结果作废并重启探测。</summary>
+    internal sealed class ContextProbeState
+    {
+        public string? Model;
+        public Task<int?>? Task;
+
+        public void Restart(string model, IAgentProvider provider) =>
+            (Model, Task) = (model, provider.GetContextWindowAsync(model, CancellationToken.None));
+    }
     private static bool HandleCommand(
         string line,
         AgentConfig config,
@@ -691,7 +705,8 @@ internal static class Program
         ref ProviderOptions opts,
         AgentClass agent,
         ref IAgentProvider providerInst,
-        ToolRegistry tools)
+        ToolRegistry tools,
+        ContextProbeState? ctxProbe = null)
     {
         var (cmd, rest) = SplitCommand(line);
         var suppressStatusBar = false;
@@ -806,7 +821,10 @@ internal static class Program
                     {
                         providerInst = ProviderFactory.Create(config);
                         agent.SetProvider(providerInst);
+                        // 重新后台探测新模型的上下文窗口（启动时的探测只对旧模型有效）
+                        ctxProbe?.Restart(opts.Model, providerInst);
                         // 同步回配置并持久化，重启后仍然生效
+                        // 重新后台探测新模型的上下文窗口（启动时的探测只对旧模型有效）
                         if (config.Providers.TryGetValue(config.Provider, out var po))
                             po.Model = opts.Model;
                         var savePath = ConfigSavePath(configPath, config);
