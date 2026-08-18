@@ -169,6 +169,7 @@ public sealed class HistoryStore
             return File.ReadAllLines(_path)
                 .Where(l => !string.IsNullOrWhiteSpace(l))
                 .TakeLast(MaxEntries)
+                .Select(Decode)
                 .ToList();
         }
         catch
@@ -182,13 +183,36 @@ public sealed class HistoryStore
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllLines(_path, _entries.TakeLast(MaxEntries));
+            File.WriteAllLines(_path, _entries.TakeLast(MaxEntries).Select(Encode));
         }
         catch
         {
             // 历史保存失败不影响主流程
         }
     }
+
+    // 多行输入（粘贴的代码块等）会进入历史：文件按行存储，内嵌换行必须转义，
+    // 否则一条多行历史会被拆成多条碎片，污染 ↑/↓ 与 Ctrl+R。旧版写入的单行条目
+    // （可能含反斜杠路径）必须原样兼容：未识别的转义序列保持字面。
+
+    private static string Encode(string s) =>
+        s.Replace("\\", "\\\\").Replace("\r", "\\r").Replace("\n", "\\n");
+
+    private static string Decode(string s)
+    {
+        if (!s.Contains('\\'))
+            return s;
+        return HistoryEscapeRe.Replace(s, m => m.Groups[1].Value switch
+        {
+            "n" => "\n",
+            "r" => "\r",
+            "\\" => "\\",
+            _ => m.Value, // 未识别的转义（旧版文件里的 \P 等）保持原样
+        });
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex HistoryEscapeRe =
+        new(@"\\(.)", System.Text.RegularExpressions.RegexOptions.Compiled);
 }
 
 /// <summary>

@@ -133,4 +133,43 @@ public class HistoryStoreTests : IDisposable
         Assert.Equal(1, store.Count);
         Assert.Equal(line, store.Entries[0]);
     }
+
+    [Fact]
+    public void Remember_MultiLineEntry_SurvivesRoundtrip()
+    {
+        // 回归：多行粘贴进入历史后，按行存储的文件曾把一条拆成多条碎片；
+        // 现在内嵌换行转义保存，重载后仍是同一条完整条目
+        var multi = "line1\nline2\n\nline3";
+        var store = new HistoryStore(_file);
+        store.Remember(multi);
+        store.Remember("after");
+
+        var reloaded = new HistoryStore(_file);
+        Assert.Equal(2, reloaded.Count);
+        Assert.Equal(multi, reloaded.Entries[0]);
+        Assert.Equal("after", reloaded.Entries[1]);
+    }
+
+    [Fact]
+    public void Remember_EntryWithLiteralBackslashN_Roundtrips()
+    {
+        // 原文里的字面 \n（两个字符）与真换行必须可区分且各自还原
+        var literal = "print(\"a\nb\")";
+        var store = new HistoryStore(_file);
+        store.Remember(literal);
+
+        var reloaded = new HistoryStore(_file);
+        Assert.Equal(literal, reloaded.Entries[0]);
+    }
+
+    [Fact]
+    public void Load_LegacyFileWithBackslashPaths_Unchanged()
+    {
+        // 旧版写入的单行条目（Windows 路径含未转义反斜杠）：未识别的转义序列保持原样
+        Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
+        File.WriteAllLines(_file, [@"cd D:\Projects\CodeAgent", "git status"]);
+        var store = new HistoryStore(_file);
+        Assert.Equal(@"cd D:\Projects\CodeAgent", store.Entries[0]);
+        Assert.Equal("git status", store.Entries[1]);
+    }
 }
