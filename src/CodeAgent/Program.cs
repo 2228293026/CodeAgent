@@ -512,6 +512,8 @@ internal static class Program
             var content = m.Content ?? "";
             if (content.Length > 300)
                 content = content[..300] + "…";
+            // 多行内容折叠为一行（工具结果常带换行，否则会打乱逐条列表）
+            content = content.Replace("\r", "").Replace("\n", " ⏎ ");
             Console.WriteLine($"  [{role}] {content}");
         }
     }
