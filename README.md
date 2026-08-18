@@ -164,7 +164,7 @@ codeagent --continue                  # 恢复本项目最近一次会话继续�
 codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
 ```
 
-每条消息自动落盘到 `.codeagent/sessions/*.jsonl`（`saveSessions` 控制），`--continue` 恢复最近一次；会话内 `/resume` 列出最近 10 次并按编号恢复，`/clear` 后自动滚动新日志（不会误恢复已清空的历史）。
+每条消息自动落盘到 `.codeagent/sessions/*.jsonl`（`saveSessions` 控制），`--continue` 恢复最近一次；会话内 `/resume` 列出最近 10 次并按编号恢复，`/clear` 后自动滚动新日志（不会误恢复已清空的历史）；`/export <编号>` 把 /resume 列表中的历史会话导出为 Markdown（不带编号则导出当前对话）。
 
 ### 交互模式
 
