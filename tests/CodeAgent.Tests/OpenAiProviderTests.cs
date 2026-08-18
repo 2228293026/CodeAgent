@@ -418,4 +418,20 @@ public class OpenAiProviderTests
 
         Assert.Equal("length", resp.FinishReason);
     }
+    [Fact]
+    public async Task ChatAsync_RefusalField_IsIncludedInText()
+    {
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":null,"refusal":"无法协助"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "k" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Equal("无法协助", resp.Text);
+    }
+
 }

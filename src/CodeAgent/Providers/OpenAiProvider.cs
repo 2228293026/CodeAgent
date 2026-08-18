@@ -182,6 +182,10 @@ public sealed class OpenAiProvider : IAgentProvider
             text = string.Join("", parts.Select(b => b?["text"]?.GetValue<string>() ?? ""));
         else
             text = choice?["content"]?.GetValue<string>() ?? "";
+        // o 系列安全拒绝：message.refusal 与流式 delta.refusal 同源，不读则静默丢失
+        var refusalText = choice?["refusal"]?.GetValue<string>();
+        if (!string.IsNullOrEmpty(refusalText))
+            text = text.Length == 0 ? refusalText : text + "\n" + refusalText;
 
         var toolCalls = new List<ToolCall>();
         var arr = choice?["tool_calls"]?.AsArray();
