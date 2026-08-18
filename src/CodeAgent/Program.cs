@@ -1278,7 +1278,9 @@ internal static class Program
             .Where(i => i >= 0)
             .DefaultIfEmpty(-1)
             .Min();
-        return idx < 0 ? (line, "") : (line[..idx], line[(idx + 1)..]);
+        // 命令名统一小写：/HELP、/Model 曾因大小写不匹配落入 default 分支被当成聊天消息发给模型；
+        // rest 保持原样（模型名/会话名区分大小写）
+        return idx < 0 ? (line.ToLowerInvariant(), "") : (line[..idx].ToLowerInvariant(), line[(idx + 1)..]);
     }
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
     /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>

@@ -7,6 +7,17 @@ namespace CodeAgent.Tests;
 public class SplitCommandTests
 {
     [Fact]
+    public void SplitCommand_UpperCaseCommand_IsNormalized_RestKeepsCase()
+    {
+        // 回归：/MODEL 曾因大小写不匹配落入 default 分支被当成聊天消息发给模型
+        var (cmd, rest) = Program.SplitCommand("/MODEL GPT-4o");
+        Assert.Equal("/model", cmd);
+        Assert.Equal("GPT-4o", rest); // rest 不动：模型名/会话名区分大小写
+
+        var (c2, rest2) = Program.SplitCommand("/HELP");
+        Assert.Equal("/help", c2);
+    }
+    [Fact]
     public void CommandWithArgs_SplitsAtFirstSpace()
     {
         var (cmd, rest) = Program.SplitCommand("/model gpt-4o");
