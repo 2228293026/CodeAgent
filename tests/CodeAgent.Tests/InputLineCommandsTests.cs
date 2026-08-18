@@ -170,6 +170,31 @@ public class InputLineCommandsTests
     public void CursorLeftOffset_CJKAware(string text, int cursor, int expected) =>
         Assert.Equal(expected, InputLine.CursorLeftOffset(text, cursor));
 
+    // ===== FindHistoryMatch（Ctrl+R 反向搜索）=====
+
+    [Fact]
+    public void FindHistoryMatch_FindsNewestThenOlder()
+    {
+        var history = new[] { "dotnet build", "dotnet test", "git status", "dotnet format" };
+        // 最新命中：从尾部搜 "dotnet" → 下标 3
+        Assert.Equal(3, InputLine.FindHistoryMatch(history, "dotnet", history.Length - 1));
+        // 再搜（跳过当前命中）：更早的 → 下标 1
+        Assert.Equal(1, InputLine.FindHistoryMatch(history, "dotnet", 2));
+        Assert.Equal(0, InputLine.FindHistoryMatch(history, "dotnet", 0));
+        // 无更早命中
+        Assert.Equal(-1, InputLine.FindHistoryMatch(history, "dotnet", -1));
+    }
+
+    [Fact]
+    public void FindHistoryMatch_CaseInsensitiveAndBounds()
+    {
+        var history = new[] { "DOTNET build" };
+        Assert.Equal(0, InputLine.FindHistoryMatch(history, "dotnet", 0)); // 忽略大小写
+        Assert.Equal(-1, InputLine.FindHistoryMatch(history, "", 5));      // 空 query 不命中
+        Assert.Equal(-1, InputLine.FindHistoryMatch([], "x", 3));          // 空历史
+        Assert.Equal(-1, InputLine.FindHistoryMatch(history, "zzz", 99));  // 越界 fromIndex 安全
+    }
+
     [Theory]
     [InlineData("/model", "/model")]
     [InlineData("／model", "/model")] // 全角斜杠归一化

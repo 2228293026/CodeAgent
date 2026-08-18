@@ -347,12 +347,17 @@ public static class InputLine
         var idx = session.Count;
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
+        var searching = false;      // Ctrl+R 反向搜索模式：输入进 query，输入行显示命中的历史条目
+        var searchQuery = new StringBuilder();
+        var searchFrom = -1;        // 当前命中的 session 下标（-1 = 无命中）
 
         // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」
         string InputText() =>
-            idx < session.Count
-                ? $"{promptPlain} (历史 {idx + 1}/{session.Count}){buf.Text}"
-                : promptPlain + buf.Text;
+            searching
+                ? $"{promptPlain} (搜索)`{searchQuery}` {buf.Text}"
+                : idx < session.Count
+                    ? $"{promptPlain} (历史 {idx + 1}/{session.Count}){buf.Text}"
+                    : promptPlain + buf.Text;
 
         var winW = TryWindowWidth();
         var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
@@ -835,6 +840,7 @@ public static class InputLine
             switch (key.Key)
             {
                 case ConsoleKey.Enter:
+                    searching = false; // 搜索结束：提交当前命中的历史条目
                     if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
                     {
                         var sel = menuItems[menuIndex].Name;
@@ -879,6 +885,22 @@ public static class InputLine
                     return line;
 
                 case ConsoleKey.Backspace:
+                    if (searching)
+                    {
+                        // 搜索模式退格：删 query 末字符并重新跳到最新命中
+                        if (searchQuery.Length > 0)
+                        {
+                            searchQuery.Remove(searchQuery.Length - 1, 1);
+                            searchFrom = FindHistoryMatch(session, searchQuery.ToString(), session.Count - 1);
+                            if (searchFrom >= 0)
+                            {
+                                SetBuf(session, buf, searchFrom);
+                                inputExpanded = false;
+                            }
+                            RedrawInput();
+                        }
+                        break;
+                    }
                     if (menuOpen && modePicker)
                         CloseMenu();
                     if (buf.Backspace())
@@ -936,6 +958,7 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.UpArrow:
+                    searching = false; // 方向键退出搜索，回到普通历史浏览
                     if (menuOpen && menuItems.Count > 0)
                     {
                         MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
@@ -965,6 +988,7 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.DownArrow:
+                    searching = false; // 方向键退出搜索，回到普通历史浏览
                     if (menuOpen && menuItems.Count > 0)
                     {
                         MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
@@ -1080,6 +1104,13 @@ public static class InputLine
                     break;
 
                 case ConsoleKey.Escape:
+                    if (searching)
+                    {
+                        // 退出搜索：保留当前命中的文本，继续编辑
+                        searching = false;
+                        RedrawInput();
+                        break;
+                    }
                     if (menuOpen)
                     {
                         CloseMenu();
@@ -1143,6 +1174,28 @@ public static class InputLine
                     Remember("/clear");
                     return "/clear"; // Alt+N / Ctrl+Shift+N：新建会话（清空历史）（菜单打开时不触发）
 
+                case ConsoleKey.R when (key.Modifiers & ConsoleModifiers.Control) != 0 && !menuOpen:
+                    // Ctrl+R：反向搜索历史（bash 式）。进入搜索；再按跳到更早的下一个命中
+                    if (!searching)
+                    {
+                        searching = true;
+                        searchQuery.Clear();
+                        searchFrom = -1;
+                        RedrawInput();
+                    }
+                    else
+                    {
+                        var next = FindHistoryMatch(session, searchQuery.ToString(), searchFrom - 1);
+                        if (next >= 0)
+                        {
+                            searchFrom = next;
+                            SetBuf(session, buf, next);
+                            inputExpanded = false;
+                            RedrawInput();
+                        }
+                    }
+                    break;
+
                 case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
                     try { Console.Clear(); } catch { /* 忽略 */ }
                     // 清屏后菜单内容已消失：RefreshMenu 在过滤未变时短路不重绘，
@@ -1156,6 +1209,19 @@ public static class InputLine
                 default:
                     if (key.KeyChar != '\0' && key.KeyChar != '\u0003' && !char.IsControl(key.KeyChar))
                     {
+                        // 搜索模式：可打印字符进 query 并跳到最新命中（bash 语义），不进输入缓冲
+                        if (searching)
+                        {
+                            searchQuery.Append(key.KeyChar);
+                            searchFrom = FindHistoryMatch(session, searchQuery.ToString(), session.Count - 1);
+                            if (searchFrom >= 0)
+                            {
+                                SetBuf(session, buf, searchFrom);
+                                inputExpanded = false;
+                            }
+                            RedrawInput();
+                            break;
+                        }
                         if (menuOpen && modePicker)
                             CloseMenu();
                         buf.Insert(key.KeyChar);
@@ -1205,6 +1271,20 @@ public static class InputLine
             return -1;
         var idx = menuOffset + n - 1;
         return idx < menuCount ? idx : -1;
+    }
+
+    /// <summary>反向搜索历史：从 fromIndex 向更旧方向找第一个包含 query（忽略大小写）的条目；无命中返回 -1。
+    /// Ctrl+R 进入搜索（query 空 → 不命中），再按 Ctrl+R 跳更早的下一个命中。</summary>
+    internal static int FindHistoryMatch(IReadOnlyList<string> history, string query, int fromIndex)
+    {
+        if (query.Length == 0 || history.Count == 0)
+            return -1;
+        for (var i = Math.Min(fromIndex, history.Count - 1); i >= 0; i--)
+        {
+            if (history[i].Contains(query, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
     }
 
     /// <summary>记录一条输入到历史（委托给 HistoryStore）。</summary>
