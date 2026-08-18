@@ -261,4 +261,27 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.Single(Directory.GetFiles(SessionDir, "*.json"));
         Assert.False(Directory.Exists(Path.Combine(SessionDir, "a")));
     }
+    [Fact]
+    public async Task LoadSession_RollsSessionLog()
+    {
+        // 回归：/load 曾不滚动日志——加载命名快照后 --continue 恢复的是旧对话
+        AgentClass Logged(FakeProvider p) => new(new AgentConfig
+        {
+            SaveSessions = true, SessionDir = SessionDir, ExportDir = ExportDir, MaxToolIterations = 5,
+        }, p, ToolRegistry.CreateDefault());
+        var agent = Logged(new FakeProvider { NextResponse = new ProviderResponse { Text = "旧对话内容" } });
+        await agent.RunAsync("旧问题", CancellationToken.None);
+        agent.SaveSession("snap");
+
+        var agent2 = Logged(new FakeProvider { NextResponse = new ProviderResponse { Text = "回复" } });
+        await agent2.RunAsync("新问题", CancellationToken.None); // agent2 当前日志 = 新问题
+        agent2.LoadSession("snap");
+        agent2.Close();
+
+        // --continue 读取最新日志：应包含加载的「旧对话内容」
+        var latest = System.Linq.Enumerable.Single(Program.RecentSessionLogs(new AgentConfig { SessionDir = SessionDir }, 1));
+        var escaped = System.Text.Json.JsonSerializer.Serialize("旧对话内容").Trim('"'); // 日志默认转义非 ASCII
+        Assert.Contains(escaped, File.ReadAllText(latest));
+    }
+
 }

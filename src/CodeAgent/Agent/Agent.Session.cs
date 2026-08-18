@@ -20,11 +20,17 @@ public sealed partial class Agent
     /// <summary>从命名会话恢复对话（替换当前历史）。</summary>
     public void LoadSession(string name)
     {
+        var msgs = LoadMessages(name);
         _messages.Clear();
-        _messages.AddRange(LoadMessages(name));
+        _messages.AddRange(msgs);
         // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
         _turnStarts.Clear();
         LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
+        LastPrompt = null;   // 加载前的「上一条请求」不应被 /retry 复活进加载的对话
+        // 与 LoadSessionLog 一致：滚动新日志并重写，--continue 恢复的是加载后的对话而非旧日志
+        RollSessionLog();
+        foreach (var m in _messages)
+            LogMessage(m);
     }
 
     /// <summary>把当前对话（或指定命名会话）导出为 Markdown 记录，返回文件路径。</summary>
