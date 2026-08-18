@@ -161,6 +161,7 @@ public sealed class Agent
         if (start <= 0 || start >= _messages.Count)
             return null; // 防御：起点已越界（消息被压缩/移除），丢弃该层
         _messages.RemoveRange(start, _messages.Count - start);
+        LastInputTokens = 0; // 撤回后历史变短：真实 prompt_tokens 已过期，ctx 退回估算
         return $"⏪ 已撤回最后一轮（剩余 {start} 条历史消息）。";
     }
 
@@ -257,6 +258,13 @@ public sealed class Agent
         {
             return false;
         }
+        // 丢弃末尾未完成的工具轮（ESC 取消/进程中断时，assistant(toolCalls) 已写日志、
+        // 工具结果没写全）：带着孤儿 tool_calls 恢复会让下次请求被 API 拒绝（400）。
+        // 从尾向前删掉 tool 结果与带 toolCalls 的 assistant，停在完整边界
+        while (msgs.Count > 0 &&
+               (msgs[^1].Role == MessageRole.Tool ||
+                msgs[^1] is { Role: MessageRole.Assistant, ToolCalls.Count: > 0 }))
+            msgs.RemoveAt(msgs.Count - 1);
         if (msgs.Count == 0)
             return false;
 
@@ -733,7 +741,12 @@ public sealed class Agent
                 return;
             foreach (var line in text.Split('\n'))
             {
-                if (line.StartsWith('-'))
+                // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿
+                if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
+                    SafeColor.Foreground(ConsoleColor.DarkGray);
+                else if (line.StartsWith("@@", StringComparison.Ordinal))
+                    SafeColor.Foreground(ConsoleColor.Cyan);
+                else if (line.StartsWith('-'))
                     SafeColor.Foreground(ConsoleColor.Red);
                 else if (line.StartsWith('+'))
                     SafeColor.Foreground(ConsoleColor.Green);
@@ -1076,6 +1089,7 @@ public sealed class Agent
                 Role = MessageRole.System,
                 Content = $"【历史摘要】{summary}",
             });
+            LastInputTokens = 0; // 压缩后上下文大幅缩小：旧 prompt_tokens 过期，ctx 退回估算
             Console.WriteLine("✔ 历史已压缩，继续执行。");
             return true;
         }

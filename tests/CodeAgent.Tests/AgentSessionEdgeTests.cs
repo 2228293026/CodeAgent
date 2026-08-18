@@ -110,6 +110,26 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.False(MakeAgent(new FakeProvider()).LoadSessionLog(Path.Combine(SessionDir, "nope.jsonl")));
 
     [Fact]
+    public void LoadSessionLog_DropsTrailingIncompleteToolRound()
+    {
+        // 回归：ESC 取消回合时 assistant(toolCalls) 已写日志、结果没写全；带着孤儿 tool_calls
+        // 恢复会让下次请求被 API 拒绝（tool_calls 必须跟结果）。恢复时从尾丢弃未完成的工具轮
+        var path = Path.Combine(SessionDir, "cancelled.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"ts":"10:00:00","role":"user","tool":null,"toolCallId":null,"content":"任务","toolCalls":null,"error":false}""",
+            """{"ts":"10:00:01","role":"assistant","tool":null,"toolCallId":null,"content":null,"toolCalls":[{"Id":"c1","Name":"read_file","ArgumentsJson":"{\"path\":\"a\"}"}],"error":false}""",
+            """{"ts":"10:00:02","role":"tool","tool":"read_file","toolCallId":"c1","content":"结果","toolCalls":null,"error":false}""",
+        ]);
+        var agent = MakeAgent(new FakeProvider());
+
+        Assert.True(agent.LoadSessionLog(path));
+        // 剩 system（补插）+ user：未完成的 assistant+tool 轮被整体丢弃
+        Assert.Equal(2, agent.MessageCount);
+        Assert.Equal(MessageRole.User, agent.Messages[^1].Role);
+    }
+
+    [Fact]
     public void RecentSessionLogs_SkipsEmptyLogs_AndOrdersNewestFirst()
     {
         // 回归：启动后未对话就退出会留下 0 字节日志；曾混进 /resume 列表与 --continue 的

@@ -7,6 +7,10 @@ namespace CodeAgent.Tools;
 /// <summary>共享的 shell 命令执行器：shell 选择、进程启动、超时、输出截断。</summary>
 public static class ShellRunner
 {
+    /// <summary>主线程正在做控制台输入（如 y/N 确认）时置 true：
+    /// 回合期间的 ESC 监视线程会吞掉所有按键，不置闩用户输入的 y/n 会被抢走。</summary>
+    internal static volatile bool ConsoleInputBusy;
+
     /// <summary>执行命令，返回 (退出码, 格式化输出)。env 为附加环境变量（叠加到当前环境）。</summary>
     public static async Task<(int ExitCode, string Output)> RunAsync(
         string shell, string command, string cwd, int timeoutSeconds, CancellationToken ct,
@@ -87,8 +91,17 @@ public static class ShellRunner
     public static async Task<bool> ConfirmAsync(string command)
     {
         Console.Write($"\n[codeagent] 执行命令? {command}\n[y/N] ");
-        var answer = await Task.Run(() => Console.ReadLine()?.Trim());
-        return string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase);
+        bool answer;
+        ShellRunner.ConsoleInputBusy = true; // 挡住 ESC 监视线程，防止按键被吞
+        try
+        {
+            answer = string.Equals(await Task.Run(() => Console.ReadLine()?.Trim()), "y", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            ShellRunner.ConsoleInputBusy = false;
+        }
+        return answer;
     }
 
     private static (string fileName, string[] args) BuildShellCommand(string shell, string command)

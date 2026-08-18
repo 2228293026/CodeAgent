@@ -442,7 +442,8 @@ internal static class Program
             {
                 while (!stop && !cts.IsCancellationRequested)
                 {
-                    if (!stop && Console.KeyAvailable)
+                    // 主线程在做 y/N 确认等控制台输入时让路：这里的 ReadKey 会吞按键
+                    if (!CodeAgent.Tools.ShellRunner.ConsoleInputBusy && !stop && Console.KeyAvailable)
                     {
                         var key = Console.ReadKey(intercept: true);
                         if (!stop && key.Key == ConsoleKey.Escape)
