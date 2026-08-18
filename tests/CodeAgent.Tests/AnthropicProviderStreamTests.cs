@@ -177,7 +177,7 @@ public class AnthropicProviderStreamTests
 
         var body = JsonNode.Parse(handler.LastRequest ?? "");
         Assert.NotNull(body?["messages"]);
-        Assert.Equal(1, body!["messages"]!.AsArray().Count); // system 走顶层，不进 messages
+        Assert.Single(body!["messages"]!.AsArray()); // system 走顶层，不进 messages
         Assert.Equal("sys", body["system"]!.GetValue<string>());
         Assert.Equal(true, body["stream"]!.GetValue<bool>());
     }
