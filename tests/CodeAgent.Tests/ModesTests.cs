@@ -146,4 +146,18 @@ public class ModesTests
         Assert.Equal("code", code.Name);
         Assert.Null(code.AllowedTools); // code 模式不限制工具
     }
+
+    [Fact]
+    public void Build_CustomModeWithEmptyToolsArray_AllowsAll()
+    {
+        // 文档约定：modes[].tools 空数组 = 全部工具（与缺省 tools 等价）
+        // README「自定义模式」与 codeagent.example.json 的 fix 模式都用 "tools": []
+        var config = new AgentConfig
+        {
+            Modes = { new AgentModeConfig { Name = "fix", Description = "修复模式", SystemPrompt = "fix prompt", Tools = [] } },
+        };
+
+        var mode = Modes.Build(config).First(m => m.Name == "fix");
+        Assert.Null(mode.AllowedTools); // 空数组 = 全部工具
+    }
 }
