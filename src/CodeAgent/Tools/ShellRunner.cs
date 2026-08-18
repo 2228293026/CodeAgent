@@ -146,7 +146,11 @@ public static class ShellRunner
                 // 注意：不能把命令包进 & '...'——PowerShell 会把整串当命令名查找导致 CommandNotFound
                 "powershell" => ("powershell.exe", new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command }),
                 "pwsh" => ("pwsh", new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command }),
-                "bash" => (FindGitBash() ?? "bash.exe", new[] { "-lc", command }),
+                // 找不到 Git Bash 时不能退回 "bash.exe"——System32 下那是 WSL 启动器，
+                // 命令会被带进 Linux 子系统执行（工作区路径语义完全不同）。明确报错让模型换工具。
+                "bash" => (FindGitBash()
+                           ?? throw new ToolException("未找到 Git Bash：bash 工具需要安装 Git for Windows（或改用 run_command / powershell）"),
+                    new[] { "-lc", command }),
                 _ => ("cmd.exe", new[] { "/d", "/c", command }),
             };
         }
