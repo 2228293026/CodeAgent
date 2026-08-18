@@ -1192,7 +1192,7 @@ internal static class Program
                     {
                         agent.LoadSession(rest.Trim());
                         Console.WriteLine($"✔ 已恢复会话: {rest.Trim()}");
-                        PrintConversation(agent); // 显示恢复的消息，避免"看不到之前的消息"
+                        PrintConversation(agent, 20); // 显示恢复的最近 20 条（全量打印长会话会刷屏）
                     }
                     catch (Exception ex)
                     {
@@ -1215,7 +1215,7 @@ internal static class Program
                         if (agent.LoadSessionLog(logs[ridx - 1]))
                         {
                             Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(logs[ridx - 1])}");
-                            PrintConversation(agent);
+                            PrintConversation(agent, 20);
                         }
                         else
                             Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
