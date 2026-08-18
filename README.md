@@ -243,6 +243,17 @@ src/CodeAgent/
 
 **模型没调用工具就回复了？** 该模型可能不支持 function calling / tool use，换支持的工具型模型（如 gpt-4o、claude-sonnet、deepseek-chat、qwen3-coder）。
 
+## 深入文档
+
+- [项目介绍](docs/项目介绍.md) — 定位、整体架构与设计取舍
+- [配置参考](docs/配置参考.md) — `codeagent.json` 全部字段逐项说明
+- [工作模式](docs/工作模式.md) — 内置 8 种模式与自定义模式
+- [工具参考](docs/工具参考.md) — 10 个内置工具的参数与行为细节
+- [快捷键参考](docs/快捷键参考.md) — 输入行全部按键（菜单/历史/Ctrl+R/Alt 组合）
+- [常见问题](docs/常见问题.md) — 界面错位、Provider 报错等排障
+- [开发指南](docs/开发指南.md) — 如何构建、测试与参与开发
+
 ## License
 
 MIT
+
