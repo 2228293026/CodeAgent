@@ -935,7 +935,7 @@ public sealed partial class Agent
             ProviderResponse resp;
             try
             {
-                resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], _ctx.Config.ThinkingEffort, ct), ct);
+                resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], "off", ct), ct); // 摘要不需要深度思考：压缩阻塞交互，关掉省时省钱
             }
             finally
             {
