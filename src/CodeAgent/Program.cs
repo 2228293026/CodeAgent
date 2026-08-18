@@ -860,16 +860,16 @@ internal static class Program
 
             case "/compact":
                 // 用户主动压缩上下文：把最早的一部分对话交给 LLM 压缩成摘要（/clear 是彻底清空，本命令保留语义）
-                try
+                // 走 RunTurnAsync：摘要请求支持 ESC/Ctrl+C 取消（此前 CancellationToken.None 卡住只能干等）
                 {
-                    // 控制台无同步上下文，GetAwaiter().GetResult() 与 PrintModelsAsync 等既有模式一致
-                    var ok = agent.CompactAsync(CancellationToken.None).GetAwaiter().GetResult();
-                    if (!ok)
+                    var result = RunTurnAsync(async t =>
+                        await agent.CompactAsync(t) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult(); // HandleCommand 同步上下文
+                    if (IsCancelledTurn(result))
+                        Console.WriteLine("⏹ 已取消压缩（历史未变动）。");
+                    else if (result == "SHORT")
                         Console.WriteLine("⚠ 当前对话过短，无需压缩。");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"⚠ 压缩失败: {ex.Message}");
+                    else
+                        Console.WriteLine("✔ 历史已压缩。");
                 }
                 break;
 
