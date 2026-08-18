@@ -552,4 +552,20 @@ public class FileToolsTests : IDisposable
         Assert.Equal(0, ctx.Undo.Count); // 无撤销条目
         Assert.Equal(before, File.GetLastWriteTimeUtc(Path.Combine(_dir, "same.txt"))); // mtime 未变
     }
+
+    [Fact]
+    public async Task EditFile_IdenticalStrings_ThrowsInsteadOfNoOp()
+    {
+        // 回归：old == new 曾静默重写文件并报「已替换 N 处」，误导模型以为做了修改
+        File.WriteAllText(Path.Combine(_dir, "eq.txt"), "value");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "eq.txt", ["old_string"] = "value", ["new_string"] = "value" },
+                ctx, CancellationToken.None));
+        Assert.Contains("相同", ex.Message);
+        Assert.Equal(0, ctx.Undo.Count);
+    }
 }
