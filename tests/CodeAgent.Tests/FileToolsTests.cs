@@ -218,6 +218,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_FlatDirWithManyFiles_RespectsCap()
+    {
+        // 回归：cap 曾只在 Walk 入口检查，平铺目录里 foreach 会把 cap 之后的文件行全部输出
+        for (int i = 0; i < 900; i++)
+            File.WriteAllText(Path.Combine(_dir, $"f{i:000}.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(new JsonObject { ["path"] = "." }, ctx, CancellationToken.None);
+
+        var lines = outText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Contains("已截断", outText);
+        Assert.True(lines.Length <= 803, $"输出行数 {lines.Length} 应被 cap 截断在 ~800 行");
+        Assert.Contains("f000.txt", outText); // 头部条目保留
+        Assert.DoesNotContain("f899.txt", outText); // 超出 cap 的尾部条目被截掉
+    }
+
+    [Fact]
     public async Task ListDirectory_EmptyDir_ReportsHelpfully()
     {
         Directory.CreateDirectory(Path.Combine(_dir, "empty"));

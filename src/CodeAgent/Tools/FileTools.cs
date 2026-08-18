@@ -255,6 +255,8 @@ public sealed class ListDirectoryTool : ITool
                 foreach (var d in Directory.EnumerateDirectories(dir)
                              .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
                 {
+                    if (emitted >= cap)
+                        break; // 上限在循环内也生效：平铺大目录不再把 cap 之后的行全部输出
                     var name = Path.GetFileName(d);
                     if (SkipDirs.IsSkipped(name))
                         continue;
@@ -265,6 +267,8 @@ public sealed class ListDirectoryTool : ITool
                 foreach (var f in Directory.EnumerateFiles(dir)
                              .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
                 {
+                    if (emitted >= cap)
+                        break;
                     sb.AppendLine(indent + Path.GetFileName(f));
                     emitted++;
                 }
