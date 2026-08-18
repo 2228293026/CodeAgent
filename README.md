@@ -14,12 +14,11 @@
 - 🖥️ 工具调用可视化：执行工具时实时显示动作与耗时，`run_command` 附带输出预览（`"showToolCalls": false` 可关闭）
 - 🔁 自动重试：429 / 5xx / 连接失败自动指数退避重试（最多 2 次），流式已输出文本则不重试
 - 🧠 上下文自动摘要：历史超限时先用 LLM 压缩最早对话，失败才回退丢弃旧消息
-- 🎭 多工作模式：`/mode` 切换 code / plan / explain / review / debug / refactor / test / doc，只读模式自动隐藏并拦截写工具
+- 🎭 多工作模式：`/mode` 或 Tab 切换内置 8 种（code/plan/explain/review/debug/refactor/test/doc）+ 配置自定义模式；只读模式自动隐藏并拦截写工具
 - 🎮 ADOFAI mod 适配：检测到 mod 项目自动注入开发上下文与 moddev / harmony / assetbundle 模式
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
 - ⌨️ 终端 TUI：斜杠命令菜单（过滤/方向键选择/数字执行/→ 填充）、命令历史（↑/↓，持久化）、TAB 补全、多行粘贴折叠、Ctrl+L 清屏、`[模式]` 提示符
 - 🔧 内置 10 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `bash` / `powershell` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
-- 🧭 8 种内置工作模式（code/plan/explain/review/debug/refactor/test/doc，Tab 秒切）+ 自定义模式；只读模式自动收走写工具
 - ↩️ 会话自动落盘：`--continue` 恢复最近会话、`/resume` 按编号恢复历史会话、Esc 多级撤回逐轮回退
 - 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）与思考强度；`/compact` 主动压缩历史
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
@@ -187,7 +186,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称]` `/config` `/s
 
 运行中按 `Ctrl+C` 或 `Esc` 可**优雅取消当前轮**（停止模型思考/工具执行，中断后历史会自动回滚为合法状态，可继续对话）；空闲时按 `Ctrl+C` 退出程序。
 
-交互输入：输入 `/`（兼容全角 `／`）自动弹出**命令菜单**（**ANSI 原地渲染**：`↑`/`↓` 让 `>` 在列表内原地移动、`→` 把选中命令填充到输入行（不执行，可继续加参数）、回车执行、`Esc` 关闭、继续输入即过滤；**数字键 1-9 直接执行**；老式终端乱码时设 `"tuiAnsi": false` 退回滚动式）；**快捷键**：`Esc`（空输入时）撤回最近一轮对话（连按逐轮回退）、`Tab`（输入非 `/` 开头时）切换下一个工作模式（`/mode next`）、`Shift+Tab` 切换文件访问权限模式（strict→whitelist→full，`/access` 查看）、`Alt+M`（或 `Ctrl+Shift+M`）模式菜单、`Alt+U` 撤销、`Alt+D` 查看 diff、`Alt+N` 新建会话、`Ctrl+L` 清屏（部分终端吞 Alt 时用 Ctrl+Shift 组合）；菜单内 `Shift+Tab` 反向循环选择项；无菜单时 `↑`/`↓` 浏览命令历史（持久化在 `.codeagent/history.txt`）。每轮提示符上方显示**状态栏**：`⏵ 模式 · 模型 · 目录 · token 用量`。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
+交互输入：输入 `/`（兼容全角 `／`）自动弹出**命令菜单**（**ANSI 原地渲染**：`↑`/`↓` 让 `>` 在列表内原地移动、`→` 把选中命令填充到输入行（不执行，可继续加参数）、回车执行、`Esc` 关闭、继续输入即过滤；**数字键 1-9 直接执行**；老式终端乱码时设 `"tuiAnsi": false` 退回滚动式）；**快捷键**：`Esc`（空输入时）撤回最近一轮对话（连按逐轮回退）、`Tab`（输入非 `/` 开头时）切换下一个工作模式（`/mode next`）、`Shift+Tab` 切换文件访问权限模式（strict→whitelist→full，`/access` 查看）、`Alt+M`（或 `Ctrl+Shift+M`）模式菜单、`Alt+U` 撤销、`Alt+D` 查看 diff、`Alt+N` 新建会话、`Ctrl+L` 清屏（部分终端吞 Alt 时用 Ctrl+Shift 组合）；菜单内 `Shift+Tab` 反向循环选择项；无菜单时 `↑`/`↓` 浏览命令历史、`Ctrl+R` 反向搜索历史（持久化在 `.codeagent/history.txt`）。每轮提示符上方显示**状态栏**：`⏵ 模式 · 模型 · 目录 · token 用量`。提示符显示当前模式、模型与目录，如 `[debug|laguna-s-2.1:free] CodeAgent>`。
 
 ## 工具一览
 
