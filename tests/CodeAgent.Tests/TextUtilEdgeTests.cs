@@ -338,4 +338,21 @@ public class TextUtilEdgeTests : IDisposable
         var gbk = System.Text.Encoding.GetEncoding("GB18030").GetBytes("构建成功，0 个警告");
         Assert.Equal("构建成功，0 个警告", TextUtil.DecodeSmart(gbk));
     }
+    [Fact]
+    public void DetectFileEncoding_ClassifiesBom_Gbk_AndUtf8()
+    {
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var bom = Path.Combine(_dir, "b.bin");
+        File.WriteAllBytes(bom, [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("x")]);
+        Assert.Equal("utf8-bom", TextUtil.DetectFileEncoding(bom));
+
+        var gbk = Path.Combine(_dir, "g.bin");
+        File.WriteAllBytes(gbk, System.Text.Encoding.GetEncoding("GB18030").GetBytes("中文"));
+        Assert.Equal("gb18030", TextUtil.DetectFileEncoding(gbk));
+
+        var utf8 = Path.Combine(_dir, "u.bin");
+        File.WriteAllBytes(utf8, System.Text.Encoding.UTF8.GetBytes("中文"));
+        Assert.Null(TextUtil.DetectFileEncoding(utf8));
+    }
+
 }
