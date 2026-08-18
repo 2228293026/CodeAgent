@@ -996,8 +996,9 @@ internal static class Program
 
             case "/stats":
                 Console.WriteLine(
-                    $"会话统计: 请求 {agent.ProviderCalls} 次，" +
-                    $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens");
+                    $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
+                    $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，" +
+                    $"当前上下文 ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}");
                 break;
 
             case "/tools":
