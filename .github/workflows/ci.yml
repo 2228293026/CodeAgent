@@ -18,6 +18,5 @@ jobs:
         run: dotnet format --verify-no-changes
       - name: Build
         run: dotnet build -c Release
-        run: dotnet build -c Release
       - name: Test
         run: dotnet test -c Release --no-build
