@@ -5,7 +5,7 @@ using static CodeAgent.Program;
 
 namespace CodeAgent.Tests;
 
-/// <summary>覆盖冲刺收尾：Glob/TextUtil/PercentOf/SplitCommand 批量 Theory 用例，凑足 1000+。</summary>
+/// <summary>Glob/TextUtil/PercentOf/SplitCommand 的批量 Theory 用例。</summary>
 public class FinalPushTests
 {
     // ===== Glob 正匹配（新组合）=====

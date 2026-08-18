@@ -8,7 +8,7 @@ using Xunit;
 
 namespace CodeAgent.Tests;
 
-/// <summary>覆盖冲刺：UndoManager / Workspace / HistoryStore / Modes / DiffUtil 剩余边界。</summary>
+/// <summary>UndoManager / Workspace / HistoryStore / Modes / DiffUtil 的剩余边界用例。</summary>
 public class FinalWaveTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "codeagent-final-" + Guid.NewGuid().ToString("N"));
