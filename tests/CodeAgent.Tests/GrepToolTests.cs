@@ -191,4 +191,19 @@ public class GrepToolTests : IDisposable
         Assert.Contains("这是老编码的中文内容", output);
     }
 
+    [Fact]
+    public async Task Grep_CaseSensitive_OverridesSmartCase()
+    {
+        // 智能大小写下全小写 pattern 忽略大小写；case_sensitive=true 应强制精确匹配
+        File.WriteAllText(Path.Combine(_dir, "a.cs"), "var id = 1;\nvar ID = 2;\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "id", ["case_sensitive"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a.cs:1", output);
+        Assert.DoesNotContain("a.cs:2", output); // ID 不再命中
+    }
+
 }
