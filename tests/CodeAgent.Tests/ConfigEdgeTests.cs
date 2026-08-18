@@ -31,6 +31,25 @@ public class ConfigEdgeTests : IDisposable
     // ===== ProviderOptions 默认值 =====
 
     [Fact]
+    public void Load_NormalizesStringEnumCaseAndWhitespace()
+    {
+        // 回归：手写配置 "High"/" FULL " 曾原样传给 Provider——OpenAI 侧静默不发送
+        // reasoning_effort、Anthropic 侧却按默认预算开启 thinking，同一配置两种行为
+        var path = WriteJson("""{"thinkingEffort":" High ","fileAccess":" FULL "}""");
+        var c = AgentConfig.Load(path);
+        Assert.Equal("high", c.ThinkingEffort);
+        Assert.Equal("full", c.FileAccess);
+    }
+
+    [Fact]
+    public void Load_InvalidEnumFallsBackToSafeDefault()
+    {
+        // 误拼值回退默认：fileAccess 应回退到更严格的 strict（不放开沙箱）
+        var path = WriteJson("""{"thinkingEffort":"banana","fileAccess":"fll"}""");
+        var c = AgentConfig.Load(path);
+        Assert.Equal("off", c.ThinkingEffort);
+        Assert.Equal("strict", c.FileAccess);
+    }
     public void ProviderOptions_HasSaneDefaults()
     {
         var p = new ProviderOptions();

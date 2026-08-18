@@ -193,6 +193,10 @@ public sealed class AgentConfig
             cfg.MaxHistoryChars = Math.Clamp(cfg.MaxHistoryChars, 1_000, 20_000_000);
             cfg.ContextWindow = Math.Clamp(cfg.ContextWindow, 0, 10_000_000);
             cfg.CommandTimeoutSeconds = Math.Clamp(cfg.CommandTimeoutSeconds, 1, 300);
+            // 字符串枚举归一化：手写配置的大小写/空白差异曾让同一值在不同 Provider 上行为分叉
+            //（如 "High" 在 OpenAI 侧静默不发送 reasoning_effort、在 Anthropic 侧却按默认预算开启 thinking）
+            cfg.ThinkingEffort = NormalizeChoice(cfg.ThinkingEffort, "off", "low", "medium", "high", "auto");
+            cfg.FileAccess = NormalizeChoice(cfg.FileAccess, "strict", "whitelist", "full");
             return cfg;
         }
         catch (JsonException ex)
@@ -204,6 +208,14 @@ public sealed class AgentConfig
     /// <summary>配置来源文件（用于日志展示），不参与序列化。</summary>
     [JsonIgnore]
     public string? SourceFile { get; private set; }
+
+    /// <summary>配置字符串枚举归一化：去空白 + 小写；不在候选集内回退第一个候选（默认值）。
+    /// FileAccess 的默认是更严格的 strict——误拼不放开沙箱。</summary>
+    private static string NormalizeChoice(string? value, params string[] allowed)
+    {
+        var v = value?.Trim().ToLowerInvariant();
+        return allowed.Contains(v) ? v! : allowed[0];
+    }
 
     /// <summary>以 camelCase 格式保存配置到指定路径。</summary>
     public static void Save(AgentConfig config, string path)
