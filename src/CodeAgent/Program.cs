@@ -776,6 +776,7 @@ internal static class Program
         Console.WriteLine($"  Provider : {config.Provider} ({opts.Type})");
         Console.WriteLine($"  Model    : {opts.Model}");
         Console.WriteLine($"  Mode     : {agent.CurrentMode.Name}");
+        Console.WriteLine($"  Thinking : {config.ThinkingEffort}{(config.ThinkingEffort == "auto" ? "（自动探测模型推理档位，状态栏显示实际生效值）" : "")}");
         Console.WriteLine($"  BaseUrl  : {opts.BaseUrl}");
         Console.WriteLine($"  Workspace: {Environment.CurrentDirectory}");
         if (agent.SessionPath is not null)
