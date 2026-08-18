@@ -279,4 +279,18 @@ public class AgentEdgeTests : IDisposable
         // 无 usage → 走估算分支；系统提示 11 个全角字 → ≥ 11
         Assert.True(agent.ContextTokens >= 11, $"CJK 估算 {agent.ContextTokens} 应接近字数而非字数/4");
     }
+    [Fact]
+    public void SetMode_UnknownCustomTool_WarnsButApplies()
+    {
+        var provider = new FakeProvider();
+        var agent = MakeAgent(provider);
+        var mode = new AgentMode("custom", "c", "prompt", ["read_file", "read_filles"]); // 末项拼错
+
+        agent.SetMode(mode);
+
+        Assert.Equal("custom", agent.CurrentMode.Name); // 模式仍生效
+        var tools = agent.ToolsForMode();
+        Assert.Single(tools); // 只有合法的 read_file 生效
+    }
+
 }

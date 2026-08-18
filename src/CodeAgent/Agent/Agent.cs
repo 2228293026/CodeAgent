@@ -146,8 +146,16 @@ public sealed partial class Agent
         CurrentMode = mode;
         if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
             _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(mode) };
+        // 自定义模式的工具名打错（不在注册表）时，ToolsForMode 会静默丢弃——
+        // 轻则少工具，重则整个模式无工具可用。提示而非沉默。
+        if (mode.AllowedTools is { } allowed)
+        {
+            var known = _tools.ToToolSpecs().Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var unknown = allowed.Where(t => !known.Contains(t)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (unknown.Count > 0)
+                Console.WriteLine($"⚠ 模式 {mode.Name} 引用了未知工具: {string.Join(", ", unknown)}（/tools 查看可用工具）");
+        }
     }
-
     /// <summary>code 模式使用配置的自定义 systemPrompt；其他模式用模式自身的提示词。</summary>
     private string EffectivePrompt(AgentMode mode) =>
         mode.Name == "code" ? _config.SystemPrompt : mode.SystemPrompt;
