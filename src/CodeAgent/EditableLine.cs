@@ -151,6 +151,22 @@ public sealed class EditableLine
 
     public void Home() => Cursor = 0;
 
+    /// <summary>光标移到当前行行首（多行输入的 Home 语义；单行时等价 Home）。</summary>
+    public void LineHome()
+    {
+        var text = _text.ToString();
+        var ls = Cursor > 0 ? text.LastIndexOf('\n', Cursor - 1) : -1;
+        Cursor = ls < 0 ? 0 : ls + 1;
+    }
+
+    /// <summary>光标移到当前行行尾（多行输入的 End 语义；单行时等价 End）。</summary>
+    public void LineEnd()
+    {
+        var text = _text.ToString();
+        var nl = text.IndexOf('\n', Cursor);
+        Cursor = nl < 0 ? text.Length : nl;
+    }
+
     public void End() => Cursor = _text.Length;
 
     public void Clear()

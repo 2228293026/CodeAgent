@@ -768,7 +768,7 @@ public static class InputLine
                 case ConsoleKey.Home:
                     if (!menuOpen)
                     {
-                        buf.Home();
+                        buf.LineHome(); // 多行输入：Home 到当前行行首
                         RedrawInput();
                     }
                     break;
@@ -776,7 +776,7 @@ public static class InputLine
                 case ConsoleKey.End:
                     if (!menuOpen)
                     {
-                        buf.End();
+                        buf.LineEnd();
                         RedrawInput();
                     }
                     break;

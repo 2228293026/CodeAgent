@@ -327,4 +327,20 @@ public class WordNavTests
         Assert.True(b.DeleteWordBackward()); // 删「 世界」
         Assert.Equal("你好", b.Text);
     }
+    [Fact]
+    public void LineHome_LineEnd_StayWithinCurrentLine()
+    {
+        var line = new EditableLine();
+        line.SetInitial("aa\nbb\ncc");
+        line.Home();
+        for (int i = 0; i < 5; i++) line.MoveRight(); // index 5（bb 行行尾的换行处）
+        line.LineHome();
+        Assert.Equal(3, line.Cursor); // bb 行首
+        line.LineEnd();
+        Assert.Equal(5, line.Cursor); // bb 行尾（\n 之前）
+        line.Home(); // 全局 Home 不受影响
+        Assert.Equal(0, line.Cursor);
+        line.LineEnd(); // 首行没有后续… 在 aa 行内 → 行尾 index 2
+        Assert.Equal(2, line.Cursor);
+    }
 }
