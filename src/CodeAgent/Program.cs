@@ -531,6 +531,7 @@ internal static class Program
             var shown = c < 0.01 ? c.ToString("F4") : c.ToString("F2"); // 小额保留 4 位小数避免 $0.00
             costText = $" ≈${shown}";
         }
+        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
@@ -573,6 +574,7 @@ internal static class Program
             "full" => "所有文件可读可写（完全放开）",
             _ => mode,
         };
+        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine($"已切换权限: {mode}（{desc}）");
         if (showHint)
@@ -601,16 +603,20 @@ internal static class Program
     }
 
     /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
+    /// <summary>深路径显示截断：超长时保留尾部（工作区名永远可见），前缀省略号。</summary>
+    internal static string TruncatePathHead(string path, int max = 42) =>
+        path.Length <= max ? path : "…" + path[^(max - 1)..];
+
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow)
     {
         var think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
-        // ctx：模型实际收到的上下文规模；配置了 contextWindow 时附窗口占比，便于判断何时 /compact
         var ctx = contextWindow > 0
             ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(agent.ContextTokens, contextWindow)}%)"
             : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
+        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
-            $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {Environment.CurrentDirectory} · " +
+            $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {shownCwd} · " +
             $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out · {ctx}{think}");
         SafeColor.Reset();
     }
@@ -1155,6 +1161,7 @@ internal static class Program
     /// <summary>模式切换的灰色单行确认（Tab / /mode 用；状态栏本轮跳过，避免模式名重复三处）。</summary>
     private static void PrintModeSwitched(AgentMode mode)
     {
+        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
         SafeColor.Reset();
