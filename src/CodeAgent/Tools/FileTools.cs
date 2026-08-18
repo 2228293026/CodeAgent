@@ -176,23 +176,21 @@ public sealed class EditFileTool : ITool
         var text = await File.ReadAllTextAsync(full, ct);
         var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
 
-        string result;
-        int count;
-        int firstIdx;
+        // 先统一做未命中检查：replace_all 模式下未命中也不允许静默写回原文件
+        // 并报「已替换 0 处」（曾让模型误以为修改成功，还往撤销栈里塞了无效条目）
+        int firstIdx = text.IndexOf(oldString, StringComparison.Ordinal);
+        if (firstIdx < 0)
+            throw new ToolException(
+                $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---");
+        int count = TextUtil.CountOccurrences(text, oldString);
 
+        string result;
         if (replaceAll)
         {
-            count = TextUtil.CountOccurrences(text, oldString);
             result = text.Replace(oldString, newString);
-            firstIdx = text.IndexOf(oldString, StringComparison.Ordinal);
         }
         else
         {
-            firstIdx = text.IndexOf(oldString, StringComparison.Ordinal);
-            if (firstIdx < 0)
-                throw new ToolException(
-                    $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---");
-            count = TextUtil.CountOccurrences(text, oldString);
             if (count > 1)
                 throw new ToolException(
                     $"old_string 在文件中出现 {count} 次，请扩大上下文使其唯一，或设置 replace_all=true。");

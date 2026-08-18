@@ -357,6 +357,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_ReplaceAll_NoMatch_Throws()
+    {
+        // 回归：replace_all 未命中时曾静默写回原文件并报「已替换 0 处」，
+        // 还往撤销栈塞了无效条目；应与单次替换一样明确报错
+        File.WriteAllText(Path.Combine(_dir, "rano.txt"), "aaa bbb");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "rano.txt", ["old_string"] = "zzz", ["new_string"] = "y", ["replace_all"] = true },
+                ctx, CancellationToken.None));
+        Assert.Contains("未找到 old_string", ex.Message);
+        Assert.Equal("aaa bbb", File.ReadAllText(Path.Combine(_dir, "rano.txt"))); // 文件未被改动
+        Assert.Equal(0, ctx.Undo.Count); // 失败不入撤销栈
+    }
+
+    [Fact]
     public async Task ReadFile_OffsetBeyondEnd_ReturnsEmpty()
     {
         // offset 超过文件行数时应友好提示而非崩溃
