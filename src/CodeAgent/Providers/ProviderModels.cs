@@ -79,6 +79,7 @@ public static class KnownContextWindows
 {
     private static readonly (string Prefix, int Tokens)[] Table =
     [
+        ("gpt-5.1", 400_000),
         ("gpt-5", 400_000),
         ("gpt-4.1", 1_000_000),
         ("gpt-4o", 128_000),
@@ -92,6 +93,9 @@ public static class KnownContextWindows
         ("qwen3", 131_072),
         ("qwen2.5-coder", 131_072),
         ("qwen-max", 131_072),
+        ("claude-opus-5", 200_000),
+        ("claude-sonnet-5", 1_000_000),
+        ("claude-haiku-4-5", 200_000),
         ("claude-opus-4", 200_000),
         ("claude-sonnet-4", 200_000),
         ("claude-haiku-4", 200_000),

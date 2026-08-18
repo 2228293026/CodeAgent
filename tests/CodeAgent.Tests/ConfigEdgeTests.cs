@@ -200,6 +200,10 @@ public class ConfigEdgeTests : IDisposable
     [InlineData("deepseek/deepseek-reasoner", 128_000)]
     [InlineData("qwen3-coder-plus", 262_144)]
     [InlineData("claude-sonnet-4-5", 200_000)]
+    [InlineData("claude-sonnet-5", 1_000_000)]      // 5 系 Sonnet 1M 窗口
+    [InlineData("claude-opus-5", 200_000)]
+    [InlineData("claude-haiku-4-5-20251001", 200_000)]
+    [InlineData("gpt-5.1", 400_000)]
     [InlineData("anthropic/claude-opus-4-5", 200_000)]
     [InlineData("gemini-2.5-flash", 1_000_000)]
     public void KnownContextWindows_RecognizesCommonModels(string model, int expected) =>
