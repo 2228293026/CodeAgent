@@ -1130,7 +1130,9 @@ internal static class Program
                         : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
                     Console.WriteLine(
                         $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
-                        $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，当前上下文 {ctxText}" +
+                        $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens" +
+                        (agent.TotalCachedTokens > 0 ? $"（其中缓存命中 {agent.TotalCachedTokens:N0}）" : "") +
+                        $"，当前上下文 {ctxText}" +
                         (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
                 }
                 break;

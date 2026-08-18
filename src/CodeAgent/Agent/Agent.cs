@@ -68,6 +68,7 @@ public sealed partial class Agent
     public int ProviderCalls { get; private set; }
     public long TotalInputTokens { get; private set; }
     public long TotalOutputTokens { get; private set; }
+    public long TotalCachedTokens { get; private set; }
 
     // 单轮统计（回合结束后用于摘要行）
     public int TurnRounds { get; private set; }
@@ -241,6 +242,8 @@ public sealed partial class Agent
                 TotalInputTokens += inTok;
             if (resp.OutputTokens is int outTok)
                 TotalOutputTokens += outTok;
+            if (resp.CachedTokens is int ccTok)
+                TotalCachedTokens += ccTok;
 
             _messages.Add(new ProviderMessage
             {
