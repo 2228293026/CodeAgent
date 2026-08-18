@@ -17,15 +17,17 @@
 - 🎭 多工作模式：`/mode` 或 Tab 切换内置 8 种（code/plan/explain/review/debug/refactor/test/doc）+ 配置自定义模式；只读模式自动隐藏并拦截写工具
 - 🎮 ADOFAI mod 适配：检测到 mod 项目自动注入开发上下文与 moddev / harmony / assetbundle 模式
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
-- ⌨️ 终端 TUI：斜杠命令菜单（过滤/方向键选择/数字执行/→ 填充）、命令历史（↑/↓，持久化）、TAB 补全、多行粘贴折叠、Ctrl+L 清屏、`[模式]` 提示符
+- ⌨️ 终端 TUI：斜杠命令菜单（过滤/方向键选择/数字执行/→ 填充）、命令历史（↑/↓，持久化、Ctrl+R 反向搜索）、TAB 补全、多行粘贴折叠、Ctrl+L 清屏、`[模式]` 提示符
 - 🔧 内置 10 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `bash` / `powershell` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
 - ↩️ 会话自动落盘：`--continue` 恢复最近会话、`/resume` 按编号恢复历史会话、Esc 多级撤回逐轮回退
-- 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）与思考强度；`/compact` 主动压缩历史
+- 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）与思考强度（`auto` 自动探测模型推理档位并取最高）；`/compact` 主动压缩历史（压缩过程显示进度）
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
 - 🛡️ 工作区沙箱：文件工具默认无法访问工作区之外；命令执行可选逐个确认
 - 🔐 文件访问分级：strict（默认沙箱）/ whitelist（沙箱 + 只读白名单）/ full（完全放开），`/access` 或 Shift+Tab 实时切换并持久化
-- 📝 会话日志：每轮对话写入 `.codeagent/sessions/*.jsonl`，可回看
+- 📝 会话日志：每轮对话写入 `.codeagent/sessions/*.jsonl`，可回看；超出 `maxSessionLogs`（默认 30）自动清理最旧日志
+- 🌍 编码自适应：读文件自动识别 BOM / UTF-8 / GB18030（GBK），中文老项目不乱码；写回与撤销保留原有 UTF-8 BOM
+- ⚠️ 截断告警：输出被 `maxTokens` 截断时（finish_reason=length / stop_reason=max_tokens）明确提示，回复不完整不再静默
 - 💬 两种用法：一次请求 `codeagent "任务"`，或交互式 REPL
 
 ## 快速开始
