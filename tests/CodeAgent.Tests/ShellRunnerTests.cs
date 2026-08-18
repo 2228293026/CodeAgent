@@ -164,7 +164,10 @@ public class ShellRunnerTests
     public void IsWslBash_DistinguishesSystem32FromGitBash()
     {
         // 回归：System32 下的 bash.exe 是 WSL 启动器，Git Bash 检测必须跳过，
-        // 否则装了 WSL 的机器上 where.exe/PATH 会优先命中它，命令被带进 Linux 子系统
+        // 否则装了 WSL 的机器上 where.exe/PATH 会优先命中它，命令被带进 Linux 子系统。
+        // System32 判定仅在 Windows 有意义（Linux 的 SpecialFolder.System 为空），其他平台跳过
+        if (!OperatingSystem.IsWindows())
+            return;
         var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
         Assert.True(ShellRunner.IsWslBash(System.IO.Path.Combine(system, "bash.exe")));
 

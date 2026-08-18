@@ -165,8 +165,9 @@ public class GrepToolTests : IDisposable
         var out1 = await tool.ExecuteAsync(
             new JsonObject { ["pattern"] = "hit", ["max_results"] = 5 }, ctx, CancellationToken.None);
         Assert.Contains("max_results=5", out1);
+        Assert.Contains("max_results=5", out1);
         Assert.Contains("hit4", out1);
-        Assert.DoesNotContain("hit5\n", out1 + "\n"); // 上限外的内容不出现
+        Assert.DoesNotContain("g.txt:6:", out1); // 上限外只有上下文行可见，无「第 6 条匹配」行
 
         // 未达上限：无提示
         var out2 = await tool.ExecuteAsync(

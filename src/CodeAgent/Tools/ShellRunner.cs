@@ -146,10 +146,11 @@ public static class ShellRunner
         return shell.ToLowerInvariant() switch
         {
             "sh" => ("/bin/sh", new[] { "-lc", command }),
+            // Unix 上 PowerShell 走 pwsh（曾落入默认 bash 分支：PowerShellTool 的命令被 bash 执行而报 127）
+            "powershell" or "pwsh" => ("pwsh", new[] { "-NoProfile", "-Command", command }),
             _ => ("/bin/bash", new[] { "-lc", command }),
         };
     }
-
     /// <summary>查找 Git Bash：常见路径 → PATH 上的 git.exe 反推安装根 → where.exe 解析。</summary>
     private static string? FindGitBash()
     {
