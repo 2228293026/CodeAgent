@@ -145,6 +145,14 @@ public sealed partial class Agent
         RollSessionLog();
         LogMessage(_messages[0]);
     }
+
+    /// <summary>当前生效的系统提示（消息里的实际值；/prompt 调试用）。</summary>
+    public string CurrentSystemPrompt =>
+        _messages.Count > 0 && _messages[0].Role == MessageRole.System
+            ? _messages[0].Content ?? ""
+            : EffectivePrompt(CurrentMode);
+
+    /// <summary>切换工作模式：替换系统提示并限制可用工具。</summary>
     public void SetMode(AgentMode mode)
     {
         CurrentMode = mode;

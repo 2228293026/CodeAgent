@@ -1377,6 +1377,15 @@ internal static class Program
                 }
                 break;
 
+            case "/prompt":
+                {
+                    // 查看当前生效的系统提示（模式提示 + ADOFAI 注入等叠加后的实际值）
+                    var p = agent.CurrentSystemPrompt;
+                    Console.WriteLine($"系统提示（{p.Length:N0} 字符，截断显示 2000）:");
+                    Console.WriteLine(TextUtil.Truncate(p, 2000));
+                }
+                break;
+
             case "/diag":
                 // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
                 Console.WriteLine("终端诊断:");
@@ -1500,6 +1509,7 @@ internal static class Program
               /model [名称|编号] 查看或切换模型（编号按完整列表）
               /provider [名]   查看或切换供应商（无需重启）
               /copy            复制最近一条助手回复到剪贴板
+              /prompt          查看当前生效的系统提示
               /config          显示当前配置
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导

@@ -307,4 +307,14 @@ public class AgentEdgeTests : IDisposable
         Assert.Null(agent.LastPrompt);
     }
 
+    [Fact]
+    public void CurrentSystemPrompt_TracksModeSwitch()
+    {
+        var agent = MakeAgent(new FakeProvider());
+        var before = agent.CurrentSystemPrompt;
+        agent.SetMode(Modes.Find("plan", new AgentConfig()));
+        Assert.NotEqual(before, agent.CurrentSystemPrompt); // 切模式后提示变化
+        Assert.Contains("PLAN mode", agent.CurrentSystemPrompt);
+    }
+
 }
