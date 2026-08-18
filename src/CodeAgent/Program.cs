@@ -1506,7 +1506,7 @@ internal static class Program
               /providers       显示已配置的 Provider
               /models [关键字]  列出/过滤模型（过滤时编号不变）
               /diag            显示终端环境诊断
-/history [N]      显示对话历史（N = 最近 N 条）
+              /history [N]      显示对话历史（N = 最近 N 条）
               /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
               /thinking        查看或设置思考强度（off/low/medium/high/auto）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
