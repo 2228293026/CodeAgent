@@ -718,6 +718,12 @@ internal static class Program
 
     private static void PrintBanner(AgentConfig config, ProviderOptions opts, AgentClass agent)
     {
+        try
+        {
+            // 终端标签页标题：多标签时快速区分项目/模型（不支持标题的终端静默忽略）
+            Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}";
+        }
+        catch { /* 平台不支持：忽略 */ }
         Console.WriteLine("── CodeAgent ─────────────────────────────────────────────");
         Console.WriteLine($"  Version  : {InformationalVersion}");
         Console.WriteLine($"  Provider : {config.Provider} ({opts.Type})");
@@ -919,6 +925,7 @@ internal static class Program
                         var savePath = ConfigSavePath(configPath, config);
                         AgentConfig.Save(config, savePath);
                         Console.WriteLine($"已切换模型: {opts.Model}，已保存到 {savePath}");
+                        try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
                     }
                     catch (Exception ex)
                     {
