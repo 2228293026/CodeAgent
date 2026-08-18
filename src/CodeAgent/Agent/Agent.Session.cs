@@ -7,7 +7,7 @@ namespace CodeAgent.Agent;
 
 /// <summary>Agent 的会话持久化部分：jsonl 逐条日志、命名快照、/export 导出（partial 拆分）。</summary>
 public sealed partial class Agent
- {
+{
     /// <summary>把当前对话保存为命名会话（.codeagent/sessions/&lt;name&gt;.json）。</summary>
     public void SaveSession(string name)
     {
@@ -244,4 +244,4 @@ public sealed partial class Agent
         public string name { get; set; } = "";
         public string arguments { get; set; } = "";
     }
- }
+}

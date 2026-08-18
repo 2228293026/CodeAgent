@@ -2,8 +2,8 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Text;
-using System.Threading;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent;
 using CodeAgent.Providers;
@@ -179,6 +179,6 @@ public class AnthropicProviderStreamTests
         Assert.NotNull(body?["messages"]);
         Assert.Single(body!["messages"]!.AsArray()); // system 走顶层，不进 messages
         Assert.Equal("sys", body["system"]!.GetValue<string>());
-        Assert.Equal(true, body["stream"]!.GetValue<bool>());
+        Assert.True(body["stream"]!.GetValue<bool>());
     }
 }

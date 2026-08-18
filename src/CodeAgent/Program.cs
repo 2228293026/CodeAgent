@@ -1085,7 +1085,7 @@ internal static class Program
                         $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens，当前上下文 {ctxText}" +
                         (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
                 }
-                    break;
+                break;
 
             case "/tools":
                 Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}）:");
