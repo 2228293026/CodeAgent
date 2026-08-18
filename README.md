@@ -150,7 +150,11 @@ CODEGENT_PROVIDER=anthropic codeagent
 codeagent "把 Program.cs 里的 TODO 都实现掉"
 codeagent --cwd ../some-project "解释一下这个项目怎么构建"
 codeagent --models                    # 列出当前 Provider 的可用模型
+codeagent --continue                  # 恢复本项目最近一次会话继续对话
+codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
 ```
+
+每条消息自动落盘到 `.codeagent/sessions/*.jsonl`（`saveSessions` 控制），`--continue` 恢复最近一次；会话内 `/resume` 列出最近 10 次并按编号恢复，`/clear` 后自动滚动新日志（不会误恢复已清空的历史）。
 
 ### 交互模式
 
