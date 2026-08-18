@@ -37,7 +37,7 @@
 cd CodeAgent
 dotnet build -c Release
 
-# 2. 交互式配置供应商（推荐：终端里选供应商、填模型，自动生成 codeagent.json）
+# 2. 交互式配置供应商（推荐：终端里选供应商、填模型，自动生成 codeagent.json，保存前自动测试连接）
 dotnet run --project src/CodeAgent -- --setup
 #    或先生成示例配置再手动编辑:  dotnet run --project src/CodeAgent -- --init
 
