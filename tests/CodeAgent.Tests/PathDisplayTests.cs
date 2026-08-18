@@ -43,4 +43,26 @@ public class PathDisplayTests
         Assert.Equal(3, hit.Count); // openai/gpt-5 也命中（子串）
         Assert.DoesNotContain("deepseek-chat", hit);
     }
+
+    [Fact]
+    public void SuggestModels_FamilyPrefix_FindsCandidates()
+    {
+        var models = new[] { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "deepseek-chat", "deepseek-reasoner" };
+        // 输入 gpt4o（拼错的家族名）：按首段 gpt4o 匹配 → 无；用 gpt 匹配的调用方语义
+        Assert.Empty(Program.SuggestModels(models, "gpt4o"));
+        // 正确家族段：gpt → 前 3 个 gpt 系
+        var gpt = Program.SuggestModels(models, "gpt-4o-min");
+        Assert.Equal(3, gpt.Count);
+        Assert.All(gpt, m => Assert.StartsWith("gpt", m));
+        // deepseek 家族
+        var ds = Program.SuggestModels(models, "deepseek-cht"); // 拼错 chat → cht
+        Assert.Equal(2, ds.Count);
+    }
+
+    [Fact]
+    public void SuggestModels_EmptyFamily_ReturnsEmpty()
+    {
+        Assert.Empty(Program.SuggestModels(["a", "b"], "-x"));
+        Assert.Empty(Program.SuggestModels(["a"], ".y"));
+    }
 }

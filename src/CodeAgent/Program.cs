@@ -644,6 +644,19 @@ internal static class Program
 
     /// <summary>列出当前 Provider 的可用模型，并用 * 标记当前配置的模型。</summary>
     /// <summary>按关键字过滤模型列表（忽略大小写子串）；null/空 = 不过滤。</summary>
+    /// <summary>从模型列表中找与输入相近的候选（按输入首个家族段做包含匹配，忽略大小写；最多 max 个）。</summary>
+    internal static IReadOnlyList<string> SuggestModels(IReadOnlyList<string> models, string input, int max = 3)
+    {
+        var family = input.Split('-', '.')[0];
+        if (family.Length == 0)
+            return [];
+        return models
+            .Where(m => m.Contains(family, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(max)
+            .ToList();
+    }
+
     internal static IReadOnlyList<string> FilterModels(IReadOnlyList<string> models, string? filter) =>
         string.IsNullOrWhiteSpace(filter) ? models : models.Where(m => m.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
@@ -832,8 +845,7 @@ internal static class Program
                             var knownModels = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
                             if (knownModels.Count > 0 && !knownModels.Contains(modelArg, StringComparer.OrdinalIgnoreCase))
                             {
-                                var near = knownModels.Where(m => m.Contains(modelArg.Split('-', '.')[0], StringComparison.OrdinalIgnoreCase))
-                                                .Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+                                var near = SuggestModels(knownModels, modelArg);
                                 Console.WriteLine($"⚠ 模型列表中没有「{modelArg}」（共 {knownModels.Count} 个模型）");
                                 if (near.Count > 0)
                                     Console.WriteLine($"  相近的模型: {string.Join("、", near)}");
