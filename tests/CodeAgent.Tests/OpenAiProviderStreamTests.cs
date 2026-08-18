@@ -159,4 +159,28 @@ public class OpenAiProviderStreamTests
         Assert.True(payload["stream"]!.GetValue<bool>());
         Assert.NotNull(payload["stream_options"]); // include_usage
     }
+
+    [Fact]
+    public async Task ChatStreamAsync_NonStringDeltaFields_SkippedNotThrown()
+    {
+        // 回归：不合规代理可能把 reasoning/content 发成非字符串（数字/对象）；
+        // 曾用 GetValue<string> 直接抛异常中断整个流，现在跳过该增量
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"reasoning_content":123,"content":"好的"}}]}
+
+                data: {"choices":[{"delta":{"content":{"type":"text","text":"x"}}}]}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }], [], "off",
+            null, null, null, CancellationToken.None);
+
+        Assert.Equal("好的", resp.Text); // 非字符串增量被跳过，合法增量照常累积
+    }
 }

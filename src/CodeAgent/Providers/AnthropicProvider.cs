@@ -258,14 +258,13 @@ public sealed class AnthropicProvider : IAgentProvider
                     if (dtype == "thinking_delta")
                     {
                         // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示
-                        var t = delta?["thinking"]?.GetValue<string>() ?? "";
-                        if (t.Length > 0)
+                        if (delta?["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var t) && t.Length > 0)
                             onReasoning?.Invoke(t);
                     }
                     else if (dtype == "text_delta")
                     {
-                        var t = delta?["text"]?.GetValue<string>() ?? "";
-                        if (t.Length > 0)
+                        // TryGetValue：非字符串形态（不合规代理）跳过该增量而不是抛异常中断流
+                        if (delta?["text"] is JsonValue tv && tv.TryGetValue<string>(out var t) && t.Length > 0)
                         {
                             text.Append(t);
                             onText?.Invoke(t);
