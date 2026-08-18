@@ -1295,7 +1295,7 @@ internal static class Program
               /clear           清空对话历史
               /compact         压缩对话历史为摘要（/clear 是彻底清空）
               /cls             清空屏幕（或按 Ctrl+L）
-              /model [名称]    查看或切换模型
+              /model [名称|编号] 查看或切换模型（编号按完整列表）
               /config          显示当前配置
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导
@@ -1308,11 +1308,11 @@ internal static class Program
               /retry           重新执行上一条请求
               /tools           列出可用工具
               /providers       显示已配置的 Provider
-              /models [关键字]  列出/过滤当前 Provider 的可用模型
+              /models [关键字]  列出/过滤模型（过滤时编号不变）
               /diag            显示终端环境诊断
               /history         显示当前对话历史
               /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
-              /thinking        查看或设置思考强度（off/low/medium/high）
+              /thinking        查看或设置思考强度（off/low/medium/high/auto）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /access [模式]   查看或切换文件访问权限（strict/whitelist/full，next 循环切换）
               /exit, /quit     退出
