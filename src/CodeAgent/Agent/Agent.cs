@@ -20,7 +20,7 @@ public sealed class Agent
     private readonly List<ProviderMessage> _messages = [];
     private StreamWriter? _sessionLog; // 非 readonly：/clear 与恢复会话时会滚动到新日志文件
 
-    public Agent(AgentConfig config, IAgentProvider provider, ToolRegistry tools)
+    public Agent(AgentConfig config, IAgentProvider provider, ToolRegistry tools, string? workingDirectory = null)
     {
         _provider = provider;
         _tools = tools;
@@ -28,7 +28,7 @@ public sealed class Agent
         _ctx = new AgentContext
         {
             Config = config,
-            Workspace = new Workspace(Environment.CurrentDirectory, config.ReadOnlyDirs, config.FileAccess),
+            Workspace = new Workspace(workingDirectory ?? Environment.CurrentDirectory, config.ReadOnlyDirs, config.FileAccess),
         };
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = config.SystemPrompt });
 
@@ -799,25 +799,8 @@ public sealed class Agent
     private async Task<List<ProviderMessage>> ExecuteToolCallsAsync(IReadOnlyList<ToolCall> calls, CancellationToken ct)
     {
         var results = new List<ProviderMessage>(calls.Count);
-
+        var conflict = _ctx.Config.ConfirmCommands || DetectWriteConflict(calls, ResolveForConflict);
         // 确认模式下逐个确认命令，输入会串扰，必须顺序执行；同路径写操作并发会互相覆盖，也顺序执行
-        var conflict = _ctx.Config.ConfirmCommands;
-        if (!conflict)
-        {
-            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var tc in calls)
-            {
-                if (tc.Name is "write_file" or "edit_file")
-                {
-                    var p = ExtractPath(tc.ArgumentsJson);
-                    if (p.Length > 0 && !paths.Add(p))
-                    {
-                        conflict = true;
-                        break;
-                    }
-                }
-            }
-        }
 
         if (conflict || calls.Count <= 1)
         {
@@ -954,7 +937,40 @@ public sealed class Agent
         };
     }
 
+    /// <summary>检测同批次内是否有指向同一文件的多个写操作（write_file/edit_file）。
+    /// 路径比较必须先归一化：write_file("a.txt") 与 edit_file("./a.txt") 文本不同但同一文件，
+    /// 不归一化会被误判为无冲突而并行执行，造成丢失更新。</summary>
+    internal static bool DetectWriteConflict(IReadOnlyList<ToolCall> calls, Func<string, string> resolvePath)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tc in calls)
+        {
+            if (tc.Name is "write_file" or "edit_file")
+            {
+                var p = resolvePath(ExtractPath(tc.ArgumentsJson));
+                if (p.Length > 0 && !paths.Add(p))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>冲突检测用的路径归一化：解析成绝对路径；解析失败（非法/越界路径）时回退原始文本。</summary>
+    internal string ResolveForConflict(string path)
+    {
+        if (path.Length == 0)
+            return path;
+        try
+        {
+            return _ctx.Workspace.Resolve(path);
+        }
+        catch
+        {
+            return path;
+        }
+    }
     /// <summary>从工具参数 JSON 中提取目标文件路径（用于检测同路径写冲突）。</summary>
+
     private static string ExtractPath(string argsJson)
     {
         try

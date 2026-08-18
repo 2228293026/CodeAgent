@@ -214,4 +214,43 @@ public class AgentLoopTests : IDisposable
         Assert.True(agent.ProviderCalls <= 4, $"不应超过上限太多（实际调用 {agent.ProviderCalls} 次）");
         Assert.True(agent.LastTurnFailed, "达到轮数上限应标记为失败（REPL 显示 ⚠、一次性模式退出码非 0）");
     }
+
+    [Fact]
+    public async Task RunAsync_SameFileDifferentPathSpellings_SerializesWrites()
+    {
+        // 回归：write_file("same.txt") 与 edit_file("./same.txt") 文本不同但指向同一文件，
+        // 曾被判为无冲突而并行执行，造成丢失更新（edit 竞争读不到 write 的结果）。
+        // 冲突判定是纯逻辑（DetectWriteConflict），这里直接验证归一化后能识别同一文件
+        ToolCall[] calls =
+        [
+            new() { Id = "w1", Name = "write_file", ArgumentsJson = """{"path":"same.txt","content":"x"}""" },
+            new() { Id = "e1", Name = "edit_file", ArgumentsJson = """{"path":"./same.txt","old_string":"a","new_string":"b"}""" },
+        ];
+        string Resolve(string p) => Path.GetFullPath(Path.Combine(_dir, p));
+        Assert.True(AgentClass.DetectWriteConflict(calls, Resolve));
+
+        // 大小写与子目录回溯也算同一文件（Windows 大小写不敏感）
+        ToolCall[] caseCalls =
+        [
+            new() { Id = "w2", Name = "write_file", ArgumentsJson = """{"path":"Same.TXT","content":"x"}""" },
+            new() { Id = "e2", Name = "edit_file", ArgumentsJson = """{"path":"sub/../same.txt","old_string":"a","new_string":"b"}""" },
+        ];
+        Assert.True(AgentClass.DetectWriteConflict(caseCalls, Resolve));
+
+        // 不同文件、以及不含写操作的批次：无冲突
+        ToolCall[] noConflict =
+        [
+            new() { Id = "w3", Name = "write_file", ArgumentsJson = """{"path":"a.txt","content":"x"}""" },
+            new() { Id = "e3", Name = "edit_file", ArgumentsJson = """{"path":"b.txt","old_string":"a","new_string":"b"}""" },
+            new() { Id = "r1", Name = "read_file", ArgumentsJson = """{"path":"a.txt"}""" },
+        ];
+        Assert.False(AgentClass.DetectWriteConflict(noConflict, Resolve));
+        // 生产路径归一化本身：同一 Agent 实例下不同写法解析到同一绝对路径
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false }, new FakeProvider(),
+            ToolRegistry.CreateDefault(), workingDirectory: _dir);
+        var a1 = agent.ResolveForConflict("same.txt");
+        var a2 = agent.ResolveForConflict("./sub/../Same.txt");
+        Assert.Equal(a1, a2, StringComparer.OrdinalIgnoreCase);
+    }
 }
