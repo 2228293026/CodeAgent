@@ -588,4 +588,24 @@ public class FileToolsTests : IDisposable
         Assert.Contains("中文内容", output);
     }
 
+    [Fact]
+    public async Task EditFile_PreservesUtf8Bom()
+    {
+        // 回归：改写曾丢 BOM——PowerShell 5.1 等工具靠 BOM 识别 UTF-8，丢掉后中文变乱码
+        var path = Path.Combine(_dir, "bom.txt");
+        File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("hello BOM world")]);
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bom.txt", ["old_string"] = "BOM", ["new_string"] = " бом" },
+            ctx, CancellationToken.None);
+
+        var bytes = await File.ReadAllBytesAsync(path);
+        Assert.True(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF,
+            "改写后应保留 UTF-8 BOM");
+        var text = System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
+        Assert.Contains(" бом", text); // 替换内容也正确写入
+    }
+
 }

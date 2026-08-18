@@ -123,7 +123,7 @@ public sealed class WriteFileTool : ITool
 
         try
         {
-            await File.WriteAllTextAsync(full, content, ct);
+            await TextUtil.WriteTextPreserveBomAsync(full, content, ct);
         }
         catch (IOException ex)
         {
@@ -208,7 +208,7 @@ public sealed class EditFileTool : ITool
         // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对；
         // 先写入成功再入栈，失败不污染撤销历史
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
-        await File.WriteAllTextAsync(full, result, ct);
+        await TextUtil.WriteTextPreserveBomAsync(full, result, ct);
 
         ctx.Undo.Push(new UndoEntry
         {
@@ -293,4 +293,5 @@ public sealed class ListDirectoryTool : ITool
         var head = string.IsNullOrWhiteSpace(path) ? $"工作区根目录 {ctx.Workspace.Root}\n" : $"目录 {path}\n";
         return head + sb.ToString().TrimEnd() + (emitted >= cap ? "\n…(条目过多，已截断)" : "");
     }
+
 }

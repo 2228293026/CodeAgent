@@ -37,6 +37,21 @@ public static class TextUtil
     public static async Task<string> ReadTextSmartAsync(string path, CancellationToken ct = default) =>
         DecodeSmart(await File.ReadAllBytesAsync(path, ct));
 
+    /// <summary>写入文本：目标已存在且带 UTF-8 BOM 时保留 BOM。
+    /// 部分 Windows 工具（PowerShell 5.1、老编辑器）靠 BOM 识别 UTF-8，
+    /// 改写后 BOM 丢失会让其中的中文变成乱码。</summary>
+    public static async Task WriteTextPreserveBomAsync(string path, string content, CancellationToken ct = default)
+    {
+        bool keepBom = false;
+        if (File.Exists(path))
+        {
+            var head = new byte[3];
+            using (var fs = File.OpenRead(path))
+                keepBom = await fs.ReadAsync(head.AsMemory(0, 3), ct) == 3
+                          && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
+        }
+        await File.WriteAllTextAsync(path, content, new System.Text.UTF8Encoding(keepBom), ct);
+    }
     private static string DecodeSmart(byte[] bytes)
     {
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
