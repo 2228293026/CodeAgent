@@ -29,7 +29,7 @@
 - 📝 会话日志：每轮对话写入 `.codeagent/sessions/*.jsonl`，可回看；超出 `maxSessionLogs`（默认 30）自动清理最旧日志
 - 🌍 编码自适应：读文件自动识别 BOM / UTF-8 / GB18030（GBK），中文老项目不乱码；写回与撤销保留原有 UTF-8 BOM
 - ⚠️ 截断告警：输出被 `maxTokens` 截断时（finish_reason=length / stop_reason=max_tokens）明确提示，回复不完整不再静默
-- 💬 两种用法：一次请求 `codeagent "任务"`，或交互式 REPL
+- 💬 两种用法：一次请求 `codeagent "任务"`（支持管道附加 stdin 内容），或交互式 REPL
 
 ## 快速开始
 

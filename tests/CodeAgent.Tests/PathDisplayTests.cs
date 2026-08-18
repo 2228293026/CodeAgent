@@ -90,4 +90,17 @@ public class PathDisplayTests
         Assert.Empty(Program.SuggestModels(["a", "b"], "-x"));
         Assert.Empty(Program.SuggestModels(["a"], ".y"));
     }
+    [Fact]
+    public void ComposeTaskWithStdin_AppendsWhenPiped()
+    {
+        // type bug.log | codeagent "分析"：stdin 内容附在任务后；空 stdin 原样返回
+        var composed = Program.ComposeTaskWithStdin("分析日志", "ERROR at line 3");
+        Assert.StartsWith("分析日志", composed);
+        Assert.Contains("[stdin 输入]", composed);
+        Assert.Contains("ERROR at line 3", composed);
+
+        Assert.Equal("分析日志", Program.ComposeTaskWithStdin("分析日志", ""));
+        Assert.Equal("分析日志", Program.ComposeTaskWithStdin("分析日志", "  \n"));
+    }
+
 }

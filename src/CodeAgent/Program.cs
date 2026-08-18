@@ -229,7 +229,9 @@ internal static class Program
         {
             try
             {
-                var result = await RunTurnAsync(t => agent.RunAsync(string.Join(" ", positional), t));
+                var task = ComposeTaskWithStdin(string.Join(" ", positional),
+                    Console.IsInputRedirected ? await Console.In.ReadToEndAsync() : "");
+                var result = await RunTurnAsync(t => agent.RunAsync(task, t));
                 if (IsCancelledTurn(result))
                     result = "\n⏹ 已取消。"; // 哨兵映射回显示文本（一次性模式没有草稿回填）
                 PrintResult(result, agent.StreamedLastRun, prefixNewline: false);
@@ -788,6 +790,15 @@ internal static class Program
     }
     /// <summary>有效上下文窗口：contextWindow 配置 > 内置模型表 > /models 元数据探测（仅对探测时模型有效）。
     /// 0 = 未知（显示层退回绝对值）。REPL 状态栏与 /stats 共用。</summary>
+    /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
+    /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
+    /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。</summary>
+    internal static string ComposeTaskWithStdin(string task, string stdin)
+    {
+        if (string.IsNullOrWhiteSpace(stdin))
+            return task;
+        return task + "\n\n[stdin 输入]\n" + TextUtil.Truncate(stdin.TrimEnd(), 100_000);
+    }
     internal static int EffectiveContextWindow(AgentConfig config, ProviderOptions opts, ContextProbeState? probe)
     {
         if (config.ContextWindow > 0)
@@ -801,7 +812,6 @@ internal static class Program
         return 0;
     }
 
-    /// <summary>后台上下文窗口探测状态：/model 换模型后旧结果作废并重启探测。</summary>
     /// <summary>后台上下文窗口探测状态：/model 换模型后旧结果作废并重启探测。</summary>
     internal sealed class ContextProbeState
     {
@@ -1483,7 +1493,7 @@ internal static class Program
               /access [模式]   查看或切换文件访问权限（strict/whitelist/full，next 循环切换）
               /exit, /quit     退出
             用法:
-              codeagent "帮我给项目写个 README"    一次性任务
+              codeagent "帮我给项目写一个 README"  一次性任务（管道输入会附加到任务后：`type bug.log | codeagent "分析"`）
               codeagent                           进入交互模式
             参数:
               -c, --config <路径>  指定配置文件
