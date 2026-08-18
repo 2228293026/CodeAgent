@@ -532,7 +532,6 @@ internal static class Program
             var shown = c < 0.01 ? c.ToString("F4") : c.ToString("F2"); // 小额保留 4 位小数避免 $0.00
             costText = $" ≈${shown}";
         }
-        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
@@ -575,7 +574,6 @@ internal static class Program
             "full" => "所有文件可读可写（完全放开）",
             _ => mode,
         };
-        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine($"已切换权限: {mode}（{desc}）");
         if (showHint)
@@ -1170,7 +1168,6 @@ internal static class Program
     /// <summary>模式切换的灰色单行确认（Tab / /mode 用；状态栏本轮跳过，避免模式名重复三处）。</summary>
     private static void PrintModeSwitched(AgentMode mode)
     {
-        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
         SafeColor.Reset();
