@@ -302,7 +302,7 @@ public static class InputLine
         ("/retry", "Re-run last request"),
         ("/tools", "List available tools"),
         ("/providers", "List configured providers"),
-        ("/models", "List available models"),
+        ("/models", "List available models (filterable)"),
         ("/diag", "Show terminal diagnostics"),
         ("/history", "Show conversation history"),
         ("/thinking", "Adjust model thinking effort"),
