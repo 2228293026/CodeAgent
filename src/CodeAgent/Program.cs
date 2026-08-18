@@ -119,7 +119,8 @@ internal static class Program
             var target = Path.Combine(Environment.CurrentDirectory, "codeagent.json");
             if (File.Exists(target))
             {
-                Console.WriteLine($"codeagent.json 已存在: {target}");
+                Console.WriteLine($"codeagent.json 已存在: {target}（未覆盖——误删配置防护；删除后重跑 --init 可重新生成）");
+                return 0;
             }
             AgentConfig.WriteExample(target);
             Console.WriteLine($"已生成示例配置: {target}");
