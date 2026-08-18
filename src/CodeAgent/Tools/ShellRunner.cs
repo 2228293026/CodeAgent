@@ -87,6 +87,32 @@ public static class ShellRunner
         return "";
     }
 
+    /// <summary>命令类工具（run_command / bash / powershell）的共用执行管线：
+    /// 参数校验、鉴权、超时收敛、目录解析、确认、撤销快照与结果记录——三者行为完全一致，只差 shell 选择。</summary>
+    internal static async Task<string> ExecuteCommandToolAsync(string shell, JsonObject? args, AgentContext ctx, CancellationToken ct)
+    {
+        var command = ToolArgs.GetString(args, "command");
+        if (string.IsNullOrWhiteSpace(command))
+            throw new ToolException("缺少必填参数 command");
+
+        if (!ctx.Config.AllowCommands)
+            return "命令执行被禁用（config.AllowCommands = false）。";
+
+        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", ctx.Config.CommandTimeoutSeconds), 1, 300);
+        var cwdArg = ToolArgs.GetString(args, "cwd");
+        var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
+        var env = ToolArgs.GetStringDict(args, "env");
+
+        if (ctx.Config.ConfirmCommands && !await ConfirmAsync(command))
+            return "用户已取消命令执行。";
+
+        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚命令对文件的改动）
+        var snapshot = UndoManager.SnapshotDir(cwd);
+        var (_, output) = await RunAsync(shell, command, cwd, timeout, ct, env);
+        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
+        return output;
+    }
+
     /// <summary>命令确认询问，返回是否放行。</summary>
     public static async Task<bool> ConfirmAsync(string command)
     {
@@ -262,29 +288,8 @@ public sealed class BashTool : ITool
         ["required"] = new JsonArray("command"),
     };
 
-    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
-    {
-        var command = ToolArgs.GetString(args, "command");
-        if (string.IsNullOrWhiteSpace(command))
-            throw new ToolException("缺少必填参数 command");
-
-        if (!ctx.Config.AllowCommands)
-            return "命令执行被禁用（config.AllowCommands = false）。";
-
-        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", ctx.Config.CommandTimeoutSeconds), 1, 300);
-        var cwdArg = ToolArgs.GetString(args, "cwd");
-        var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
-        var env = ToolArgs.GetStringDict(args, "env");
-
-        if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
-            return "用户已取消命令执行。";
-
-        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚 bash 对文件的改动）
-        var snapshot = UndoManager.SnapshotDir(cwd);
-        var (_, output) = await ShellRunner.RunAsync("bash", command, cwd, timeout, ct, env);
-        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
-        return output;
-    }
+    public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct) =>
+        ShellRunner.ExecuteCommandToolAsync("bash", args, ctx, ct);
 }
 
 /// <summary>在 PowerShell 中执行命令（优先 pwsh 7，否则 Windows PowerShell 5.1）。</summary>
@@ -306,29 +311,9 @@ public sealed class PowerShellTool : ITool
         ["required"] = new JsonArray("command"),
     };
 
-    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
-    {
-        var command = ToolArgs.GetString(args, "command");
-        if (string.IsNullOrWhiteSpace(command))
-            throw new ToolException("缺少必填参数 command");
-
-        if (!ctx.Config.AllowCommands)
-            return "命令执行被禁用（config.AllowCommands = false）。";
-
-        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", ctx.Config.CommandTimeoutSeconds), 1, 300);
-        var cwdArg = ToolArgs.GetString(args, "cwd");
-        var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
-        var env = ToolArgs.GetStringDict(args, "env");
-
-        if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
-            return "用户已取消命令执行。";
-
+    public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct) =>
         // Windows：无 pwsh 7 时用系统自带的 Windows PowerShell 5.1；其他平台需要 pwsh
-        var shell = OperatingSystem.IsWindows() && ShellRunner.FindPwsh() is null ? "powershell" : "pwsh";
-        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚 powershell 对文件的改动）
-        var snapshot = UndoManager.SnapshotDir(cwd);
-        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct, env);
-        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
-        return output;
-    }
+        ShellRunner.ExecuteCommandToolAsync(
+            OperatingSystem.IsWindows() && ShellRunner.FindPwsh() is null ? "powershell" : "pwsh",
+            args, ctx, ct);
 }

@@ -25,28 +25,9 @@ public sealed class CommandTool : ITool
         ["required"] = new JsonArray("command"),
     };
 
-    public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
+    public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
-        var command = ToolArgs.GetString(args, "command");
-        if (string.IsNullOrWhiteSpace(command))
-            throw new ToolException("缺少必填参数 command");
-
-        if (!ctx.Config.AllowCommands)
-            return "命令执行被禁用（config.AllowCommands = false）。";
-
-        var timeout = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", ctx.Config.CommandTimeoutSeconds), 1, 300);
-        var cwdArg = ToolArgs.GetString(args, "cwd");
-        var cwd = ctx.Workspace.Resolve(string.IsNullOrWhiteSpace(cwdArg) ? null : cwdArg);
-        var env = ToolArgs.GetStringDict(args, "env");
-
-        if (ctx.Config.ConfirmCommands && !await ShellRunner.ConfirmAsync(command))
-            return "用户已取消命令执行。";
-
         var shell = string.IsNullOrWhiteSpace(ctx.Config.Shell) ? ShellRunner.AutoShell() : ctx.Config.Shell;
-        // 命令副作用撤销：执行前对工作区做文件快照，执行后把新增/修改/删除的文件推入撤销栈（/undo 可回滚）
-        var snapshot = UndoManager.SnapshotDir(cwd);
-        var (_, output) = await ShellRunner.RunAsync(shell, command, cwd, timeout, ct, env);
-        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
-        return output;
+        return ShellRunner.ExecuteCommandToolAsync(shell, args, ctx, ct);
     }
 }
