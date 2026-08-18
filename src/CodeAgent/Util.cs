@@ -308,26 +308,29 @@ public static class DiffUtil
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"--- a/{path}");
         sb.AppendLine($"+++ b/{path}");
-        var firstChange = ops.FindIndex(o => o.Op != ' ');
-        if (firstChange >= 0)
-        {
-            var oldLine = 1 + ops.Take(firstChange).Count(o => o.Op != '+');
-            var newLine = 1 + ops.Take(firstChange).Count(o => o.Op != '-');
-            sb.AppendLine($"@@ -{oldLine} +{newLine} @@");
-        }
+        // 多处修改分段输出：每段一个 @@ 头（头内行号准确），
+        // 曾全程只发一个头，第二处修改之后的行号全部错位
         const int ctx = 2;
+        int oldPos = 0, newPos = 0;
+        var inHunk = false;
         for (int i = 0; i < ops.Count; i++)
         {
+            var (op, line) = ops[i];
             var near = ops.Skip(Math.Max(0, i - ctx)).Take(ctx).Concat(ops.Skip(i + 1).Take(ctx)).Any(o => o.Op != ' ');
-            if (ops[i].Op == ' ')
+            var emit = op != ' ' || near;
+            if (emit && !inHunk)
             {
-                if (near)
-                    sb.AppendLine("  " + ops[i].Line);
+                sb.AppendLine($"@@ -{oldPos + 1} +{newPos + 1} @@");
+                inHunk = true;
             }
-            else
+            else if (!emit)
             {
-                sb.AppendLine($"{(ops[i].Op == '-' ? "- " : "+ ")}{ops[i].Line}");
+                inHunk = false;
             }
+            if (emit)
+                sb.AppendLine(op == ' ' ? "  " + line : $"{op} {line}");
+            if (op != '+') oldPos++;
+            if (op != '-') newPos++;
         }
         return sb.ToString().TrimEnd();
     }

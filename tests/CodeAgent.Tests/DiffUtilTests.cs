@@ -73,4 +73,21 @@ public class DiffUtilTests
         Assert.Contains("- b", d);
         Assert.DoesNotContain("+ a", d); // 内容行不是新增行
     }
+
+    [Fact]
+    public void Unified_TwoDistantChanges_EmitsTwoHunksWithCorrectNumbers()
+    {
+        // 回归：曾全程只发一个 @@ 头，第二处修改的行号沿用第一处，全部错位
+        var oldText = string.Join("\n", Enumerable.Range(1, 30).Select(i => $"line{i}"));
+        var newText = oldText.Replace("line2\n", "LINE2\n").Replace("\nline28", "\nLINE28"); // 带换行锚定，避免误伤 line2x
+
+        var d = DiffUtil.Unified(oldText, newText, "a.txt");
+
+        var headers = System.Text.RegularExpressions.Regex.Matches(d, @"@@ -(\d+) \+(\d+) @@");
+        Assert.True(headers.Count >= 2, $"两处远距修改应至少两个 @@ 头，实际 {headers.Count}: {d}");
+        // 第一处在 line2：上下文窗口覆盖第 1 行附近
+        Assert.Equal("1", headers[0].Groups[1].Value);
+        // 第二处在 line28：旧侧行号应为 26（28-2 上下文），不再是 1
+        Assert.Equal("26", headers[^1].Groups[1].Value);
+    }
 }
