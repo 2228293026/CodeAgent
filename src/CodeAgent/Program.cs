@@ -274,6 +274,14 @@ internal static class Program
             return 0;
         }
 
+        // 切换块原地覆盖按「提示符占一行」计算：窄终端 + 长模式/模型/目录名会让提示符折行，
+        // 此时退回追加模式，避免错位覆盖（留 8 列余量吸收目录里的 CJK 双宽字符）
+        bool PromptFitsOneRow()
+        {
+            try { return PromptFor(opts, agent).TrimStart('\n').Length < Console.WindowWidth - 8; }
+            catch { return true; }
+        }
+
         // 清掉上一会话遗留的输入缓冲（否则新会话一启动就被旧按键触发菜单/命令，显得"诡异"）
         try
         {
@@ -325,7 +333,7 @@ internal static class Program
                     // 「消息+空行+提示符」三行块——光标此刻在旧提示符行的下一行行首，上移 3 行即块顶
                     var (peekCmd, peekRest) = SplitCommand(line);
                     var isSwitch = IsSwitchCommand(peekCmd, peekRest);
-                    if (isSwitch && couldOverwriteBlock && ansiOk)
+                    if (isSwitch && couldOverwriteBlock && ansiOk && PromptFitsOneRow())
                         Console.Write("\x1b[3A");
                     var suppress = HandleCommand(line, config, configPath, ref opts, agent, ref providerInst, tools);
                     skipStatusBar = suppress;
