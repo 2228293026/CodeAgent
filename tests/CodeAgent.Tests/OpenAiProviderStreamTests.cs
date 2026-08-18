@@ -200,4 +200,22 @@ public class OpenAiProviderStreamTests
                 [], "off", null, null, null, CancellationToken.None));
         Assert.Contains("rate limited", ex.Message);
     }
+
+    [Fact]
+    public async Task ChatStreamAsync_RateLimitError_IsRetryable()
+    {
+        // 限流类型的流中错误应标记 Retryable（Agent 在未输出文本时会自动退避重试）
+        var http = new HttpClient(new SseHandler
+        {
+            Body = "data: {\"error\":{\"message\":\"slow down\",\"code\":429}}\n\ndata: [DONE]\n\n",
+        });
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "k" }, http);
+
+        var ex = await Assert.ThrowsAsync<ProviderException>(() =>
+            provider.ChatStreamAsync(
+                [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+                [], "off", null, null, null, CancellationToken.None));
+        Assert.True(ex.Retryable);
+        Assert.Equal(429, ex.StatusCode);
+    }
 }

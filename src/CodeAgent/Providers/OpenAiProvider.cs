@@ -260,12 +260,18 @@ public sealed class OpenAiProvider : IAgentProvider
                 continue;
             }
 
-            // 流中途的错误事件（限流/配额等以 data:{"error":...} 形式出现）：
-            // 静默忽略会得到空回复的「模型未返回内容」，这里明确抛出原因
             if (root?["error"] is JsonObject errObj)
             {
+                var errType = errObj["type"]?.GetValue<string>() ?? "";
+                var errCode = errObj["code"] is JsonValue errVal && errVal.TryGetValue<int>(out var c) ? c : (int?)null;
                 throw new ProviderException(
-                    $"流式响应中断: {errObj["message"]?.GetValue<string>() ?? Truncate(errObj.ToJsonString(), 300)}");
+                    $"流式响应中断: {errObj["message"]?.GetValue<string>() ?? Truncate(errObj.ToJsonString(), 300)}")
+                {
+                    StatusCode = errCode,
+                    // 限流类错误允许自动重试（Agent 只在尚未输出任何文本时重试，不会重复打印）
+                    Retryable = errCode == 429 || errType.Contains("rate", StringComparison.OrdinalIgnoreCase)
+                                            || errType.Contains("overloaded", StringComparison.OrdinalIgnoreCase),
+                };
             }
 
             var delta = root?["choices"]?[0]?["delta"];
