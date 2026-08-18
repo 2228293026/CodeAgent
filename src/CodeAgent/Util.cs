@@ -28,6 +28,28 @@ public static class TextUtil
         // GB18030/GBK 等本地代码页在 .NET（Core）需显式注册，ReadTextSmart 的兜底解码依赖它
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
+    /// <summary>截断尾部的半个多字节序列：截断点可能切在 UTF-8 多字节序列中间，
+    /// 不回退会让严格 UTF-8 校验失败、整段输出被误判为 GBK 解码。序列完整时原样返回。</summary>
+    internal static int TrimPartialTail(byte[] bytes, int end)
+    {
+        int cont = 0, scan = end;
+        while (scan > 0 && cont < 3 && (bytes[scan - 1] & 0xC0) == 0x80)
+        {
+            scan--;
+            cont++;
+        }
+        if (end > 0 && (bytes[end - 1] & 0xC0) == 0xC0)
+            return end - 1; // 尾字节本身是首字节：后续续字节全被截掉，必残缺
+        if (scan == end || scan == 0)
+            return end; // 尾字节是 ASCII（边界完好）或全是续字节（原样交解码器）
+        var lead = bytes[scan - 1];
+        if ((lead & 0xC0) != 0xC0)
+            return end; // 续字节前面不是首字节（杂散）：原样交给解码器处理
+        var expected = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : 2;
+        return cont + 1 == expected ? end : scan - 1; // 完整保留；残缺连首字节一起丢
+    }
+
+    /// <summary>读文本文件：BOM 优先；无 BOM 时严格校验 UTF-8，非法则按 GB18030 兜底。
     /// <summary>读文本文件：BOM 优先；无 BOM 时严格校验 UTF-8，非法则按 GB18030 兜底。
     /// 老 Windows 工具保存的 ANSI（GBK）中文文件若按 UTF-8 读会出现乱码，
     /// grep 搜不到中文、read_file 显示 &#65533; 替换符。</summary>
@@ -66,7 +88,7 @@ public static class TextUtil
         File.WriteAllText(path, content, new System.Text.UTF8Encoding(keepBom));
     }
 
-    private static string DecodeSmart(byte[] bytes)
+    internal static string DecodeSmart(byte[] bytes) // internal：ShellRunner 命令输出解码复用
     {
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
             return System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);

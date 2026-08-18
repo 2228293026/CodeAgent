@@ -253,27 +253,32 @@ public static class ShellRunner
     /// </summary>
     private static async Task<string> ReadWithCap(StreamReader reader, int cap, CancellationToken ct)
     {
-        var sb = new StringBuilder();
-        var buf = new char[8192];
+        // 读原始字节再解码：中文 Windows 上 cmd/dotnet 等输出 GBK（CP936），
+        // 固定按 UTF-8 解会把中文路径/报错变成替换符，模型读不懂命令输出
+        var ms = new MemoryStream();
+        var buf = new byte[8192];
         var capped = false;
         while (true)
         {
-            var n = await reader.ReadAsync(buf, ct);
+            var n = await reader.BaseStream.ReadAsync(buf, ct);
             if (n == 0)
                 break;
             if (!capped)
             {
-                var remaining = cap - sb.Length;
-                var take = Math.Clamp(remaining, 0, n);
-                sb.Append(buf, 0, take);
+                var take = Math.Min(cap - (int)ms.Length, n);
+                ms.Write(buf, 0, take);
                 if (take < n)
-                {
                     capped = true;
-                    sb.Append("\n…(输出过长，已截断)");
-                }
             }
         }
-        return sb.ToString();
+        var bytes = ms.ToArray();
+        if (capped)
+        {
+            // 截断点可能切在多字节序列中间：回退到序列边界，否则整段被误判为 GBK
+            var end = TextUtil.TrimPartialTail(bytes, bytes.Length);
+            return TextUtil.DecodeSmart(bytes[..end]) + "\n…(输出过长，已截断)";
+        }
+        return TextUtil.DecodeSmart(bytes);
     }
 }
 

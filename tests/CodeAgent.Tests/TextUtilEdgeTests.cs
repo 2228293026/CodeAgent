@@ -319,4 +319,23 @@ public class TextUtilEdgeTests : IDisposable
         var listing = await Task.Run(() => SkipDirs.EnumerateFilesPruned(_dir).ToList());
         Assert.Contains(listing, f => f.EndsWith("f.txt", StringComparison.Ordinal));
     }
+    [Theory]
+    [InlineData(new byte[] { 97, 98, 228, 184, 173 }, 5, 5)]              // "ab中" 完整：不动
+    [InlineData(new byte[] { 97, 98, 228, 184, 173, 228 }, 6, 5)]         // 尾部孤立首字节 → 丢弃
+    [InlineData(new byte[] { 97, 228, 184 }, 3, 1)]                       // "a" + 2/3 序列 → 只剩 "a"
+    [InlineData(new byte[] { 97, 228, 184, 173, 228, 184 }, 6, 4)]        // "a中" + 2/3 序列 → "a中"
+    [InlineData(new byte[] { 97, 98 }, 2, 2)]                             // 纯 ASCII：不动
+    public void TrimPartialTail_CutsIncompleteSequence(byte[] bytes, int end, int expected)
+    {
+        Assert.Equal(expected, TextUtil.TrimPartialTail(bytes, end));
+    }
+
+    [Fact]
+    public void DecodeSmart_GbkCommandOutput_DecodesCorrectly()
+    {
+        // 中文 Windows 的 cmd 输出 GBK：DecodeSmart 应还原中文而非替换符
+        _ = TextUtil.EstimateTokens(""); // 触发静态构造（注册 GB18030 代码页）
+        var gbk = System.Text.Encoding.GetEncoding("GB18030").GetBytes("构建成功，0 个警告");
+        Assert.Equal("构建成功，0 个警告", TextUtil.DecodeSmart(gbk));
+    }
 }
