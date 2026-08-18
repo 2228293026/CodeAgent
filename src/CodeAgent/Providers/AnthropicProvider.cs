@@ -164,6 +164,7 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             ["model"] = _model,
             ["max_tokens"] = _maxTokens,
+            ["messages"] = BuildMessages(messages),
 
             ["stream"] = true,
         };

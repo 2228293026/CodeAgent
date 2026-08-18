@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using CodeAgent;
 using CodeAgent.Providers;
@@ -16,10 +17,11 @@ public class AnthropicProviderStreamTests
     private sealed class SseHandler : HttpMessageHandler
     {
         public string Body { get; init; } = "";
-
+        public string? LastRequest { get; private set; }
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken ct)
         {
+            LastRequest = request.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
             var resp = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(Body, Encoding.UTF8, "text/event-stream"),
@@ -157,5 +159,26 @@ public class AnthropicProviderStreamTests
                 [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
                 [], "off", null, null, null, CancellationToken.None));
         Assert.Contains("服务过载", ex.Message);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_PayloadIncludesMessagesAndSystem()
+    {
+        // 回归：手工拼 payload 曾在重构时丢掉 messages 字段（流式测试只断言响应解析，
+        // 请求体缺字段照样通过）。锁定请求体的必备字段。
+        var handler = new SseHandler { Body = "data: [DONE]\n\n" };
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "k", Model = "claude-sonnet-4-5" }, new HttpClient(handler));
+
+        await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+             new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastRequest ?? "");
+        Assert.NotNull(body?["messages"]);
+        Assert.Equal(1, body!["messages"]!.AsArray().Count); // system 走顶层，不进 messages
+        Assert.Equal("sys", body["system"]!.GetValue<string>());
+        Assert.Equal(true, body["stream"]!.GetValue<bool>());
     }
 }
