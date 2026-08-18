@@ -652,6 +652,12 @@ public static class InputLine
 
             switch (key.Key)
             {
+                // Shift+Enter：插入换行（手动多行输入）。必须排在无修饰符的 Enter 分支之前；
+                // Alt+Enter 不用——conhost 里它是全屏切换，会误导
+                case ConsoleKey.Enter when (key.Modifiers & ConsoleModifiers.Shift) != 0:
+                    searching = false;
+                    buf.Insert((char)10); // Shift+Enter 插入换行
+                    break;
                 case ConsoleKey.Enter:
                     searching = false; // 搜索结束：提交当前命中的历史条目
                     if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
