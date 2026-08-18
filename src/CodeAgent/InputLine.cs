@@ -383,7 +383,7 @@ public static class InputLine
 
         // —— 绘制助手（局部函数） ——
 
-        int MenuAbove() => MenuAreaRows; // 固定面板高度（MoveSelectionAnsi 行定位用）
+        int MenuAbove() => menuRows + CountNewlines(buf.Text); // 菜单块 + 输入块总行数（光标到块顶的行距）
 
         string Header() => modePicker
             ? "  Modes (up/down select, Enter switch, Esc close):"
@@ -397,6 +397,10 @@ public static class InputLine
                     n++;
             return n;
         }
+
+        /// <summary>光标所在行距输入块首行多少行（多行输入时菜单锚点计算用）。</summary>
+        int CursorLineInBlock() =>
+            CountNewlines(buf.Text[..Math.Clamp(buf.Cursor, 0, buf.Text.Length)]);
 
         void ScrollInput()
         {
@@ -520,8 +524,9 @@ public static class InputLine
             var rows = BlockRows(menuItems.Count);
             var sb = new StringBuilder();
             // 菜单块绘制在输入行正上方（块空间已由 ResizeMenuSpace 用 IL/DL 腾出），
-            // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大
-            sb.Append($"\x1b[{rows}A\x1b[1G");
+            // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大。
+            // 多行输入：块顶在光标行上方 rows + (行数-1) 处
+            sb.Append($"\x1b[{rows + CountNewlines(buf.Text)}A\x1b[1G");
             sb.AppendLine(Fit(Header()) + "\x1b[K");
             if (menuItems.Count == 0)
             {
@@ -566,7 +571,8 @@ public static class InputLine
         {
             var sb = new StringBuilder();
             if (rows > 0)
-                sb.Append($"\x1b[{rows}A\x1b[{rows}M"); // 上移到块顶整块删除（0 行保护：CSI 参数 0 被按 1 处理）
+                // 上移到块顶整块删除；多行输入时块顶在光标行上方 rows + (行数-1) 处
+                sb.Append($"\x1b[{rows + CountNewlines(buf.Text)}A\x1b[{rows}M");
             sb.Append("\x1b[1G");
             sb.Append(InputText());
             sb.Append("\x1b[K");
@@ -668,19 +674,20 @@ public static class InputLine
         }
 
         /// <summary>调整菜单块高度（menuRows → newAbove）：在块顶插入/删除行差（IL/DL 序列）。
-        /// 输入行随块整体移动，块上方的屏幕内容（横幅/历史输出）不被覆盖——
-        /// 曾用「上移后整块覆盖重绘」，菜单开在屏幕上部时会吃掉上方内容，收起后留下一片空白。
-        /// IL/DL 是单条转义序列，由终端内部滚动缓冲，无逐行重绘开销。</summary>
+        /// 多行输入时光标可能停在块中间的行：所有定位都以「输入块首行」为锚，
+        /// 菜单始终插在整块上方，不切入输入文本行之间。</summary>
         void ResizeMenuSpace(int newAbove)
         {
             if (newAbove == menuRows)
                 return;
-            if (menuRows > 0)
-                Console.Write($"\x1b[{menuRows}A");  // 当前块顶
+            var aboveInput = CursorLineInBlock();             // 光标 → 输入块首行的行距
+            var up = aboveInput + menuRows;                   // 光标 → 菜单块顶（首次开菜单时 menuRows=0）
+            if (up > 0)
+                Console.Write($"\x1b[{up}A");
             Console.Write(newAbove > menuRows
-                ? $"\x1b[{newAbove - menuRows}L"     // 扩高：块顶插入空行，下方内容（含输入行）下移
-                : $"\x1b[{menuRows - newAbove}M");   // 缩高：块顶删除行差，下方内容上移
-            Console.Write($"\x1b[{newAbove}B");      // 回到（移动后的）输入行
+                ? $"\x1b[{newAbove - menuRows}L"              // 扩高：块顶插入空行，下方内容（含输入块）下移
+                : $"\x1b[{menuRows - newAbove}M");            // 缩高：块顶删除行差，下方内容上移
+            Console.Write($"\x1b[{aboveInput + newAbove}B");  // 回到（移动后的）光标行
             menuRows = newAbove;
         }
 
