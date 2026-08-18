@@ -384,7 +384,9 @@ public sealed partial class Agent
 
     /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens（会话全部口径）。
     /// 先换到输入行下方独立一行（spinner 专属行），\r 只更新该行，不覆盖输入框。</summary>
-    private void ShowSpinner()
+    /// <param name="label">非空时该文案替换「用时/token」指示（如压缩历史）：非流式调用无 token
+    /// 可计，改用 spinner 自己的秒表显示已进行时长（/compact 不在回合内，_turnSw 是上一回合的旧值）。</param>
+    private void ShowSpinner(string? label = null)
     {
         _spinnerSw.Restart();
         _streamTokens = 0;
@@ -410,7 +412,11 @@ public sealed partial class Agent
                     {
                         if (cts.IsCancellationRequested)
                             break;
-                        Console.Write($"\r{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
+                        // label 模式（压缩历史等非流式调用）：无 token 可计，显示已进行时长；
+                        // 默认模式维持原样（用时 + 本回合 tokens）
+                        Console.Write(label is null
+                            ? $"\r{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens"
+                            : $"\r{f} {label} 已用时 {TextUtil.FormatSessionTime(_spinnerSw.Elapsed)}");
                     }
                     await Task.Delay(120, cts.Token);
                 }
@@ -895,9 +901,17 @@ public sealed partial class Agent
 
         try
         {
-            // 自动裁剪时提示「上下文超限」；手动 /compact 时只说「正在压缩」
-            Console.WriteLine(manual ? "📝 正在压缩历史…" : "📝 上下文超限，正在压缩历史…");
-            var resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], _ctx.Config.ThinkingEffort, ct), ct);
+            // 摘要请求可能耗时数十秒：改用 spinner 实时显示已用时（原先只打一行静止文字干等）
+            ShowSpinner(manual ? "正在压缩历史…" : "上下文超限，正在压缩历史…");
+            ProviderResponse resp;
+            try
+            {
+                resp = await CallWithRetryAsync(() => _provider.ChatAsync([prompt], [], _ctx.Config.ThinkingEffort, ct), ct);
+            }
+            finally
+            {
+                ClearSpinner(); // 成败都要清掉 spinner 行：外层 catch 吞掉一切异常，finally 是唯一可靠出口
+            }
             var summary = resp.Text?.Trim();
             if (string.IsNullOrWhiteSpace(summary))
                 return false;
