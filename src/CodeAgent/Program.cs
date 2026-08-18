@@ -609,10 +609,12 @@ internal static class Program
         if (thinkingEffort == "auto")
         {
             var t = reasoningProbe?.Task;
+            var done = t?.IsCompletedSuccessfully == true
+                && string.Equals(opts.Model, reasoningProbe?.Model, StringComparison.OrdinalIgnoreCase);
             var efforts = t?.IsCompletedSuccessfully == true ? t.Result : null;
-            var resolved = efforts is { Count: > 0 }
-                && string.Equals(opts.Model, reasoningProbe!.Model, StringComparison.OrdinalIgnoreCase);
-            think = resolved ? $" · think:auto→{efforts![^1]}" : " · think:auto";
+            // 探测完成且模型未变：显示实际生效档（无支持 → off，与 /thinking 的说明一致）；
+            // 探测中或已换模型（结果作废）：仍只显示 auto
+            think = done ? $" · think:auto→{(efforts is { Count: > 0 } ? efforts[^1] : "off")}" : " · think:auto";
         }
         else
         {
