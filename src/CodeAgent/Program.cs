@@ -830,7 +830,7 @@ internal static class Program
                     : KnownContextWindows.TryGet(opts.Model) is { } known ? $"{known:N0}（按模型名自动识别）"
                     : "未知（可配置 contextWindow）";
                 Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {ctxDesc}");
-                Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}");
+                Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}   超时: {config.CommandTimeoutSeconds}s");
                 Console.WriteLine($"工具日志 : {(config.ShowToolCalls ? "on" : "off")}   流式输出: {(config.StreamOutput ? "on" : "off")}");
                 break;
 
@@ -1203,6 +1203,7 @@ internal static class Program
               Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）
               Alt+D / Ctrl+Shift+D   查看最近修改的 diff（/diff）
               Alt+N / Ctrl+Shift+N   新建会话（/clear）
+              Ctrl+R                 反向搜索命令历史（再按跳更早命中）
               Ctrl+L                 清屏
             """);
     }
