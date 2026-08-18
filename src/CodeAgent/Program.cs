@@ -872,6 +872,42 @@ internal static class Program
                 }
                 break;
 
+            case "/provider":
+                // 切换供应商（无需重启）：-p 只在启动时生效，会话内曾只能改配置文件
+                if (string.IsNullOrWhiteSpace(rest))
+                {
+                    Console.WriteLine($"当前 Provider: {config.Provider}（/provider <名> 切换，/providers 查看全部）");
+                }
+                else
+                {
+                    var wanted = rest.Trim();
+                    var hit = config.Providers.FirstOrDefault(kv =>
+                        kv.Key.Equals(wanted, StringComparison.OrdinalIgnoreCase));
+                    if (hit.Key is null)
+                    {
+                        Console.WriteLine($"⚠ 没有供应商「{wanted}」，可用: {string.Join(", ", config.Providers.Keys)}");
+                        break;
+                    }
+                    try
+                    {
+                        config.Provider = hit.Key;
+                        opts = hit.Value;
+                        providerInst = ProviderFactory.Create(config);
+                        agent.SetProvider(providerInst);
+                        ctxProbe?.Restart(opts.Model, providerInst);
+                        reasoningProbe?.Restart(opts.Model, providerInst);
+                        var savePath = ConfigSavePath(configPath, config);
+                        AgentConfig.Save(config, savePath);
+                        try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
+                        Console.WriteLine($"已切换 Provider: {hit.Key}，模型 {opts.Model}，已保存到 {savePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"切换失败: {ex.Message}");
+                    }
+                }
+                break;
+
             case "/model":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
@@ -1360,6 +1396,7 @@ internal static class Program
               /compact         压缩对话历史为摘要（/clear 是彻底清空）
               /cls             清空屏幕（或按 Ctrl+L）
               /model [名称|编号] 查看或切换模型（编号按完整列表）
+              /provider [名]   查看或切换供应商（无需重启）
               /config          显示当前配置
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导
