@@ -135,9 +135,15 @@ public static class SkipDirs
     {
         var stack = new Stack<string>();
         stack.Push(root);
+        // 已访问目录集合：junction/symlink 成环（A→B→A）时避免死循环（曾会永久挂起 glob/grep）
+        var visited = new HashSet<string>(OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal);
         while (stack.Count > 0)
         {
             var dir = stack.Pop();
+            if (!visited.Add(dir))
+                continue;
             IEnumerable<string> subDirs;
             IEnumerable<string> files;
             try

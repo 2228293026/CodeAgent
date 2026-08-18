@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using CodeAgent;
 using Xunit;
 
@@ -299,4 +300,23 @@ public class TextUtilEdgeTests : IDisposable
     [InlineData("😀", 2)]          // emoji 代理对按 2 计（与简单口径一致，误差可接受）
     public void EstimateTokens_MixedScript(string s, long expected) =>
         Assert.Equal(expected, TextUtil.EstimateTokens(s));
+
+    [Fact]
+    public async Task EnumerateFilesPruned_JunctionCycle_Terminates()
+    {
+        // 回归：junction/symlink 成环（A→B→A）曾让枚举永久挂起（glob/grep 卡死）
+        if (!OperatingSystem.IsWindows())
+            return; // junction 仅 Windows；Linux 的 symlink 环同样由 visited 集合防护
+        Directory.CreateDirectory(Path.Combine(_dir, "a", "b"));
+        File.WriteAllText(Path.Combine(_dir, "a", "b", "f.txt"), "x");
+        var psi = new System.Diagnostics.ProcessStartInfo("cmd.exe", $"/c mklink /J \"{Path.Combine(_dir, "a", "b", "loop")}\" \"{Path.Combine(_dir, "a")}\"")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using (var p = System.Diagnostics.Process.Start(psi)!) p.WaitForExit(5000);
+
+        var listing = await Task.Run(() => SkipDirs.EnumerateFilesPruned(_dir).ToList());
+        Assert.Contains(listing, f => f.EndsWith("f.txt", StringComparison.Ordinal));
+    }
 }
