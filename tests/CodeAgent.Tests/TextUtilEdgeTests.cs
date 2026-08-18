@@ -284,7 +284,7 @@ public class TextUtilEdgeTests : IDisposable
         var s = "😀😀😀😀"; // 8 个 char
         var t = TextUtil.Truncate(s, 5);
         Assert.DoesNotContain("�", t);
-        Assert.True(t.StartsWith("😀😀")); // 第三个 emoji 完整保留或整体让位，不劈半
+        Assert.StartsWith("😀😀", t); // 第三个 emoji 完整保留或整体让位，不劈半
 
         var tl = TextUtil.TruncateLine(s, 5);
         Assert.DoesNotContain("�", tl);
