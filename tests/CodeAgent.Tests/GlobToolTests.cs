@@ -95,4 +95,20 @@ public class GlobToolTests : IDisposable
         var idxZeta = output.IndexOf("zeta.txt", StringComparison.Ordinal);
         Assert.True(idxAlpha >= 0 && idxMid > idxAlpha && idxZeta > idxMid, $"结果应按字母序排列:\n{output}");
     }
+
+    [Fact]
+    public async Task Glob_OverFiveHundredResults_ReportsTruncation()
+    {
+        // 回归：达到 500 上限时曾静默截断且「共 N 个」误导（N 恒为 501）
+        for (int i = 0; i < 510; i++)
+            File.WriteAllText(Path.Combine(_dir, $"g{i:000}.tmp"), "x");
+        var tool = new GlobTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "*.tmp" }, ctx, CancellationToken.None);
+
+        Assert.Contains("可能不完整", output);
+        Assert.Contains("g000.tmp", output);
+    }
 }

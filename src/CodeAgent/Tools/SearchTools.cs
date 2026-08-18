@@ -35,10 +35,14 @@ public sealed class GlobTool : ITool
         var results = new List<string>();
         var scanned = 0;
 
+        var capped = false;
         foreach (var file in SkipDirs.EnumerateFilesPruned(start))
         {
             if (scanned++ > 200_000 || results.Count > 500)
+            {
+                capped = true; // 提前停止：结果可能不完整（曾静默截断，总数显示还误导）
                 break;
+            }
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
             if (regexes.Any(r => r.IsMatch(rel)))
                 results.Add(rel);
@@ -46,10 +50,12 @@ public sealed class GlobTool : ITool
 
         await Task.Yield();
         if (results.Count == 0)
-            return $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
+            return capped
+                ? $"(匹配 {string.Join(", ", patterns)} 的文件超过 500 个，已截断——请用更精确的 pattern)"
+                : $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
         results.Sort(StringComparer.Ordinal); // 确定性输出：枚举顺序跨平台不定
         var shown = string.Join('\n', results.Take(300));
-        return shown + (results.Count > 300 ? $"\n…(共 {results.Count} 个，仅显示前 300)" : "");
+        return shown + (results.Count > 300 ? $"\n…(共 {results.Count} 个，仅显示前 300{(capped ? "，已达上限，可能不完整" : "")})" : "");
     }
 }
 
