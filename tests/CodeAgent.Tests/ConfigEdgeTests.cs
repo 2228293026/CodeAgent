@@ -5,6 +5,7 @@ using CodeAgent;
 using CodeAgent.Providers;
 using CodeAgent.Tools;
 using Xunit;
+using static CodeAgent.Program;
 
 namespace CodeAgent.Tests;
 
@@ -187,6 +188,32 @@ public class ConfigEdgeTests : IDisposable
     {
         var path = WriteJson($"{{\"contextWindow\": {input}}}");
         Assert.Equal(expected, AgentConfig.Load(path).ContextWindow);
+    }
+
+    // ===== ConfigSavePath（/model //thinking //setup 的写回路径）=====
+
+    [Fact]
+    public void ConfigSavePath_ExplicitFlagWins()
+    {
+        var cfg = AgentConfig.Load(WriteJson("""{"provider":"x"}""")); // SourceFile 指向该文件
+        Assert.Equal("-c.json", ConfigSavePath("-c.json", cfg));
+    }
+
+    [Fact]
+    public void ConfigSavePath_FallsBackToLoadedSourceFile()
+    {
+        // 无 -c 时写回实际加载的来源文件（可能是 ~/.codeagent/config.json），
+        // 而不是 cwd 新建 codeagent.json 把配置一分为二
+        var path = WriteJson("""{"provider":"x"}""");
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal(path, ConfigSavePath(null, cfg));
+    }
+
+    [Fact]
+    public void ConfigSavePath_NoSource_DefaultsToLocalFile()
+    {
+        var cfg = new AgentConfig(); // 内置默认，无来源文件
+        Assert.Equal("codeagent.json", ConfigSavePath(null, cfg));
     }
 
     // ===== KnownContextWindows（状态栏 ctx 百分比的自动识别表）=====

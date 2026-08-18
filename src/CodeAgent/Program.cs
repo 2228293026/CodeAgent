@@ -519,7 +519,7 @@ internal static class Program
     /// 配置写回路径：-c 显式路径 → 实际加载的来源文件（可能是 ~/.codeagent/config.json）→ 默认当前目录。
     /// 忽略来源文件时，从主目录配置启动的 /model 会把半份配置写进 cwd 的新 codeagent.json，配置被一分为二。
     /// </summary>
-    private static string ConfigSavePath(string? configPath, AgentConfig config) =>
+    internal static string ConfigSavePath(string? configPath, AgentConfig config) =>
         !string.IsNullOrWhiteSpace(configPath) ? configPath
         : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
         : "codeagent.json";

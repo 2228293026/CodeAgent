@@ -138,6 +138,37 @@ public class InputLineCommandsTests
         Assert.Contains("c", folded);                  // 第 3 行保留（阈值 4 折前 3 行）
     }
 
+    // ===== FitToWidth / CursorLeftOffset（显示宽度：CJK/emoji 按 2 列）=====
+
+    [Theory]
+    [InlineData("ascii", 10)]      // 宽度内原样返回
+    [InlineData("中文", 4)]        // 2 个 CJK 恰 4 列
+    [InlineData("中文", 5)]
+    public void FitToWidth_WithinWidth_ReturnsAsIs(string s, int width) =>
+        Assert.Equal(s, InputLine.FitToWidth(s, width));
+
+    [Theory]
+    [InlineData("中文", 3, "中…")]         // 截断到 1 个 CJK + 省略号
+    [InlineData("中文内容", 5, "中文…")]
+    [InlineData("abcdef", 4, "abc…")]
+    public void FitToWidth_OverWidth_TruncatesWithEllipsis(string s, int width, string expected) =>
+        Assert.Equal(expected, InputLine.FitToWidth(s, width));
+
+    [Fact]
+    public void FitToWidth_EmojiSurrogatePair_CountsTwoColumns()
+    {
+        // 代理对按 2 列：1 个 emoji + 省略号恰好用满 4 列
+        Assert.Equal("😀…", InputLine.FitToWidth("😀中", 4));
+    }
+
+    [Theory]
+    [InlineData("中文ab", 0, 6)]   // 2*2+2
+    [InlineData("中文ab", 2, 2)]   // 移过「中」占 2 列
+    [InlineData("abc", 1, 2)]
+    [InlineData("abc", 3, 0)]
+    public void CursorLeftOffset_CJKAware(string text, int cursor, int expected) =>
+        Assert.Equal(expected, InputLine.CursorLeftOffset(text, cursor));
+
     [Theory]
     [InlineData("/model", "/model")]
     [InlineData("／model", "/model")] // 全角斜杠归一化
