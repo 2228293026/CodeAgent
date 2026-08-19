@@ -58,4 +58,24 @@ public class SkipDirsTests : IDisposable
         Assert.Contains("real.py", files);
         Assert.DoesNotContain(files, f => f.Contains(".venv") || f.Contains(".terraform") || f.Contains(".pytest_cache"));
     }
+
+    [Fact]
+    public void EnumerateFilesPruned_SkipsPackageAndFrontendCaches()
+    {
+        // 包管理器缓存与前端构建缓存：扫描不应进入（否则 node_modules 之外的缓存目录也被扫）
+        foreach (var d in new[] { ".cache", ".npm", ".yarn", ".pnpm-store", ".turbo", ".eslintcache",
+                                  ".parcel-cache", ".angular", ".svelte-kit", ".cargo", "vendor", ".bundle" })
+            Directory.CreateDirectory(Path.Combine(_dir, d));
+        File.WriteAllText(Path.Combine(_dir, ".npm", "x.js"), "x");
+        File.WriteAllText(Path.Combine(_dir, ".turbo", "t.js"), "t");
+        File.WriteAllText(Path.Combine(_dir, "vendor", "v.php"), "v");
+        File.WriteAllText(Path.Combine(_dir, "app.js"), "ok");
+
+        var files = SkipDirs.EnumerateFilesPruned(_dir)
+            .Select(f => Path.GetRelativePath(_dir, f).Replace('\\', '/'))
+            .ToList();
+
+        Assert.Contains("app.js", files);
+        Assert.DoesNotContain(files, f => f.Contains(".npm") || f.Contains(".turbo") || f.Contains("vendor"));
+    }
 }

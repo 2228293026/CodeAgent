@@ -282,6 +282,10 @@ public static class SkipDirs
         "target", "Library", "Temp", "temp", "logs", "Logs", ".codeagent", "__pycache__", ".tox", "DerivedData",
         ".venv", "venv", ".gradle", ".terraform", ".dart_tool", ".pytest_cache",
         ".next", ".nuxt", "Pods", ".mypy_cache", ".ruff_cache", ".coverage",
+        // 常见包管理器缓存与前端构建缓存：glob/grep 不应扫进这些目录
+        ".cache", ".npm", ".yarn", ".pnpm-store", ".turbo", ".eslintcache", ".parcel-cache",
+        ".angular", ".svelte-kit", ".astro", ".cargo", "vendor", ".bundle",
+        ".egg-info", ".eggs", ".ipynb_checkpoints", ".serverless", ".stack-work",
     };
 
     public static bool IsSkipped(string dirName) => Names.Contains(dirName);
