@@ -391,8 +391,9 @@ public sealed partial class Agent
             {
                 return await call();
             }
-            catch (ProviderException ex) when (ex.Retryable && attempt < maxRetries && !_streamedThisCall)
+            catch (ProviderException ex) when (ex.Retryable && attempt < maxRetries && !_streamedThisCall && !_reasoningShown)
             {
+                // 已流式输出过正文或思考内容（暗色）都不重试：重跑会重复打印此前已显示的内容
                 var delay = 2 * (attempt + 1);
                 ClearSpinner();
                 Console.WriteLine($"⚠ 请求失败（{DescribeFailure(ex)}），{delay}s 后重试…");

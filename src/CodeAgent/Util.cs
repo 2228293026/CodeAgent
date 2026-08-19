@@ -29,6 +29,7 @@ public static class TextUtil
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
     /// <summary>显示宽度：CJK/全角字符按 2 列计算；emoji 等代理对按 2 列（两个 surrogate 只算一次）。
+    /// 孤立代理（半个码点）按 1 列——终端渲染为单宽替换符，按 2 列算会让对齐偏一列。
     /// 终端对齐/截断共用（InputLine、ConsoleRenderer 曾各自实现一份）。</summary>
     public static int DisplayWidth(string s)
     {
@@ -43,7 +44,7 @@ public static class TextUtil
             }
             else
             {
-                w += c > 0x2E7F ? 2 : 1;
+                w += !char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1;
             }
         }
         return w;

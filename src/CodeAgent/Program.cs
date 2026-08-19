@@ -258,6 +258,14 @@ internal static class Program
             {
                 var task = ComposeTaskWithStdin(string.Join(" ", positional),
                     Console.IsInputRedirected ? await Console.In.ReadToEndAsync() : "");
+                // 空任务防御（codeagent ""）：空 user 消息对部分 API 是非法请求（Anthropic 侧
+                // 会被归一化掉导致 messages 为空数组直接 400），与其等远端报错不如本地明确提示
+                if (string.IsNullOrWhiteSpace(task))
+                {
+                    Console.Error.WriteLine("任务为空：请提供任务描述（codeagent \"任务\"），或直接运行 codeagent 进入交互模式。");
+                    agent.Close();
+                    return 2;
+                }
                 var result = await RunTurnAsync(t => agent.RunAsync(task, t));
                 if (IsCancelledTurn(result))
                     result = "\n⏹ 已取消。"; // 哨兵映射回显示文本（一次性模式没有草稿回填）

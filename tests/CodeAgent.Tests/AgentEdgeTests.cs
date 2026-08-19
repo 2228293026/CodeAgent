@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -26,6 +27,16 @@ public class AgentEdgeTests : IDisposable
 
     private AgentClass MakeAgent(FakeProvider provider) => new(
         new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            MaxToolIterations = 5,
+        },
+        provider,
+        ToolRegistry.CreateDefault());
+
+    private AgentClass MakeAgent(IAgentProvider provider, AgentConfig? config = null) => new(
+        config ?? new AgentConfig
         {
             SaveSessions = false,
             SessionDir = SessionDir,
@@ -335,4 +346,41 @@ public class AgentEdgeTests : IDisposable
         Assert.Contains("PLAN mode", agent.CurrentSystemPrompt);
     }
 
+
+    /// <summary>脚本化 Provider：第一次调用先回调思考增量再抛可重试异常，之后返回正常回复。
+    /// 用于断言「已显示思考内容后不再自动重试」。</summary>
+    private sealed class ReasoningThenFailProvider : IAgentProvider
+    {
+        public int StreamCalls;
+        public string Name => "rtf";
+        public ProviderResponse? NextResponse { get; set; } = new() { Text = "ok" };
+
+        public Task<ProviderResponse> ChatAsync(IReadOnlyList<ProviderMessage> messages, IReadOnlyList<ToolSpec> tools, string thinkingEffort, CancellationToken ct) =>
+            Task.FromResult(NextResponse!);
+
+        public Task<ProviderResponse> ChatStreamAsync(IReadOnlyList<ProviderMessage> messages, IReadOnlyList<ToolSpec> tools, string thinkingEffort, Action<string>? onText, Action<string>? onReasoning, Action<string>? onToolFragment, CancellationToken ct)
+        {
+            StreamCalls++;
+            if (StreamCalls == 1)
+            {
+                onReasoning?.Invoke("思考片段");
+                throw new ProviderException("可重试错误") { Retryable = true };
+            }
+            return Task.FromResult(NextResponse!);
+        }
+
+        public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<string>>(["m"]);
+    }
+
+    [Fact]
+    public async Task StreamRetry_AfterReasoningShown_DoesNotRetry()
+    {
+        // 回归：思考内容已暗色打印后再遇到可重试错误，若重试会把同一段思考重复打印；
+        // 应直接失败上抛（调用方捕获 ProviderException 提示），而不是重发请求
+        var provider = new ReasoningThenFailProvider();
+        var agent = MakeAgent(provider);
+        await Assert.ThrowsAsync<ProviderException>(() => agent.RunAsync("x", CancellationToken.None));
+        Assert.Equal(1, provider.StreamCalls); // 只调用一次：没有自动重试
+    }
 }
