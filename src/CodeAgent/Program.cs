@@ -925,7 +925,7 @@ internal static class Program
                     try
                     {
                         result = RunTurnAsync(async t =>
-                            await agent.CompactAsync(t) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult(); // HandleCommand 同步上下文
+                            await agent.CompactAsync(t, string.IsNullOrWhiteSpace(rest) ? null : rest.Trim()) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult(); // HandleCommand 同步上下文（rest = 压缩保留重点）
                     }
                     catch (Exception ex)
                     {
@@ -1591,7 +1591,7 @@ internal static class Program
             命令:
               /help            显示本帮助
               /clear           清空对话历史
-              /compact         压缩对话历史为摘要（/clear 是彻底清空）
+              /compact [重点]   压缩对话历史为摘要（重点并入摘要指令；/clear 是彻底清空）
               /cls             清空屏幕（或按 Ctrl+L）
               /model [名称|编号] 查看或切换模型（编号按完整列表）
               /provider [名]   查看或切换供应商（无需重启）

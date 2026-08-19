@@ -906,11 +906,12 @@ public sealed partial class Agent
         }
     }
 
-    /// <summary>用户主动压缩上下文（/compact 命令）：把最早的一部分对话交给 LLM 压缩成摘要。成功返回 true。</summary>
-    public async Task<bool> CompactAsync(CancellationToken ct) => await TrySummarizeAsync(ct, manual: true);
+    /// <summary>用户主动压缩上下文（/compact 命令）：把最早的一部分对话交给 LLM 压缩成摘要。
+    /// focus 为用户附加的保留重点（/compact 保留接口设计），会并入摘要指令；成功返回 true。</summary>
+    public async Task<bool> CompactAsync(CancellationToken ct, string? focus = null) => await TrySummarizeAsync(ct, manual: true, focus: focus);
 
     /// <summary>把最早的一部分对话交给 LLM 压缩成摘要；成功返回 true。</summary>
-    private async Task<bool> TrySummarizeAsync(CancellationToken ct, bool manual = false)
+    private async Task<bool> TrySummarizeAsync(CancellationToken ct, bool manual = false, string? focus = null)
     {
         // 只有 system 一条（/clear 后直接 /compact）时 GetRange 会越界抛异常：
         // 对话过短直接返回 false，让 /compact 显示友好的「无需压缩」而不是堆栈信息
@@ -934,11 +935,13 @@ public sealed partial class Agent
             return $"<{m.Role.ToString().ToLowerInvariant()}> {body}";
         }));
 
+        var instruction = "请把下面的对话历史压缩成一份精炼的中文摘要（保留：用户需求、已做的文件改动、工具执行结论、未完成事项）。只输出摘要正文，不要任何前缀。";
+        if (!string.IsNullOrWhiteSpace(focus))
+            instruction += "压缩时请额外侧重保留：" + focus.Trim(); // /compact <重点>：用户指定的保留重点并入摘要指令
         var prompt = new ProviderMessage
         {
             Role = MessageRole.User,
-            Content = "请把下面的对话历史压缩成一份精炼的中文摘要（保留：用户需求、已做的文件改动、工具执行结论、未完成事项）。只输出摘要正文，不要任何前缀。\n\n" +
-                      TextUtil.Truncate(payload, 60_000),
+            Content = instruction + "\n\n" + TextUtil.Truncate(payload, 60_000),
         };
 
         try

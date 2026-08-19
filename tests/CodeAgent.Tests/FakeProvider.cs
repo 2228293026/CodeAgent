@@ -15,12 +15,16 @@ public sealed class FakeProvider : IAgentProvider
     /// <summary>为 true 时，摘要请求（单条 user 消息）返回空回复，使 LLM 摘要失败、走兜底裁剪路径。</summary>
     public bool FailSummarization { get; set; }
 
+    /// <summary>最近一次 ChatAsync/ChatStreamAsync 收到的消息（供断言外发请求内容，如 /compact 重点是否并入指令）。</summary>
+    public IReadOnlyList<ProviderMessage>? LastMessages { get; private set; }
+
     public Task<ProviderResponse> ChatAsync(
         IReadOnlyList<ProviderMessage> messages,
         IReadOnlyList<ToolSpec> tools,
         string thinkingEffort,
         CancellationToken ct)
     {
+        LastMessages = messages;
         if (FailSummarization && messages.Count == 1 && messages[0].Role == MessageRole.User)
             return Task.FromResult(new ProviderResponse { Text = null });
         return Task.FromResult(NextResponse ?? new ProviderResponse { Text = "ok" });
@@ -35,6 +39,7 @@ public sealed class FakeProvider : IAgentProvider
         Action<string>? onToolFragment,
         CancellationToken ct)
     {
+        LastMessages = messages;
         var resp = NextResponse ?? new ProviderResponse { Text = "ok" };
         if (resp.Text is { } t && onText is not null)
             onText(t);

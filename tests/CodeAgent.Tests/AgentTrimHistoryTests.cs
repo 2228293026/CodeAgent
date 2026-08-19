@@ -136,6 +136,43 @@ public class AgentTrimHistoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Compact_WithFocus_AppendsFocusToSummarizationInstruction()
+    {
+        // /compact <重点>：用户附加的保留重点（如 /compact 保留接口设计）应并入摘要指令，
+        // 且摘要请求是单条 user 消息（prompt 结构不受 focus 影响）
+        var provider = new FakeProvider();
+        var agent = MakeAgent(provider, maxHistoryChars: 100_000);
+        for (int i = 0; i < 6; i++)
+            await agent.RunAsync($"第 {i} 轮请求", CancellationToken.None);
+        provider.NextResponse = new ProviderResponse { Text = "这是摘要" };
+
+        Assert.True(await agent.CompactAsync(CancellationToken.None, "保留接口设计"));
+
+        var req = provider.LastMessages!;
+        Assert.Single(req);
+        Assert.Equal(MessageRole.User, req[0].Role);
+        Assert.Contains("压缩", req[0].Content);
+        Assert.Contains("保留接口设计", req[0].Content);
+    }
+
+    [Fact]
+    public async Task Compact_WithoutFocus_InstructionStaysBase()
+    {
+        // 不带重点的 /compact：指令保持原样，不出现侧重句
+        var provider = new FakeProvider();
+        var agent = MakeAgent(provider, maxHistoryChars: 100_000);
+        for (int i = 0; i < 6; i++)
+            await agent.RunAsync($"第 {i} 轮请求", CancellationToken.None);
+        provider.NextResponse = new ProviderResponse { Text = "这是摘要" };
+
+        Assert.True(await agent.CompactAsync(CancellationToken.None));
+
+        var content = provider.LastMessages![0].Content ?? "";
+        Assert.Contains("压缩成一份精炼的中文摘要", content);
+        Assert.DoesNotContain("额外侧重保留", content);
+    }
+
+    [Fact]
     public async Task UndoAfterTrimming_RemovesOnlyTheLastTurn()
     {
         // 回归：历史裁剪移除最早消息后，ESC 撤回（UndoLastTurn）曾按过期的 LastTurnStartCount
