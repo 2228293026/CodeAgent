@@ -3,8 +3,6 @@ using System.Text;
 namespace CodeAgent;
 
 /// <summary>
-
-/// <summary>
 /// 终端输入行：斜杠命令菜单（**ANSI 原地渲染**：方向键让 ">" 在列表内上下移动，
 /// 纯转义文本输出，不依赖控制台光标 API，兼容 Windows Terminal 等现代终端；
 /// `tuiAnsi=false` 时退回滚动式）、数字键 1-9 直接执行、↑/↓ 历史、TAB 补全、
