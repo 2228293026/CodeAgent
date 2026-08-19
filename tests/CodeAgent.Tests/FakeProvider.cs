@@ -24,6 +24,7 @@ public sealed class FakeProvider : IAgentProvider
         string thinkingEffort,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested(); // 与真实 Provider 一致：入口即尊重取消令牌（ESC 取消测试依赖）
         LastMessages = messages;
         if (FailSummarization && messages.Count == 1 && messages[0].Role == MessageRole.User)
             return Task.FromResult(new ProviderResponse { Text = null });
@@ -39,6 +40,7 @@ public sealed class FakeProvider : IAgentProvider
         Action<string>? onToolFragment,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested(); // 与真实 Provider 一致：入口即尊重取消令牌
         LastMessages = messages;
         var resp = NextResponse ?? new ProviderResponse { Text = "ok" };
         if (resp.Text is { } t && onText is not null)

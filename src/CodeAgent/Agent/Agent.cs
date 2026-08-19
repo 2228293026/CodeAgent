@@ -974,6 +974,12 @@ public sealed partial class Agent
             Console.WriteLine("✔ 历史已压缩，继续执行。");
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            // 用户取消（ESC/Ctrl+C）必须向上传播：RunTurnAsync 靠 OCE 识别取消并显示「已取消压缩」，
+            // 此前被下面的兜底 catch 吞成 return false，/compact 取消时误报「对话过短，无需压缩」
+            throw;
+        }
         catch
         {
             return false;

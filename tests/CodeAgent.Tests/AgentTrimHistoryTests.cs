@@ -173,6 +173,23 @@ public class AgentTrimHistoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Compact_Cancelled_ThrowsOceInsteadOfReturningFalse()
+    {
+        // 回归：ESC 取消 /compact 时 TrySummarizeAsync 曾把 OperationCanceledException
+        // 吞成 return false，REPL 误报「当前对话过短，无需压缩」而不是「已取消压缩」
+        var provider = new FakeProvider();
+        var agent = MakeAgent(provider, maxHistoryChars: 100_000);
+        for (int i = 0; i < 6; i++)
+            await agent.RunAsync($"第 {i} 轮请求", CancellationToken.None);
+        provider.NextResponse = new ProviderResponse { Text = "这是摘要" };
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => agent.CompactAsync(cts.Token));
+    }
+
+    [Fact]
     public async Task UndoAfterTrimming_RemovesOnlyTheLastTurn()
     {
         // 回归：历史裁剪移除最早消息后，ESC 撤回（UndoLastTurn）曾按过期的 LastTurnStartCount
