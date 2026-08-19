@@ -18,7 +18,6 @@ public sealed class UndoEntry
     public string? NewText { get; init; }
 
     /// <summary>write：修改前文件是否已存在。</summary>
-    /// <summary>write：修改前文件是否已存在。</summary>
     public bool HadFile { get; init; }
 
     /// <summary>撤销时按原编码写回（"utf8-bom" | "gb18030" | null=无 BOM UTF-8）：GBK 文件撤销后仍是 GBK。</summary>
