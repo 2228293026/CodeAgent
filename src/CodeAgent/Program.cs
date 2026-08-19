@@ -651,11 +651,11 @@ internal static class Program
         }
     }
 
-    /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
     /// <summary>深路径显示截断：超长时保留尾部（工作区名永远可见），前缀省略号。</summary>
     internal static string TruncatePathHead(string path, int max = 42) =>
         path.Length <= max ? path : "…" + path[^(max - 1)..];
 
+    /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow, ReasoningProbeState? reasoningProbe)
     {
         // auto：探测完成后显示实际生效档位（最高可用档），探测中显示 auto
