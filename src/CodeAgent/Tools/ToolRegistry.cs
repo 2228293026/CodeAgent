@@ -33,9 +33,9 @@ public sealed class Workspace
             {
                 if (string.IsNullOrWhiteSpace(d))
                     continue;
-                var full = Path.GetFullPath(Path.Combine(Root, d));
-                var prefix = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                             + Path.DirectorySeparatorChar;
+                var full = Path.GetFullPath(Path.Combine(Root, d))
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); // 配置常写尾斜杠（libs/）：归一化后 ReadOnlyRoots 展示与目录相等判断才一致
+                var prefix = full + Path.DirectorySeparatorChar; // full 已去尾分隔符，这里补回作为子路径前缀
                 _readOnly.Add((full, prefix));
             }
         }

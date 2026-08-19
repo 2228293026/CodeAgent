@@ -365,4 +365,31 @@ public class WorkspaceTests
         Assert.False(ws.FullAccess);
         Assert.Throws<ToolException>(() => ws.Resolve(outside));
     }
+
+    [Fact]
+    public void SetFileAccess_WhitelistAtRuntime_ActivatesReadOnlyDirs()
+    {
+        // 运行时切到 whitelist（/access whitelist）：配置过的只读白名单目录读放行、写仍拦截
+        var ws = new Workspace(Root, new[] { Outside }, "strict");
+        var kb = Path.Combine(Outside, "kb.md");
+        Assert.Throws<ToolException>(() => ws.ResolveRead(kb)); // strict 下白名单不生效
+
+        ws.SetFileAccess("whitelist");
+        Assert.False(ws.FullAccess);
+        Assert.Equal(Path.GetFullPath(kb), ws.ResolveRead(kb));
+        Assert.Throws<ToolException>(() => ws.Resolve(kb)); // 白名单目录只读不可写
+
+        ws.SetFileAccess("strict");
+        Assert.Throws<ToolException>(() => ws.ResolveRead(kb)); // 切回 strict：白名单重新关闭
+    }
+
+    [Fact]
+    public void ReadOnlyRoots_ExposesNormalizedDirs()
+    {
+        // ReadOnlyRoots 暴露规范化后的白名单目录（去尾分隔符），供诊断/确认显示
+        var ws = new Workspace(Root, new[] { Outside + Path.DirectorySeparatorChar, " ", null! });
+        var roots = ws.ReadOnlyRoots;
+        Assert.Single(roots);
+        Assert.Equal(Path.GetFullPath(Outside).TrimEnd(Path.DirectorySeparatorChar), roots[0]);
+    }
 }
