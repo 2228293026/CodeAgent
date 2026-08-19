@@ -83,9 +83,10 @@ public sealed class AgentConfig
     public string Shell { get; set; } = "";
 
     /// <summary>是否把每轮对话写入会话日志（.codeagent/sessions/*.jsonl）。</summary>
+    public bool SaveSessions { get; set; } = true;
+
     /// <summary>会话日志保留数量：.codeagent/sessions/*.jsonl 滚动新日志时删除最旧的超出部分（磁盘卫生）。
     /// 0 = 不清理（保留全部）。</summary>
-    public bool SaveSessions { get; set; } = true;
     public int MaxSessionLogs { get; set; } = 30;
 
     /// <summary>会话日志目录（相对工作目录）。</summary>
