@@ -581,6 +581,5 @@ public sealed class OpenAiProvider : IAgentProvider
         return arr;
     }
 
-    internal static string Truncate(string s, int max) =>
-        s.Length <= max ? s : s[..max] + $"\n…(共 {s.Length} 字符，已截断)";
+    internal static string Truncate(string s, int max) => TextUtil.Truncate(s, max);
 }
