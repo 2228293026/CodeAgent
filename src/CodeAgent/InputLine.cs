@@ -187,7 +187,7 @@ public static class InputLine
 
         // —— 绘制助手（局部函数） ——
 
-        int MenuAbove() => menuRows + CountNewlines(buf.Text); // 菜单块 + 输入块总行数（光标到块顶的行距）
+        int MenuAbove() => menuRows + DisplayedNewlines(inputExpanded, buf.Text); // 菜单块 + 输入块总行数（光标到块顶的行距，折叠感知）
 
         string Header() => modePicker
             ? "  Modes (up/down select, Enter switch, Esc close):"
@@ -204,7 +204,12 @@ public static class InputLine
 
         /// <summary>光标所在行距输入块首行多少行（多行输入时菜单锚点计算用）。</summary>
         int CursorLineInBlock() =>
-            CountNewlines(buf.Text[..Math.Clamp(buf.Cursor, 0, buf.Text.Length)]);
+            DisplayedCursorLine(inputExpanded, buf.Text, buf.Cursor); // 折叠时第 2 行及以后都显示在折叠行
+
+        /// <summary>输入块的显示文本：与 ScrollInput 同口径（未展开且 &gt;3 行时折叠）。
+        /// 菜单重绘也必须画折叠视图——画原始多行会把块高从 3 行撑回 N 行，与菜单定位的行数口径不符。</summary>
+        string DisplayedInputText() =>
+            !inputExpanded && 1 + CountNewlines(buf.Text) > 3 ? FoldText(InputText()) : InputText();
 
         void ScrollInput()
         {
@@ -329,8 +334,8 @@ public static class InputLine
             var sb = new StringBuilder();
             // 菜单块绘制在输入行正上方（块空间已由 ResizeMenuSpace 用 IL/DL 腾出），
             // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大。
-            // 多行输入：块顶在光标行上方 rows + (行数-1) 处
-            sb.Append($"\x1b[{rows + CountNewlines(buf.Text)}A\x1b[1G");
+            // 多行输入：块顶在光标行上方 rows + (显示行数-1) 处（折叠视图只占 3 行）
+            sb.Append($"\x1b[{rows + DisplayedNewlines(inputExpanded, buf.Text)}A\x1b[1G");
             sb.AppendLine(Fit(Header()) + "\x1b[K");
             if (menuItems.Count == 0)
             {
@@ -358,7 +363,7 @@ public static class InputLine
             }
             sb.AppendLine(); // 空行；末尾换行后光标已在输入行
             sb.Append("\x1b[1G");
-            sb.Append(InputText());
+            sb.Append(DisplayedInputText());
             sb.Append("\x1b[K");
             menuRows = rows;
             Console.Write(sb.ToString());
@@ -375,10 +380,10 @@ public static class InputLine
         {
             var sb = new StringBuilder();
             if (rows > 0)
-                // 上移到块顶整块删除；多行输入时块顶在光标行上方 rows + (行数-1) 处
-                sb.Append($"\x1b[{rows + CountNewlines(buf.Text)}A\x1b[{rows}M");
+                // 上移到块顶整块删除；多行输入时块顶在光标行上方 rows + (显示行数-1) 处（折叠感知，与绘制口径一致）
+                sb.Append($"\x1b[{rows + DisplayedNewlines(inputExpanded, buf.Text)}A\x1b[{rows}M");
             sb.Append("\x1b[1G");
-            sb.Append(InputText());
+            sb.Append(DisplayedInputText());
             sb.Append("\x1b[K");
             menuRows = 0;
             Console.Write(sb.ToString());
@@ -409,7 +414,7 @@ public static class InputLine
             sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
             sb.Append("\x1b[7m" + Fit(MenuLineText(newIndex, newIndex - menuOffset)) + "\x1b[0m");
             sb.Append($"\x1b[{up2}B\x1b[1G");
-            sb.Append(InputText());
+            sb.Append(DisplayedInputText());
             sb.Append("\x1b[K");
             Console.Write(sb.ToString());
         }
@@ -1105,6 +1110,30 @@ public static class InputLine
                 return i;
         }
         return -1;
+    }
+
+    /// <summary>输入块的显示换行数（= 显示行数 - 1，即从块末行上移到块首的行距）。
+    /// 折叠视图（未展开且 &gt;3 行）只显示「前 2 行 + 折叠提示行」共 3 行，显示换行数是 2——
+    /// 菜单定位必须按显示行数算：按原始换行数上移会越过输入块顶，菜单画到历史输出上（屏幕错位）。</summary>
+    internal static int DisplayedNewlines(bool expanded, string text)
+    {
+        var raw = 0;
+        foreach (var c in text)
+            if (c == '\n')
+                raw++;
+        return !expanded && raw + 1 > 3 ? 2 : raw;
+    }
+
+    /// <summary>光标在输入块内的显示行（0-based，块首为 0）：折叠时第 2 行及以后都落在折叠行上（=2）。
+    /// ResizeMenuSpace 的上移距离用它，与 ScrollInput 里 fold 感知的 lastCursorLine 口径一致。</summary>
+    internal static int DisplayedCursorLine(bool expanded, string text, int cursor)
+    {
+        cursor = Math.Clamp(cursor, 0, text.Length);
+        var n = 0;
+        for (int i = 0; i < cursor; i++)
+            if (text[i] == '\n')
+                n++;
+        return !expanded && n + 1 > 3 ? Math.Min(n, 2) : n;
     }
 
     /// <summary>记录一条输入到历史（委托给 HistoryStore）。</summary>

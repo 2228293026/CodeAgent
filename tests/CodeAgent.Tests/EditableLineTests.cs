@@ -381,4 +381,37 @@ public class WordNavTests
         line.LineEnd(); // 首行没有后续… 在 aa 行内 → 行尾 index 2
         Assert.Equal(2, line.Cursor);
     }
+
+    // ===== 折叠视图的菜单定位口径（DisplayedNewlines / DisplayedCursorLine）=====
+
+    [Fact]
+    public void DisplayedNewlines_Unfolded_MatchesRawCount()
+    {
+        // 未折叠（≤3 行或已展开）：显示换行数 = 实际换行数
+        Assert.Equal(0, InputLine.DisplayedNewlines(false, "abc"));
+        Assert.Equal(1, InputLine.DisplayedNewlines(false, "a\nb"));
+        Assert.Equal(2, InputLine.DisplayedNewlines(false, "a\nb\nc"));
+        Assert.Equal(9, InputLine.DisplayedNewlines(true, "a\na\na\na\na\na\na\na\na\na")); // 展开后按原始行数
+    }
+
+    [Fact]
+    public void DisplayedNewlines_Folded_ClampsToTwo()
+    {
+        // 折叠视图固定 3 行（前 2 行 + 折叠提示行）：显示换行数 = 2，
+        // 菜单按原始行数定位会越过输入块顶、画到历史输出上
+        Assert.Equal(2, InputLine.DisplayedNewlines(false, "a\nb\nc\nd"));
+        Assert.Equal(2, InputLine.DisplayedNewlines(false, "1\n2\n3\n4\n5\n6\n7"));
+    }
+
+    [Theory]
+    [InlineData(false, "a\nb\nc\nd\ne", 9, 2)]   // 折叠：光标在末尾（第 5 行）显示在折叠行
+    [InlineData(false, "a\nb\nc\nd\ne", 3, 1)]   // 折叠：光标在第 2 行开头（跨过 1 个换行）→ 显示行 1
+    [InlineData(false, "a\nb\nc\nd\ne", 0, 0)]   // 折叠：光标在第 1 行 → 显示行 0
+    [InlineData(true, "a\nb\nc\nd\ne", 9, 4)]    // 展开：光标在末尾 → 显示行 = 原始行 4
+    [InlineData(true, "a\nb\nc\nd\ne", 7, 3)]    // 展开：第 4 行开头 → 3
+    [InlineData(false, "a\nb", 3, 1)]            // 未折叠多行：原始行
+    public void DisplayedCursorLine_FoldAware(bool expanded, string text, int cursor, int expected)
+    {
+        Assert.Equal(expected, InputLine.DisplayedCursorLine(expanded, text, cursor));
+    }
 }
