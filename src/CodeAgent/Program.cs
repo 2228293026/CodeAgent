@@ -847,8 +847,6 @@ internal static class Program
         Console.WriteLine("  输入 /help 查看命令；直接输入任务描述即可开始。");
         Console.WriteLine("──────────────────────────────────────────────────────────");
     }
-    /// <summary>有效上下文窗口：contextWindow 配置 > 内置模型表 > /models 元数据探测（仅对探测时模型有效）。
-    /// 0 = 未知（显示层退回绝对值）。REPL 状态栏与 /stats 共用。</summary>
     /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
     /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。</summary>
     internal static string ComposeTaskWithStdin(string task, string stdin)
@@ -857,6 +855,8 @@ internal static class Program
             return task;
         return task + "\n\n[stdin 输入]\n" + TextUtil.Truncate(stdin.TrimEnd(), 100_000);
     }
+    /// <summary>有效上下文窗口：contextWindow 配置 > 内置模型表 > /models 元数据探测（仅对探测时模型有效）。
+    /// 0 = 未知（显示层退回绝对值）。REPL 状态栏与 /stats 共用。</summary>
     internal static int EffectiveContextWindow(AgentConfig config, ProviderOptions opts, ContextProbeState? probe)
     {
         if (config.ContextWindow > 0)
