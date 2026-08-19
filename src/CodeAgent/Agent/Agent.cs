@@ -528,8 +528,8 @@ public sealed partial class Agent
             // 用 ToolArgs 取原始字符串值：JsonNode.ToJsonString() 默认编码器会把中文
             // 转义成 \uXXXX（曾导致工具摘要行显示 docs/项目… 而非 docs/项目介绍）
             var v = ToolArgs.GetString(args, kv.Key);
-            if (v.Length > 60)
-                v = v[..60] + "…";
+            // TruncateLine 代理对安全：v[..60] 会把 emoji 劈成半个码点（终端乱码）
+            v = TextUtil.TruncateLine(v, 60);
             parts.Add($"{kv.Key}={v}");
         }
         return parts.Count == 0 ? name : $"{name}({string.Join(" ", parts)})";

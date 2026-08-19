@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent;
@@ -143,6 +144,23 @@ public class AgentEdgeTests : IDisposable
     {
         var s = AgentClass.SummarizeCall("read_file", """{"path":"a.cs","offset":10}""");
         Assert.Contains("offset=10", s); // 非字符串标量仍显示为其 JSON 文本
+    }
+
+    [Fact]
+    public void SummarizeCall_LongEmojiArg_NotSplitSurrogate()
+    {
+        // 回归：超长参数值曾用 v[..60] 截断，切点落在代理对中间会把 emoji 劈成半个码点（终端乱码）
+        var emojis = string.Concat(Enumerable.Repeat("😀", 50)); // 100 chars
+        var s = AgentClass.SummarizeCall("read_file", $$"""{"path":"{{emojis}}.cs"}""");
+        for (int i = 0; i < s.Length; i++)
+        {
+            if (char.IsLowSurrogate(s[i]) && i > 0 && char.IsHighSurrogate(s[i - 1]))
+                continue; // 正常配对的低位代理（高位在前一条分支已校验）
+            if (char.IsHighSurrogate(s[i]))
+                Assert.True(i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]), $"代理对在 {i} 处被劈开");
+            else
+                Assert.False(char.IsLowSurrogate(s[i]), $"孤立低位代理在 {i} 处");
+        }
     }
 
     [Fact]

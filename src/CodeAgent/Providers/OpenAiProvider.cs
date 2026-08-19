@@ -453,7 +453,7 @@ public sealed class OpenAiProvider : IAgentProvider
     }
 
     /// <summary>探测模型支持的推理档位：优先 /models 元数据（OpenRouter 等网关带 reasoning.effort 字段，
-    /// 值为 true 的键即支持的档位，按 low→high 升序返回）；元数据无能力信息时回退到内置模型名前缀表；
+    /// 值为 true 的键即支持的档位，按 low→high 升序返回）；元数据无能力信息时回退到内置模型名前缀表。</summary>
     public async Task<IReadOnlyList<string>?> GetSupportedEffortsAsync(string model, CancellationToken ct)
     {
         try

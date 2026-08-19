@@ -123,6 +123,10 @@ public sealed partial class Agent
         {
             // 读取中断：返回已解析部分（LoadSessionLog 视为空 → false）
         }
+        catch (UnauthorizedAccessException)
+        {
+            // 受保护目录 / ACL 拒绝：按无法恢复处理，--continue 启动路径不至于抛异常崩溃
+        }
         return msgs;
     }
 
