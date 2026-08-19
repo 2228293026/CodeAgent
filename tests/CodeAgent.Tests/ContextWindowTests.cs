@@ -25,9 +25,13 @@ public class ContextWindowTests
         config.ContextWindow = 0;
         Assert.Equal(128_000, Program.EffectiveContextWindow(config, opts, DoneProbe("gpt-4o", 999_999)));
 
-        // 表未命中（deepseek-v4 假设不在表）：探测值生效——但仅当探测是同一模型
+        // deepseek-v4 系列已入表：128k
         opts.Model = "deepseek-v4";
-        Assert.Equal(555_555, Program.EffectiveContextWindow(config, opts, DoneProbe("deepseek-v4", 555_555)));
+        Assert.Equal(128_000, Program.EffectiveContextWindow(config, opts, DoneProbe("deepseek-v4", 555_555)));
+
+        // 表未命中（my-private-model 不在表）：探测值生效——但仅当探测是同一模型
+        opts.Model = "my-private-model";
+        Assert.Equal(555_555, Program.EffectiveContextWindow(config, opts, DoneProbe("my-private-model", 555_555)));
         Assert.Equal(0, Program.EffectiveContextWindow(config, opts, DoneProbe("other-model", 555_555)));
 
         // 表未命中且无探测：0（未知）
@@ -38,8 +42,8 @@ public class ContextWindowTests
     public void EffectiveContextWindow_ProbeNotCompleted_IsIgnored()
     {
         var config = new AgentConfig();
-        var opts = new ProviderOptions { Model = "deepseek-v4" };
-        var pending = new Program.ContextProbeState { Model = "deepseek-v4", Task = NeverCompletes() };
+        var opts = new ProviderOptions { Model = "my-private-model" }; // 不在表：探测未完成时必须回落 0
+        var pending = new Program.ContextProbeState { Model = "my-private-model", Task = NeverCompletes() };
         Assert.Equal(0, Program.EffectiveContextWindow(config, opts, pending));
         return;
         static Task<int?> NeverCompletes() => new Task<int?>(() => 0);
