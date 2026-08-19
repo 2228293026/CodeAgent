@@ -91,6 +91,7 @@ public static class KnownContextWindows
         ("o4-mini", 200_000),
         ("deepseek-reasoner", 128_000),
         ("deepseek-chat", 128_000),
+        ("deepseek-v4", 128_000),
         ("deepseek-v3", 128_000),
         ("qwen3-coder", 262_144),
         ("qwen3", 131_072),
