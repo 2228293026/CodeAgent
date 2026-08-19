@@ -259,6 +259,47 @@ public class EditableLineTests
         b.SetInitial(text);
         return b;
     }
+
+    [Fact]
+    public void LineHome_FromSecondLine_GoesToLineStart()
+    {
+        // 多行输入的 Home 语义：跳到当前行行首（而非全局行首）
+        var b = MakeLine("aa\nbb\ncc");
+        b.End();               // 光标在末尾（cc 后）
+        b.MoveLineUp();        // 到 cc 行行首
+        b.LineHome();          // 已在行首：不动
+        Assert.Equal(6, b.Cursor);
+        b.LineHome();
+        Assert.Equal(6, b.Cursor); // cc 行行首
+        b.MoveLineUp();        // bb 行行首
+        b.End();               // 光标在 bb 行行尾（索引 5）
+        b.LineHome();
+        Assert.Equal(3, b.Cursor); // bb 行行首（aa\n 之后）
+    }
+
+    [Fact]
+    public void LineEnd_FromFirstLine_GoesToLineEnd()
+    {
+        // 多行输入的 End 语义：跳到当前行行尾（而非全局行尾）
+        var b = MakeLine("aa\nbb\ncc");
+        b.Home();              // 全局行首（aa 前）
+        b.LineEnd();
+        Assert.Equal(2, b.Cursor); // aa 行行尾（索引 2）
+        b.LineEnd();
+        Assert.Equal(2, b.Cursor); // 已在行尾：不动
+        b.MoveLineDown();      // bb 行行首
+        b.LineEnd();
+        Assert.Equal(5, b.Cursor); // bb 行行尾（aa\n 之后的 bb，索引 3..5）
+    }
+
+    [Fact]
+    public void LineHome_SingleLine_EqualsHome()
+    {
+        var b = MakeLine("single");
+        b.End();
+        b.LineHome();
+        Assert.Equal(0, b.Cursor); // 单行无换行：等价全局 Home
+    }
 }
 
 public class WordNavTests
