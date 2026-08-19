@@ -411,7 +411,6 @@ internal static class Program
                             Console.WriteLine($"⚠ 上下文已用 {pct}%（{TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)}）：建议 /compact 压缩历史，否则即将自动裁剪最旧对话。");
                     }
                 }
-                PrintTurnSummary(agent, sw.Elapsed, opts);
             }
             catch (ProviderException ex)
             {

@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Text.RegularExpressions;
 using CodeAgent;
 using Xunit;
 using static CodeAgent.Program;
@@ -178,4 +180,26 @@ public class FinalPushTests
     [InlineData("\u0000leading")]
     public void LooksBinary_Nul_True(string s) =>
         Assert.True(SkipDirs.LooksBinary(s));
+
+    // ===== 回合摘要打印 =====
+
+    [Fact]
+    public void TurnSummary_PrintedExactlyOncePerTurn()
+    {
+        // 回归：REPL 主循环曾把 PrintTurnSummary 调用写了两遍，导致每回合「✓ 完成」摘要打印两行；
+        // 调用点必须唯一——防止再次复制粘贴引入重复调用
+        var src = ProgramSourcePath();
+        var calls = Regex.Matches(File.ReadAllText(src), @"PrintTurnSummary\(agent, sw\.Elapsed, opts\)");
+        Assert.Single(calls);
+    }
+
+    /// <summary>从测试运行目录向上定位仓库根下的 Program.cs（bin/&lt;Config&gt;/net10.0/ → …/src/CodeAgent/）。</summary>
+    private static string ProgramSourcePath()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "src", "CodeAgent", "Program.cs")))
+            dir = dir.Parent;
+        Assert.NotNull(dir); // 仓库根下必然存在 src/CodeAgent/Program.cs
+        return Path.Combine(dir!.FullName, "src", "CodeAgent", "Program.cs");
+    }
 }
