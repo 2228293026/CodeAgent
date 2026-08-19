@@ -76,7 +76,6 @@ public sealed class GrepTool : ITool
             ["include"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "仅搜索匹配这些 glob 的文件（如 \"*.cs\"），可用字符串或数组" },
             ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
-            ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
             ["case_sensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "强制区分大小写（默认智能大小写：pattern 全小写时忽略大小写）" },
         },
         ["required"] = new JsonArray("pattern"),
