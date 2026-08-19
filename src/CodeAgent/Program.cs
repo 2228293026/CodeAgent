@@ -1271,9 +1271,13 @@ internal static class Program
                 break;
 
             case "/resume":
-                // 恢复历史会话日志（每条消息自动落盘）；--continue 启动时自动恢复最近一次
+                // 恢复历史会话日志（每条消息自动落盘）；--continue 启动时自动恢复最近一次。
+                // 列表排除当前会话自己的日志：不排除时刚聊过几句的当前会话占据编号 1，
+                // 用户想恢复的「上一次对话」被挤到后面（恢复自己还会把日志再滚动复制一份）
                 {
-                    var logs = RecentSessionLogs(config);
+                    var logs = RecentSessionLogs(config)
+                        .Where(p => !string.Equals(p, agent.SessionPath, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
                     if (logs.Count == 0)
                     {
                         Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
@@ -1297,7 +1301,14 @@ internal static class Program
                         else
                             Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
                         for (int i = 0; i < logs.Count; i++)
-                            Console.WriteLine($"  {i + 1}) {Path.GetFileNameWithoutExtension(logs[i])}");
+                        {
+                            // 文件名只是时间戳：附上首条用户消息预览与条数，才能认出哪个会话是哪段对话
+                            var (preview, count) = AgentClass.SessionLogSummary(logs[i]);
+                            var label = Path.GetFileNameWithoutExtension(logs[i]);
+                            Console.WriteLine(preview is null
+                                ? $"  {i + 1}) {label}（{count} 条）"
+                                : $"  {i + 1}) {label} · {TextUtil.TruncateLine(preview, 50)}（{count} 条）");
+                        }
                     }
                     break;
                 }

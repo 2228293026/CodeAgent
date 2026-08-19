@@ -287,4 +287,55 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.Contains("旧对话内容", File.ReadAllText(latest)); // 中文明文落盘
     }
 
+
+    [Fact]
+    public void SessionLogSummary_FirstUserMessage_AsPreview()
+    {
+        // /resume 列表摘要：文件名只是时间戳认不出会话，预览取首条用户消息 + 统计条数
+        var log = Path.Combine(SessionDir, "20260819-120000.jsonl");
+        File.WriteAllLines(log,
+        [
+            """{"ts":"12:00:00","role":"system","tool":null,"toolCallId":null,"content":"系统提示","toolCalls":null,"error":false}""",
+            """{"ts":"12:00:01","role":"user","tool":null,"toolCallId":null,"content":"帮我写一个 README","toolCalls":null,"error":false}""",
+            """{"ts":"12:00:05","role":"assistant","tool":null,"toolCallId":null,"content":"好的","toolCalls":null,"error":false}""",
+        ]);
+
+        var (preview, count) = AgentClass.SessionLogSummary(log);
+        Assert.Equal("帮我写一个 README", preview);
+        Assert.Equal(3, count);
+    }
+
+    [Fact]
+    public void SessionLogSummary_MultilineUser_PreviewFolded()
+    {
+        // 多行用户输入折叠为 ⏎ 单行预览（列表不能被换行打乱）
+        var log = Path.Combine(SessionDir, "20260819-120100.jsonl");
+        File.WriteAllLines(log,
+        [
+            """{"ts":"12:01:00","role":"system","tool":null,"toolCallId":null,"content":"s","toolCalls":null,"error":false}""",
+            "{\"ts\":\"12:01:01\",\"role\":\"user\",\"tool\":null,\"toolCallId\":null,\"content\":\"第一行\\n第二行\",\"toolCalls\":null,\"error\":false}",
+        ]);
+
+        var (preview, count) = AgentClass.SessionLogSummary(log);
+        Assert.Equal("第一行 ⏎ 第二行", preview);
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
+    public void SessionLogSummary_NoUserOrNullContent_ReturnsNullPreview()
+    {
+        // 无用户消息（如只有 system）或 user content 为 null：预览为 null，条数照常
+        var log = Path.Combine(SessionDir, "20260819-120200.jsonl");
+        File.WriteAllLines(log,
+        [
+            """{"ts":"12:02:00","role":"system","tool":null,"toolCallId":null,"content":"s","toolCalls":null,"error":false}""",
+            """{"ts":"12:02:01","role":"assistant","tool":null,"toolCallId":null,"content":null,"toolCalls":[],"error":false}""",
+        ]);
+
+        var (preview, count) = AgentClass.SessionLogSummary(log);
+        Assert.Null(preview);
+        Assert.Equal(2, count);
+
+        Assert.Equal((string?)null, AgentClass.SessionLogSummary(Path.Combine(SessionDir, "nope.jsonl")).Preview);
+    }
 }

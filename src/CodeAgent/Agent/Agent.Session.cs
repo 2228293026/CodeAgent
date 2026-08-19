@@ -203,6 +203,42 @@ public sealed partial class Agent
             yield return line;
     }
 
+    /// <summary>会话日志摘要（/resume 列表用）：首条用户消息预览（多行折叠为 ⏎）+ 消息条数。
+    /// 文件名只是时间戳，看不出哪个会话是哪段对话——首条用户输入才是可辨识的标题。
+    /// 流式读取且行数封顶 5000：超大日志不做完整解析，避免列表卡顿。</summary>
+    internal static (string? Preview, int Count) SessionLogSummary(string path)
+    {
+        try
+        {
+            string? preview = null;
+            var count = 0;
+            foreach (var line in ReadLogLines(path))
+            {
+                count++;
+                if (count >= 5000)
+                    break; // 行数封顶：预览早已在前几行拿到，够用
+                if (preview is not null)
+                    continue;
+                try
+                {
+                    var n = JsonNode.Parse(line) as JsonObject;
+                    if (n?["role"]?.GetValue<string>() == "user" &&
+                        n["content"]?.GetValue<string>() is { Length: > 0 } c)
+                        preview = c.Replace("\r", "").Replace("\n", " ⏎ ").Trim();
+                }
+                catch
+                {
+                    // 损坏行跳过（与 ParseLogLine 一致）
+                }
+            }
+            return (preview, count);
+        }
+        catch
+        {
+            return (null, 0); // 读取失败：列表降级为仅显示时间戳
+        }
+    }
+
     /// <summary>生成不重名的会话日志路径（同一秒内多次滚动时追加 -2/-3 序号）。</summary>
     private string NewSessionLogPath(string dir)
     {
