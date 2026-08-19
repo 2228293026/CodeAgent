@@ -1441,7 +1441,7 @@ internal static class Program
                 // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
                 Console.WriteLine("终端诊断:");
                 Console.WriteLine($"  IsInputRedirected : {Console.IsInputRedirected}");
-                Console.WriteLine($"  OutputEncoding    : {W(() => (int)Console.OutputEncoding.CodePage)}（代码页；GBK 输出问题排查用）");
+                Console.WriteLine($"  OutputEncoding    : {Console.OutputEncoding.WebName} (CP{W(() => (int)Console.OutputEncoding.CodePage)})");
                 static string W(Func<int> f)
                 {
                     try { return f().ToString(); }
@@ -1452,7 +1452,6 @@ internal static class Program
                 Console.WriteLine($"  BufferWidth       : {W(() => Console.BufferWidth)}");
                 Console.WriteLine($"  CursorLeft/Top    : {W(() => Console.CursorLeft)}/{W(() => Console.CursorTop)}");
                 Console.WriteLine($"  TuiAnsi           : {config.TuiAnsi}");
-                Console.WriteLine($"  OutputEncoding    : {Console.OutputEncoding.WebName}");
                 Console.WriteLine($"  IsOutputRedirected: {Console.IsOutputRedirected}");
                 var wt = Environment.GetEnvironmentVariable("WT_SESSION");
                 var term = Environment.GetEnvironmentVariable("TERM_PROGRAM");
