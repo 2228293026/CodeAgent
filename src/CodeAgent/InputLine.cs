@@ -52,6 +52,7 @@ public static class InputLine
         ("/diag", "显示终端环境诊断"),
         ("/history", "显示对话历史（N = 最近 N 条）"),
         ("/thinking", "查看或设置思考强度"),
+        ("/shell", "查看或切换命令 shell"),
         ("/mode", "查看或切换工作模式"),
         ("/access", "查看或切换文件访问权限"),
         ("/exit", "退出（同 /quit）"),

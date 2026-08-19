@@ -16,7 +16,7 @@ public class InputLineCommandsTests
         {
             "/help", "/clear", "/compact", "/cls", "/model", "/config", "/session", "/setup",
             "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/stats",
-            "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
+            "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking", "/shell",
             "/exit", "/quit", "/retry",
         };
         var menu = InputLine.Commands.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -85,7 +85,7 @@ public class InputLineCommandsTests
         {
             "/help", "/clear", "/compact", "/cls", "/model", "/provider", "/config", "/session", "/setup",
             "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/copy", "/prompt", "/files", "/stats",
-            "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking",
+            "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking", "/shell",
             "/exit", "/quit",
         };
         foreach (var c in InputLine.Commands)

@@ -1509,6 +1509,41 @@ internal static class Program
                 }
                 break;
 
+
+            case "/shell":
+                // 命令 shell 运行时切换：run_command 工具每次执行时读 config.Shell（留空自动检测），改完下一跳命令即生效
+                if (string.IsNullOrWhiteSpace(rest))
+                {
+                    var auto = ShellRunner.AutoShell();
+                    var current = string.IsNullOrWhiteSpace(config.Shell)
+                        ? $"auto（当前生效: {(auto.Length == 0 ? "bash" : auto)}）"
+                        : config.Shell;
+                    Console.WriteLine($"命令 shell: {current}（可选: cmd / powershell / pwsh / bash / sh / auto）");
+                }
+                else
+                {
+                    var v = rest.Trim().ToLowerInvariant();
+                    if (v is "cmd" or "powershell" or "pwsh" or "bash" or "sh" or "auto")
+                    {
+                        config.Shell = v == "auto" ? "" : v;
+                        // 持久化到配置文件，重启后仍然生效
+                        try
+                        {
+                            var savePath = ConfigSavePath(configPath, config);
+                            AgentConfig.Save(config, savePath);
+                            Console.WriteLine($"命令 shell 已设为: {v}，已保存到 {savePath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"命令 shell 已设为: {v}（保存配置失败: {ex.Message}）");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"无效值: {rest}（可选: cmd / powershell / pwsh / bash / sh / auto）");
+                    }
+                }
+                break;
             case "/help":
                 PrintReplHelp();
                 break;
@@ -1580,6 +1615,7 @@ internal static class Program
               /history [N]      显示对话历史（N = 最近 N 条）
               /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
               /thinking        查看或设置思考强度（off/low/medium/high/auto）
+              /shell [名称]     查看或切换命令 shell（cmd/powershell/pwsh/bash/sh，auto=自动检测）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
               /access [模式]   查看或切换文件访问权限（strict/whitelist/full，next 循环切换）
               /exit, /quit     退出
