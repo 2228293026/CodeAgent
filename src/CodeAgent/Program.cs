@@ -707,8 +707,6 @@ internal static class Program
         }
     }
 
-    /// <summary>列出当前 Provider 的可用模型，并用 * 标记当前配置的模型。</summary>
-    /// <summary>按关键字过滤模型列表（忽略大小写子串）；null/空 = 不过滤。</summary>
     /// <summary>从模型列表中找与输入相近的候选（按输入首个家族段做包含匹配，忽略大小写；最多 max 个）。</summary>
     internal static IReadOnlyList<string> SuggestModels(IReadOnlyList<string> models, string input, int max = 3)
     {
@@ -736,9 +734,11 @@ internal static class Program
         return result;
     }
 
+    /// <summary>按关键字过滤模型列表（忽略大小写子串）；null/空 = 不过滤。</summary>
     internal static IReadOnlyList<string> FilterModels(IReadOnlyList<string> models, string? filter) =>
         string.IsNullOrWhiteSpace(filter) ? models : models.Where(m => m.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
+    /// <summary>列出当前 Provider 的可用模型，并用 * 标记当前配置的模型。</summary>
     private static async Task PrintModelsAsync(IAgentProvider provider, string? currentModel, string? filter = null)
     {
         try
