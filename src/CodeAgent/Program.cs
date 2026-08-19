@@ -541,7 +541,6 @@ internal static class Program
         }
         else
             Console.WriteLine($"对话历史（{msgs.Count} 条）:");
-        Console.WriteLine($"对话历史（{msgs.Count} 条）:");
         foreach (var m in msgs)
         {
             var role = m.Role switch
