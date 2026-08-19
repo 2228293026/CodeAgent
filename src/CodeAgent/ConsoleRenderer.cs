@@ -344,22 +344,5 @@ public sealed class ConsoleRenderer
     }
 
     /// <summary>显示宽度：CJK/全角字符按 2 列计算；emoji 等代理对按 2 列（两个 surrogate 只算一次）。</summary>
-    private static int DisplayWidth(string s)
-    {
-        int w = 0;
-        for (int i = 0; i < s.Length; i++)
-        {
-            char c = s[i];
-            if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
-            {
-                w += 2; // 代理对（emoji）：终端按 2 列显示
-                i++;
-            }
-            else
-            {
-                w += c > 0x2E7F ? 2 : 1;
-            }
-        }
-        return w;
-    }
+    private static int DisplayWidth(string s) => TextUtil.DisplayWidth(s);
 }

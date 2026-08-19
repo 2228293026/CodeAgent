@@ -28,6 +28,27 @@ public static class TextUtil
         // GB18030/GBK 等本地代码页在 .NET（Core）需显式注册，ReadTextSmart 的兜底解码依赖它
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
+    /// <summary>显示宽度：CJK/全角字符按 2 列计算；emoji 等代理对按 2 列（两个 surrogate 只算一次）。
+    /// 终端对齐/截断共用（InputLine、ConsoleRenderer 曾各自实现一份）。</summary>
+    public static int DisplayWidth(string s)
+    {
+        int w = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+            {
+                w += 2; // 代理对（emoji）：终端按 2 列显示
+                i++;
+            }
+            else
+            {
+                w += c > 0x2E7F ? 2 : 1;
+            }
+        }
+        return w;
+    }
+
     /// <summary>截断尾部的半个多字节序列：截断点可能切在 UTF-8 多字节序列中间，
     /// 不回退会让严格 UTF-8 校验失败、整段输出被误判为 GBK 解码。序列完整时原样返回。</summary>
     internal static int TrimPartialTail(byte[] bytes, int end)
