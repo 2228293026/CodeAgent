@@ -169,8 +169,7 @@ public sealed class EditFileTool : ITool
         if (string.IsNullOrWhiteSpace(path))
             throw new ToolException("缺少必填参数 path");
         if (string.IsNullOrEmpty(oldString))
-            if (string.IsNullOrEmpty(oldString))
-                throw new ToolException("缺少必填参数 old_string");
+            throw new ToolException("缺少必填参数 old_string");
         // 相同字符串的替换是无操作：明确报错让模型自查，而不是返回误导性的「已替换 N 处」
         if (oldString == newString)
             throw new ToolException("old_string 与 new_string 相同，无需修改（如需调整请给出不同的新文本）。");
