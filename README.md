@@ -117,8 +117,8 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
 
 ```bash
 codeagent -p deepseek "任务..."        # 命令行指定
-CODEGENT_PROVIDER=anthropic codeagent  # 环境变量指定（-p 优先）
-CODEGENT_MODEL=gpt-4o codeagent        # 只换模型（-m 优先）
+CODEAGENT_PROVIDER=anthropic codeagent  # 环境变量指定（-p 优先；兼容旧拼写 CODEGENT_PROVIDER）
+CODEAGENT_MODEL=gpt-4o codeagent        # 只换模型（-m 优先；兼容旧拼写 CODEGENT_MODEL）
 # REPL 内: /model gpt-4o-mini  （切模型）
 ```
 

@@ -118,8 +118,8 @@ Three ways to switch provider:
 
 ```bash
 codeagent -p deepseek "task..."        # CLI flag
-CODEGENT_PROVIDER=anthropic codeagent  # env var (-p wins)
-CODEGENT_MODEL=gpt-4o codeagent        # model only (-m wins)
+CODEAGENT_PROVIDER=anthropic codeagent  # env var (-p wins; legacy CODEGENT_* spelling still accepted)
+CODEAGENT_MODEL=gpt-4o codeagent        # model only (-m wins; legacy CODEGENT_* spelling still accepted)
 # In the REPL: /model gpt-4o-mini, /provider anthropic
 ```
 

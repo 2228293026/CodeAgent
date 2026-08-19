@@ -179,9 +179,11 @@ internal static class Program
                     config.Modes.Add(m);
         }
 
-        // 命令行/环境变量覆盖：provider 与 model
-        var envProvider = Environment.GetEnvironmentVariable("CODEGENT_PROVIDER");
-        var envModel = Environment.GetEnvironmentVariable("CODEGENT_MODEL");
+        // 命令行/环境变量覆盖：provider 与 model。
+        // 环境变量同时接受 CODEAGENT_* 与历史拼写 CODEGENT_*（后者像笔误，按自然名设置曾静默无效），
+        // CODEAGENT_* 优先
+        var envProvider = FirstEnvVar("CODEAGENT_PROVIDER", "CODEGENT_PROVIDER");
+        var envModel = FirstEnvVar("CODEAGENT_MODEL", "CODEGENT_MODEL");
         if (provider is not null)
             config.Provider = provider;
         else if (!string.IsNullOrWhiteSpace(envProvider))
@@ -462,6 +464,18 @@ internal static class Program
             config.Providers[config.Provider] = opts;
         }
         return opts;
+    }
+
+    /// <summary>按顺序取第一个非空环境变量（别名兜底：CODEAGENT_* 优先，历史拼写 CODEGENT_* 兼容）。</summary>
+    internal static string? FirstEnvVar(params string[] names)
+    {
+        foreach (var n in names)
+        {
+            var v = Environment.GetEnvironmentVariable(n);
+            if (!string.IsNullOrWhiteSpace(v))
+                return v;
+        }
+        return null;
     }
 
     internal static string NextArg(string[] args, ref int i, string flag)

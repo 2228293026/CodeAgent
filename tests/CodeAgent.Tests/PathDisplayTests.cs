@@ -1,3 +1,4 @@
+using System;
 using CodeAgent;
 using Xunit;
 
@@ -103,4 +104,28 @@ public class PathDisplayTests
         Assert.Equal("分析日志", Program.ComposeTaskWithStdin("分析日志", "  \n"));
     }
 
+
+    [Fact]
+    public void FirstEnvVar_PrefersFirstNonEmpty_AndFallsThrough()
+    {
+        // 别名兜底：CODEAGENT_* 优先于历史拼写 CODEGENT_*；全空返回 null；空白视为未设置
+        var a = "codeagent-test-a-" + Guid.NewGuid().ToString("N");
+        var b = "codeagent-test-b-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            Environment.SetEnvironmentVariable(a, "first");
+            Environment.SetEnvironmentVariable(b, "second");
+            Assert.Equal("first", Program.FirstEnvVar(a, b));
+            Assert.Equal("second", Program.FirstEnvVar("codeagent-missing-" + a, b));
+            Assert.Null(Program.FirstEnvVar("codeagent-missing-" + a));
+
+            Environment.SetEnvironmentVariable(a, "   ");
+            Assert.Equal("second", Program.FirstEnvVar(a, b)); // 空白值跳过
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(a, null);
+            Environment.SetEnvironmentVariable(b, null);
+        }
+    }
 }
