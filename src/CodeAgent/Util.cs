@@ -71,7 +71,6 @@ public static class TextUtil
     }
 
     /// <summary>读文本文件：BOM 优先；无 BOM 时严格校验 UTF-8，非法则按 GB18030 兜底。
-    /// <summary>读文本文件：BOM 优先；无 BOM 时严格校验 UTF-8，非法则按 GB18030 兜底。
     /// 老 Windows 工具保存的 ANSI（GBK）中文文件若按 UTF-8 读会出现乱码，
     /// grep 搜不到中文、read_file 显示 &#65533; 替换符。</summary>
     public static string ReadTextSmart(string path) => DecodeSmart(File.ReadAllBytes(path));
