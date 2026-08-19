@@ -448,15 +448,15 @@ public sealed class AnthropicProvider : IAgentProvider
                 case MessageRole.Tool:
                     {
                         var content = new JsonArray
-                    {
-                        new JsonObject
                         {
-                            ["type"] = "tool_result",
-                            ["tool_use_id"] = m.ToolCallId ?? "",
-                            ["content"] = m.Content ?? "",
-                            ["is_error"] = m.IsError,
-                        },
-                    };
+                            new JsonObject
+                            {
+                                ["type"] = "tool_result",
+                                ["tool_use_id"] = m.ToolCallId ?? "",
+                                ["content"] = m.Content ?? "",
+                                ["is_error"] = m.IsError,
+                            },
+                        };
                         Append(new JsonObject { ["role"] = "user", ["content"] = content });
                         break;
                     }
