@@ -727,9 +727,11 @@ internal static class Program
     internal static IReadOnlyList<(int Num, string Model)> NumberedModels(IReadOnlyList<string> models, string? filter)
     {
         var shown = FilterModels(models, filter);
+        // HashSet 查找：过滤后逐项 Contains 是 O(n*m)，模型列表上百时拖慢 /models
+        var shownSet = new HashSet<string>(shown, StringComparer.OrdinalIgnoreCase);
         var result = new List<(int, string)>(shown.Count);
         for (int i = 0; i < models.Count; i++)
-            if (shown.Contains(models[i]))
+            if (shownSet.Contains(models[i]))
                 result.Add((i + 1, models[i]));
         return result;
     }
