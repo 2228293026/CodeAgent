@@ -159,14 +159,20 @@ public sealed class UndoManager
     private const long SnapshotMaxTotalBytes = 20 * 1024 * 1024; // 快照总大小上限：防止大项目拖慢每次命令
 
     /// <summary>目录快照：文件内容 + 各文件编码。编码取自命令执行前——被删文件无法
-    /// 从磁盘探测，若只靠执行后推断，撤销重建会把 GBK 文件写成 UTF-8。</summary>
-    public sealed record DirSnapshot(Dictionary<string, string> Texts, Dictionary<string, string?> Encodings);
+    /// 从磁盘探测，若只靠执行后推断，撤销重建会把 GBK 文件写成 UTF-8。
+    /// Seen 是枚举到的全部文件（含被跳过未记内容的 &gt;1MB/不可读文件）：命令把这类文件
+    /// 改小到快照范围内时，撤销不能把它误当新建文件删除。</summary>
+    public sealed record DirSnapshot(
+        Dictionary<string, string> Texts,
+        Dictionary<string, string?> Encodings,
+        HashSet<string> Seen);
 
     /// <summary>对目录做文本文件快照（相对路径 → 内容）：跳过构建/缓存目录、二进制与超大文件。</summary>
     public static DirSnapshot SnapshotDir(string cwd)
     {
         var texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var encodings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
         try
         {
@@ -175,13 +181,14 @@ public sealed class UndoManager
                 try
                 {
                     var fi = new FileInfo(file);
+                    var rel = Path.GetRelativePath(cwd, file).Replace('\\', '/');
+                    seen.Add(rel); // 先记录存在：下面的尺寸/读取检查跳过的文件同样不能被误删
                     if (fi.Length <= 0 || fi.Length > SnapshotMaxFileBytes)
                         continue;
                     if (total + fi.Length > SnapshotMaxTotalBytes)
                         break;
                     var text = TextUtil.ReadTextSmart(file); // GBK 等旧编码快照内容不乱码
                     total += fi.Length;
-                    var rel = Path.GetRelativePath(cwd, file).Replace('\\', '/');
                     texts[rel] = text;
                     encodings[rel] = TextUtil.DetectFileEncoding(file);
                 }
@@ -195,7 +202,7 @@ public sealed class UndoManager
         {
             // 快照失败按无快照处理：本次命令不记录副作用
         }
-        return new DirSnapshot(texts, encodings);
+        return new DirSnapshot(texts, encodings, seen);
     }
 
     /// <summary>对比执行前后快照，把新增/修改/删除的文件作为 cmd 条目推入撤销栈（/undo 可回滚）。</summary>
@@ -216,7 +223,9 @@ public sealed class UndoManager
                 Kind = "cmd",
                 Path = full,
                 OldText = had ? old : null, // 新增文件无旧内容（撤销=删除）；修改/删除则记录执行前内容
-                HadFile = had,
+                // 执行前就在磁盘上（含 >1MB/不可读、未记内容的文件）不算新建：HadFile=true 且
+                // OldText=null 会走「如实说明无法撤销」，而不是把改小后的文件删掉
+                HadFile = had || before.Seen.Contains(rel),
                 // 原编码取自执行前快照：被删文件磁盘上已不存在，执行后推断拿不到它的 GBK
                 EncodingName = had ? before.Encodings.GetValueOrDefault(rel) : null,
             });

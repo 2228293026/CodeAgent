@@ -383,6 +383,27 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void RecordCommandSideEffects_PreExistingBigFileShrunk_UndoDoesNotDeleteIt()
+    {
+        // 回归：>1MB 的既有文件被命令改小后进入 after 快照，曾按「新建文件」入栈——
+        // /undo 直接删除了用户的既有文件（数据丢失）。应按「超出快照范围」如实报无法撤销
+        var dir = Path.Combine(_dir, "shrink");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "big.txt");
+        File.WriteAllText(path, new string('x', 1_500_000)); // >1MB：before 快照跳过内容，但 Seen 记录存在
+
+        var before = UndoManager.SnapshotDir(dir);
+        File.WriteAllText(path, "small now"); // 命令把它改小 → 进入 after 快照
+
+        var um = new UndoManager();
+        UndoManager.RecordCommandSideEffects(dir, before, um);
+
+        Assert.Contains("无法撤销", um.TryUndo());
+        Assert.True(File.Exists(path));            // 不被删除
+        Assert.Equal("small now", File.ReadAllText(path)); // 也不被误动
+    }
+
+    [Fact]
     public void RecordCommandSideEffects_DetectsCreateModifyDelete()
     {
         var dir = Path.Combine(_dir, "work");
