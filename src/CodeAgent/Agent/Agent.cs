@@ -971,6 +971,11 @@ public sealed partial class Agent
                 Role = MessageRole.System,
                 Content = $"【历史摘要】{summary}",
             });
+            // 日志同步滚动重写（与 Undo/Load/Reset 一致）：压缩曾只改内存不落盘，
+            // --continue 恢复的仍是压缩前全量历史，压缩对重启后的会话不生效
+            RollSessionLog();
+            foreach (var m in _messages)
+                LogMessage(m);
             LastInputTokens = 0; // 压缩后上下文大幅缩小：旧 prompt_tokens 过期，ctx 退回估算
             Console.WriteLine("✔ 历史已压缩，继续执行。");
             return true;

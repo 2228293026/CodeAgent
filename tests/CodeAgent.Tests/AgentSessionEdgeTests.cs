@@ -383,4 +383,27 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.Equal(agent.CurrentSystemPrompt, agent.Messages[0].Content); // 重盖为当前模式提示
         Assert.DoesNotContain("过期", agent.Messages[0].Content);
     }
+
+    [Fact]
+    public async Task CompactAsync_RollsSessionLog_RestoreSeesCompactedHistory()
+    {
+        // 回归：压缩曾只改内存不落盘，--continue 恢复的是压缩前全量历史（压缩白做）；
+        // 现压缩后滚动重写日志，恢复的会话自带摘要、且不含被压缩掉的最早几轮
+        var provider = new FakeProvider();
+        var agent = MakeLoggedAgent(provider);
+        for (int i = 1; i <= 4; i++)
+        {
+            provider.NextResponse = new ProviderResponse { Text = $"回复{i}" };
+            await agent.RunAsync($"问题{i}", CancellationToken.None);
+        }
+        provider.NextResponse = new ProviderResponse { Text = "历史摘要" };
+        Assert.True(await agent.CompactAsync(CancellationToken.None));
+        agent.Close();
+
+        var restored = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        Assert.True(restored.LoadSessionLog(agent.SessionPath!));
+        Assert.Contains(restored.Messages, m => m.Content?.Contains("历史摘要") == true); // 摘要落盘
+        Assert.DoesNotContain(restored.Messages, m => m.Content == "问题1"); // 最早一轮已被压缩掉
+        Assert.Contains(restored.Messages, m => m.Content == "问题4");       // 最近一轮保留
+    }
 }
