@@ -126,6 +126,26 @@ public class TextUtilFormattingTests
         Assert.Equal(expected, TextUtil.FormatSessionTime(TimeSpan.FromSeconds(seconds)));
 
     [Theory]
+    [InlineData(0, "刚刚")]
+    [InlineData(-30, "刚刚")]          // 未来时间（时钟回拨）：按刚刚，不显示负数
+    [InlineData(59, "刚刚")]
+    [InlineData(60, "1 分钟前")]
+    [InlineData(3599, "59 分钟前")]
+    [InlineData(3600, "1 小时前")]
+    [InlineData(86399, "23 小时前")]
+    [InlineData(86400, "1 天前")]
+    [InlineData(30 * 86400, "30 天前")]
+    [InlineData(31 * 86400, "5月15日")]        // 超 30 天：回退日期（同年不带年份）
+    [InlineData(400 * 86400, "2025年5月11日")] // 跨年：带年份
+    public void RelativeTime_Cases(double secondsAgo, string expected)
+    {
+        // 固定基准 2026-06-15（年中，避免 31 天前必然跨年）：秒数前的时间换算应得到预期文本
+        var now = new DateTime(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc);
+        var utc = now.AddSeconds(-secondsAgo);
+        Assert.Equal(expected, TextUtil.RelativeTime(utc, now));
+    }
+
+    [Theory]
     [InlineData(0, "0.0s")]
     [InlineData(22.7, "22.7s")]
     [InlineData(59.95, "60.0s")]

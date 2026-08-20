@@ -1308,12 +1308,13 @@ internal static class Program
                             Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
                         for (int i = 0; i < logs.Count; i++)
                         {
-                            // 文件名只是时间戳：附上首条用户消息预览与条数，才能认出哪个会话是哪段对话
+                            // 文件名只是时间戳：附上相对时间、首条用户消息预览与条数，才能认出哪个会话是哪段对话
                             var (preview, count) = AgentClass.SessionLogSummary(logs[i]);
                             var label = Path.GetFileNameWithoutExtension(logs[i]);
+                            var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(logs[i]), DateTime.UtcNow);
                             Console.WriteLine(preview is null
-                                ? $"  {i + 1}) {label}（{count} 条）"
-                                : $"  {i + 1}) {label} · {TextUtil.TruncateLine(preview, 50)}（{count} 条）");
+                                ? $"  {i + 1}) {label}（{age}，{count} 条）"
+                                : $"  {i + 1}) {label} · {age} · {TextUtil.TruncateLine(preview, 50)}（{count} 条）");
                         }
                     }
                     break;

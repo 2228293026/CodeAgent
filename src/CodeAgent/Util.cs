@@ -240,6 +240,26 @@ public static class TextUtil
         : t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s"
         : $"{t.TotalSeconds:F0}s";
 
+    /// <summary>相对时间文本（刚刚 / N 分钟前 / N 小时前 / N 天前；超过 30 天回退到日期，
+    /// 跨年带年份）。/resume 列表用：文件名时间戳不便认会话新旧。</summary>
+    public static string RelativeTime(DateTime utc, DateTime nowUtc)
+    {
+        var span = nowUtc - utc;
+        if (span < TimeSpan.Zero)
+            span = TimeSpan.Zero; // 时钟回拨/未来文件：按刚刚处理
+        if (span.TotalMinutes < 1)
+            return "刚刚";
+        if (span.TotalHours < 1)
+            return $"{(int)span.TotalMinutes} 分钟前";
+        if (span.TotalDays < 1)
+            return $"{(int)span.TotalHours} 小时前";
+        if (span.TotalDays <= 30)
+            return $"{(int)span.TotalDays} 天前";
+        return utc.Year == nowUtc.Year
+            ? $"{utc.Month}月{utc.Day}日"
+            : $"{utc.Year}年{utc.Month}月{utc.Day}日";
+    }
+
     /// <summary>耗时格式（如 1m 5s / 22.0s，保留一位小数秒）。</summary>
     public static string FormatElapsed(TimeSpan t) =>
         t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F1}s";
