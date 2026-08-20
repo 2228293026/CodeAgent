@@ -144,13 +144,14 @@ Switch live (persisted back to the config): `/access next` cycles strict → whi
 ```bash
 codeagent "Implement all the TODOs in Program.cs"
 codeagent --cwd ../some-project "Explain how this project builds"
+codeagent --mode review "Review src/Agent.cs"   # start in a given mode (session-level defaultMode override, not persisted)
 codeagent --models                    # list the current provider models
 codeagent --continue                  # resume this project latest session
 codeagent --continue "continue the task"
 type bug.log | codeagent "analyze"    # piped stdin is appended to the task
 ```
 
-Every message is logged to `.codeagent/sessions/*.jsonl` (`saveSessions`); `--continue` resumes the latest; `/resume` lists the 10 most recent and restores by number; `/export <n>` exports one of them to Markdown.
+Every message is logged to `.codeagent/sessions/*.jsonl` (`saveSessions`); `--continue` resumes the latest; `/resume` lists the 10 most recent (relative age + first-user-input preview) and restores by number; `/export <n>` exports one of them to Markdown (a named snapshot wins over the number if they collide).
 
 ### Interactive REPL
 

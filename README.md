@@ -161,6 +161,7 @@ CODEAGENT_MODEL=gpt-4o codeagent        # 只换模型（-m 优先；兼容旧�
 ```bash
 codeagent "把 Program.cs 里的 TODO 都实现掉"
 codeagent --cwd ../some-project "解释一下这个项目怎么构建"
+codeagent --mode review "审查 src/Agent.cs"   # 以指定工作模式启动（会话级覆盖 defaultMode，不写回配置）
 codeagent --models                    # 列出当前 Provider 的可用模型
 codeagent --continue                  # 恢复本项目最近一次会话继续对话
 codeagent --resume 3                  # 按 /resume 列表编号恢复历史会话
@@ -168,7 +169,7 @@ codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执�
 codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
 ```
 
-每条消息自动落盘到 `.codeagent/sessions/*.jsonl`（`saveSessions` 控制），`--continue` 恢复最近一次；会话内 `/resume` 列出最近 10 次并按编号恢复，`/clear` 后自动滚动新日志（不会误恢复已清空的历史）；`/export <编号>` 把 /resume 列表中的历史会话导出为 Markdown（不带编号则导出当前对话）。
+每条消息自动落盘到 `.codeagent/sessions/*.jsonl`（`saveSessions` 控制），`--continue` 恢复最近一次；会话内 `/resume` 列出最近 10 次（相对时间 + 首条用户输入预览）并按编号恢复，`/clear` 后自动滚动新日志（不会误恢复已清空的历史）；`/export <编号>` 把 /resume 列表中的历史会话导出为 Markdown（不带编号则导出当前对话；与命名快照撞名时快照优先）。
 
 ### 交互模式
 
