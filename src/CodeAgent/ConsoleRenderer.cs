@@ -83,7 +83,9 @@ public sealed class ConsoleRenderer
                     _tickRun = 0;
                     return;
                 }
-                // 围栏开始：先输出围栏前的内容，进入代码模式
+                // 围栏开始：先冲刷缓冲中的表格（表格后紧跟代码块时表格应先输出——
+                // EmitLine 不带表格冲刷，漏了会把表格渲染到代码块之后甚至丢失），进入代码模式
+                FlushTable();
                 EmitLine(_line.ToString());
                 _line.Clear();
                 _inCode = true;

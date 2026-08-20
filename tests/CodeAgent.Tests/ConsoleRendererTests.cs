@@ -37,6 +37,27 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void TableFollowedByCodeFence_TablePrintsBeforeCode()
+    {
+        // 回归：围栏开始曾不冲刷表格缓冲——表格后紧跟代码块时，表格被渲染到代码块之后（顺序颠倒）
+        // （单元格按列宽填充，断言用表格特有的 ─ 分隔线而非含空格的表头）
+        var output = Render("| a | b |\n|---|---|\n| 1 | 2 |\n```cs\nvar x = 1;\n```\n");
+        var tableAt = output.IndexOf('─');
+        Assert.True(tableAt >= 0, "表格分隔线应存在");
+        Assert.True(tableAt < output.IndexOf("var x = 1;", StringComparison.Ordinal), "表格应在代码块之前输出");
+    }
+
+    [Fact]
+    public void TableFollowedByUnterminatedCodeFence_TableStillPrinted()
+    {
+        // 回归：流在围栏内结束时，Flush 走 EmitCode 分支不冲刷表格——开围栏时冲刷后表格不再丢失
+        var output = Render("| a | b |\n|---|---|\n| 1 | 2 |\n```cs\nvar x = 1;\n");
+        var tableAt = output.IndexOf('─');
+        Assert.True(tableAt >= 0, "表格分隔线应存在");
+        Assert.True(tableAt < output.IndexOf("var x = 1;", StringComparison.Ordinal), "表格应在代码之前输出");
+    }
+
+    [Fact]
     public void Append_CrlfLineEndings_DoNotLeakCarriageReturns()
     {
         // 回归：Windows 换行（\r\n）的行尾 \r 曾被原样输出，终端会把它当回车跳回行首覆盖本行
