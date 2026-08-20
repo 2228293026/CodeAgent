@@ -2,6 +2,31 @@ using System.Text;
 
 namespace CodeAgent;
 
+/// <summary>括号粘贴模式（bracketed paste）使能/复位：终端把粘贴内容包在
+/// ESC[200~ … ESC[201~ 里，粘贴边界从计时启发式变成确定性标记。
+/// 模式在进程生命周期内保持开启（每个提示符都可能粘贴）；退出时必须复位，
+/// 否则标记序列残留给后续的 shell（cmd 对它显示乱码）。不支持的终端忽略使能序列，
+/// 输入层自动回退到旧的间隔启发式。</summary>
+public static class BracketedPaste
+{
+    private static bool _enabled;
+
+    /// <summary>开启括号粘贴（幂等）。只在交互式 ANSI 终端下有效。</summary>
+    public static void Enable()
+    {
+        if (_enabled)
+            return;
+        _enabled = true;
+        Console.Write("\x1b[?2004h");
+        // 进程退出兜底复位（/exit 的 Environment.Exit 也会触发 ProcessExit）；
+        // 正常路径关闭的可靠性不依赖这里，双发一次复位序列无害
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { Console.Write("\x1b[?2004l"); } catch { /* 进程退出中，尽力而为 */ }
+        };
+    }
+}
+
 /// <summary>
 /// 终端输入行：斜杠命令菜单（**ANSI 原地渲染**：方向键让 ">" 在列表内上下移动，
 /// 纯转义文本输出，不依赖控制台光标 API，兼容 Windows Terminal 等现代终端；
@@ -160,6 +185,8 @@ public static class InputLine
 
         var winW = TryWindowWidth();
         var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
+        if (ansiOk)
+            BracketedPaste.Enable(); // 粘贴边界标记（详见 BracketedPaste 注释）；重定向/窄终端不启用
         string Fit(string s) => FitToWidth(s, Math.Max(10, winW - 4));
 
         var menuOpen = false;
@@ -617,16 +644,24 @@ public static class InputLine
         }
 
         // —— 主输入循环 ——
-        var pendingKey = (ConsoleKeyInfo?)null; // 粘贴流中暂存的按键（CRLF 的 \n 会被吞掉、普通字符放回）
+        var pending = new Queue<ConsoleKeyInfo>(); // 暂存键队列（标记探测误吞时放回、CRLF 携带键等）
         var keySw = new System.Diagnostics.Stopwatch();
-        var pasteStream = false; // 最近一次 ReadKey 等待 < 阈值 → 键已缓冲（粘贴流，兼容分批注入）
+        var pasteStream = false; // 最近一次 ReadKey 等待 < 阈值 → 键已缓冲（无括号粘贴终端的回退启发式）
+        var pasteActive = false; // 括号粘贴中（终端显式标记了粘贴边界）：Enter/Tab 都是内容
+        var lastPasteWasCR = false; // 粘贴中上一个换行来自 \r（CRLF 的 \n 折叠用）
+        var needsRedraw = false; // 挂起的重绘：粘贴流中逐键整行重画会卡顿，缓冲排空后一次画
         while (true)
         {
-            ConsoleKeyInfo key;
-            if (pendingKey is { } pk)
+            // 粘贴流排空：把挂起的重绘补上（仍键入中则继续攒）
+            if (needsRedraw && !Console.KeyAvailable && !pasteActive)
             {
-                key = pk; // 暂存键来自粘贴流，保持 pasteStream
-                pendingKey = null;
+                needsRedraw = false;
+                OnTextChanged();
+            }
+            ConsoleKeyInfo key;
+            if (pending.Count > 0)
+            {
+                key = pending.Dequeue(); // 暂存键可能来自粘贴流，保持 pasteStream
             }
             else
             {
@@ -636,6 +671,52 @@ public static class InputLine
                 // 键几乎立即返回（<30ms）说明是缓冲中的粘贴流；手动输入的键间隔通常更慢
                 pasteStream = keySw.ElapsedMilliseconds < 30;
             }
+
+            // 括号粘贴标记 ESC[200~/ESC[201~：使能 ESC[?2004h 的终端在粘贴内容外注入边界，
+            // 换行判定从计时启发式变成确定性标记（分批注入时 \n 曾被误判为真人按 Enter，
+            // 半截草稿被提交）。非标记（用户单按 ESC）时把已消费键放回队列，走正常 ESC 处理
+            if (key.Key == ConsoleKey.Escape)
+            {
+                var detector = new PasteMarkerDetector();
+                detector.Feed('\x1b');
+                var consumed = new List<ConsoleKeyInfo>();
+                var waited = 0;
+                while (detector.InProgress)
+                {
+                    if (!Console.KeyAvailable)
+                    {
+                        if (waited >= 10)
+                            break; // 单按 ESC：等了 10ms 无后续，不是标记
+                        System.Threading.Thread.Sleep(2);
+                        waited += 2;
+                        continue;
+                    }
+                    var mk = Console.ReadKey(intercept: true);
+                    consumed.Add(mk);
+                    detector.Feed(mk.KeyChar);
+                }
+                if (detector.Result == PasteMarkerResult.Start)
+                {
+                    pasteActive = true;
+                    lastPasteWasCR = false;
+                    continue;
+                }
+                if (detector.Result == PasteMarkerResult.End)
+                {
+                    pasteActive = false;
+                    if (needsRedraw)
+                    {
+                        needsRedraw = false;
+                        OnTextChanged();
+                    }
+                    continue;
+                }
+                // 不是标记：已消费键按到达顺序放回（先到先出），ESC 本身继续正常处理
+                foreach (var ck in consumed)
+                    pending.Enqueue(ck);
+            }
+            if (key.Key != ConsoleKey.Enter)
+                lastPasteWasCR = false; // 非换行键到达：下一个 \n 不再是 CRLF 的尾半
 
             // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
             if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
@@ -651,6 +732,20 @@ public static class InputLine
                     break;
                 case ConsoleKey.Enter:
                     searching = false; // 搜索结束：提交当前命中的历史条目
+                    if (pasteActive)
+                    {
+                        // 括号粘贴中的换行一律是内容：不提交、不选菜单。
+                        // CRLF 成对到达：\r 插入，紧跟的 \n 折叠掉；LF-only 各自插入（空行不塌）
+                        if (key.KeyChar == '\n' && lastPasteWasCR)
+                            break;
+                        buf.Insert('\n');
+                        lastPasteWasCR = key.KeyChar == '\r';
+                        if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
+                            needsRedraw = true;
+                        else
+                            OnTextChanged();
+                        break;
+                    }
                     if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
                     {
                         var sel = menuItems[menuIndex].Name;
@@ -676,13 +771,18 @@ public static class InputLine
                     if (pasteStream || Console.KeyAvailable)
                     {
                         buf.Insert('\n');
+                        // 分批注入竞态：CRLF 的 \n 可能在 \r 读走后才到（此刻 KeyAvailable=false）。
+                        // 粘贴流的下一批通常 <5ms 到达，而真人不会在 5ms 内紧跟按键——小睡再查一次，
+                        // 堵住「半截草稿被当成独立提交」的旧竞态
+                        if (pasteStream && !Console.KeyAvailable)
+                            System.Threading.Thread.Sleep(5);
                         // CRLF 粘贴的 \r\n 中 \r 触发本分支后 \n 还会再触发一次 Enter：
                         // 读取并丢弃；若下一个是普通字符（LF-only 粘贴的下一行内容）则放回暂存
                         if (Console.KeyAvailable)
                         {
                             var next = Console.ReadKey(intercept: true);
                             if (next.Key != ConsoleKey.Enter)
-                                pendingKey = next;
+                                pending.Enqueue(next);
                         }
                         OnTextChanged();
                         break;
@@ -693,6 +793,10 @@ public static class InputLine
                     var line = buf.Text;
                     Remember(line);
                     return line;
+
+                case ConsoleKey.Backspace when pasteActive:
+                case ConsoleKey.Delete when pasteActive:
+                    break; // 粘贴流中的控制键是内容的一部分（罕见），不当作编辑命令误删已插入文本
 
                 case ConsoleKey.Backspace:
                     if (searching)
@@ -869,6 +973,12 @@ public static class InputLine
                     }
                     break;
 
+                case ConsoleKey.Tab when pasteActive:
+                    buf.Insert('\t'); // 粘贴的 Tab 是内容（缩进代码），不触发补全/模式切换
+                    lastPasteWasCR = false;
+                    needsRedraw = true;
+                    break;
+
                 case ConsoleKey.Tab:
                     if (menuOpen && menuItems.Count == 1)
                     {
@@ -966,7 +1076,7 @@ public static class InputLine
                         if (confirmKey.Key != ConsoleKey.Escape)
                         {
                             // 取消确认：恢复输入行，按键交给主循环继续处理
-                            pendingKey = confirmKey;
+                            pending.Enqueue(confirmKey);
                             RedrawInput();
                             break;
                         }
@@ -1051,7 +1161,12 @@ public static class InputLine
                             CloseMenu();
                         buf.Insert(key.KeyChar);
                         draft = null; // 输入使草稿失效
-                        OnTextChanged();
+                        lastPasteWasCR = false;
+                        // 粘贴流中不逐键整行重绘（大粘贴会卡顿/闪烁）：挂起，缓冲排空或粘贴结束时一次画
+                        if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
+                            needsRedraw = true;
+                        else
+                            OnTextChanged();
                         // 任何斜杠输入都弹菜单：无匹配块本身是打字状态的实时反馈（打错字可见），
                         // 菜单常驻到 ESC/Enter 或输入脱离斜杠才关闭
                         if (!modePicker && SlashLike(buf.Text) && !menuOpen)
