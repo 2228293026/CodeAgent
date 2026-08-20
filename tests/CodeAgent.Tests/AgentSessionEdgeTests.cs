@@ -364,4 +364,23 @@ public class AgentSessionEdgeTests : IDisposable
 
         Assert.Equal(stale, Assert.Single(logs)); // 只剩旧日志：当前会话自己的日志被排除
     }
+
+    [Fact]
+    public void LoadSessionLog_RestampsSystemWithCurrentModePrompt()
+    {
+        // 回归：REPL /resume 恢复后不再 SetMode（只有启动 --continue 会），日志里的旧
+        // system（别的模式或旧版提示）曾原样带进后续请求；应与 LoadSession 一致重盖
+        var log = Path.Combine(SessionDir, "20260102-000000.jsonl");
+        File.WriteAllLines(log,
+        [
+            """{"ts":"00:00:00","role":"system","tool":null,"toolCallId":null,"content":"过期的系统提示","toolCalls":null,"error":false}""",
+            """{"ts":"00:00:01","role":"user","tool":null,"toolCallId":null,"content":"你好","toolCalls":null,"error":false}""",
+        ]);
+        var agent = MakeAgent(new FakeProvider());
+
+        Assert.True(agent.LoadSessionLog(log));
+
+        Assert.Equal(agent.CurrentSystemPrompt, agent.Messages[0].Content); // 重盖为当前模式提示
+        Assert.DoesNotContain("过期", agent.Messages[0].Content);
+    }
 }

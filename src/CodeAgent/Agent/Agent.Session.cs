@@ -135,7 +135,7 @@ public sealed partial class Agent
 
     /// <summary>从会话日志（.jsonl，每条消息自动写入）恢复对话：--continue / /resume 用。
     /// 恢复后滚动新日志并把已恢复的消息写进去，新日志自包含（可再次被恢复）；
-    /// 开头的 system 若为日志旧值，会由随后的 SetMode 换成当前模式提示。</summary>
+    /// 开头的 system 一律重盖为当前模式提示（启动路径随后的 SetMode 重盖为相同值）。</summary>
     public bool LoadSessionLog(string path)
     {
         if (!File.Exists(path))
@@ -155,8 +155,13 @@ public sealed partial class Agent
 
         _messages.Clear();
         _messages.AddRange(msgs);
+        // 开头 system 重盖为当前模式提示（与 LoadSession 一致）：REPL 的 /resume 路径不会再
+        // SetMode（只有启动 --continue 会），日志里的旧 system（别的模式或旧版提示）若不重盖
+        // 会原样带进后续请求。启动路径随后 SetMode 重盖为相同值，无影响。
         if (_messages[0].Role != MessageRole.System)
-            _messages.Insert(0, new ProviderMessage { Role = MessageRole.System, Content = _config.SystemPrompt });
+            _messages.Insert(0, new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
+        else
+            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) };
         _turnStarts.Clear(); // 恢复的会话没有「上一轮」可撤回
         LastInputTokens = 0; // 上下文变为恢复的历史：退回估算口径
 
