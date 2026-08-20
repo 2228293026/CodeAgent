@@ -63,6 +63,19 @@ public class SetupWizardFlowTests : IDisposable
     }
 
     [Fact]
+    public void SelectCustom_EmptyModelPrompt_ReasksInsteadOfCancelling()
+    {
+        // 回归：必填项直接回车曾把「空输入」误判为 EOF（Ask 把空输入映射回 null 默认值），
+        // 整个向导被取消；应提示必填并继续询问
+        var (config, output) = RunWizard("7\n\nmy-model\nhttps://x.example/v1\n3\n");
+
+        Assert.Equal("custom", config.Provider);
+        Assert.Equal("my-model", config.Providers["custom"].Model);
+        Assert.Contains("必填", output); // 重新询问的提示
+        Assert.Contains("配置已保存", output);
+    }
+
+    [Fact]
     public void SelectOllama_FreeService_GetsPlaceholderKey()
     {
         // 输入：选 ollama(4)，免费服务不询问 Key

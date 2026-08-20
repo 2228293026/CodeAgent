@@ -196,19 +196,24 @@ public static class SetupWizard
         return text.Length > 0 ? text : defaultValue;
     }
 
-    /// <summary>必填输入：空输入继续询问，输入被中断（EOF）时取消整个向导。</summary>
+    /// <summary>必填输入：空输入继续询问，输入被中断（EOF）时取消整个向导。
+    /// 不复用 Ask：Ask 把空输入映射回默认值（默认值为 null 时与 EOF 同为 null，无法区分）——
+    /// 曾导致必填项按回车被当成中断，整个向导被取消。</summary>
     private static string AskRequired(TextReader input, TextWriter output, string prompt)
     {
         while (true)
         {
-            var value = Ask(input, output, prompt);
-            if (value is null)
+            output.Write($"{prompt}: ");
+            var line = input.ReadLine();
+            if (line is null)
             {
                 output.WriteLine("\n⚠ 输入已中断，配置向导取消，未保存任何更改。");
                 throw new OperationCanceledException();
             }
+            var value = line.Trim();
             if (value.Length > 0)
                 return value;
+            output.WriteLine("  该项必填，请输入内容。");
         }
     }
 
