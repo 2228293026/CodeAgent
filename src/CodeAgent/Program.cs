@@ -1309,12 +1309,13 @@ internal static class Program
                         for (int i = 0; i < logs.Count; i++)
                         {
                             // 文件名只是时间戳：附上相对时间、首条用户消息预览与条数，才能认出哪个会话是哪段对话
-                            var (preview, count) = AgentClass.SessionLogSummary(logs[i]);
+                            var (preview, count, capped) = AgentClass.SessionLogSummary(logs[i]);
                             var label = Path.GetFileNameWithoutExtension(logs[i]);
                             var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(logs[i]), DateTime.UtcNow);
+                            var countText = capped ? $"≥{count} 条" : $"{count} 条"; // 封顶后是下限，不是精确值
                             Console.WriteLine(preview is null
-                                ? $"  {i + 1}) {label}（{age}，{count} 条）"
-                                : $"  {i + 1}) {label} · {age} · {TextUtil.TruncateLine(preview, 50)}（{count} 条）");
+                                ? $"  {i + 1}) {label}（{age}，{countText}）"
+                                : $"  {i + 1}) {label} · {age} · {TextUtil.TruncateLine(preview, 50)}（{countText}）");
                         }
                     }
                     break;

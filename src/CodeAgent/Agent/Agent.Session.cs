@@ -213,18 +213,23 @@ public sealed partial class Agent
 
     /// <summary>会话日志摘要（/resume 列表用）：首条用户消息预览（多行折叠为 ⏎）+ 消息条数。
     /// 文件名只是时间戳，看不出哪个会话是哪段对话——首条用户输入才是可辨识的标题。
-    /// 流式读取且行数封顶 5000：超大日志不做完整解析，避免列表卡顿。</summary>
-    internal static (string? Preview, int Count) SessionLogSummary(string path)
+    /// 流式读取且行数封顶 5000：超大日志不做完整解析，避免列表卡顿；Capped=true 表示
+    /// 条数只是下限（实际更多），显示层应标「≥」而不是当成精确值。</summary>
+    internal static (string? Preview, int Count, bool Capped) SessionLogSummary(string path)
     {
         try
         {
             string? preview = null;
             var count = 0;
+            var capped = false;
             foreach (var line in ReadLogLines(path))
             {
-                count++;
                 if (count >= 5000)
-                    break; // 行数封顶：预览早已在前几行拿到，够用
+                {
+                    capped = true; // 已读满 5000 行且还有更多：count 只是下限，不是精确值
+                    break;
+                }
+                count++;
                 if (preview is not null)
                     continue;
                 try
@@ -239,11 +244,11 @@ public sealed partial class Agent
                     // 损坏行跳过（与 ParseLogLine 一致）
                 }
             }
-            return (preview, count);
+            return (preview, count, capped);
         }
         catch
         {
-            return (null, 0); // 读取失败：列表降级为仅显示时间戳
+            return (null, 0, false); // 读取失败：列表降级为仅显示时间戳
         }
     }
 

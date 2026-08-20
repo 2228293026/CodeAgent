@@ -300,9 +300,10 @@ public class AgentSessionEdgeTests : IDisposable
             """{"ts":"12:00:05","role":"assistant","tool":null,"toolCallId":null,"content":"好的","toolCalls":null,"error":false}""",
         ]);
 
-        var (preview, count) = AgentClass.SessionLogSummary(log);
+        var (preview, count, capped) = AgentClass.SessionLogSummary(log);
         Assert.Equal("帮我写一个 README", preview);
         Assert.Equal(3, count);
+        Assert.False(capped);
     }
 
     [Fact]
@@ -316,9 +317,10 @@ public class AgentSessionEdgeTests : IDisposable
             "{\"ts\":\"12:01:01\",\"role\":\"user\",\"tool\":null,\"toolCallId\":null,\"content\":\"第一行\\n第二行\",\"toolCalls\":null,\"error\":false}",
         ]);
 
-        var (preview, count) = AgentClass.SessionLogSummary(log);
+        var (preview, count, capped) = AgentClass.SessionLogSummary(log);
         Assert.Equal("第一行 ⏎ 第二行", preview);
         Assert.Equal(2, count);
+        Assert.False(capped);
     }
 
     [Fact]
@@ -332,11 +334,36 @@ public class AgentSessionEdgeTests : IDisposable
             """{"ts":"12:02:01","role":"assistant","tool":null,"toolCallId":null,"content":null,"toolCalls":[],"error":false}""",
         ]);
 
-        var (preview, count) = AgentClass.SessionLogSummary(log);
+        var (preview, count, capped) = AgentClass.SessionLogSummary(log);
         Assert.Null(preview);
         Assert.Equal(2, count);
+        Assert.False(capped);
 
         Assert.Equal((string?)null, AgentClass.SessionLogSummary(Path.Combine(SessionDir, "nope.jsonl")).Preview);
+    }
+
+    [Fact]
+    public void SessionLogSummary_HugeLog_CountIsLowerBoundWithCapFlag()
+    {
+        // 回归：5000 行封顶后曾把「5000」当精确值显示——9000 行的日志谎报「5000 条」；
+        // 现在 Capped=true，列表显示「≥5000 条」。恰好 5000 行不算封顶
+        var log = Path.Combine(SessionDir, "20260821-090000.jsonl");
+        var lines = new string[5100];
+        lines[0] = """{"ts":"09:00:00","role":"user","tool":null,"toolCallId":null,"content":"首条","toolCalls":null,"error":false}""";
+        for (int i = 1; i < lines.Length; i++)
+            lines[i] = $$"""{"ts":"09:00:00","role":"assistant","tool":null,"toolCallId":null,"content":"行{{i}}","toolCalls":null,"error":false}""";
+        File.WriteAllLines(log, lines);
+
+        var (preview, count, capped) = AgentClass.SessionLogSummary(log);
+        Assert.Equal("首条", preview); // 预览在前几行，已拿到
+        Assert.True(capped);
+        Assert.Equal(5000, count); // 下限（实际 5100 行）
+
+        // 恰好 5000 行：精确值，不封顶
+        File.WriteAllLines(log, lines[..5000]);
+        var (p2, c2, capped2) = AgentClass.SessionLogSummary(log);
+        Assert.False(capped2);
+        Assert.Equal(5000, c2);
     }
 
     [Fact]
