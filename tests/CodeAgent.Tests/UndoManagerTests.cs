@@ -335,10 +335,51 @@ public class UndoManagerTests : IDisposable
         File.WriteAllText(Path.Combine(_dir, ".git", "config"), "y");
 
         var snap = UndoManager.SnapshotDir(_dir);
-        Assert.Equal("hello", snap["small.txt"]);
-        Assert.False(snap.ContainsKey("big.bin"));
-        Assert.False(snap.ContainsKey("bin/build.dll.txt")); // 构建目录被剪枝
-        Assert.False(snap.ContainsKey(".git/config"));       // 版本控制目录被剪枝
+        Assert.Equal("hello", snap.Texts["small.txt"]);
+        Assert.False(snap.Texts.ContainsKey("big.bin"));
+        Assert.False(snap.Texts.ContainsKey("bin/build.dll.txt")); // 构建目录被剪枝
+        Assert.False(snap.Texts.ContainsKey(".git/config"));       // 版本控制目录被剪枝
+    }
+
+    [Fact]
+    public void RecordCommandSideEffects_DeletedGbkFile_UndoRebuildsAsGbk()
+    {
+        // 回归：命令删除 GBK 文件后，撤销重建曾按无 BOM UTF-8 写回（编码静默丢失）；
+        // 原编码在执行前快照里就有，撤销应按 GB18030 重建
+        var dir = Path.Combine(_dir, "gbk-del");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "a.txt");
+        var bytes = System.Text.Encoding.GetEncoding("GB18030").GetBytes("中文旧内容");
+        File.WriteAllBytes(path, bytes); // 高位字节流：非法 UTF-8 → 快照判 GBK
+
+        var before = UndoManager.SnapshotDir(dir);
+        File.Delete(path);
+        var um = new UndoManager();
+        UndoManager.RecordCommandSideEffects(dir, before, um);
+
+        Assert.Contains("重建被删文件", um.TryUndo());
+        Assert.Equal(bytes, File.ReadAllBytes(path)); // 字节级一致：仍是 GB18030，不是 UTF-8
+    }
+
+    [Fact]
+    public void RecordCommandSideEffects_ModifiedGbkFile_UndoUsesBeforeEncoding()
+    {
+        // 回归：命令把 GBK 文件重写成合法 UTF-8 后，执行后推断会得到 null（UTF-8），
+        // 撤销便把旧内容写成 UTF-8；原编码必须取自执行前快照
+        var dir = Path.Combine(_dir, "gbk-mod");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "a.txt");
+        File.WriteAllBytes(path, System.Text.Encoding.GetEncoding("GB18030").GetBytes("中文旧内容"));
+
+        var before = UndoManager.SnapshotDir(dir);
+        File.WriteAllText(path, "plain ascii now"); // 命令改写为合法 UTF-8
+
+        var um = new UndoManager();
+        UndoManager.RecordCommandSideEffects(dir, before, um);
+
+        Assert.NotNull(um.TryUndo());
+        Assert.Equal("gb18030", CodeAgent.TextUtil.DetectFileEncoding(path)); // 撤销后仍判 GBK
+        Assert.Equal("中文旧内容", File.ReadAllText(path, System.Text.Encoding.GetEncoding("GB18030")));
     }
 
     [Fact]

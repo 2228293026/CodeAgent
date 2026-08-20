@@ -296,14 +296,14 @@ public class FinalWaveTests : IDisposable
         File.WriteAllText(PathOf("node_modules", "skip.js"), "s");
 
         var snap = UndoManager.SnapshotDir(_dir);
-        Assert.Contains(snap, kv => kv.Key.EndsWith("keep.cs", StringComparison.Ordinal));
-        Assert.DoesNotContain(snap, kv => kv.Key.Contains("node_modules", StringComparison.Ordinal));
+        Assert.Contains(snap.Texts, kv => kv.Key.EndsWith("keep.cs", StringComparison.Ordinal));
+        Assert.DoesNotContain(snap.Texts, kv => kv.Key.Contains("node_modules", StringComparison.Ordinal));
     }
 
     [Fact]
     public void SnapshotDir_MissingDir_ReturnsEmpty()
     {
-        Assert.Empty(UndoManager.SnapshotDir(PathOf("nope")));
+        Assert.Empty(UndoManager.SnapshotDir(PathOf("nope")).Texts);
     }
 
     [Fact]

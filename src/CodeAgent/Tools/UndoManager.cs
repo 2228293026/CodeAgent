@@ -158,10 +158,15 @@ public sealed class UndoManager
     private const long SnapshotMaxFileBytes = 1 * 1024 * 1024;   // 单文件上限：>1MB 不记录（无法撤销）
     private const long SnapshotMaxTotalBytes = 20 * 1024 * 1024; // 快照总大小上限：防止大项目拖慢每次命令
 
+    /// <summary>目录快照：文件内容 + 各文件编码。编码取自命令执行前——被删文件无法
+    /// 从磁盘探测，若只靠执行后推断，撤销重建会把 GBK 文件写成 UTF-8。</summary>
+    public sealed record DirSnapshot(Dictionary<string, string> Texts, Dictionary<string, string?> Encodings);
+
     /// <summary>对目录做文本文件快照（相对路径 → 内容）：跳过构建/缓存目录、二进制与超大文件。</summary>
-    public static Dictionary<string, string> SnapshotDir(string cwd)
+    public static DirSnapshot SnapshotDir(string cwd)
     {
-        var snap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var encodings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         long total = 0;
         try
         {
@@ -176,7 +181,9 @@ public sealed class UndoManager
                         break;
                     var text = TextUtil.ReadTextSmart(file); // GBK 等旧编码快照内容不乱码
                     total += fi.Length;
-                    snap[Path.GetRelativePath(cwd, file).Replace('\\', '/')] = text;
+                    var rel = Path.GetRelativePath(cwd, file).Replace('\\', '/');
+                    texts[rel] = text;
+                    encodings[rel] = TextUtil.DetectFileEncoding(file);
                 }
                 catch
                 {
@@ -188,19 +195,19 @@ public sealed class UndoManager
         {
             // 快照失败按无快照处理：本次命令不记录副作用
         }
-        return snap;
+        return new DirSnapshot(texts, encodings);
     }
 
     /// <summary>对比执行前后快照，把新增/修改/删除的文件作为 cmd 条目推入撤销栈（/undo 可回滚）。</summary>
-    public static void RecordCommandSideEffects(string cwd, Dictionary<string, string> before, UndoManager undo)
+    public static void RecordCommandSideEffects(string cwd, DirSnapshot before, UndoManager undo)
     {
         var after = SnapshotDir(cwd);
-        var paths = new HashSet<string>(before.Keys, StringComparer.OrdinalIgnoreCase);
-        paths.UnionWith(after.Keys);
+        var paths = new HashSet<string>(before.Texts.Keys, StringComparer.OrdinalIgnoreCase);
+        paths.UnionWith(after.Texts.Keys);
         foreach (var rel in paths)
         {
-            var had = before.TryGetValue(rel, out var old);
-            var has = after.TryGetValue(rel, out var cur);
+            var had = before.Texts.TryGetValue(rel, out var old);
+            var has = after.Texts.TryGetValue(rel, out var cur);
             if (had && has && old == cur)
                 continue; // 内容未变
             var full = Path.GetFullPath(Path.Combine(cwd, rel.Replace('/', Path.DirectorySeparatorChar)));
@@ -210,8 +217,8 @@ public sealed class UndoManager
                 Path = full,
                 OldText = had ? old : null, // 新增文件无旧内容（撤销=删除）；修改/删除则记录执行前内容
                 HadFile = had,
-                // 命令副作用无法拿到执行前文件的编码：按当前文件尽力推断（命令未改编码时即原编码）
-                EncodingName = had && has ? TextUtil.DetectFileEncoding(full) : null,
+                // 原编码取自执行前快照：被删文件磁盘上已不存在，执行后推断拿不到它的 GBK
+                EncodingName = had ? before.Encodings.GetValueOrDefault(rel) : null,
             });
         }
     }
