@@ -92,6 +92,28 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_TinyMaxTokens_ThinkingFallsBackToTemperature()
+    {
+        // 回归：maxTokens ≤ 1024 放不下最小思考预算（budget 必须 < max_tokens），
+        // 硬启用 thinking 会被 API 400 拒绝；应退回 temperature 让请求本身成功
+        var handler = new CaptureHandler();
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "test-key", MaxTokens = 512 }, new HttpClient(handler));
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "hi" },
+        };
+
+        await provider.ChatAsync(messages, [], "high", CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!);
+        Assert.Null(body?["thinking"]);
+        Assert.NotNull(body?["temperature"]);
+    }
+
+    [Fact]
     public async Task ChatAsync_ThinkingOff_SendsTemperature()
     {
         var handler = new CaptureHandler();

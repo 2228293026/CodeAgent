@@ -501,6 +501,13 @@ public sealed class AnthropicProvider : IAgentProvider
             payload["temperature"] = _temperature;
             return;
         }
+        if (_maxTokens <= 1024)
+        {
+            // Anthropic 最小思考预算 1024 且必须小于 max_tokens：maxTokens ≤ 1024 时思考放不下，
+            // 硬启用只会换来 API 400——退回不思考（发 temperature），请求仍能成功
+            payload["temperature"] = _temperature;
+            return;
+        }
         var budget = thinkingEffort switch { "low" => 1024, "high" => 16384, _ => 4096 };
         budget = Math.Min(budget, Math.Max(1024, _maxTokens - 1024)); // 预算不超过 max_tokens - 1024
         payload["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = budget };
