@@ -107,7 +107,7 @@ public static class InputLine
             }
             else
             {
-                cw = c > 0x2E7F ? 2 : 1;
+                cw = !char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1; // 孤立代理按 1 列（与 DisplayWidth 口径一致）
                 if (w + cw > maxWidth - 1)
                     break; // 预留省略号的一列
                 sb.Append(c);

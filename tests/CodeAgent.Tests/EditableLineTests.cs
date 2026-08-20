@@ -191,6 +191,15 @@ public class EditableLineTests
         Assert.Equal(expected, InputLine.FitToWidth(input, width));
 
     [Fact]
+    public void FitToWidth_LoneSurrogate_CountsAsOneColumn()
+    {
+        // 回归：孤立高代理曾按 2 列内联计算（DisplayWidth 已按 1 列），截断点提前、把「中」错截掉。
+        // 字符串在方法内构造（非 Attribute 常量）：xUnit 序列化理论数据时孤立代理会丢
+        var s = "\uD800" + "中文"; // 孤立高代理(1 列) + 中(2) + 文(2) = 5 列
+        Assert.Equal("\uD800" + "中…", InputLine.FitToWidth(s, 4));
+    }
+
+    [Fact]
     public void MoveLineUp_JumpsToPreviousLineStart()
     {
         var line = new EditableLine();
