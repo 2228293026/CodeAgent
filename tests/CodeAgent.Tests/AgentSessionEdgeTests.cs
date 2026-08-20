@@ -338,4 +338,30 @@ public class AgentSessionEdgeTests : IDisposable
 
         Assert.Equal((string?)null, AgentClass.SessionLogSummary(Path.Combine(SessionDir, "nope.jsonl")).Preview);
     }
+
+    [Fact]
+    public async Task SessionExists_SavedName_True_Missing_False()
+    {
+        // /export 名/编号二义消解的基础：/save 3 存的快照，/export 3 应按快照名解释（编号让位）
+        var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        await agent.RunAsync("x", CancellationToken.None);
+        agent.SaveSession("3");
+
+        Assert.True(agent.SessionExists("3"));
+        Assert.False(agent.SessionExists("nope"));
+    }
+
+    [Fact]
+    public async Task ResumableLogs_ExcludesCurrentSessionLog()
+    {
+        // /resume 与 /export <编号> 必须同源：当前会话日志不占编号，/export 1 与 /resume 1 指向同一文件
+        var agent = MakeLoggedAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
+        await agent.RunAsync("当前会话", CancellationToken.None);
+        var stale = Path.Combine(SessionDir, "20260101-000000.jsonl");
+        File.WriteAllText(stale, "{\"role\":\"user\",\"content\":\"旧会话\"}\n");
+
+        var logs = Program.ResumableLogs(agent, new AgentConfig { SessionDir = SessionDir });
+
+        Assert.Equal(stale, Assert.Single(logs)); // 只剩旧日志：当前会话自己的日志被排除
+    }
 }

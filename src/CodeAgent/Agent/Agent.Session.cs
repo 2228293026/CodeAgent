@@ -17,6 +17,9 @@ public sealed partial class Agent
         File.WriteAllText(path, JsonSerializer.Serialize(dto, JsonOpts));
     }
 
+    /// <summary>命名会话是否存在（/export 的名/编号二义消解：同名快照优先于 /resume 编号）。</summary>
+    public bool SessionExists(string name) => File.Exists(SessionFilePath(name));
+
     /// <summary>从命名会话恢复对话（替换当前历史）。</summary>
     public void LoadSession(string name)
     {

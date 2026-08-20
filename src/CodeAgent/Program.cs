@@ -464,6 +464,14 @@ internal static class Program
     internal static string? LatestSessionLog(AgentConfig config) =>
         RecentSessionLogs(config, 1).FirstOrDefault();
 
+    /// <summary>/resume 列表与 /export &lt;编号&gt; 共用的日志列表：排除当前会话自己的日志。
+    /// 两处必须同源——/export 曾直接用未过滤的 RecentSessionLogs，当前会话日志挤占 1 号
+    /// 时 /export 1 与 /resume 1 会指向不同文件。</summary>
+    internal static List<string> ResumableLogs(AgentClass agent, AgentConfig config) =>
+        RecentSessionLogs(config)
+            .Where(p => !string.Equals(p, agent.SessionPath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
     private static ProviderOptions EnsureSelectedProvider(AgentConfig config)
     {
         if (!config.Providers.TryGetValue(config.Provider, out var opts))
@@ -1272,12 +1280,10 @@ internal static class Program
 
             case "/resume":
                 // 恢复历史会话日志（每条消息自动落盘）；--continue 启动时自动恢复最近一次。
-                // 列表排除当前会话自己的日志：不排除时刚聊过几句的当前会话占据编号 1，
-                // 用户想恢复的「上一次对话」被挤到后面（恢复自己还会把日志再滚动复制一份）
+                // 列表排除当前会话自己的日志（ResumableLogs）：当前会话占 1 号会把用户想恢复的
+                // 「上一次对话」挤到后面（恢复自己还会把日志再滚动复制一份）
                 {
-                    var logs = RecentSessionLogs(config)
-                        .Where(p => !string.Equals(p, agent.SessionPath, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
+                    var logs = ResumableLogs(agent, config);
                     if (logs.Count == 0)
                     {
                         Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
@@ -1319,15 +1325,23 @@ internal static class Program
 
             case "/export":
                 // /export            导出当前对话
-                // /export <名>       导出命名快照（/save 保存的）
+                // /export <名>       导出命名快照（/save 保存的）；与编号撞名时快照优先
+                //                    （编号随日志滚动漂移，快照名是用户起的名，不该被劫持）
                 // /export <编号>     导出 /resume 列表中的历史会话日志（编号与 /resume 一致）
                 try
                 {
                     var arg = rest.Trim();
                     string file;
-                    if (int.TryParse(arg, out var eidx) && eidx >= 1)
+                    if (arg.Length > 0 && agent.SessionExists(arg))
+                        file = agent.ExportMarkdown(arg);
+                    else if (int.TryParse(arg, out var eidx) && eidx >= 1)
                     {
-                        var logs = RecentSessionLogs(config);
+                        var logs = ResumableLogs(agent, config);
+                        if (logs.Count == 0)
+                        {
+                            Console.WriteLine("⚠ 没有历史会话日志可导出（先正常对话过一次，或 /save <名> 后 /export <名>）。");
+                            break;
+                        }
                         if (eidx > logs.Count)
                         {
                             Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。");
@@ -1336,9 +1350,7 @@ internal static class Program
                         file = agent.ExportSessionLogMarkdown(logs[eidx - 1]);
                     }
                     else
-                    {
                         file = agent.ExportMarkdown(arg.Length == 0 ? null : arg);
-                    }
                     Console.WriteLine($"✔ 已导出: {file}");
                 }
                 catch (Exception ex)
@@ -1638,7 +1650,7 @@ internal static class Program
               /diff            显示最近一次修改的 diff
               /save <名>       保存当前会话（命名快照）
               /load <名>       恢复已保存的会话
-              /export [名/编号] 导出会话为 Markdown（编号为 /resume 列表中的历史会话）
+              /export [名/编号] 导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话）
               /stats           显示 token 用量统计
               /retry           重新执行上一条请求
               /tools           列出可用工具
