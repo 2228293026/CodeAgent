@@ -45,7 +45,7 @@ internal static class Program
         }
         catch { /* 忽略 */ }
 
-        string? configPath = null, provider = null, model = null, cwd = null;
+        string? configPath = null, provider = null, model = null, cwd = null, modeOverride = null;
         var init = false;
         var setup = false;
         var listModels = false;
@@ -70,6 +70,9 @@ internal static class Program
                         break;
                     case "--cwd":
                         cwd = NextArg(args, ref i, "--cwd");
+                        break;
+                    case "--mode":
+                        modeOverride = NextArg(args, ref i, "--mode");
                         break;
                     case "--init":
                         init = true;
@@ -240,8 +243,12 @@ internal static class Program
             else
                 Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
         }
-        // 应用配置的默认工作模式（如 "defaultMode": "debug"）
-        agent.SetMode(Modes.Find(config.DefaultMode, config));
+        // 应用工作模式：--mode <名> 会话级覆盖（不落盘），否则用配置的 defaultMode（如 "debug"）
+        var modeName = modeOverride ?? config.DefaultMode;
+        var mode = Modes.Find(modeName, config);
+        if (!string.Equals(mode.Name, modeName.Trim(), StringComparison.OrdinalIgnoreCase))
+            Console.WriteLine($"⚠ 未知模式「{modeName}」，已回退到 {mode.Name}（/mode 查看可用模式）。");
+        agent.SetMode(mode);
 
         // 列出可用模型模式
         if (listModels)
@@ -1707,6 +1714,7 @@ internal static class Program
               -p, --provider <名称>  使用配置中的指定供应商
               -m, --model <模型>     覆盖本次使用的模型
               --cwd <目录>           切换工作目录（先于 --init/--setup 生效）
+              --mode <名>            以指定工作模式启动（会话级覆盖 defaultMode，不写回配置；/mode 查看）
               --init                 在当前目录生成示例配置 codeagent.json
               --setup                交互式供应商配置向导（保存前自动测试连接）
               --models               列出当前供应商的可用模型
