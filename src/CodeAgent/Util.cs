@@ -234,9 +234,11 @@ public static class TextUtil
     public static string CompactTokenCount(long n) =>
         n >= 1_000_000 ? $"{n / 1_000_000.0:F1}M" : n >= 1000 ? $"{n / 1000.0:F1}k" : n.ToString();
 
-    /// <summary>会话总时长文本（如 2m 5s / 22s，不足 1 分钟取整秒）。</summary>
+    /// <summary>会话总时长文本（如 2h 5m / 2m 5s / 22s，不足 1 分钟取整秒）。</summary>
     public static string FormatSessionTime(TimeSpan t) =>
-        t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s" : $"{t.TotalSeconds:F0}s";
+        t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes}m"
+        : t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes}m {t.Seconds}s"
+        : $"{t.TotalSeconds:F0}s";
 
     /// <summary>耗时格式（如 1m 5s / 22.0s，保留一位小数秒）。</summary>
     public static string FormatElapsed(TimeSpan t) =>

@@ -120,8 +120,8 @@ public class TextUtilFormattingTests
     [InlineData(60, "1m 0s")]
     [InlineData(125, "2m 5s")]
     [InlineData(3599, "59m 59s")]
-    [InlineData(3600, "60m 0s")]
-    [InlineData(3661, "61m 1s")]
+    [InlineData(3600, "1h 0m")]      // 小时档：多小时会话不再显示 60m+ 的超长分钟数
+    [InlineData(3661, "1h 1m")]
     public void FormatSessionTime_VariousDurations(double seconds, string expected) =>
         Assert.Equal(expected, TextUtil.FormatSessionTime(TimeSpan.FromSeconds(seconds)));
 

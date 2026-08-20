@@ -65,7 +65,8 @@ public class MegaEdgeTests
     [InlineData(59, "59s")]
     [InlineData(60, "1m 0s")]
     [InlineData(125, "2m 5s")]
-    [InlineData(3600, "60m 0s")]
+    [InlineData(3600, "1h 0m")] // 回归：曾显示「60m 0s」，多小时会话分钟数过长不便读
+    [InlineData(7500, "2h 5m")]
     [InlineData(59.4, "59s")]
     [InlineData(59.6, "60s")]
     public void FormatSessionTime_Cases(double seconds, string expected) =>
