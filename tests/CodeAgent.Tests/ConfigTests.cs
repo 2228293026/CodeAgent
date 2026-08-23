@@ -56,6 +56,19 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ClampsAutoCompactPercent()
+    {
+        // autoCompactPercent 收敛到 0-99：负值/超值不产生危险阈值
+        var path = Path.Combine(_dir, "acp.json");
+        File.WriteAllText(path, """{ "autoCompactPercent": 150 }""");
+        Assert.Equal(99, AgentConfig.Load(path).AutoCompactPercent);
+
+        var path2 = Path.Combine(_dir, "acp2.json");
+        File.WriteAllText(path2, """{ "autoCompactPercent": -5 }""");
+        Assert.Equal(0, AgentConfig.Load(path2).AutoCompactPercent); // 关闭
+    }
+
+    [Fact]
     public void Load_MissingFile_Throws()
     {
         var path = Path.Combine(_dir, "nope.json");

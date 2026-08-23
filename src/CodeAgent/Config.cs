@@ -112,6 +112,10 @@ public sealed class AgentConfig
     /// auto 不指定强度，由模型/供应商按自身默认行为思考。</summary>
     public string ThinkingEffort { get; set; } = "off";
 
+    /// <summary>上下文占用达到该百分比时自动压缩历史（/compact 的自动版）；0 = 关闭（默认，
+    /// 仅在 90% 时提示）。合法范围 0-99，加载时收敛。</summary>
+    public int AutoCompactPercent { get; set; } = 0;
+
     /// <summary>启动时的默认工作模式（/mode 可切换），默认 code。</summary>
     public string DefaultMode { get; set; } = "code";
 
@@ -204,6 +208,7 @@ public sealed class AgentConfig
             cfg.ContextWindow = Math.Clamp(cfg.ContextWindow, 0, 10_000_000);
             cfg.CommandTimeoutSeconds = Math.Clamp(cfg.CommandTimeoutSeconds, 1, 300);
             cfg.MaxSessionLogs = Math.Clamp(cfg.MaxSessionLogs, 0, 1000);
+            cfg.AutoCompactPercent = Math.Clamp(cfg.AutoCompactPercent, 0, 99);
             // 字符串枚举归一化：手写配置的大小写/空白差异曾让同一值在不同 Provider 上行为分叉
             //（如 "High" 在 OpenAI 侧静默不发送 reasoning_effort、在 Anthropic 侧却按默认预算开启 thinking）
             var effortRaw = cfg.ThinkingEffort;
@@ -262,6 +267,7 @@ public sealed class AgentConfig
         "commandTimeoutSeconds", "shell", "saveSessions", "maxSessionLogs", "sessionDir",
         "exportDir", "streamOutput", "showToolCalls", "renderMarkdown", "tuiAnsi",
         "thinkingEffort", "defaultMode", "fileAccess", "readOnlyDirs", "modes", "systemPrompt",
+        "autoCompactPercent",
     };
     private static readonly HashSet<string> KnownProviderKeys = new(StringComparer.OrdinalIgnoreCase)
     {

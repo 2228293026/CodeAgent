@@ -446,13 +446,27 @@ internal static class Program
                     PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
                 }
                 PrintTurnSummary(agent, sw.Elapsed, opts);
-                // 上下文占用 ≥90%：提示可 /compact（状态栏百分比小、易被忽略）
+                // 上下文占用监控：配置了 autoCompactPercent 达标自动压缩；否则 ≥90% 提示建议 /compact
                 {
                     var win = EffectiveContextWindow();
                     if (win > 0 && agent.ContextTokens > 0)
                     {
                         var pct = TextUtil.PercentOf(agent.ContextTokens, win);
-                        if (pct >= 90)
+                        if (config.AutoCompactPercent > 0 && pct >= config.AutoCompactPercent && !agent.LastTurnFailed)
+                        {
+                            try
+                            {
+                                var r = RunTurnAsync(async t =>
+                                    await agent.CompactAsync(t) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult();
+                                if (r == "COMPACTED")
+                                    Console.WriteLine($"✔ 上下文已达 {pct}%（autoCompactPercent={config.AutoCompactPercent}），已自动压缩历史。");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"⚠ 自动压缩失败: {ex.Message}");
+                            }
+                        }
+                        else if (pct >= 90)
                             Console.WriteLine($"⚠ 上下文已用 {pct}%（{TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)}）：建议 /compact 压缩历史，否则即将自动裁剪最旧对话。");
                     }
                 }
