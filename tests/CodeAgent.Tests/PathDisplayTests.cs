@@ -157,6 +157,31 @@ public class PathDisplayTests
         Assert.False(Program.LooksLikeUnknownFlag(arg));
 
     [Fact]
+    public void SplitCommand_SeparatorVariants()
+    {
+        // 分隔符取最早出现者（空格/Tab/全角空格）；rest 只去掉首个分隔符，由调用方 Trim
+        var (cmd1, rest1) = Program.SplitCommand("/model  gpt-4o");   // 两个空格
+        Assert.Equal("/model", cmd1);
+        Assert.Equal(" gpt-4o", rest1);
+
+        var (cmd2, rest2) = Program.SplitCommand("/model\tgpt-4o");   // Tab
+        Assert.Equal("/model", cmd2);
+        Assert.Equal("gpt-4o", rest2.Trim());
+
+        var (cmd3, rest3) = Program.SplitCommand("/model　gpt-4o");   // 全角空格（CJK 输入法）
+        Assert.Equal("/model", cmd3);
+        Assert.Equal("gpt-4o", rest3.Trim());
+
+        var (cmd4, rest4) = Program.SplitCommand("/HELP");            // 命令名统一小写
+        Assert.Equal("/help", cmd4);
+        Assert.Equal("", rest4);
+
+        var (cmd5, rest5) = Program.SplitCommand("/save 我 的 会话");  // rest 保留内部空格
+        Assert.Equal("/save", cmd5);
+        Assert.Equal("我 的 会话", rest5);
+    }
+
+    [Fact]
     public void SavedSessions_SortedNewestFirst_WithAge()
     {
         // /load 列表：按保存时间新 → 旧，附相对时间（旧实现按文件名字典序）
