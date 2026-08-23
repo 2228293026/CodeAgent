@@ -41,6 +41,56 @@ public class GrepToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Multiline_MatchesAcrossLines()
+    {
+        // 跨行模式：\n 参与匹配（多行 JSON 块）；行号取命中起点
+        File.WriteAllText(Path.Combine(_dir, "data.json"),
+            "prefix\n{\n  \"key\": 1\n}\nsuffix\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var single = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "\\{\\s*\"key\"" }, ctx, CancellationToken.None);
+        Assert.Contains("无匹配", single); // 逐行模式：{ 与 "key" 不同行，匹配不到
+
+        var multi = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "\\{\\s*\"key\"", ["multiline"] = true }, ctx, CancellationToken.None);
+        Assert.Contains("匹配 1 处", multi);
+        Assert.Contains("data.json:2", multi);   // 命中起点在第 2 行（{ 所在行）
+        Assert.Contains("+1|", multi);           // 第二行内容作为续行展示
+    }
+
+    [Fact]
+    public async Task Grep_Multiline_LongSpan_FoldedWithRangeNotice()
+    {
+        // 跨 5 行以上的命中：显示前 3 行 + 跨行范围提示
+        File.WriteAllText(Path.Combine(_dir, "block.txt"), "A\nB\nC\nD\nE\nF\nG\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "B[\\s\\S]*F", ["multiline"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("block.txt:2", output);        // 起点行号
+        Assert.Contains("命中跨 2-6 共 5 行", output);   // 范围提示
+        Assert.Contains("+1|", output);                 // 续行展示
+    }
+
+    [Fact]
+    public async Task Grep_Multiline_SingleLineHit_NoFoldNotice()
+    {
+        // 单行命中（即使 multiline 开着）：与逐行模式相同的展示，无跨行提示
+        File.WriteAllText(Path.Combine(_dir, "one.txt"), "alpha\nbeta\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "beta", ["multiline"] = true }, ctx, CancellationToken.None);
+        Assert.Contains("one.txt:2: beta", output);
+        Assert.DoesNotContain("命中跨", output);
+    }
+
+    [Fact]
     public async Task Grep_Exclude_SkipsMatchingFiles()
     {
         File.WriteAllText(Path.Combine(_dir, "a.cs"), "TODO fix this\n");

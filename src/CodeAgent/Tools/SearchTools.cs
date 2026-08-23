@@ -63,7 +63,7 @@ public sealed class GlobTool : ITool
 public sealed class GrepTool : ITool
 {
     public string Name => "grep";
-    public string Description => "用正则搜索文件内容。智能大小写：pattern 全小写时忽略大小写，含大写则精确匹配；case_sensitive=true 可强制区分。可用 include/exclude（glob）限定文件范围。files_only=true 只返回匹配的文件名。返回 文件:行号: 内容。";
+    public string Description => "用正则搜索文件内容。智能大小写：pattern 全小写时忽略大小写，含大写则精确匹配；case_sensitive=true 可强制区分。可用 include/exclude（glob）限定文件范围。files_only=true 只返回匹配的文件名。multiline=true 允许跨行匹配（\n 当普通字符，适合匹配多行块）。返回 文件:行号: 内容。";
     public JsonObject Parameters { get; } = new()
     {
         ["type"] = "object",
@@ -77,6 +77,7 @@ public sealed class GrepTool : ITool
             ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
             ["case_sensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "强制区分大小写（默认智能大小写：pattern 全小写时忽略大小写）" },
+            ["multiline"] = new JsonObject { ["type"] = "boolean", ["description"] = "跨行匹配（\n 视为普通字符参与匹配，适合多行块如 JSON/HTML 片段），默认 false" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -118,6 +119,7 @@ public sealed class GrepTool : ITool
         var full = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(target) ? null : target);
         var sb = new StringBuilder();
         var hits = 0;
+        var multiline = ToolArgs.GetBool(args, "multiline", false);
 
         void ScanFile(string path)
         {
@@ -146,6 +148,30 @@ public sealed class GrepTool : ITool
                     {
                         hits++;
                         sb.AppendLine(rel);
+                    }
+                    return;
+                }
+
+                if (multiline)
+                {
+                    // 跨行模式：\n 作为普通字符参与匹配（多行块：JSON/HTML 片段等）。
+                    // 行号按命中起点计算；跨多行的命中折叠显示（前 3 行 + 总行数）
+                    foreach (System.Text.RegularExpressions.Match m in re.Matches(text))
+                    {
+                        if (hits >= max)
+                            break;
+                        if (m.Length == 0)
+                            continue; // 零宽命中不展示（只产生噪音）
+                        hits++;
+                        var startLine = 1 + CountNewlines(text, 0, m.Index);
+                        var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
+                        var spanLines = m.Value.Replace("\r", "").Split('\n');
+                        sb.AppendLine($"{rel}:{startLine}: {TextUtil.TruncateLine(spanLines[0], 300)}");
+                        for (int li = 1; li < Math.Min(spanLines.Length, 4); li++)
+                            sb.AppendLine($"  +{li}| {TextUtil.TruncateLine(spanLines[li], 300)}");
+                        if (spanLines.Length > 4)
+                            sb.AppendLine($"  …(命中跨 {startLine}-{endLine} 共 {spanLines.Length} 行)");
+                        sb.AppendLine();
                     }
                     return;
                 }
@@ -201,5 +227,15 @@ public sealed class GrepTool : ITool
         return filesOnly
             ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd() + notice
             : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;
+    }
+
+    /// <summary>统计 text[start,end) 内的换行数（跨行匹配的行号计算）。</summary>
+    private static int CountNewlines(string text, int start, int end)
+    {
+        int n = 0;
+        for (int i = start; i < end; i++)
+            if (text[i] == '\n')
+                n++;
+        return n;
     }
 }
