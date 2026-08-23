@@ -996,7 +996,9 @@ internal static class Program
         catch { /* 平台不支持：忽略 */ }
         Console.WriteLine("── CodeAgent ─────────────────────────────────────────────");
         Console.WriteLine($"  Version  : {InformationalVersion}");
-        Console.WriteLine($"  Provider : {config.Provider} ({opts.Type})");
+        var bannerOverride = config.PersistedProvider is not null &&
+                             !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
+        Console.WriteLine($"  Provider : {config.Provider} ({opts.Type}){(bannerOverride ? "（会话级覆盖）" : "")}");
         Console.WriteLine($"  Model    : {opts.Model}");
         Console.WriteLine($"  Mode     : {agent.CurrentMode.Name}");
         Console.WriteLine($"  Thinking : {config.ThinkingEffort}{(config.ThinkingEffort == "auto" ? "（自动探测模型推理档位，状态栏显示实际生效值）" : "")}");
@@ -1271,7 +1273,9 @@ internal static class Program
                 break;
 
             case "/config":
-                Console.WriteLine($"Provider : {config.Provider} ({opts.Type})");
+                var cfgOverride = config.PersistedProvider is not null &&
+                                  !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
+                Console.WriteLine($"Provider : {config.Provider} ({opts.Type}){(cfgOverride ? "（会话级覆盖，不持久化）" : "")}");
                 Console.WriteLine($"Model    : {opts.Model}");
                 Console.WriteLine($"BaseUrl  : {opts.BaseUrl}");
                 Console.WriteLine($"ApiKey   : {(string.IsNullOrEmpty(opts.ApiKey) ? $"env[{opts.ApiKeyEnv ?? "?"}]" : "****")}");
