@@ -154,7 +154,7 @@ codeagent --no-session "..."          # do not write a session log for this run 
 type bug.log | codeagent "analyze"    # piped stdin is appended to the task
 ```
 
-Every message is logged to `.codeagent/sessions/*.jsonl` (`saveSessions`); `--continue` resumes the latest; `/resume` lists the 10 most recent (relative age + first-user-input preview) and restores by number; `/export <n>` exports one of them to Markdown (a named snapshot wins over the number if they collide).
+Every message is logged to `.codeagent/sessions/*.jsonl` (`saveSessions`); `--continue` resumes the latest; `/resume` lists the 10 most recent (relative age + first-user-input preview) and restores by number; `/find <keyword>` searches across past sessions; `/export <n>` exports one of them to Markdown (a named snapshot wins over the number if they collide).
 
 ### Interactive REPL
 
