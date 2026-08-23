@@ -193,8 +193,8 @@ public sealed class OpenAiProvider : IAgentProvider
             text = text.Length == 0 ? refusalText : text + "\n" + refusalText;
 
         var toolCalls = new List<ToolCall>();
-        var arr = choice?["tool_calls"]?.AsArray();
-        if (arr is not null)
+        // is JsonArray 守卫：不合规网关把 tool_calls 发成对象/字符串时 AsArray() 会抛异常炸掉整次解析
+        if (choice?["tool_calls"] is JsonArray arr)
         {
             foreach (var tc in arr)
             {
@@ -369,8 +369,8 @@ public sealed class OpenAiProvider : IAgentProvider
                 onText?.Invoke(t);
             }
 
-            var tcs = delta["tool_calls"]?.AsArray();
-            if (tcs is not null)
+            // is JsonArray 守卫：非数组形态（不合规网关）跳过而不是抛异常中断流
+            if (delta["tool_calls"] is JsonArray tcs)
             {
                 foreach (var tc in tcs)
                 {
@@ -524,7 +524,8 @@ public sealed class OpenAiProvider : IAgentProvider
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
             throw new ProviderException($"模型列表接口返回 {(int)resp.StatusCode}: {Truncate(body, 400)}");
-        return JsonNode.Parse(body)?["data"]?.AsArray();
+        // is JsonArray 守卫：data 不是数组（错误页/网关异常页）返回 null 而不是抛异常
+        return JsonNode.Parse(body)?["data"] is JsonArray arr ? arr : null;
     }
 
     private static JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)

@@ -129,7 +129,8 @@ public sealed class AnthropicProvider : IAgentProvider
         var thinking = new StringBuilder();
         string? thinkingSignature = null;
         var toolCalls = new List<ToolCall>();
-        var blocks = root?["content"]?.AsArray();
+        // is JsonArray 守卫：content 非数组形态（不合规网关）按空内容处理而非抛异常
+        var blocks = root?["content"] as JsonArray;
         if (blocks is not null)
         {
             foreach (var b in blocks)
@@ -441,7 +442,8 @@ public sealed class AnthropicProvider : IAgentProvider
 
             var root = JsonNode.Parse(body);
             var lastId = (string?)null;
-            foreach (var m in root?["data"]?.AsArray() ?? [])
+            // is JsonArray 守卫：data 非数组（网关异常页）按空页处理，触发下方的翻页终止
+            foreach (var m in (root?["data"] as JsonArray) ?? [])
             {
                 var id = m?["id"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(id))
