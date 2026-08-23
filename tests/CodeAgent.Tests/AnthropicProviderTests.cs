@@ -249,6 +249,67 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_NonStream_ThinkingBlock_IsCaptured()
+    {
+        // 回归：thinking 块的文本与签名都要从非流式响应捕获（工具调用轮回传必需）
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """
+                {"content":[
+                    {"type":"thinking","thinking":"推理过程","signature":"sig-xyz"},
+                    {"type":"text","text":"结论"},
+                    {"type":"tool_use","id":"t1","name":"stop","input":{}}
+                ],"usage":{"input_tokens":1,"output_tokens":1}}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "q" }],
+            [], "high", CancellationToken.None);
+
+        Assert.Equal("推理过程", resp.ThinkingText);
+        Assert.Equal("sig-xyz", resp.ThinkingSignature);
+        Assert.Equal("结论", resp.Text);
+        Assert.Single(resp.ToolCalls);
+    }
+
+    [Fact]
+    public async Task ChatAsync_AssistantThinkingBlock_IsRoundTripped()
+    {
+        // 回传路径：历史里的 assistant 消息带 ThinkingText 时，请求体的 content
+        // 必须以 thinking 块开头（文本 + 签名成对）——缺失会被 Anthropic 400 拒绝
+        var handler = new CaptureHandler();
+        var provider = MakeProvider(handler);
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "hi" },
+            new ProviderMessage
+            {
+                Role = MessageRole.Assistant,
+                ThinkingText = "推理过程",
+                ThinkingSignature = "sig-xyz",
+                ToolCalls = [new ToolCall { Id = "c1", Name = "stop", ArgumentsJson = "{}" }],
+            },
+            new ProviderMessage { Role = MessageRole.Tool, ToolCallId = "c1", ToolName = "stop", Content = "done" },
+        };
+
+        await provider.ChatAsync(messages, [], "high", CancellationToken.None);
+
+        var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
+        Assert.NotNull(msgs);
+        var asst = msgs![^2]!; // tool_result 前的 assistant
+        Assert.Equal("assistant", asst["role"]!.GetValue<string>());
+        var content = asst["content"]!.AsArray();
+        Assert.Equal("thinking", content[0]!["type"]!.GetValue<string>()); // thinking 块在最前
+        Assert.Equal("推理过程", content[0]!["thinking"]!.GetValue<string>());
+        Assert.Equal("sig-xyz", content[0]!["signature"]!.GetValue<string>());
+        Assert.Equal("tool_use", content[1]!["type"]!.GetValue<string>()); // 后跟 tool_use
+    }
+
+    [Fact]
     public async Task ChatAsync_CacheReadTokens_TopLevelField_IsParsed()
     {
         // 回归：Anthropic 的缓存命中在 usage 顶层（cache_read_input_tokens）；

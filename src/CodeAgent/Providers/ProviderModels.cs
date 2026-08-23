@@ -41,6 +41,14 @@ public sealed class ProviderMessage
 
     /// <summary>Tool 侧：是否为错误结果。</summary>
     public bool IsError { get; init; }
+
+    /// <summary>Assistant 侧：Anthropic extended thinking 的文本。
+    /// thinking 启用 + 工具调用时，最后一轮 assistant 的 thinking 块必须原样回传（API 强制），
+    /// 缺失会被 Anthropic 400 拒绝。OpenAI 侧忽略。</summary>
+    public string? ThinkingText { get; init; }
+
+    /// <summary>Assistant 侧：Anthropic thinking 块的签名（与 ThinkingText 成对回传）。</summary>
+    public string? ThinkingSignature { get; init; }
 }
 
 /// <summary>Provider 一次调用的返回值。</summary>
@@ -54,6 +62,13 @@ public sealed class ProviderResponse
     /// <summary>结束原因（openai finish_reason / anthropic stop_reason）：
     /// "length"/"max_tokens" = 输出被 max_tokens 截断，调用方需提示用户。</summary>
     public string? FinishReason { get; init; }
+
+    /// <summary>Anthropic extended thinking 文本（thinking 启用时随响应返回；
+    /// 由 Agent 写回 assistant 消息，下一轮请求原样回传，见 ProviderMessage.ThinkingText）。</summary>
+    public string? ThinkingText { get; init; }
+
+    /// <summary>Anthropic thinking 块签名（与 ThinkingText 成对）。</summary>
+    public string? ThinkingSignature { get; init; }
 }
 
 /// <summary>暴露给模型的工具规范（JSON Schema 形式的参数）。</summary>

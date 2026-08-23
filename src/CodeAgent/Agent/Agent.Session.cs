@@ -191,6 +191,8 @@ public sealed partial class Agent
                 }).ToList(),
                 ToolCallId = n["toolCallId"]?.GetValue<string>(),
                 ToolName = n["tool"]?.GetValue<string>(),
+                ThinkingText = n["thinkingText"]?.GetValue<string>(),
+                ThinkingSignature = n["thinkingSignature"]?.GetValue<string>(),
                 IsError = n["error"]?.GetValue<bool>() ?? false,
             };
         }
@@ -382,6 +384,8 @@ public sealed partial class Agent
         toolCalls = m.ToolCalls?.Select(tc => new ToolCallDto { id = tc.Id, name = tc.Name, arguments = tc.ArgumentsJson }).ToList(),
         toolCallId = m.ToolCallId,
         toolName = m.ToolName,
+        thinkingText = m.ThinkingText,
+        thinkingSignature = m.ThinkingSignature,
         isError = m.IsError,
     };
 
@@ -392,6 +396,8 @@ public sealed partial class Agent
         ToolCalls = d.toolCalls?.Select(tc => new ToolCall { Id = tc.id, Name = tc.name, ArgumentsJson = tc.arguments }).ToList(),
         ToolCallId = d.toolCallId,
         ToolName = d.toolName,
+        ThinkingText = d.thinkingText,
+        ThinkingSignature = d.thinkingSignature,
         IsError = d.isError,
     };
 
@@ -402,6 +408,8 @@ public sealed partial class Agent
         public List<ToolCallDto>? toolCalls { get; set; }
         public string? toolCallId { get; set; }
         public string? toolName { get; set; }
+        public string? thinkingText { get; set; }
+        public string? thinkingSignature { get; set; }
         public bool isError { get; set; }
     }
 

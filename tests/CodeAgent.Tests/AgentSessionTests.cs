@@ -103,6 +103,37 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task ThinkingFields_SurviveSessionLog_Roundtrip()
+    {
+        // 回归：Anthropic thinking（文本+签名）必须随会话日志落盘并恢复，
+        // 否则 --continue 后下一轮工具调用请求缺失 thinking 块被 API 400
+        var provider = new FakeProvider
+        {
+            NextResponse = new Providers.ProviderResponse
+            {
+                Text = "ok",
+                ThinkingText = "推理过程",
+                ThinkingSignature = "sig-1",
+            },
+        };
+        var config = new AgentConfig { SaveSessions = true, SessionDir = _sessionDir };
+        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
+        await agent.RunAsync("你好", CancellationToken.None);
+
+        // 内存中的 assistant 消息带上了 thinking 字段
+        var asst = agent.Messages.Single(m => m.Role == MessageRole.Assistant);
+        Assert.Equal("推理过程", asst.ThinkingText);
+        Assert.Equal("sig-1", asst.ThinkingSignature);
+        agent.Close();
+
+        var log = Directory.GetFiles(_sessionDir, "*.jsonl").Single();
+        var restored = AgentClass.ReadSessionLogFile(log);
+        var rAsst = restored.Single(m => m.Role == MessageRole.Assistant);
+        Assert.Equal("推理过程", rAsst.ThinkingText);   // 日志往返后仍在
+        Assert.Equal("sig-1", rAsst.ThinkingSignature);
+    }
+
+    [Fact]
     public async Task SaveLoadSession_RoundTripsMessages()
     {
         var agent = MakeAgent(_sessionDir, out var path);

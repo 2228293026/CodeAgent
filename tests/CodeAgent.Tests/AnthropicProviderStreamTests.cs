@@ -151,6 +151,44 @@ public class AnthropicProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_ThinkingTextAndSignature_AreCaptured()
+    {
+        // 回归：thinking 启用 + 工具调用时，assistant 的 thinking 块（文本+签名）
+        // 必须原样回传，缺失会被 Anthropic 400 拒绝——此前完全丢弃
+        var handler = new SseHandler
+        {
+            Body = """
+                event: content_block_start
+                data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"让我想想"}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-abc123"}}
+
+                event: content_block_start
+                data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_9","name":"read_file","input":{}}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{}"}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "q" }],
+            [], "high", null, null, null, CancellationToken.None);
+
+        Assert.Equal("让我想想", resp.ThinkingText);
+        Assert.Equal("sig-abc123", resp.ThinkingSignature);
+        Assert.Single(resp.ToolCalls);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ThinkingDelta_IsReported()
     {
         var handler = new SseHandler

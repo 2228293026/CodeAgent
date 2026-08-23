@@ -272,6 +272,10 @@ public sealed partial class Agent
                 Role = MessageRole.Assistant,
                 Content = resp.Text,
                 ToolCalls = resp.ToolCalls,
+                // Anthropic extended thinking：文本与签名写回消息，下一轮请求原样回传
+                //（thinking + 工具调用轮缺失 thinking 块会被 API 400 拒绝）
+                ThinkingText = resp.ThinkingText,
+                ThinkingSignature = resp.ThinkingSignature,
             });
             LogMessage(_messages[^1]);
             await TrimHistoryAsync(ct);
@@ -1036,6 +1040,8 @@ public sealed partial class Agent
                 toolCallId = m.ToolCallId,
                 content = m.Content,
                 toolCalls = m.ToolCalls?.Select(tc => new { tc.Id, tc.Name, tc.ArgumentsJson }).ToList(),
+                thinkingText = m.ThinkingText,
+                thinkingSignature = m.ThinkingSignature,
                 error = m.IsError,
             };
             _sessionLog.WriteLine(JsonSerializer.Serialize(entry, LogJsonOpts));

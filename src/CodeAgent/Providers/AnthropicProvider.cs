@@ -122,6 +122,8 @@ public sealed class AnthropicProvider : IAgentProvider
         }
 
         var text = new StringBuilder();
+        var thinking = new StringBuilder();
+        string? thinkingSignature = null;
         var toolCalls = new List<ToolCall>();
         var blocks = root?["content"]?.AsArray();
         if (blocks is not null)
@@ -131,6 +133,12 @@ public sealed class AnthropicProvider : IAgentProvider
                 var type = b?["type"]?.GetValue<string>();
                 if (type == "text")
                     text.Append(b?["text"]?.GetValue<string>() ?? ""); // text 为 null/缺失时 Append(null) 会抛 ArgumentNullException
+                else if (type == "thinking")
+                {
+                    // extended thinking 块：文本与签名都要捕获（工具调用轮必须原样回传，缺失 API 400）
+                    thinking.Append(b?["thinking"]?.GetValue<string>() ?? "");
+                    thinkingSignature ??= b?["signature"]?.GetValue<string>();
+                }
                 else if (type == "tool_use")
                 {
                     toolCalls.Add(new ToolCall
@@ -159,6 +167,8 @@ public sealed class AnthropicProvider : IAgentProvider
             OutputTokens = outTok,
             CachedTokens = cachedTok,
             FinishReason = stopReason,
+            ThinkingText = thinking.Length == 0 ? null : thinking.ToString(),
+            ThinkingSignature = thinkingSignature,
         };
     }
 
@@ -239,6 +249,11 @@ public sealed class AnthropicProvider : IAgentProvider
         int? outputTokens = null;
         string? finishReason = null; // message_delta 的 stop_reason（"max_tokens" = 被截断）
         int? cachedTokens = null;
+        // extended thinking：thinking_delta 累积文本，signature_delta 捕获签名
+        //（thinking + 工具调用轮必须把 thinking 块原样回传，缺失会被 API 400 拒绝）
+        var thinkingText = new StringBuilder();
+        string? thinkingSignature = null;
+        var thinkingBlockIndexes = new HashSet<int>();
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
@@ -264,7 +279,18 @@ public sealed class AnthropicProvider : IAgentProvider
                         var block = root?["content_block"];
                         var type = block?["type"]?.GetValue<string>();
                         var index = ProviderJson.OptInt(root?["index"]) ?? 0;
-                        if (type == "tool_use")
+                        if (type == "thinking")
+                        {
+                            thinkingBlockIndexes.Add(index);
+                            // 块自带初始 thinking 文本（部分网关把首段放 start 事件里）
+                            var initial = block?["thinking"]?.GetValue<string>();
+                            if (initial is { Length: > 0 })
+                                thinkingText.Append(initial);
+                            var sig0 = block?["signature"]?.GetValue<string>();
+                            if (!string.IsNullOrEmpty(sig0))
+                                thinkingSignature ??= sig0;
+                        }
+                        else if (type == "tool_use")
                         {
                             toolAccum[index] = new StreamToolAccum
                             {
@@ -282,9 +308,20 @@ public sealed class AnthropicProvider : IAgentProvider
                         var index = ProviderJson.OptInt(root?["index"]) ?? 0;
                         if (dtype == "thinking_delta")
                         {
-                            // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示
+                            // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示；
+                            // 同时累积到 thinkingText——工具调用轮的 thinking 块必须原样回传
                             if (delta?["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var t) && t.Length > 0)
+                            {
+                                thinkingText.Append(t);
                                 onReasoning?.Invoke(t);
+                            }
+                        }
+                        else if (dtype == "signature_delta")
+                        {
+                            // thinking 块的加密签名：回传时与文本成对，缺失会被 API 400
+                            var sig = delta?["signature"]?.GetValue<string>();
+                            if (!string.IsNullOrEmpty(sig))
+                                thinkingSignature ??= sig;
                         }
                         else if (dtype == "text_delta")
                         {
@@ -373,6 +410,8 @@ public sealed class AnthropicProvider : IAgentProvider
             OutputTokens = outputTokens,
             CachedTokens = cachedTokens,
             FinishReason = finishReason,
+            ThinkingText = thinkingText.Length > 0 ? thinkingText.ToString() : null,
+            ThinkingSignature = thinkingSignature,
         };
     }
     /// <summary>列出 Anthropic 可用模型（GET /v1/models，跟随 has_more/after_id 分页——
@@ -476,6 +515,17 @@ public sealed class AnthropicProvider : IAgentProvider
                 case MessageRole.Assistant:
                     {
                         var content = new JsonArray();
+                        // extended thinking 块必须排在 assistant 内容最前（与原始响应顺序一致）
+                        // 并原样回传文本 + 签名：thinking 启用 + 工具调用时缺失它会被 API 400 拒绝
+                        if (!string.IsNullOrEmpty(m.ThinkingText))
+                        {
+                            content.Add(new JsonObject
+                            {
+                                ["type"] = "thinking",
+                                ["thinking"] = m.ThinkingText,
+                                ["signature"] = m.ThinkingSignature ?? "",
+                            });
+                        }
                         if (!string.IsNullOrEmpty(m.Content))
                             content.Add(TextBlock(m.Content));
                         foreach (var tc in m.ToolCalls ?? [])
