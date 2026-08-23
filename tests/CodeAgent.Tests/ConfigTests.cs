@@ -168,6 +168,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void ValidateUnknownKeys_ScalarNestedValues_Ignored()
+    {
+        // providers/modes 的值不是对象（手写 JSON 手滑）时不应抛异常，也不产生噪音警告
+        var warnings = AgentConfig.ValidateUnknownKeys(
+            """{ "providers": { "x": "not-an-object" }, "modes": ["oops", 42] }""");
+        Assert.Empty(warnings);
+    }
+
+    [Fact]
     public void ExampleConfig_HasNoUnknownKeys_AndLoadsClean()
     {
         // 防漂移守护：codeagent.example.json 必须被加载器无警告解析。
