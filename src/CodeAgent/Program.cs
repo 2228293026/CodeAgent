@@ -1566,8 +1566,9 @@ internal static class Program
                 break;
 
             case "/tools":
-                Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}）:");
-                foreach (var t in agent.ToolsForMode())
+                var modeTools = agent.ToolsForMode();
+                Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}，共 {modeTools.Count} 个）:");
+                foreach (var t in modeTools.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
                     Console.WriteLine($"  {t.Name} — {t.Description}");
                 break;
 
