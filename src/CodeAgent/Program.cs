@@ -1573,26 +1573,42 @@ internal static class Program
                     string file;
                     if (arg.Equals("all", StringComparison.OrdinalIgnoreCase))
                     {
-                        // /export all：批量导出全部可恢复的历史会话（单个失败跳过不中断）
+                        // /export all：批量导出全部可恢复的历史会话与命名快照（单个失败跳过不中断）
                         var logs = ResumableLogs(agent, config);
-                        if (logs.Count == 0)
+                        if (logs.Count == 0 && !Directory.Exists(Path.Combine(Environment.CurrentDirectory, config.SessionDir)))
                         {
                             Console.WriteLine("⚠ 没有历史会话日志可导出。");
                             break;
                         }
+                        var ok = 0;
                         foreach (var log in logs)
                         {
                             try
                             {
                                 var exported = agent.ExportSessionLogMarkdown(log);
                                 Console.WriteLine($"✔ {Path.GetFileNameWithoutExtension(log)} → {exported}");
+                                ok++;
                             }
                             catch (Exception ex)
                             {
                                 Console.WriteLine($"⚠ 跳过 {Path.GetFileName(log)}: {ex.Message}");
                             }
                         }
-                        Console.WriteLine($"共处理 {logs.Count} 个会话日志。");
+                        // 命名快照一并导出
+                        foreach (var (name, _) in SavedSessions(Path.Combine(Environment.CurrentDirectory, config.SessionDir)))
+                        {
+                            try
+                            {
+                                var exported = agent.ExportMarkdown(name);
+                                Console.WriteLine($"✔ 快照 {name} → {exported}");
+                                ok++;
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"⚠ 跳过快照 {name}: {ex.Message}");
+                            }
+                        }
+                        Console.WriteLine($"共处理 {ok} 个会话。");
                         break;
                     }
                     if (arg.Length > 0 && agent.SessionExists(arg))
