@@ -155,7 +155,7 @@ codeagent --no-session "..."          # do not write a session log for this run 
 type bug.log | codeagent "analyze"    # piped stdin is appended to the task
 ```
 
-Every message is logged to `.codeagent/sessions/*.jsonl` (`saveSessions`); `--continue` resumes the latest; `/resume` lists the 10 most recent (relative age + first-user-input preview) and restores by number; `/find <keyword>` searches across past sessions; `/export <n>` exports one of them to Markdown (a named snapshot wins over the number if they collide).
+Every message is logged to `.codeagent/sessions/*.jsonl` (`saveSessions`); `--continue` resumes the latest; `/resume` lists the 10 most recent (relative age + first-user-input preview) and restores by number; `/find <keyword>` searches across past sessions; `/export <n|all>` exports one of them to Markdown (a named snapshot wins over the number if they collide).
 
 ### Interactive REPL
 
@@ -168,7 +168,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL commands: `/help` `/clear` `/compact` `/cls` `/model` `/provider` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume` `/find <keyword>` `/export` `/copy` `/prompt` `/stats` `/retry` `/tools` `/providers` `/models` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/exit` `/quit`.
+REPL commands: `/help` `/clear` `/compact` `/cls` `/model` `/provider` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume` `/find <keyword>` `/export [名/编号/all]` `/copy` `/prompt` `/stats` `/retry` `/tools` `/providers` `/models` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/exit` `/quit`.
 
 Work modes: `/mode` lists, `/mode plan` switches. 8 built-ins: `code` (default, full power), `plan` / `explain` / `review` (read-only — write tools hidden and blocked), `debug` / `refactor` / `test` / `doc`. Custom modes live in the `modes` config list (system prompt + tool scope).
 

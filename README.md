@@ -185,7 +185,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/provider [名]` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume [编号]` `/find <关键字>` `/export` `/copy` `/prompt` `/files` `/stats` `/retry` `/tools` `/providers` `/models [关键字]` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/exit` `/quit`。
+REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/provider [名]` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume [编号]` `/find <关键字>` `/export [名/编号/all]` `/copy` `/prompt` `/files` `/stats` `/retry` `/tools` `/providers` `/models [关键字]` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/exit` `/quit`。
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 

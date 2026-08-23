@@ -1961,7 +1961,7 @@ internal static class Program
               /diff [N]        显示最近一次修改的 diff（N = 倒数第 N 条）
               /save <名>       保存当前会话（命名快照）
               /load <名>       恢复已保存的会话
-              /export [名/编号] 导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话）
+              /export [名/编号/all] 导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话；all = 全部）
               /stats           显示 token 用量统计
               /retry           重新执行上一条请求
               /tools           列出可用工具
