@@ -271,6 +271,9 @@ public class ConfigEdgeTests : IDisposable
     [InlineData("deepseek-r1", 128_000)]            // OpenRouter 命名（官方叫 deepseek-reasoner）
     [InlineData("x-ai/grok-4", 256_000)]            // 去厂商前缀 + 新条目
     [InlineData("grok-3-mini", 131_072)]            // 前缀命中 grok-3
+    [InlineData("glm-4.6", 200_000)]                // 不以 "glm-4.5" 开头：需要自己的条目
+    [InlineData("zhipu/glm-4.6", 200_000)]
+    [InlineData("gemini-3-pro", 1_000_000)]         // gemini-3 新前缀
     public void KnownContextWindows_RecognizesCommonModels(string model, int expected) =>
         Assert.Equal(expected, KnownContextWindows.TryGet(model));
 

@@ -133,6 +133,9 @@ public static class KnownContextWindows
         ("grok-4", 256_000),
         ("kimi-k2", 128_000),
         ("glm-4.5", 128_000),
+        // 新前缀：glm-4.6 / gemini-3 不被上面的短前缀命中（"glm-4.6" 不以 "glm-4.5" 开头）
+        ("glm-4.6", 200_000),
+        ("gemini-3", 1_000_000),
         ("mistral-large", 128_000),
     ];
 
