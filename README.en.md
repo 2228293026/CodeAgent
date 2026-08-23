@@ -148,6 +148,7 @@ codeagent --mode review "Review src/Agent.cs"   # start in a given mode (session
 codeagent --models                    # list the current provider models
 codeagent --continue                  # resume this project latest session
 codeagent --continue "continue the task"
+codeagent --no-session "..."          # do not write a session log for this run (privacy)
 type bug.log | codeagent "analyze"    # piped stdin is appended to the task
 ```
 

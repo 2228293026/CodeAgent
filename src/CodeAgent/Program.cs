@@ -50,6 +50,7 @@ internal static class Program
         var setup = false;
         var listModels = false;
         var continueLast = false;
+        var noSession = false; // --no-session：本次运行不落盘会话日志
         var resumeIndex = 0; // --resume <编号>：按 /resume 列表编号恢复历史会话
         var positional = new List<string>();
 
@@ -85,6 +86,10 @@ internal static class Program
                         break;
                     case "--continue":
                         continueLast = true;
+                        break;
+                    case "--no-session":
+                        // 本次运行不写会话日志（隐私敏感的一次性任务）：仅进程内生效，不写回配置文件
+                        noSession = true;
                         break;
 
                     case "--resume":
@@ -217,6 +222,11 @@ internal static class Program
             opts.Model = model;
         else if (!string.IsNullOrWhiteSpace(envModel))
             opts.Model = envModel;
+
+        // --no-session：仅进程内关闭会话落盘。放在 --setup 之后（向导保存配置时不会把
+        // 该覆盖持久化成 SaveSessions=false），Agent 构造前生效即可完全不创建日志文件。
+        if (noSession)
+            config.SaveSessions = false;
 
         var tools = ToolRegistry.CreateDefault();
 
@@ -524,7 +534,7 @@ internal static class Program
     private static readonly HashSet<string> KnownFlags = new(StringComparer.Ordinal)
     {
         "-c", "--config", "-p", "--provider", "-m", "--model", "--cwd", "--mode",
-        "--init", "--setup", "--models", "--continue", "--resume",
+        "--init", "--setup", "--models", "--continue", "--resume", "--no-session",
         "-v", "--version", "-h", "--help",
     };
 
@@ -1743,6 +1753,7 @@ internal static class Program
               --setup                交互式供应商配置向导（保存前自动测试连接）
               --models               列出当前供应商的可用模型
               --continue             恢复最近一次会话
+              --no-session           本次运行不写会话日志（隐私敏感任务；不写回配置文件）
               -v, --version          显示版本
               -h, --help             显示本帮助
 

@@ -166,7 +166,7 @@ codeagent --models                    # 列出当前 Provider 的可用模型
 codeagent --continue                  # 恢复本项目最近一次会话继续对话
 codeagent --resume 3                  # 按 /resume 列表编号恢复历史会话
 codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
-codeagent --continue "接着上次的任务继续"   # 恢复会话后直接执行新请求
+codeagent --no-session "..."          # 本次运行不写会话日志（隐私敏感任务）
 ```
 
 每条消息自动落盘到 `.codeagent/sessions/*.jsonl`（`saveSessions` 控制），`--continue` 恢复最近一次；会话内 `/resume` 列出最近 10 次（相对时间 + 首条用户输入预览）并按编号恢复，`/clear` 后自动滚动新日志（不会误恢复已清空的历史）；`/export <编号>` 把 /resume 列表中的历史会话导出为 Markdown（不带编号则导出当前对话；与命名快照撞名时快照优先）。

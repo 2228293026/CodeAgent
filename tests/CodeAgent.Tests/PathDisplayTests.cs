@@ -142,6 +142,7 @@ public class PathDisplayTests
     [InlineData("--config")]
     [InlineData("--continue")]
     [InlineData("--resume")]
+    [InlineData("--no-session")]
     [InlineData("-h")]
     [InlineData("--help")]
     public void LooksLikeUnknownFlag_KnownFlags_Accepted(string arg) =>
