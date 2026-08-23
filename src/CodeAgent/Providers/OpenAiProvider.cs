@@ -171,9 +171,10 @@ public sealed class OpenAiProvider : IAgentProvider
         }
 
         // choices 可能为空数组（部分网关在仅带 usage 或无内容时返回 []），
-        // 直接 [0] 会对空数组抛 ArgumentOutOfRangeException
+        // 直接 [0] 会对空数组抛 ArgumentOutOfRangeException；元素非对象同样防御
         var choicesArr = root?["choices"] as JsonArray;
-        var choice = choicesArr is { Count: > 0 } ? choicesArr[0]?["message"] : null;
+        var firstChoice = choicesArr is { Count: > 0 } ? choicesArr[0] as JsonObject : null;
+        var choice = firstChoice?["message"];
         // content 可能是分块数组（部分兼容服务返回 [{"type":"text","text":…}]）：
         // 必须先判数组再取字符串——对 JsonArray 调 GetValue<string> 会直接抛 InvalidOperationException，
         // 原来的「先取字符串再 if 判数组」写法让数组分支永远不可达。
@@ -217,7 +218,7 @@ public sealed class OpenAiProvider : IAgentProvider
         int? inTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens"]);
         int? outTok = ProviderJson.OptInt(root?["usage"]?["completion_tokens"]);
         int? cachedTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]);
-        var finish = choicesArr is { Count: > 0 } ? choicesArr[0]?["finish_reason"]?.GetValue<string>() : null; // "length" = 被 max_tokens 截断
+        var finish = firstChoice?["finish_reason"]?.GetValue<string>(); // "length" = 被 max_tokens 截断
 
         return new ProviderResponse
         {
@@ -332,9 +333,10 @@ public sealed class OpenAiProvider : IAgentProvider
             }
 
             // 同非流式：空 choices 数组直接 [0] 会抛 ArgumentOutOfRangeException
-            // （new-api 等网关在结束/usage chunk 返回 {"choices":[],"usage":…}）
+            // （new-api 等网关在结束/usage chunk 返回 {"choices":[],"usage":…}）；元素非对象同样防御
             var choicesArr = root?["choices"] as JsonArray;
-            var delta = choicesArr is { Count: > 0 } ? choicesArr[0]?["delta"] : null;
+            var firstChoice = choicesArr is { Count: > 0 } ? choicesArr[0] as JsonObject : null;
+            var delta = firstChoice?["delta"];
 
             // usage 可能随任意 chunk 到达（hitmargin 在带 delta 的最后一个 chunk 里返回 usage）
             if (root?["usage"] is JsonObject u)
@@ -351,7 +353,7 @@ public sealed class OpenAiProvider : IAgentProvider
             }
 
             // finish_reason 随结束 chunk 到达（可能不带 delta）：取最后一个非空值
-            var fr = choicesArr is { Count: > 0 } ? choicesArr[0]?["finish_reason"]?.GetValue<string>() : null;
+            var fr = firstChoice?["finish_reason"]?.GetValue<string>();
             if (!string.IsNullOrEmpty(fr))
                 finishReason = fr;
             if (delta is null)
@@ -445,8 +447,8 @@ public sealed class OpenAiProvider : IAgentProvider
         var ids = new List<string>();
         foreach (var m in await FetchModelsArrayAsync(ct) ?? [])
         {
-            var id = m?["id"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(id))
+            // 只看对象项：null/标量条目没有 id
+            if (m is JsonObject entry && entry["id"] is JsonValue v && v.TryGetValue<string>(out var id) && !string.IsNullOrEmpty(id))
                 ids.Add(id);
         }
         return ids;

@@ -135,31 +135,33 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             foreach (var b in blocks)
             {
-                var type = b?["type"]?.GetValue<string>();
+                if (b is not JsonObject bObj)
+                    continue; // null/标量块（不合规响应）跳过
+                var type = bObj["type"]?.GetValue<string>();
                 if (type == "text")
                 {
                     // 字段级容错：text 非字符串（不合规网关）跳过该块而不是抛异常
-                    if (b?["text"] is JsonValue tv && tv.TryGetValue<string>(out var t))
+                    if (bObj["text"] is JsonValue tv && tv.TryGetValue<string>(out var t))
                         text.Append(t);
                 }
                 else if (type == "thinking")
                 {
                     // extended thinking 块：文本与签名都要捕获（工具调用轮必须原样回传，缺失 API 400）
-                    if (b?["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var h))
+                    if (bObj["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var h))
                         thinking.Append(h);
-                    thinkingSignature ??= b?["signature"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
+                    thinkingSignature ??= bObj["signature"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
                 }
                 else if (type == "tool_use")
                 {
                     toolCalls.Add(new ToolCall
                     {
-                        Id = b?["id"] is JsonValue idv && idv.TryGetValue<string>(out var id) && id.Length > 0
+                        Id = bObj["id"] is JsonValue idv && idv.TryGetValue<string>(out var id) && id.Length > 0
                             ? id
                             : Guid.NewGuid().ToString("N"),
-                        Name = b?["name"] is JsonValue nv && nv.TryGetValue<string>(out var n) && n.Length > 0
+                        Name = bObj["name"] is JsonValue nv && nv.TryGetValue<string>(out var n) && n.Length > 0
                             ? n
                             : "unknown",
-                        ArgumentsJson = b?["input"]?.ToJsonString() ?? "{}",
+                        ArgumentsJson = bObj["input"]?.ToJsonString() ?? "{}",
                     });
                 }
             }
@@ -463,7 +465,10 @@ public sealed class AnthropicProvider : IAgentProvider
             // is JsonArray 守卫：data 非数组（网关异常页）按空页处理，触发下方的翻页终止
             foreach (var m in (root?["data"] as JsonArray) ?? [])
             {
-                var id = m?["id"]?.GetValue<string>();
+                // 只看对象项：null/标量条目没有 id
+                if (m is not JsonObject entry)
+                    continue;
+                var id = entry["id"] is JsonValue idv && idv.TryGetValue<string>(out var s) ? s : null;
                 if (!string.IsNullOrEmpty(id))
                 {
                     ids.Add(id);
