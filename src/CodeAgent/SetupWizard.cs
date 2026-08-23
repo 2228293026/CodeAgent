@@ -181,6 +181,16 @@ public static class SetupWizard
             else if (!models.Contains(opts.Model ?? "", StringComparer.OrdinalIgnoreCase))
             {
                 output.WriteLine($"⚠ 可连接，但模型列表中没有「{opts.Model}」（共 {models.Count} 个模型，可能拼写有误或无权限）。");
+                // 给出相近候选（与 REPL /model 的拼写提示同款逻辑），少走一趟 /models
+                var family = (opts.Model ?? "").Split('-', '.')[0];
+                var near = string.IsNullOrEmpty(family)
+                    ? []
+                    : models.Where(m => m.Contains(family, StringComparison.OrdinalIgnoreCase))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .Take(3)
+                            .ToList();
+                if (near.Count > 0)
+                    output.WriteLine($"  相近的模型: {string.Join("、", near)}");
             }
             else
             {
