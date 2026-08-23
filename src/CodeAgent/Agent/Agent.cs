@@ -375,8 +375,20 @@ public sealed partial class Agent
                     _streamTokens += TextUtil.EstimateTokens(frag); // 工具调用参数也计入 ↑ tokens
                 }, ct), ct);
 
-            if (!_streamedThisCall && !_reasoningShown)
-                ClearSpinner();
+            if (!_streamedThisCall)
+            {
+                if (_reasoningShown)
+                {
+                    // 只有思考没有正文（模型仅输出 reasoning 就结束）：补换行收尾，
+                    // 否则后续工具日志/摘要行粘连在暗色推理文本同一行
+                    lock (ConsoleLock)
+                        Console.WriteLine();
+                }
+                else
+                {
+                    ClearSpinner();
+                }
+            }
             return result;
         }
         catch
