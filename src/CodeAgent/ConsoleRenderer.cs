@@ -280,6 +280,9 @@ public sealed class ConsoleRenderer
     /// <summary>单张表格最大渲染行数，超出截断（防止模型输出的超大表格撑爆终端）。</summary>
     private const int MaxTableRows = 50;
 
+    /// <summary>单元格最大显示宽度，超出截断加省略号（base64/长 URL 等会把其他列挤出终端折行破版）。</summary>
+    private const int MaxTableColWidth = 40;
+
     /// <summary>Markdown 分隔行单元格：可选冒号 + 至少 3 个 -（---、:---、---:、:---:）。</summary>
     private static readonly System.Text.RegularExpressions.Regex SepRe = new(@"^:?-{3,}:?$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -295,7 +298,7 @@ public sealed class ConsoleRenderer
         var widths = new int[cols];
         foreach (var r in rows)
             for (int i = 0; i < r.Count; i++)
-                widths[i] = Math.Max(widths[i], DisplayWidth(r[i]));
+                widths[i] = Math.Min(MaxTableColWidth, Math.Max(widths[i], DisplayWidth(r[i])));
         foreach (var r in rows)
         {
             // 分隔行判定需精确：Markdown 分隔行单元格形如 ---、:---、---:、:---:
@@ -303,7 +306,11 @@ public sealed class ConsoleRenderer
             var isSep = r.Count > 0 && r.All(c => SepRe.IsMatch(c));
             var cells = new string[r.Count];
             for (int i = 0; i < r.Count; i++)
-                cells[i] = isSep ? new string('─', widths[i]) : PadToWidth(r[i], widths[i]);
+            {
+                // 超宽单元格先截断到列宽（FitToWidth 代理对安全并补省略号），再补空格对齐
+                var cell = InputLine.FitToWidth(r[i], widths[i]);
+                cells[i] = isSep ? new string('─', widths[i]) : PadToWidth(cell, widths[i]);
+            }
             Console.WriteLine("  " + string.Join(" │ ", cells));
         }
         if (truncated)

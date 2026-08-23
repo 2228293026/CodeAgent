@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Xunit;
 
 namespace CodeAgent.Tests;
@@ -273,6 +274,24 @@ public class ConsoleRendererTests : IDisposable
         r.Append("plain **markdown** `code`");
         r.Flush();
         Assert.Contains("plain **markdown** `code`", _out.ToString()); // 禁用时原样输出
+    }
+
+    [Fact]
+    public void Table_OverwideCell_IsTruncatedWithEllipsis()
+    {
+        // 回归：base64/长 URL 等超长单元格会把其他列挤出终端折行破版；
+        // 列宽封顶 40，超出截断加省略号
+        var longCell = new string('x', 100);
+        var output = Render($"| k | v |\n|---|---|\n| a | {longCell} |\n");
+
+        foreach (var line in output.Split('\n').Where(l => l.Contains('│')))
+        {
+            // 每行竖线位置一致（对齐未被撑爆）：第一列宽度固定
+            var pipe = line.IndexOf("│", StringComparison.Ordinal);
+            Assert.True(pipe > 0 && pipe < 60, $"列宽应受控: [{line}]");
+        }
+        Assert.Contains("…", output); // 长单元格被截断
+        Assert.DoesNotContain(longCell, output); // 完整 100 字符不出现
     }
 
     [Fact]
