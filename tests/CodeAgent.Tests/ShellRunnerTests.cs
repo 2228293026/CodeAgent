@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent.Tools;
@@ -9,6 +11,53 @@ namespace CodeAgent.Tests;
 
 public class ShellRunnerTests
 {
+    [Fact]
+    public async Task ExecuteCommandTool_InvalidShell_ThrowsHelpfulError()
+    {
+        // 单次调用级 shell 覆盖：非法值明确报错而不是静默回落默认 shell
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-shell-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var ctx = new AgentContext
+            {
+                Config = new AgentConfig { AllowCommands = true },
+                Workspace = new Workspace(dir),
+            };
+            var ex = await Assert.ThrowsAsync<ToolException>(() =>
+                ShellRunner.ExecuteCommandToolAsync("bash",
+                    new JsonObject { ["command"] = "echo hi", ["shell"] = "fish" },
+                    ctx, CancellationToken.None));
+            Assert.Contains("无效 shell", ex.Message);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteCommandTool_ValidShellOverride_Executes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-shell2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var ctx = new AgentContext
+            {
+                Config = new AgentConfig { AllowCommands = true },
+                Workspace = new Workspace(dir),
+            };
+            var shell = OperatingSystem.IsWindows() ? "cmd" : "sh";
+            var (_, output) = await ShellRunner.RunAsync(shell, "echo hi", dir, 30, CancellationToken.None);
+            Assert.Contains("hi", output);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
     [Fact]
     public async Task RunAsync_PassesEnvironmentVariables()
     {

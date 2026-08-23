@@ -95,12 +95,23 @@ public static class ShellRunner
     }
 
     /// <summary>命令类工具（run_command / bash / powershell）的共用执行管线：
-    /// 参数校验、鉴权、超时收敛、目录解析、确认、撤销快照与结果记录——三者行为完全一致，只差 shell 选择。</summary>
+    /// 参数校验、鉴权、超时收敛、目录解析、确认、撤销快照与结果记录——三者行为完全一致，只差 shell 选择。
+    /// 模型可用 `shell` 参数按次覆盖默认选择（如必须用 powershell 跑 PS 脚本）。</summary>
     internal static async Task<string> ExecuteCommandToolAsync(string shell, JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
         var command = ToolArgs.GetString(args, "command");
         if (string.IsNullOrWhiteSpace(command))
             throw new ToolException("缺少必填参数 command");
+
+        // 单次调用级 shell 覆盖（可选）：非法值明确报错而不是静默回落
+        var shellArg = ToolArgs.GetString(args, "shell");
+        if (!string.IsNullOrWhiteSpace(shellArg))
+        {
+            var v = shellArg.Trim().ToLowerInvariant();
+            if (v is not ("cmd" or "powershell" or "pwsh" or "bash" or "sh"))
+                throw new ToolException($"无效 shell: {shellArg}（可选 cmd / powershell / pwsh / bash / sh）");
+            shell = v;
+        }
 
         if (!ctx.Config.AllowCommands)
             return "命令执行被禁用（config.AllowCommands = false）。";
@@ -300,6 +311,7 @@ public sealed class BashTool : ITool
             ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的 bash 命令" },
             ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
             ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+            ["shell"] = new JsonObject { ["type"] = "string", ["description"] = "本次调用使用的 shell（cmd / powershell / pwsh / bash / sh），覆盖工具默认值" },
             ["env"] = new JsonObject { ["type"] = "object", ["description"] = "附加环境变量（字符串键值对，叠加到当前环境）", ["additionalProperties"] = new JsonObject { ["type"] = "string" } },
         },
         ["required"] = new JsonArray("command"),
@@ -323,6 +335,7 @@ public sealed class PowerShellTool : ITool
             ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的 PowerShell 命令" },
             ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
             ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+            ["shell"] = new JsonObject { ["type"] = "string", ["description"] = "本次调用使用的 shell（cmd / powershell / pwsh / bash / sh），覆盖工具默认值" },
             ["env"] = new JsonObject { ["type"] = "object", ["description"] = "附加环境变量（字符串键值对，叠加到当前环境）", ["additionalProperties"] = new JsonObject { ["type"] = "string" } },
         },
         ["required"] = new JsonArray("command"),

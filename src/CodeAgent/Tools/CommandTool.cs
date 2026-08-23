@@ -19,6 +19,7 @@ public sealed class CommandTool : ITool
             ["command"] = new JsonObject { ["type"] = "string", ["description"] = "要执行的命令，如 dotnet build" },
             ["timeout_seconds"] = new JsonObject { ["type"] = "integer", ["description"] = "超时秒数（默认 60，最大 300）" },
             ["cwd"] = new JsonObject { ["type"] = "string", ["description"] = "执行目录（相对工作区，默认工作区根）" },
+            ["shell"] = new JsonObject { ["type"] = "string", ["description"] = "本次调用使用的 shell（cmd / powershell / pwsh / bash / sh），覆盖配置默认值" },
             ["env"] = new JsonObject { ["type"] = "object", ["description"] = "附加环境变量（字符串键值对，叠加到当前环境）", ["additionalProperties"] = new JsonObject { ["type"] = "string" } },
         },
         ["required"] = new JsonArray("command"),
