@@ -480,7 +480,10 @@ public sealed partial class Agent
     private void ClearSpinner()
     {
         _spinnerCts?.Cancel();
-        TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
+        // 累加语义：多轮工具调用时每轮都有思考时段，摘要显示总思考时长；
+        // 累加后立即 Reset——同一调用的 catch 路径再走 ClearSpinner 不会双计
+        TurnThinkingSeconds += _spinnerSw.Elapsed.TotalSeconds;
+        _spinnerSw.Reset();
         // 清空 spinner 行并回到行首：不留常驻文本（思考时长由回合摘要行显示），
         // 流式输出/工具日志从该行继续，输入行保持在上方。
         // 锁内「先取消再清行」：与动画任务的锁互斥，保证清行后不会再有帧写进来
@@ -493,7 +496,9 @@ public sealed partial class Agent
     private void FinalizeSpinner()
     {
         _spinnerCts?.Cancel();
-        TurnThinkingSeconds = _spinnerSw.Elapsed.TotalSeconds;
+        // 累加语义（同 ClearSpinner）：累加后 Reset 防止后续路径双计
+        TurnThinkingSeconds += _spinnerSw.Elapsed.TotalSeconds;
+        _spinnerSw.Reset();
         // 本回合口径：与本回合摘要行/状态栏一致（会话累计见 /stats）
         var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
         var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
