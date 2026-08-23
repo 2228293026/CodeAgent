@@ -170,6 +170,19 @@ public class PathDisplayTests
     }
 
     [Fact]
+    public void ConfirmReplace_OnlyYProceeds()
+    {
+        using var yes = new StringReader("Y\n");
+        using var outYes = new StringWriter();
+        Assert.True(Program.ConfirmReplace(yes, outYes, "覆盖？"));
+
+        using var no = new StringReader("\n"); // 回车默认不覆盖
+        using var outNo = new StringWriter();
+        Assert.False(Program.ConfirmReplace(no, outNo, "覆盖？"));
+        Assert.Contains("覆盖?", outNo.ToString().Replace("？", "?")); // 问题文案透传
+    }
+
+    [Fact]
     public void ConfirmFullAccess_OnlyYProceeds()
     {
         // 放开沙箱是高危操作：只有明确 y 放行；EOF / 空输入 / 其他输入一律取消

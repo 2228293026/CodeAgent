@@ -713,6 +713,13 @@ internal static class Program
         return false;
     }
 
+    /// <summary>通用覆盖确认（/save 同名快照等）：只有明确 y 放行，EOF/其他输入取消（安全默认）。</summary>
+    internal static bool ConfirmReplace(TextReader input, TextWriter output, string question)
+    {
+        output.Write($"⚠ {question} [y/N] ");
+        return string.Equals(input.ReadLine()?.Trim(), "y", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）——灰色 UI 层级。</summary>
     private static void PrintFileAccess(string mode, bool showHint = false)
     {
@@ -1346,6 +1353,13 @@ internal static class Program
                 {
                     try
                     {
+                        // 同名快照已存在：覆盖前确认（误覆盖旧快照不可恢复）
+                        if (agent.SessionExists(rest.Trim()) &&
+                            !ConfirmReplace(Console.In, Console.Out, $"会话「{rest.Trim()}」已存在，覆盖？"))
+                        {
+                            Console.WriteLine("已取消保存。");
+                            break;
+                        }
                         agent.SaveSession(rest.Trim());
                         Console.WriteLine($"✔ 已保存会话: {rest.Trim()}");
                     }
