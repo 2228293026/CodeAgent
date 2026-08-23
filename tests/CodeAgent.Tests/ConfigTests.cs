@@ -71,6 +71,90 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_UnknownTopLevelKey_ProducesWarning()
+    {
+        // 拼写错误的配置项此前被反序列化静默丢弃——「配了但不生效」无任何线索
+        var path = Path.Combine(_dir, "typo.json");
+        File.WriteAllText(path, """
+            {
+              "provider": "openai",
+              "providers": { "openai": { "type": "openai", "model": "gpt-4o" } },
+              "maxToolIteratons": 5
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("maxToolIteratons") && w.Contains("未知配置项"));
+    }
+
+    [Fact]
+    public void Load_KnownKeys_NoWarnings()
+    {
+        var path = Path.Combine(_dir, "clean.json");
+        File.WriteAllText(path, """
+            {
+              // 注释与尾逗号不应触发警告
+              "provider": "openai",
+              "providers": { "openai": { "type": "openai", "model": "gpt-4o", "apiKeyEnv": "OPENAI_API_KEY", } },
+              "modes": [ { "name": "fix", "description": "d", "systemPrompt": "p", "tools": [] } ],
+              "fileAccess": "whitelist",
+              "readOnlyDirs": ["../libs"],
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Empty(cfg.Warnings);
+    }
+
+    [Fact]
+    public void Load_UnknownProviderAndModeKeys_ProduceWarnings()
+    {
+        var path = Path.Combine(_dir, "nested-typo.json");
+        File.WriteAllText(path, """
+            {
+              "providers": {
+                "deepseek": { "type": "openai", "baseurl": "https://x/v1", "api_key": "k" }
+              },
+              "modes": [ { "name": "a", "prompts": "p" } ]
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("Provider 'deepseek'") && w.Contains("api_key"));
+        Assert.DoesNotContain(cfg.Warnings, w => w.Contains("baseurl")); // 大小写不敏感绑定，不算未知
+        Assert.Contains(cfg.Warnings, w => w.Contains("自定义模式[0]") && w.Contains("prompts"));
+    }
+
+    [Fact]
+    public void Load_InvalidEnumValue_FallsBackWithWarning()
+    {
+        var path = Path.Combine(_dir, "enum.json");
+        File.WriteAllText(path, """
+            {
+              "thinkingEffort": "ultra",
+              "fileAccess": "god"
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Equal("off", cfg.ThinkingEffort);   // 回退默认
+        Assert.Equal("strict", cfg.FileAccess);    // 回退更严格默认
+        Assert.Contains(cfg.Warnings, w => w.Contains("thinkingEffort"));
+        Assert.Contains(cfg.Warnings, w => w.Contains("fileAccess"));
+    }
+
+    [Fact]
+    public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()
+    {
+        // 解析失败交给反序列化统一报错，校验器不重复抛异常
+        Assert.Empty(AgentConfig.ValidateUnknownKeys("{ not json !!"));
+    }
+
+    [Fact]
     public void SaveLoad_RoundTripsAllFields()
     {
         // 回归：camelCase 序列化往返后，多 provider、自定义模式、开关项都应存活

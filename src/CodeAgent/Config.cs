@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace CodeAgent;
@@ -205,8 +206,15 @@ public sealed class AgentConfig
             cfg.MaxSessionLogs = Math.Clamp(cfg.MaxSessionLogs, 0, 1000);
             // 字符串枚举归一化：手写配置的大小写/空白差异曾让同一值在不同 Provider 上行为分叉
             //（如 "High" 在 OpenAI 侧静默不发送 reasoning_effort、在 Anthropic 侧却按默认预算开启 thinking）
+            var effortRaw = cfg.ThinkingEffort;
             cfg.ThinkingEffort = NormalizeChoice(cfg.ThinkingEffort, "off", "low", "medium", "high", "auto");
+            if (!string.IsNullOrWhiteSpace(effortRaw) && cfg.ThinkingEffort != effortRaw.Trim().ToLowerInvariant())
+                cfg.Warnings.Add($"thinkingEffort='{effortRaw}' 不是有效档位（off/low/medium/high/auto），已回退为 '{cfg.ThinkingEffort}'。");
+            var accessRaw = cfg.FileAccess;
             cfg.FileAccess = NormalizeChoice(cfg.FileAccess, "strict", "whitelist", "full");
+            if (!string.IsNullOrWhiteSpace(accessRaw) && cfg.FileAccess != accessRaw.Trim().ToLowerInvariant())
+                cfg.Warnings.Add($"fileAccess='{accessRaw}' 不是有效级别（strict/whitelist/full），已回退为更严格的 '{cfg.FileAccess}'。");
+            cfg.Warnings.AddRange(ValidateUnknownKeys(text));
             return cfg;
         }
         catch (JsonException ex)
@@ -219,12 +227,78 @@ public sealed class AgentConfig
     [JsonIgnore]
     public string? SourceFile { get; private set; }
 
+    /// <summary>加载时的非致命警告（未知配置项、非法枚举回退等），由入口打印提示。
+    /// 手写 JSON 的拼写错误此前会被静默忽略——「配了但不生效」且无任何线索。</summary>
+    [JsonIgnore]
+    public List<string> Warnings { get; } = new();
+
     /// <summary>配置字符串枚举归一化：去空白 + 小写；不在候选集内回退第一个候选（默认值）。
     /// FileAccess 的默认是更严格的 strict——误拼不放开沙箱。</summary>
     private static string NormalizeChoice(string? value, params string[] allowed)
     {
         var v = value?.Trim().ToLowerInvariant();
         return allowed.Contains(v) ? v! : allowed[0];
+    }
+
+    // 已知配置键（反序列化大小写不敏感，这里同样按忽略大小写比较，避免误报）
+    private static readonly HashSet<string> KnownTopLevelKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "provider", "providers", "maxToolIterations", "maxHistoryChars", "contextWindow",
+        "pricePerMillionInput", "pricePerMillionOutput", "allowCommands", "confirmCommands",
+        "commandTimeoutSeconds", "shell", "saveSessions", "maxSessionLogs", "sessionDir",
+        "exportDir", "streamOutput", "showToolCalls", "renderMarkdown", "tuiAnsi",
+        "thinkingEffort", "defaultMode", "fileAccess", "readOnlyDirs", "modes", "systemPrompt",
+    };
+    private static readonly HashSet<string> KnownProviderKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "type", "baseUrl", "model", "apiKeyEnv", "apiKey",
+        "maxTokens", "temperature", "pricePerMillionInput", "pricePerMillionOutput",
+    };
+    private static readonly HashSet<string> KnownModeKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "name", "description", "systemPrompt", "tools",
+    };
+
+    /// <summary>校验配置文件键名：未知顶层/供应商/自定义模式字段多半是拼写错误，
+    /// 反序列化会静默丢弃——「配了但不生效」且无任何线索。返回人类可读警告。</summary>
+    internal static IReadOnlyList<string> ValidateUnknownKeys(string json)
+    {
+        var warnings = new List<string>();
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions
+            {
+                AllowTrailingCommas = true,
+                CommentHandling = JsonCommentHandling.Skip,
+            });
+        }
+        catch
+        {
+            return warnings; // 解析失败交给反序列化统一报错，这里不重复
+        }
+        if (root is not JsonObject obj)
+            return warnings;
+
+        foreach (var key in obj.Select(kv => kv.Key))
+            if (!KnownTopLevelKeys.Contains(key))
+                warnings.Add($"未知配置项 '{key}'（可能是拼写错误，该配置不会生效）。");
+
+        if (obj["providers"] is JsonObject providers)
+            foreach (var (name, pnode) in providers)
+                if (pnode is JsonObject pobj)
+                    foreach (var key in pobj.Select(kv => kv.Key))
+                        if (!KnownProviderKeys.Contains(key))
+                            warnings.Add($"Provider '{name}' 存在未知配置项 '{key}'（可能是拼写错误，该配置不会生效）。");
+
+        if (obj["modes"] is JsonArray modes)
+            for (int i = 0; i < modes.Count; i++)
+                if (modes[i] is JsonObject mobj)
+                    foreach (var key in mobj.Select(kv => kv.Key))
+                        if (!KnownModeKeys.Contains(key))
+                            warnings.Add($"自定义模式[{i}] 存在未知配置项 '{key}'（可能是拼写错误，该配置不会生效）。");
+
+        return warnings;
     }
 
     /// <summary>以 camelCase 格式保存配置到指定路径。</summary>

@@ -149,6 +149,14 @@ internal static class Program
             return 2;
         }
 
+        // 配置非致命警告（未知配置项 / 枚举回退）：拼写错误此前被静默忽略，用户无从得知「配了不生效」
+        foreach (var warning in config.Warnings)
+        {
+            SafeColor.Foreground(ConsoleColor.DarkYellow);
+            Console.WriteLine($"⚠ 配置: {warning}");
+            SafeColor.Reset();
+        }
+
         // 交互式供应商配置向导：生成/更新 codeagent.json 后退出
         if (setup)
         {
