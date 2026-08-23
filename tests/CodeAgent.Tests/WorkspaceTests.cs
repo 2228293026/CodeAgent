@@ -42,8 +42,9 @@ public class WorkspaceTests
         // File.Exists / Directory.Exists 双双失配，read_file 误报「文件不存在」
         var ws = new Workspace(Root);
         var expected = Path.GetFullPath(Path.Combine(Root, "a.txt"));
-        Assert.Equal(expected, ws.Resolve("a.txt/"));
-        Assert.Equal(expected, ws.ResolveRead("./a.txt\\"));
+        Assert.Equal(expected, ws.Resolve("a.txt/"));   // '/' 在全平台都是分隔符
+        if (OperatingSystem.IsWindows())
+            Assert.Equal(expected, ws.ResolveRead("./a.txt\\")); // '\' 仅 Windows 是分隔符（Linux 上是合法文件名字符）
         // 工作区根本身不受影响
         Assert.Equal(Path.GetFullPath(Root), ws.Resolve("."));
     }
