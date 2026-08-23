@@ -211,9 +211,9 @@ internal static class Program
         // 环境变量/命令行的会话级覆盖不会固化成配置默认值（显式 /provider 切换除外）
         config.PersistedProvider = config.Provider;
         if (provider is not null)
-            config.Provider = provider;
+            config.Provider = provider.Trim();
         else if (!string.IsNullOrWhiteSpace(envProvider))
-            config.Provider = envProvider;
+            config.Provider = envProvider.Trim();
 
         // 拼错的 provider 名此前会静默落到空的 openai 配置，报错变成误导性的「缺 API Key」。
         // 在创建 Provider 前先校验名字，给出可用列表
