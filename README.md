@@ -20,9 +20,11 @@
 - 🎮 ADOFAI mod 适配：检测到 mod 项目自动注入开发上下文与 moddev / harmony / assetbundle 模式
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
 - ⌨️ 终端 TUI：斜杠命令菜单（过滤/方向键选择/数字执行/→ 填充）、命令历史（↑/↓，持久化、Ctrl+R 反向搜索）、TAB 补全、多行粘贴折叠、Shift+Enter 手动换行、Ctrl+L 清屏、`[模式]` 提示符
-- 🔧 内置 10 个工具：`read_file` / `write_file` / `edit_file` / `list_directory` / `glob` / `grep` / `run_command` / `bash` / `powershell` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
-- ↩️ 会话自动落盘：`--continue` 恢复最近会话、`/resume` 按编号恢复历史会话、Esc 多级撤回逐轮回退
-- 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）与思考强度（`auto` 自动探测模型推理档位并取最高）；`/compact [重点]` 主动压缩历史（压缩过程显示进度；可附保留重点，如 `/compact 保留接口设计`）
+- 🔧 内置 10 个工具：`read_file`（offset/limit/tail）/ `write_file` / `edit_file`（换行风格容错：LF↔CRLF 自动归一化匹配）/ `list_directory` / `glob` / `grep`（支持 multiline 跨行匹配）/ `run_command` / `bash` / `powershell` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
+- 🔁 Anthropic extended thinking 全支持：思考文本 + 签名随工具调用轮原样回传（缺失会被 API 400）
+- ↩️ 会话自动落盘：`--continue` 恢复最近会话、`/resume` 按编号恢复历史会话、`/find <关键字>` 跨历史会话搜索、Esc 多级撤回逐轮回退；`--no-session` 本次运行不落盘（隐私任务）
+- 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）、思考强度（`auto` 自动探测模型推理档位并取最高）与**当前 git 分支**；`/compact [重点]` 主动压缩历史（压缩过程显示进度；可附保留重点，如 `/compact 保留接口设计`）
+- ✅ 配置校验：未知配置项 / 非法枚举值启动时明确警告（拼写错误不再静默失效）
 - 🔌 双 Provider：OpenAI 兼容（chat completions + function calling）、Anthropic（messages + tool use）
 - ⚙️ 配置文件 `codeagent.json`（项目级或 `~/.codeagent/config.json` 全局级），API Key 从环境变量读取
 - 🛡️ 工作区沙箱：文件工具默认无法访问工作区之外；命令执行可选逐个确认
