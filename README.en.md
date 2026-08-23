@@ -240,6 +240,12 @@ src/CodeAgent/
 
 **The model replies without using tools?** The model probably lacks function calling / tool use — switch to a tool-capable model (gpt-4o, claude-sonnet, deepseek-chat, qwen3-coder and the like).
 
+**Startup shows "unknown config key" warnings?** A key in `codeagent.json` is misspelled or no longer exists — the loader ignores it, so the setting never took effect. Fix the name (see [配置参考](docs/配置参考.md)); unknown keys inside a provider block are reported the same way.
+
+**Where did my `/compact` summary go on Claude?** Nowhere — summaries inserted mid-conversation are converted to user-role blocks automatically (Anthropic has no mid-thread system role).
+
+**A config field I set in an ADOFAI project got overwritten with injected text / my `CODEAGENT_PROVIDER` became the default?** Fixed: runtime injections and session-level overrides are no longer persisted by in-session saves (`/model` etc.). Older configs may still contain the baked-in text — remove it manually once.
+
 ## Further documentation (Chinese)
 
 - [项目介绍](docs/项目介绍.md) — positioning, architecture, design trade-offs
