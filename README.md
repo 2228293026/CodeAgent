@@ -261,6 +261,12 @@ src/CodeAgent/
 
 **模型没调用工具就回复了？** 该模型可能不支持 function calling / tool use，换支持的工具型模型（如 gpt-4o、claude-sonnet、deepseek-chat、qwen3-coder）。
 
+**启动时提示「未知配置项」？** `codeagent.json` 里有拼写错误或已废弃的字段——加载器会忽略它，所以该配置从未生效。对照[配置参考](docs/配置参考.md)修正名称即可；provider 内部的未知键也会同样报告。
+
+**/compact 的摘要在 Claude 上丢了？** 没丢——插入对话中间的摘要会自动转成 user 角色块（Anthropic 没有中途 system 角色）。
+
+**ADOFAI 项目里配置文件被写入注入文本 / CODEAGENT_PROVIDER 变成了默认 provider？** 已修复：会话级注入与覆盖不再被 `/model` 等保存操作持久化。旧配置里如已被写入过一次，手动删除那段文本即可。
+
 ## 深入文档
 
 - [项目介绍](docs/项目介绍.md) — 定位、整体架构与设计取舍
