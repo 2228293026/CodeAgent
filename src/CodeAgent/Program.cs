@@ -1652,7 +1652,11 @@ internal static class Program
                 Console.WriteLine($"已配置的 Provider（当前: {config.Provider}，-p <名> 或改 provider 切换）:");
                 foreach (var kv in config.Providers)
                 {
-                    var cur = string.Equals(kv.Key, config.Provider, StringComparison.OrdinalIgnoreCase) ? " ←" : "";
+                    var isCurrent = string.Equals(kv.Key, config.Provider, StringComparison.OrdinalIgnoreCase);
+                    // 会话级覆盖（env / -p）指向的目标：标注以免用户误以为已持久化
+                    var sessionOnly = isCurrent && config.PersistedProvider is not null &&
+                                      !string.Equals(kv.Key, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
+                    var cur = isCurrent ? (sessionOnly ? " ←（会话级）" : " ←") : "";
                     var price = kv.Value.PricePerMillionInput > 0
                         ? $"  单价: ${kv.Value.PricePerMillionInput:F2}/${kv.Value.PricePerMillionOutput:F2} per M"
                         : "";
