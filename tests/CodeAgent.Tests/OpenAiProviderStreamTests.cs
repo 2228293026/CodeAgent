@@ -92,6 +92,30 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_StreamUsageFalse_OmitsStreamOptions()
+    {
+        // 旧版本地推理服务对 stream_options 直接 400：streamUsage=false 时不发该字段
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"content":"ok"}}]}
+
+                data: [DONE]
+                """,
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "k", StreamUsage = false }, new HttpClient(handler));
+
+        await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastRequest!);
+        Assert.Null(body!["stream_options"]);   // 字段整体省略
+        Assert.True(body["stream"]!.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_MalformedToolCallFields_SkippedNotFatal()
     {
         // 回归：function 非对象 / id 非字符串（不合规网关）曾让 GetValue 抛异常炸掉整条流；

@@ -32,6 +32,10 @@ public sealed class ProviderOptions
     public double PricePerMillionInput { get; set; } = 0;
     /// <summary>该供应商的输出单价（美元 / 百万 token）；0 = 未配置（回退全局 pricePerMillionOutput）。</summary>
     public double PricePerMillionOutput { get; set; } = 0;
+
+    /// <summary>流式请求是否附带 stream_options.include_usage（用于回收 token 用量）。
+    /// 部分旧版本地推理服务（如老 llama.cpp）对该字段直接 400——遇到时设 false。</summary>
+    public bool StreamUsage { get; set; } = true;
 }
 
 /// <summary>自定义模式定义（codeagent.json 的 modes 列表项）。</summary>
@@ -272,7 +276,7 @@ public sealed class AgentConfig
     private static readonly HashSet<string> KnownProviderKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         "type", "baseUrl", "model", "apiKeyEnv", "apiKey",
-        "maxTokens", "temperature", "pricePerMillionInput", "pricePerMillionOutput",
+        "maxTokens", "temperature", "pricePerMillionInput", "pricePerMillionOutput", "streamUsage",
     };
     private static readonly HashSet<string> KnownModeKeys = new(StringComparer.OrdinalIgnoreCase)
     {

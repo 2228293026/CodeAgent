@@ -50,6 +50,7 @@ public sealed class OpenAiProvider : IAgentProvider
     private readonly string _apiKey;
     private readonly int _maxTokens;
     private readonly double _temperature;
+    private readonly bool _streamUsage;
 
     /// <summary>未注入 HttpClient 时的共享实例：/model 每次切换都会新建 Provider，
     /// 逐实例 new HttpClient 会各自持有连接池不释放（套接字耗尽），必须全局复用。</summary>
@@ -62,6 +63,7 @@ public sealed class OpenAiProvider : IAgentProvider
         _maxTokens = opts.MaxTokens <= 0 ? 8192 : opts.MaxTokens;
         _temperature = opts.Temperature;
         _apiKey = ResolveApiKey(opts, DefaultApiKeyEnv);
+        _streamUsage = opts.StreamUsage;
         _http = http ?? SharedHttp;
     }
 
@@ -248,8 +250,11 @@ public sealed class OpenAiProvider : IAgentProvider
             ["model"] = _model,
             ["messages"] = BuildMessages(messages),
             ["stream"] = true,
-            ["stream_options"] = new JsonObject { ["include_usage"] = true },
         };
+        // stream_options.include_usage 用于回收 token 用量；旧版本地推理服务可能不认识该字段（400）——
+        // 供应商配置 streamUsage=false 时省略（代价是流式无 usage，ctx 回退估算口径）
+        if (_streamUsage)
+            payload["stream_options"] = new JsonObject { ["include_usage"] = true };
         ApplyLimits(payload);
         if (tools.Count > 0)
         {
