@@ -281,8 +281,9 @@ public sealed partial class Agent
                     break;
                 try
                 {
-                    var n = JsonNode.Parse(line) as JsonObject;
-                    var content = n?["content"]?.GetValue<string>();
+                    if (JsonNode.Parse(line) is not JsonObject n)
+                        continue;
+                    var content = n["content"]?.GetValue<string>();
                     if (content is null)
                         continue;
                     // 斜杠命令行（/model gpt 等）是操作记录不是对话内容：跳过不作为命中

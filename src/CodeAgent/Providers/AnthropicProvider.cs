@@ -443,8 +443,12 @@ public sealed class AnthropicProvider : IAgentProvider
     {
         var ids = new List<string>();
         string? after = null;
+        var pages = 0;
         while (true)
         {
+            // 防御：游标正常前进但 has_more 恒 true 的异常网关会无限翻页——最多 50 页（5 万个模型绰绰有余）
+            if (++pages > 50)
+                break;
             var url = _baseUrl + "/v1/models?limit=1000" + (after is null ? "" : $"&after_id={after}");
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.Add("x-api-key", _apiKey);
@@ -471,6 +475,7 @@ public sealed class AnthropicProvider : IAgentProvider
                 return ids;
             after = lastId;
         }
+        return ids; // 页数上限触发：返回已收集的部分
     }
     private JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)
     {

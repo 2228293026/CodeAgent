@@ -426,6 +426,22 @@ public class AnthropicProviderTests
         Assert.NotNull(body?["tools"]);
     }
     [Fact]
+    public async Task ListModelsAsync_InfiniteHasMore_StopsAtPageCap()
+    {
+        // 回归：异常网关 has_more 恒 true 且游标一直前进 → 无限翻页；
+        // 50 页上限后应正常返回（每页 1 条 → 恰好 50 条）
+        var page = 0;
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "k" },
+            new HttpClient(new PagedHandler(() =>
+                $"{{\"data\":[{{\"id\":\"m-{++page}\"}}],\"has_more\":true}}")));
+
+        var models = await provider.ListModelsAsync(CancellationToken.None);
+
+        Assert.Equal(50, models.Count); // 上限生效，不死循环
+    }
+
+    [Fact]
     public async Task ListModelsAsync_FollowsPagination()
     {
         // Anthropic /models 每页默认 20 条：has_more + after_id 必须翻页，否则大账号只见第一页
