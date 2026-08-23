@@ -47,13 +47,16 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
-    public void Remember_NonConsecutiveDuplicate_IsAllowed()
+    public void Remember_NonConsecutiveDuplicate_MovesToEnd()
     {
+        // 同一命令再次使用：旧副本移除、条目回到末尾——
+        // ↑/↓ 与 Ctrl+R 里不再出现散落的旧副本
         var store = new HistoryStore(_file);
         store.Remember("a");
         store.Remember("b");
-        store.Remember("a"); // 非连续重复：允许（回到常用命令）
-        Assert.Equal(3, store.Count);
+        store.Remember("a");
+        Assert.Equal(2, store.Count);
+        Assert.Equal(["b", "a"], store.Entries); // a 移到末尾
     }
 
     [Fact]

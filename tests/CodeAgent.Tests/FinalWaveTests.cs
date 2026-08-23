@@ -180,13 +180,15 @@ public class FinalWaveTests : IDisposable
     }
 
     [Fact]
-    public void Remember_DuplicateAfterOther_IsAllowed()
+    public void Remember_DuplicateAfterOther_MovesToEnd()
     {
+        // 语义变更：非连续重复不再保留旧副本，而是移到末尾（↑/↓ 与 Ctrl+R 不再散落旧副本）
         var h = NewStore();
         h.Remember("a");
         h.Remember("b");
-        h.Remember("a"); // 非连续重复允许
-        Assert.Equal(3, h.Count);
+        h.Remember("a");
+        Assert.Equal(2, h.Count);
+        Assert.Equal(new[] { "b", "a" }, h.Entries);
     }
 
     [Fact]

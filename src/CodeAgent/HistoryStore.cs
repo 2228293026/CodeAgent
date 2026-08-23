@@ -18,13 +18,16 @@ public sealed class HistoryStore
 
     public int Count => _entries.Count;
 
-    /// <summary>记录一条输入：空白忽略、与末尾重复忽略、超上限丢最旧。</summary>
+    /// <summary>记录一条输入：空白忽略；重复条目移到末尾（↑/↓ 与 Ctrl+R 里不再出现
+    /// 散落的旧副本）；超上限丢最旧。</summary>
     public void Remember(string line)
     {
         if (string.IsNullOrWhiteSpace(line))
             return;
         if (_entries.Count > 0 && _entries[^1] == line)
             return;
+        // 非相邻的旧重复一并移除：等价于「同一命令多次使用后只保留最新位置」
+        _entries.RemoveAll(l => l == line);
         _entries.Add(line);
         if (_entries.Count > MaxEntries)
             _entries.RemoveAt(0);
