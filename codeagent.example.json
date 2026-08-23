@@ -55,6 +55,7 @@
   "renderMarkdown": true,
   "tuiAnsi": true,
   "thinkingEffort": "off",
+  "autoCompactPercent": 0,
   "defaultMode": "code",
   "modes": [
     {
