@@ -198,3 +198,41 @@ internal sealed class StreamToolAccum
     public string Name = "";
     public StringBuilder Args = new();
 }
+
+/// <summary>Provider 响应字段的宽容读取：部分 OpenAI 兼容网关把 token 计数、布尔值序列化为
+/// 字符串（"prompt_tokens": "123"），GetValue&lt;int&gt;() 对此直接抛异常，炸掉整次响应解析；
+/// 这里统一收敛为「能解析就取值，否则返回 null/默认」。</summary>
+internal static class ProviderJson
+{
+    /// <summary>宽容整数：数字（含整数值浮点）与数字字符串均可；其他形态或超范围返回 null。</summary>
+    public static int? OptInt(JsonNode? node)
+    {
+        if (node is not JsonValue v)
+            return null;
+        if (v.TryGetValue<int>(out var i))
+            return i;
+        if (v.TryGetValue<double>(out var d) && double.IsFinite(d)
+            && d == Math.Truncate(d) && d is >= int.MinValue and <= int.MaxValue)
+            return (int)d;
+        if (v.TryGetValue<string>(out var s) && int.TryParse(s.Trim(), out var p))
+            return p;
+        return null;
+    }
+
+    /// <summary>宽容布尔：原生 bool 与 "true"/"false" 字符串均可；其他形态返回 null。</summary>
+    public static bool? OptBool(JsonNode? node)
+    {
+        if (node is not JsonValue v)
+            return null;
+        if (v.TryGetValue<bool>(out var b))
+            return b;
+        if (v.TryGetValue<string>(out var s))
+        {
+            if (s.Trim().Equals("true", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (s.Trim().Equals("false", StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+        return null;
+    }
+}

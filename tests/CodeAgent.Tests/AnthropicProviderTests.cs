@@ -270,6 +270,27 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_StringTokenCounts_AreParsedNotFatal()
+    {
+        // 回归：字符串形态的 usage 计数（网关变体）不应抛异常中断解析
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """
+                {"content":[{"type":"text","text":"ok"}],
+                 "usage":{"input_tokens":"10","output_tokens":"5"}}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Equal(10, resp.InputTokens);
+        Assert.Equal(5, resp.OutputTokens);
+    }
+
+    [Fact]
     public async Task ChatAsync_NoTools_OmitsToolsField()
     {
         // 回归：空工具列表曾发送 "tools": []（/compact 摘要调用），Anthropic 对此返回 400

@@ -202,9 +202,9 @@ public sealed class OpenAiProvider : IAgentProvider
             }
         }
 
-        int? inTok = root?["usage"]?["prompt_tokens"]?.GetValue<int>();
-        int? outTok = root?["usage"]?["completion_tokens"]?.GetValue<int>();
-        int? cachedTok = root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]?.GetValue<int>();
+        int? inTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens"]);
+        int? outTok = ProviderJson.OptInt(root?["usage"]?["completion_tokens"]);
+        int? cachedTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]);
         var finish = choicesArr is { Count: > 0 } ? choicesArr[0]?["finish_reason"]?.GetValue<string>() : null; // "length" = 被 max_tokens 截断
 
         return new ProviderResponse
@@ -326,12 +326,15 @@ public sealed class OpenAiProvider : IAgentProvider
             // usage 可能随任意 chunk 到达（hitmargin 在带 delta 的最后一个 chunk 里返回 usage）
             if (root?["usage"] is JsonObject u)
             {
-                if (u["prompt_tokens"] is not null)
-                    inTok = u["prompt_tokens"]!.GetValue<int>();
-                if (u["completion_tokens"] is not null)
-                    outTok = u["completion_tokens"]!.GetValue<int>();
-                if (u["prompt_tokens_details"]?["cached_tokens"] is not null)
-                    cachedTok = u["prompt_tokens_details"]!["cached_tokens"]!.GetValue<int>();
+                var it = ProviderJson.OptInt(u["prompt_tokens"]);
+                if (it is not null)
+                    inTok = it;
+                var ot = ProviderJson.OptInt(u["completion_tokens"]);
+                if (ot is not null)
+                    outTok = ot;
+                var ct2 = ProviderJson.OptInt(u["prompt_tokens_details"]?["cached_tokens"]);
+                if (ct2 is not null)
+                    cachedTok = ct2;
             }
 
             // finish_reason 随结束 chunk 到达（可能不带 delta）：取最后一个非空值
@@ -365,7 +368,7 @@ public sealed class OpenAiProvider : IAgentProvider
             {
                 foreach (var tc in tcs)
                 {
-                    var index = tc?["index"]?.GetValue<int>() ?? 0;
+                    var index = ProviderJson.OptInt(tc?["index"]) ?? 0;
                     if (!toolAccum.TryGetValue(index, out var acc))
                     {
                         acc = new StreamToolAccum();

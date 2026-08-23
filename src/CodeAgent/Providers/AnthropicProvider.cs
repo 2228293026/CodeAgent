@@ -143,12 +143,12 @@ public sealed class AnthropicProvider : IAgentProvider
             }
         }
 
-        int? inTok = root?["usage"]?["input_tokens"]?.GetValue<int>();
-        int? outTok = root?["usage"]?["output_tokens"]?.GetValue<int>();
+        int? inTok = ProviderJson.OptInt(root?["usage"]?["input_tokens"]);
+        int? outTok = ProviderJson.OptInt(root?["usage"]?["output_tokens"]);
         // Anthropic 把缓存命中放顶层 usage.cache_read_input_tokens；
         // input_tokens_details 是 OpenAI 的响应结构，真实 Anthropic 响应里不存在（保留兜底兼容网关）
-        int? cachedTok = root?["usage"]?["cache_read_input_tokens"]?.GetValue<int>()
-                         ?? root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
+        int? cachedTok = ProviderJson.OptInt(root?["usage"]?["cache_read_input_tokens"])
+                         ?? ProviderJson.OptInt(root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]);
         var stopReason = root?["stop_reason"]?.GetValue<string>(); // "max_tokens" = 输出被截断
 
         return new ProviderResponse
@@ -272,7 +272,7 @@ public sealed class AnthropicProvider : IAgentProvider
                     {
                         var block = root?["content_block"];
                         var type = block?["type"]?.GetValue<string>();
-                        var index = root?["index"]?.GetValue<int>() ?? 0;
+                        var index = ProviderJson.OptInt(root?["index"]) ?? 0;
                         if (type == "tool_use")
                         {
                             toolAccum[index] = new StreamToolAccum
@@ -288,7 +288,7 @@ public sealed class AnthropicProvider : IAgentProvider
                     {
                         var delta = root?["delta"];
                         var dtype = delta?["type"]?.GetValue<string>();
-                        var index = root?["index"]?.GetValue<int>() ?? 0;
+                        var index = ProviderJson.OptInt(root?["index"]) ?? 0;
                         if (dtype == "thinking_delta")
                         {
                             // 思考内容（extended thinking）：实时回调，由 Agent 暗色显示
@@ -317,14 +317,14 @@ public sealed class AnthropicProvider : IAgentProvider
                     }
 
                 case "message_start":
-                    inputTokens = root?["message"]?["usage"]?["input_tokens"]?.GetValue<int>();
+                    inputTokens = ProviderJson.OptInt(root?["message"]?["usage"]?["input_tokens"]);
                     // 同非流式：Anthropic 的缓存命中在 usage 顶层，嵌套路径只是网关兼容兜底
-                    cachedTokens = root?["message"]?["usage"]?["cache_read_input_tokens"]?.GetValue<int>()
-                                   ?? root?["message"]?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
+                    cachedTokens = ProviderJson.OptInt(root?["message"]?["usage"]?["cache_read_input_tokens"])
+                                   ?? ProviderJson.OptInt(root?["message"]?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]);
                     break;
 
                 case "message_delta":
-                    outputTokens = root?["usage"]?["output_tokens"]?.GetValue<int>();
+                    outputTokens = ProviderJson.OptInt(root?["usage"]?["output_tokens"]);
                     var sr = root?["delta"]?["stop_reason"]?.GetValue<string>();
                     if (!string.IsNullOrEmpty(sr))
                         finishReason = sr; // "max_tokens" 表示输出被截断
@@ -397,7 +397,7 @@ public sealed class AnthropicProvider : IAgentProvider
                 }
             }
             // has_more 时用最后一条 id 翻页；空页或游标未前进则停止（防服务端异常导致的死循环）
-            if (root?["has_more"]?.GetValue<bool>() != true || lastId is null || lastId == after)
+            if (ProviderJson.OptBool(root?["has_more"]) != true || lastId is null || lastId == after)
                 return ids;
             after = lastId;
         }

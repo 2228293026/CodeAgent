@@ -434,4 +434,28 @@ public class OpenAiProviderTests
         Assert.Equal("无法协助", resp.Text);
     }
 
+    [Fact]
+    public async Task ChatAsync_StringTokenCounts_AreParsedNotFatal()
+    {
+        // 回归：部分 OpenAI 兼容网关把 token 计数序列化为字符串（"prompt_tokens": "123"），
+        // GetValue<int> 会抛 InvalidOperationException 炸掉整次响应解析
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """
+                {"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],
+                 "usage":{"prompt_tokens":"12","completion_tokens":"34","prompt_tokens_details":{"cached_tokens":"5"}}}
+                """,
+        };
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Equal("ok", resp.Text);
+        Assert.Equal(12, resp.InputTokens);
+        Assert.Equal(34, resp.OutputTokens);
+        Assert.Equal(5, resp.CachedTokens);
+    }
+
 }

@@ -66,6 +66,32 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_StringTokenCounts_AreParsedNotFatal()
+    {
+        // 回归：流式 usage 里字符串形态的 token 计数（网关变体）不应炸掉整条流
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"content":"hi"}}]}
+
+                data: {"choices":[],"usage":{"prompt_tokens":"12","completion_tokens":"5","prompt_tokens_details":{"cached_tokens":"2"}}}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("hi", resp.Text);
+        Assert.Equal(12, resp.InputTokens);
+        Assert.Equal(5, resp.OutputTokens);
+        Assert.Equal(2, resp.CachedTokens);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ReasoningContent_IsReported()
     {
         var handler = new SseHandler
