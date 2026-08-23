@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using CodeAgent;
 using Xunit;
 
@@ -154,4 +155,51 @@ public class PathDisplayTests
     [InlineData("")]
     public void LooksLikeUnknownFlag_PositionalText_NotFlag(string arg) =>
         Assert.False(Program.LooksLikeUnknownFlag(arg));
+
+    [Fact]
+    public void SaveConfig_SessionProviderOverride_NotPersisted()
+    {
+        // 回归：CODEAGENT_PROVIDER=deepseek 启动后，/thinking 等命令保存配置
+        // 曾把 deepseek 固化成配置文件的默认 provider
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-savecfg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "codeagent.json");
+            AgentConfig.Save(new AgentConfig { Provider = "openai" }, path);
+
+            var config = AgentConfig.Load(path);
+            config.PersistedProvider = config.Provider; // Program 启动时记录
+            config.Provider = "deepseek";                // 会话级覆盖（env/-p）
+
+            Program.SaveConfig(config, path);
+
+            Assert.Equal("deepseek", config.Provider); // 内存保持会话值
+            var reloaded = AgentConfig.Load(path);
+            Assert.Equal("openai", reloaded.Provider); // 持久层保持原值
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void SaveConfig_NoPersistedRecord_SavesCurrentProvider()
+    {
+        // 未记录持久值（新配置/测试直造）：按当前值保存，行为与旧版一致
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-savecfg2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "codeagent.json");
+            var config = new AgentConfig { Provider = "deepseek" };
+            Program.SaveConfig(config, path);
+            Assert.Equal("deepseek", AgentConfig.Load(path).Provider);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
 }

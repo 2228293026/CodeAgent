@@ -234,6 +234,13 @@ public sealed class AgentConfig
     [JsonIgnore]
     public string? SessionOnlySystemPrompt { get; set; }
 
+    /// <summary>启动时配置文件里持久化的 provider 名（环境变量/命令行覆盖前）。
+    /// /model、/thinking、/shell、/access 等命令保存配置时按它写回 provider 字段，
+    /// 避免把 CODEAGENT_PROVIDER=xxx 之类的会话级覆盖固化成配置文件的默认值。
+    /// 显式 /provider 切换会同步更新它（用户明确选择应持久化）。null = 无需还原。</summary>
+    [JsonIgnore]
+    public string? PersistedProvider { get; set; }
+
     /// <summary>加载时的非致命警告（未知配置项、非法枚举回退等），由入口打印提示。
     /// 手写 JSON 的拼写错误此前会被静默忽略——「配了但不生效」且无任何线索。</summary>
     [JsonIgnore]

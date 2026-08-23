@@ -207,6 +207,9 @@ internal static class Program
         // CODEAGENT_* 优先
         var envProvider = FirstEnvVar("CODEAGENT_PROVIDER", "CODEGENT_PROVIDER");
         var envModel = FirstEnvVar("CODEAGENT_MODEL", "CODEGENT_MODEL");
+        // 记住持久层原始 provider：后续 /thinking 等命令保存配置时按它写回，
+        // 环境变量/命令行的会话级覆盖不会固化成配置默认值（显式 /provider 切换除外）
+        config.PersistedProvider = config.Provider;
         if (provider is not null)
             config.Provider = provider;
         else if (!string.IsNullOrWhiteSpace(envProvider))
@@ -672,6 +675,19 @@ internal static class Program
         : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
         : "codeagent.json";
 
+    /// <summary>保存配置，但 provider 按启动时的持久值写回（见 AgentConfig.PersistedProvider）：
+    /// /model、/thinking、/shell、/access 等命令的保存不把 CODEAGENT_PROVIDER 之类的
+    /// 会话级覆盖固化成配置文件的默认 provider。显式 /provider 切换由调用方先更新
+    /// PersistedProvider 再保存（用户明确选择应持久化）。</summary>
+    internal static void SaveConfig(AgentConfig config, string path)
+    {
+        var session = config.Provider;
+        if (config.PersistedProvider is not null)
+            config.Provider = config.PersistedProvider;
+        try { AgentConfig.Save(config, path); }
+        finally { config.Provider = session; }
+    }
+
     /// <summary>切换权限模式后写回配置文件（/access 与 Shift+Tab 用），使重启后保持该模式。
     /// 成功时静默（切换确认行已反馈状态，连写两行会破坏连续切换的原地覆盖行数）；失败才提示。</summary>
     private static void PersistFileAccess(AgentConfig config)
@@ -680,7 +696,7 @@ internal static class Program
             return; // 无配置文件：仅本次会话生效（/access 查看时的提示已覆盖此说明）
         try
         {
-            AgentConfig.Save(config, config.SourceFile);
+            SaveConfig(config, config.SourceFile);
         }
         catch (Exception ex)
         {
@@ -1107,6 +1123,7 @@ internal static class Program
                         agent.SetProvider(providerInst);
                         ctxProbe?.Restart(opts.Model, providerInst);
                         reasoningProbe?.Restart(opts.Model, providerInst);
+                        config.PersistedProvider = hit.Key; // 显式切换：用户明确选择，应持久化
                         var savePath = ConfigSavePath(configPath, config);
                         AgentConfig.Save(config, savePath);
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
@@ -1178,7 +1195,7 @@ internal static class Program
                         if (config.Providers.TryGetValue(config.Provider, out var po))
                             po.Model = opts.Model;
                         var savePath = ConfigSavePath(configPath, config);
-                        AgentConfig.Save(config, savePath);
+                        SaveConfig(config, savePath);
                         Console.WriteLine($"已切换模型: {opts.Model}，已保存到 {savePath}");
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
                     }
@@ -1640,7 +1657,7 @@ internal static class Program
                         try
                         {
                             var savePath = ConfigSavePath(configPath, config);
-                            AgentConfig.Save(config, savePath);
+                            SaveConfig(config, savePath);
                             Console.WriteLine($"思考强度已设为: {v}，已保存到 {savePath}");
                         }
                         catch (Exception ex)
@@ -1676,7 +1693,7 @@ internal static class Program
                         try
                         {
                             var savePath = ConfigSavePath(configPath, config);
-                            AgentConfig.Save(config, savePath);
+                            SaveConfig(config, savePath);
                             Console.WriteLine($"命令 shell 已设为: {v}，已保存到 {savePath}");
                         }
                         catch (Exception ex)
