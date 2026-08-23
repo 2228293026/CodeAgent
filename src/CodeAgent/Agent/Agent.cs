@@ -892,6 +892,34 @@ public sealed partial class Agent
                 _messages.RemoveAt(u1 + 1);
             }
         }
+
+        // 4) 极限兜底：消息条数删不动（如单条用户粘贴就超限、system+首 user+回复 = 4 条）
+        //    时，直接截短最大的那条消息内容——否则请求注定超出模型上下文失败。
+        //    首条 user 是兜底删除的锚点也照截：保住一段开头远比整轮失败有用。
+        if (total > limit)
+        {
+            int biggest = -1;
+            for (int i = 1; i < _messages.Count; i++)
+                if ((_messages[i].Content?.Length ?? 0) > 200 &&
+                    (biggest < 0 || (_messages[i].Content?.Length ?? 0) > (_messages[biggest].Content?.Length ?? 0)))
+                    biggest = i;
+            if (biggest >= 0 && _messages[biggest].Content is { } big)
+            {
+                var keep = Math.Max(100, limit / 4); // 截到上限 1/4：给后续轮次留增长余量
+                if (keep < big.Length)
+                {
+                    _messages[biggest] = new ProviderMessage
+                    {
+                        Role = _messages[biggest].Role,
+                        Content = big[..keep] + "\n…[历史消息已裁剪]",
+                        ToolCalls = _messages[biggest].ToolCalls,
+                        ToolCallId = _messages[biggest].ToolCallId,
+                        ToolName = _messages[biggest].ToolName,
+                        IsError = _messages[biggest].IsError,
+                    };
+                }
+            }
+        }
     }
 
     /// <summary>对起点栈逐层做坐标变换（返回 null 的层被丢弃）；历史裁剪/压缩移动消息时同步修正撤回索引。</summary>

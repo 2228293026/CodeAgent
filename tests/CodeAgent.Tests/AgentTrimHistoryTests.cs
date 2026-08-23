@@ -34,6 +34,31 @@ public class AgentTrimHistoryTests : IDisposable
         ToolRegistry.CreateDefault());
 
     [Fact]
+    public async Task SingleOversizedUserMessage_IsTruncatedNotDropped()
+    {
+        // 回归：单条用户消息就超过 MaxHistoryChars 时（粘贴大段日志），
+        // 消息条数删不动（兜底删除保底 4 条），历史永远超限 → 请求注定超出上下文失败；
+        // 现在直接截短最大的那条消息内容
+        var provider = new FakeProvider
+        {
+            FailSummarization = true, // 摘要不可用：三步兜底全走本地路径
+            NextResponse = new ProviderResponse { Text = "ok" },
+        };
+        var agent = MakeAgent(provider, maxHistoryChars: 1000);
+
+        var huge = "开头标记：" + new string('大', 5000);
+        await agent.RunAsync(huge, CancellationToken.None);
+
+        // 用户消息被截短（带裁剪标记），而不是原样保留 5000+ 字符
+        var userMsg = agent.Messages.Single(m => m.Role == MessageRole.User);
+        Assert.Contains("开头标记", userMsg.Content); // 开头保留
+        Assert.Contains("…[历史消息已裁剪]", userMsg.Content);
+        Assert.True((userMsg.Content ?? "").Length < 1000, $"截短后仍超限（{userMsg.Content?.Length}）");
+        // 模型请求能带着截短后的历史正常发出
+        Assert.NotNull(provider.LastMessages);
+    }
+
+    [Fact]
     public async Task LongConversation_IsTrimmedToHistoryLimit()
     {
         // 历史超限时应被裁剪：system 保留、总字符量收敛到上限附近
