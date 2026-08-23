@@ -1550,6 +1550,30 @@ internal static class Program
                 {
                     var arg = rest.Trim();
                     string file;
+                    if (arg.Equals("all", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // /export all：批量导出全部可恢复的历史会话（单个失败跳过不中断）
+                        var logs = ResumableLogs(agent, config);
+                        if (logs.Count == 0)
+                        {
+                            Console.WriteLine("⚠ 没有历史会话日志可导出。");
+                            break;
+                        }
+                        foreach (var log in logs)
+                        {
+                            try
+                            {
+                                var exported = agent.ExportSessionLogMarkdown(log);
+                                Console.WriteLine($"✔ {Path.GetFileNameWithoutExtension(log)} → {exported}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"⚠ 跳过 {Path.GetFileName(log)}: {ex.Message}");
+                            }
+                        }
+                        Console.WriteLine($"共处理 {logs.Count} 个会话日志。");
+                        break;
+                    }
                     if (arg.Length > 0 && agent.SessionExists(arg))
                         file = agent.ExportMarkdown(arg);
                     else if (int.TryParse(arg, out var eidx) && eidx >= 1)
