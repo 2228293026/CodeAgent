@@ -65,7 +65,7 @@ public class ToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public void CreateDefault_RegistersAllTenTools()
+    public void CreateDefault_RegistersAllElevenTools()
     {
         // 回归：默认工具集应完整；缺工具会让 Agent 某些能力静默失效
         var registry = ToolRegistry.CreateDefault();
@@ -75,7 +75,8 @@ public class ToolRegistryTests : IDisposable
         var expected = new[]
         {
             "read_file", "write_file", "edit_file", "list_directory",
-            "glob", "grep", "run_command", "bash", "powershell", "stop",
+            "glob", "grep", "run_command", "bash", "powershell",
+            "session_search", "stop",
         };
         foreach (var name in expected)
             Assert.True(names.Contains(name), $"缺少工具: {name}");

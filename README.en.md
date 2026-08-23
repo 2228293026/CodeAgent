@@ -18,7 +18,7 @@ An LLM-powered coding assistant CLI written in C# (.NET 10). Like Claude Code / 
 - 🎮 ADOFAI mod detection: mod projects get dev context and moddev / harmony / assetbundle modes injected automatically
 - 🎨 Markdown rendering: code blocks / inline code / bold / headings colored (`"renderMarkdown": false` to disable)
 - ⌨️ Terminal TUI: slash-command menu (filter / arrow keys / digit-run / fill), command history (arrows, persisted, Ctrl+R reverse search), TAB completion, multi-line paste folding, Shift+Enter manual newline, line-local Home/End, Ctrl+L clear, mode prompt
-- 🔧 10 built-in tools: `read_file` (offset/limit/tail) / `write_file` / `edit_file` (newline-style tolerant: LF↔CRLF normalized matching) / `list_directory` / `glob` / `grep` (multiline cross-line matching) / `run_command` / `bash` / `powershell` / `stop` (command tools auto-pick Git Bash / PowerShell); `edit_file` / `write_file` show a colored diff preview before executing
+- 🔧 11 built-in tools: `read_file` (offset/limit/tail) / `write_file` / `edit_file` (newline-style tolerant: LF↔CRLF normalized matching) / `list_directory` / `glob` / `grep` (multiline cross-line matching) / `run_command` / `bash` / `powershell` / `stop` (command tools auto-pick Git Bash / PowerShell); `edit_file` / `write_file` show a colored diff preview before executing
 - 💭 Anthropic extended thinking fully supported: thinking text + signature are round-tripped on tool-use turns (missing blocks make the API return 400)
 - ↩️ Sessions auto-saved: `--continue` resumes the latest session, `/resume` restores by number, `/find <keyword>` searches past sessions, Esc rolls back turn by turn; `--no-session` skips logging for one run (privacy)
 - 📊 Usage visibility: status bar shows per-turn tokens, current context size ctx (with percentage; window auto-detected for common models), thinking effort (`auto` probes supported levels and picks the highest) and the **current git branch**; `/compact [focus]` compresses history manually (with progress; ESC cancels; optional focus folded into the summarization prompt)
@@ -252,7 +252,7 @@ src/CodeAgent/
 - [项目介绍](docs/项目介绍.md) — positioning, architecture, design trade-offs
 - [配置参考](docs/配置参考.md) — every `codeagent.json` field explained
 - [工作模式](docs/工作模式.md) — built-in and custom work modes
-- [工具参考](docs/工具参考.md) — parameters and behavior of the 10 built-in tools
+- [工具参考](docs/工具参考.md) — parameters and behavior of the 11 built-in tools
 - [快捷键参考](docs/快捷键参考.md) — every input-line key
 - [常见问题](docs/常见问题.md) — troubleshooting
 - [开发指南](docs/开发指南.md) — building, testing, contributing
