@@ -7,7 +7,7 @@ namespace CodeAgent.Tools;
 public sealed class ReadFileTool : ITool
 {
     public string Name => "read_file";
-    public string Description => "读取文件内容（带行号）。用 offset/limit 只读需要的部分，避免一次性读取大文件。";
+    public string Description => "读取文件内容（带行号）。用 offset/limit 只读需要的部分，tail 读末尾 N 行（日志排查），避免一次性读取大文件。";
     public JsonObject Parameters { get; } = new()
     {
         ["type"] = "object",
@@ -16,6 +16,7 @@ public sealed class ReadFileTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "文件路径，相对工作区根目录" },
             ["offset"] = new JsonObject { ["type"] = "integer", ["description"] = "起始行号（1 起，默认 1）" },
             ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（默认 300，最大 5000）" },
+            ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
@@ -39,6 +40,7 @@ public sealed class ReadFileTool : ITool
 
         var offset = Math.Max(1, ToolArgs.GetInt(args, "offset", 1));
         var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
+        var tail = Math.Clamp(ToolArgs.GetInt(args, "tail", 0), 0, 5000);
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
@@ -52,11 +54,25 @@ public sealed class ReadFileTool : ITool
         if (lines.Length == 0)
             return $"(文件 {path} 为空)";
 
-        var start = Math.Min(offset - 1, lines.Length);
-        if (start >= lines.Length)
-            return $"(文件 {path} 共 {lines.Length} 行，offset={offset} 超出范围，无需读取)";
-
-        var count = Math.Min(limit, lines.Length - start);
+        int start, count;
+        if (tail > 0)
+        {
+            // tail 模式：读末尾 N 行（排查日志尾部最常用），同样受 5000 行上限约束
+            start = Math.Max(0, lines.Length - tail);
+            count = lines.Length - start;
+            if (count > 5000)
+            {
+                start += count - 5000;
+                count = 5000;
+            }
+        }
+        else
+        {
+            start = Math.Min(offset - 1, lines.Length);
+            if (start >= lines.Length)
+                return $"(文件 {path} 共 {lines.Length} 行，offset={offset} 超出范围，无需读取)";
+            count = Math.Min(limit, lines.Length - start);
+        }
         var sb = new StringBuilder();
         for (int i = 0; i < count; i++)
         {

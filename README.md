@@ -200,7 +200,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 
 | 工具 | 说明 |
 |------|------|
-| `read_file` | 带行号读取文件，支持 `offset`/`limit` 分段读取与 `no_line_numbers`；二进制文件与目录会给出明确提示 |
+| `read_file` | 带行号读取文件，支持 `offset`/`limit` 分段读取、`tail` 读末尾 N 行与 `no_line_numbers`；二进制文件与目录会给出明确提示 |
 | `write_file` | 创建/覆盖文件，自动建父目录；缺 `content` 会报错而非写空文件；内容与现状相同则跳过写入 |
 | `edit_file` | 精确文本替换（类似补丁），重复匹配会报错；`replace_all` 可全部替换，old/new 相同或未命中会明确报错，撤销可精确恢复 |
 | `list_directory` | 列出目录树，跳过构建/缓存目录 |

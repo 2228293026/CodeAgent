@@ -27,6 +27,58 @@ public class FileToolsTests : IDisposable
     };
 
     [Fact]
+    public async Task ReadFile_TailReadsLastLines()
+    {
+        // tail 模式：读末尾 N 行（日志排查），行号保持全局编号
+        File.WriteAllLines(Path.Combine(_dir, "log.txt"), Enumerable.Range(1, 10).Select(i => $"行{i}"));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "log.txt", ["tail"] = 3 },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("8\t行8", result);
+        Assert.Contains("9\t行9", result);
+        Assert.Contains("10\t行10", result);
+        Assert.DoesNotContain("行7\n", result + "\n"); // 之前的行不出现
+        Assert.Contains("已显示 8-10", result);          // 范围提示
+    }
+
+    [Fact]
+    public async Task ReadFile_TailLargerThanFile_ReadsWholeFile()
+    {
+        File.WriteAllText(Path.Combine(_dir, "small.txt"), "a\nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "small.txt", ["tail"] = 100 },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("a", result);
+        Assert.Contains("b", result);
+        Assert.DoesNotContain("已显示", result); // 全量显示无范围提示
+    }
+
+    [Fact]
+    public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
+    {
+        // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
+        File.WriteAllLines(Path.Combine(_dir, "seq.txt"), Enumerable.Range(1, 20).Select(i => $"L{i}"));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "seq.txt", ["offset"] = 2, ["limit"] = 2 },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("2\tL2", result);
+        Assert.Contains("3\tL3", result);
+        Assert.DoesNotContain("L4", result);
+    }
+
+    [Fact]
     public async Task WriteFile_MissingContent_Throws()
     {
         var tool = new WriteFileTool();
