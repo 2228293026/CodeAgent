@@ -404,20 +404,29 @@ public sealed class AnthropicProvider : IAgentProvider
         }
 
         string? line;
+        var pendingEvt = ""; // event: 名只作用于紧跟的一个事件（SSE 规范；默认 message = 未知类型安全忽略）
         while (!done && (line = await reader.ReadLineAsync(ct)) is not null)
         {
             if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
             {
-                evt = line["event:".Length..].Trim();
+                pendingEvt = line["event:".Length..].Trim();
                 continue;
             }
-            // 跨行 data 组装：单行完整立即处理；不完整的进缓冲等后续行拼齐（SSE 规范行为）
+            // 跨行 data 组装：单行完整立即处理；不完整的进缓冲等后续行拼齐（SSE 规范行为）。
+            // 派发时消费事件名——此前 evt 会粘到后续所有事件，网关省略 event: 行时误用旧类型
             if (assembler.Feed(line) is { } chunk)
+            {
+                evt = pendingEvt;
+                pendingEvt = "";
                 HandleEvent(chunk);
+            }
         }
         // 流中断时冲刷缓冲里已凑齐的最后一个事件，不丢尾部增量
         if (!done && assembler.Flush() is { } tail)
+        {
+            evt = pendingEvt;
             HandleEvent(tail);
+        }
 
         var toolCalls = toolAccum
             .OrderBy(kv => kv.Key)
