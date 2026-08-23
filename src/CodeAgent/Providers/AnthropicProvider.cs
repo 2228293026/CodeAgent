@@ -137,19 +137,28 @@ public sealed class AnthropicProvider : IAgentProvider
             {
                 var type = b?["type"]?.GetValue<string>();
                 if (type == "text")
-                    text.Append(b?["text"]?.GetValue<string>() ?? ""); // text 为 null/缺失时 Append(null) 会抛 ArgumentNullException
+                {
+                    // 字段级容错：text 非字符串（不合规网关）跳过该块而不是抛异常
+                    if (b?["text"] is JsonValue tv && tv.TryGetValue<string>(out var t))
+                        text.Append(t);
+                }
                 else if (type == "thinking")
                 {
                     // extended thinking 块：文本与签名都要捕获（工具调用轮必须原样回传，缺失 API 400）
-                    thinking.Append(b?["thinking"]?.GetValue<string>() ?? "");
-                    thinkingSignature ??= b?["signature"]?.GetValue<string>();
+                    if (b?["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var h))
+                        thinking.Append(h);
+                    thinkingSignature ??= b?["signature"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
                 }
                 else if (type == "tool_use")
                 {
                     toolCalls.Add(new ToolCall
                     {
-                        Id = b?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
-                        Name = b?["name"]?.GetValue<string>() ?? "unknown",
+                        Id = b?["id"] is JsonValue idv && idv.TryGetValue<string>(out var id) && id.Length > 0
+                            ? id
+                            : Guid.NewGuid().ToString("N"),
+                        Name = b?["name"] is JsonValue nv && nv.TryGetValue<string>(out var n) && n.Length > 0
+                            ? n
+                            : "unknown",
                         ArgumentsJson = b?["input"]?.ToJsonString() ?? "{}",
                     });
                 }
@@ -291,11 +300,11 @@ public sealed class AnthropicProvider : IAgentProvider
                         if (type == "thinking")
                         {
                             thinkingBlockIndexes.Add(index);
-                            // 块自带初始 thinking 文本（部分网关把首段放 start 事件里）
-                            var initial = block?["thinking"]?.GetValue<string>();
+                            // 块自带初始 thinking 文本（部分网关把首段放 start 事件里）；字段级容错
+                            var initial = block?["thinking"] is JsonValue hv0 && hv0.TryGetValue<string>(out var h0) ? h0 : null;
                             if (initial is { Length: > 0 })
                                 thinkingText.Append(initial);
-                            var sig0 = block?["signature"]?.GetValue<string>();
+                            var sig0 = block?["signature"] is JsonValue sv0 && sv0.TryGetValue<string>(out var s0) ? s0 : null;
                             if (!string.IsNullOrEmpty(sig0))
                                 thinkingSignature ??= sig0;
                         }
@@ -303,8 +312,8 @@ public sealed class AnthropicProvider : IAgentProvider
                         {
                             toolAccum[index] = new StreamToolAccum
                             {
-                                Id = block?["id"]?.GetValue<string>() ?? "",
-                                Name = block?["name"]?.GetValue<string>() ?? "",
+                                Id = block?["id"] is JsonValue iv && iv.TryGetValue<string>(out var bid) ? bid : "",
+                                Name = block?["name"] is JsonValue nv2 && nv2.TryGetValue<string>(out var bn) ? bn : "",
                             };
                         }
                         break;
@@ -343,7 +352,8 @@ public sealed class AnthropicProvider : IAgentProvider
                         }
                         else if (dtype == "input_json_delta")
                         {
-                            var frag = delta?["partial_json"]?.GetValue<string>() ?? "";
+                            // 字段级容错：partial_json 非字符串（不合规网关）跳过该增量
+                            var frag = delta?["partial_json"] is JsonValue fv && fv.TryGetValue<string>(out var f) ? f : "";
                             if (frag.Length > 0 && toolAccum.TryGetValue(index, out var acc))
                             {
                                 acc.Args.Append(frag);
