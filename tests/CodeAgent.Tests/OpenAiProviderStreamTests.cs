@@ -92,6 +92,35 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_MalformedToolCallFields_SkippedNotFatal()
+    {
+        // 回归：function 非对象 / id 非字符串（不合规网关）曾让 GetValue 抛异常炸掉整条流；
+        // 现在坏字段跳过、好字段照常累积
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":123,"function":"oops"}]}}]}
+
+                data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"read_file","arguments":"{\"path\":"}}]}}]}
+
+                data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"a.txt\"}"}}]}}]}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "read" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Single(resp.ToolCalls);
+        Assert.Equal("call_1", resp.ToolCalls[0].Id);       // 坏 id 被跳过，好 id 生效
+        Assert.Equal("read_file", resp.ToolCalls[0].Name);
+        Assert.Equal("""{"path":"a.txt"}""", resp.ToolCalls[0].ArgumentsJson);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_MultilineDataEvent_IsAssembled()
     {
         // SSE 规范允许一个事件的 data 跨多个 data: 行（拼接后才是完整 JSON）；

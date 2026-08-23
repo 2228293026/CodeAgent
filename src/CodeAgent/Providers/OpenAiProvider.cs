@@ -198,11 +198,18 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             foreach (var tc in arr)
             {
+                var fn = tc?["function"] as JsonObject; // function 非对象（不合规）按 unknown/{} 处理
                 toolCalls.Add(new ToolCall
                 {
-                    Id = tc?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
-                    Name = tc?["function"]?["name"]?.GetValue<string>() ?? "unknown",
-                    ArgumentsJson = tc?["function"]?["arguments"]?.GetValue<string>() ?? "{}",
+                    Id = tc?["id"] is JsonValue idv && idv.TryGetValue<string>(out var id) && id.Length > 0
+                        ? id
+                        : Guid.NewGuid().ToString("N"),
+                    Name = fn?["name"] is JsonValue nv && nv.TryGetValue<string>(out var n) && n.Length > 0
+                        ? n
+                        : "unknown",
+                    ArgumentsJson = fn?["arguments"] is JsonValue av && av.TryGetValue<string>(out var a) && a.Length > 0
+                        ? a
+                        : "{}",
                 });
             }
         }
@@ -381,13 +388,15 @@ public sealed class OpenAiProvider : IAgentProvider
                         toolAccum[index] = acc;
                     }
 
-                    var id = tc?["id"]?.GetValue<string>();
+                    // 字段级容错：id/name 非字符串、function 非对象（不合规网关）跳过该字段而不是抛异常中断流
+                    var id = tc?["id"] is JsonValue idv && idv.TryGetValue<string>(out var idStr) ? idStr : null;
                     if (!string.IsNullOrEmpty(id) && acc.Id.Length == 0)
                         acc.Id = id;
-                    var name = tc?["function"]?["name"]?.GetValue<string>();
+                    var fnObj = tc?["function"] as JsonObject;
+                    var name = fnObj?["name"] is JsonValue nv && nv.TryGetValue<string>(out var nameStr) ? nameStr : null;
                     if (!string.IsNullOrEmpty(name) && acc.Name.Length == 0)
                         acc.Name = name;
-                    var frag = tc?["function"]?["arguments"]?.GetValue<string>();
+                    var frag = fnObj?["arguments"] is JsonValue fv && fv.TryGetValue<string>(out var fragStr) ? fragStr : null;
                     if (!string.IsNullOrEmpty(frag))
                     {
                         acc.Args.Append(frag);
