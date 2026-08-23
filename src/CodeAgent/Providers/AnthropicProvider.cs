@@ -242,20 +242,11 @@ public sealed class AnthropicProvider : IAgentProvider
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
-        string? line;
-        while (!done && (line = await reader.ReadLineAsync(ct)) is not null)
-        {
-            if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
-            {
-                evt = line["event:".Length..].Trim();
-                continue;
-            }
-            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-                continue;
-            var data = line["data:".Length..].Trim();
-            if (data.Length == 0)
-                continue;
+        var assembler = new SseDataAssembler();
 
+        // 处理一条完整 data 负载（可能是跨行拼接的结果）；message_stop 置位 done
+        void HandleEvent(string data)
+        {
             JsonNode? root;
             try
             {
@@ -263,7 +254,7 @@ public sealed class AnthropicProvider : IAgentProvider
             }
             catch (JsonException)
             {
-                continue;
+                return;
             }
 
             switch (evt)
@@ -347,6 +338,22 @@ public sealed class AnthropicProvider : IAgentProvider
                     break;
             }
         }
+
+        string? line;
+        while (!done && (line = await reader.ReadLineAsync(ct)) is not null)
+        {
+            if (line.StartsWith("event:", StringComparison.OrdinalIgnoreCase))
+            {
+                evt = line["event:".Length..].Trim();
+                continue;
+            }
+            // 跨行 data 组装：单行完整立即处理；不完整的进缓冲等后续行拼齐（SSE 规范行为）
+            if (assembler.Feed(line) is { } chunk)
+                HandleEvent(chunk);
+        }
+        // 流中断时冲刷缓冲里已凑齐的最后一个事件，不丢尾部增量
+        if (!done && assembler.Flush() is { } tail)
+            HandleEvent(tail);
 
         var toolCalls = toolAccum
             .OrderBy(kv => kv.Key)

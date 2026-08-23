@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace CodeAgent.Providers;
@@ -197,6 +198,70 @@ internal sealed class StreamToolAccum
     public string Id = "";
     public string Name = "";
     public StringBuilder Args = new();
+}
+
+/// <summary>
+/// SSE data 行组装器：规范允许一个事件的 data 跨多个 <c>data:</c> 行（按 \n 拼接后才是完整 JSON），
+/// 此前逐行独立解析会把被拆开的长 JSON 当非法丢弃（文本/工具参数增量静默丢失）。
+/// 宽容策略：单行即完整 JSON（或不带空行的连续事件——部分网关不发空行）立即产出；
+/// 单行不完整则进缓冲，与后续行拼接，凑齐、空行或流结束时才产出。
+/// </summary>
+internal sealed class SseDataAssembler
+{
+    private readonly StringBuilder _pending = new();
+
+    /// <summary>喂入一行原始 SSE 文本，返回本次应处理的 data 负载；无则返回 null。
+    /// 空行/注释行/非 data 字段（event: 等）返回 null——event 字段由调用方先行提取。</summary>
+    public string? Feed(string line)
+    {
+        if (line.Length == 0)
+            return Flush(); // 空行 = 事件边界：冲刷未完成缓冲
+        if (line.StartsWith(':'))
+            return null; // SSE 注释行（如 :keepalive）
+        if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var payload = line["data:".Length..].Trim();
+        if (payload.Length == 0 && _pending.Length == 0)
+            return null;
+
+        var candidate = _pending.Length == 0 ? payload : _pending + "\n" + payload;
+        if (LooksComplete(candidate))
+        {
+            _pending.Clear();
+            return candidate;
+        }
+        _pending.Clear().Append(candidate); // 不完整：留待后续 data 行拼接
+        return null;
+    }
+
+    /// <summary>流结束时冲刷缓冲：内容完整则返回，否则丢弃残缺尾部。</summary>
+    public string? Flush()
+    {
+        if (_pending.Length == 0)
+            return null;
+        var s = _pending.ToString();
+        _pending.Clear();
+        return LooksComplete(s) ? s : null;
+    }
+
+    /// <summary>JSON 数组/对象尝试整体解析判定完整性；其他负载（如 [DONE] 哨兵）原样放行。</summary>
+    private static bool LooksComplete(string s)
+    {
+        if (s.Length == 0)
+            return false;
+        if (s[0] is not ('{' or '['))
+            return true;
+        try
+        {
+            JsonNode.Parse(s);
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 }
 
 /// <summary>Provider 响应字段的宽容读取：部分 OpenAI 兼容网关把 token 计数、布尔值序列化为

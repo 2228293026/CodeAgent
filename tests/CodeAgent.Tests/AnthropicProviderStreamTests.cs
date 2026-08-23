@@ -100,6 +100,57 @@ public class AnthropicProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_MultilineDataEvent_IsAssembled()
+    {
+        // SSE 规范：data 跨多行时按 \n 拼接才是完整 JSON；此前逐行解析会把拆开的事件丢弃
+        var handler = new SseHandler
+        {
+            Body = """
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,
+                data: "delta":{"type":"text_delta","text":"你好"}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"！"}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("你好！", resp.Text);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_CommentLines_Ignored()
+    {
+        var handler = new SseHandler
+        {
+            Body = """
+                : ping
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "q" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("hi", resp.Text);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ThinkingDelta_IsReported()
     {
         var handler = new SseHandler

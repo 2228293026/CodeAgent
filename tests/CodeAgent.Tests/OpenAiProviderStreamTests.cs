@@ -92,6 +92,79 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_MultilineDataEvent_IsAssembled()
+    {
+        // SSE 规范允许一个事件的 data 跨多个 data: 行（拼接后才是完整 JSON）；
+        // 之前逐行独立解析会把拆开的长 JSON 当非法丢弃，文本增量静默丢失
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{
+                data: "content":"你好"}}]}
+
+                data: {"choices":[{"delta":{"content":"！"}}]}
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+        var text = new StringBuilder();
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", t => text.Append(t), null, null, CancellationToken.None);
+
+        Assert.Equal("你好！", text.ToString());
+        Assert.Equal("你好！", resp.Text);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_ConsecutiveDataLinesWithoutBlankLine_EachProcessed()
+    {
+        // 回归：部分网关不发空行分隔、连续单行完整 JSON——组装器必须立即逐条产出而不是拼成一坨
+        var handler = new SseHandler
+        {
+            Body = """
+                data: {"choices":[{"delta":{"content":"a"}}]}
+                data: {"choices":[{"delta":{"content":"b"}}]}
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("ab", resp.Text);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_CommentAndUnknownFields_Ignored()
+    {
+        // SSE 注释行（:keepalive）与 event/retry 字段不应影响解析
+        var handler = new SseHandler
+        {
+            Body = """
+                : keepalive
+
+                event: message
+                data: {"choices":[{"delta":{"content":"ok"}}]}
+                retry: 5000
+
+                data: [DONE]
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("ok", resp.Text);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ReasoningContent_IsReported()
     {
         var handler = new SseHandler

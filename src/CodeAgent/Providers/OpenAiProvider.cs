@@ -283,16 +283,17 @@ public sealed class OpenAiProvider : IAgentProvider
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
-        string? line;
-        while ((line = await reader.ReadLineAsync(ct)) is not null)
+        var assembler = new SseDataAssembler();
+        var doneSentinel = false;
+
+        // 处理一条完整 data 负载（可能是跨行拼接的结果）；返回 false 表示收到 [DONE]
+        bool ProcessChunk(string data)
         {
-            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
-                continue;
-            var data = line["data:".Length..].Trim();
-            if (data.Length == 0)
-                continue;
             if (data == "[DONE]")
-                break;
+            {
+                doneSentinel = true;
+                return false;
+            }
 
             JsonNode? root;
             try
@@ -301,13 +302,13 @@ public sealed class OpenAiProvider : IAgentProvider
             }
             catch (JsonException)
             {
-                continue;
+                return true;
             }
 
             if (root?["error"] is JsonObject errObj)
             {
                 var errType = errObj["type"]?.GetValue<string>() ?? "";
-                var errCode = errObj["code"] is JsonValue errVal && errVal.TryGetValue<int>(out var c) ? c : (int?)null;
+                var errCode = ProviderJson.OptInt(errObj["code"]);
                 throw new ProviderException(
                     $"流式响应中断: {errObj["message"]?.GetValue<string>() ?? Truncate(errObj.ToJsonString(), 300)}")
                 {
@@ -332,9 +333,9 @@ public sealed class OpenAiProvider : IAgentProvider
                 var ot = ProviderJson.OptInt(u["completion_tokens"]);
                 if (ot is not null)
                     outTok = ot;
-                var ct2 = ProviderJson.OptInt(u["prompt_tokens_details"]?["cached_tokens"]);
-                if (ct2 is not null)
-                    cachedTok = ct2;
+                var ck = ProviderJson.OptInt(u["prompt_tokens_details"]?["cached_tokens"]);
+                if (ck is not null)
+                    cachedTok = ck;
             }
 
             // finish_reason 随结束 chunk 到达（可能不带 delta）：取最后一个非空值
@@ -342,7 +343,7 @@ public sealed class OpenAiProvider : IAgentProvider
             if (!string.IsNullOrEmpty(fr))
                 finishReason = fr;
             if (delta is null)
-                continue;
+                return true;
 
             // 思考内容（DeepSeek-R1 用 reasoning_content，OpenRouter 用 reasoning）
             var reasoning = delta["reasoning_content"] ?? delta["reasoning"];
@@ -389,7 +390,19 @@ public sealed class OpenAiProvider : IAgentProvider
                     }
                 }
             }
+            return true;
         }
+
+        string? line;
+        while (!doneSentinel && (line = await reader.ReadLineAsync(ct)) is not null)
+        {
+            // 跨行 data 组装：单行完整立即处理；不完整的进缓冲等后续行拼齐（SSE 规范行为）
+            if (assembler.Feed(line) is { } chunk && !ProcessChunk(chunk))
+                break;
+        }
+        // 流在 [DONE] 前中断时，冲刷缓冲里已凑齐的最后一个事件，不丢尾部增量
+        if (!doneSentinel && assembler.Flush() is { } tail)
+            ProcessChunk(tail);
 
         var toolCalls = toolAccum
             .OrderBy(kv => kv.Key)
