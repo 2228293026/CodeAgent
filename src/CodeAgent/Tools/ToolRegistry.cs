@@ -190,14 +190,29 @@ internal static class ToolArgs
         return v.ToJsonString().Trim('"');
     }
 
-    /// <summary>读取整数；兼容模型把数字序列化为字符串的情况（如 "300"）。</summary>
+    /// <summary>读取整数；兼容模型把数字序列化为字符串的情况（如 "300"），
+    /// 以及浮点字面量（如 10.0——部分模型坚持给整型参数发浮点）：整数值直接采用，带小数部分视为非法回默认。</summary>
     public static int GetInt(JsonObject? args, string key, int def)
     {
         if (args?[key] is not JsonValue v)
             return def;
         if (v.TryGetValue<int>(out var i))
             return i;
-        return v.TryGetValue<string>(out var s) && int.TryParse(s, out var p) ? p : def;
+        if (v.TryGetValue<double>(out var d))
+            return double.IsFinite(d) && d == Math.Truncate(d) && d >= int.MinValue && d <= int.MaxValue
+                ? (int)d
+                : def;
+        if (v.TryGetValue<string>(out var s))
+        {
+            if (int.TryParse(s.Trim(), out var p))
+                return p;
+            // 字符串浮点（"10.0"）与原生浮点同一口径：只有整数值才接受
+            return double.TryParse(s.Trim(), out var pd) && double.IsFinite(pd) && pd == Math.Truncate(pd)
+                   && pd >= int.MinValue && pd <= int.MaxValue
+                ? (int)pd
+                : def;
+        }
+        return def;
     }
 
     /// <summary>读取布尔；兼容 "true"/"false"/"1"/"0"/"yes"/"no" 字符串。</summary>

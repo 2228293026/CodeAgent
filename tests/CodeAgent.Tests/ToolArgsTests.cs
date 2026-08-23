@@ -139,6 +139,47 @@ public class ToolArgsTests
     }
 
     [Theory]
+    [InlineData(10.0, 10)]     // 浮点字面量整数值（模型常发 "limit": 10.0）
+    [InlineData(300.0000, 300)]
+    [InlineData(-2.0, -2)]
+    public void GetInt_DoubleIntegralValue_Accepted(double value, int expected)
+    {
+        var args = new JsonObject { ["n"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(value))! };
+        Assert.Equal(expected, ToolArgs.GetInt(args, "n", 9));
+    }
+
+    [Theory]
+    [InlineData(10.5)]   // 带小数部分视为非法
+    [InlineData(1.0E12)] // 整数值但超出 int 范围
+    public void GetInt_DoubleNonIntegralOrOutOfRange_FallsBack(double value)
+    {
+        var args = new JsonObject { ["n"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(value))! };
+        Assert.Equal(9, ToolArgs.GetInt(args, "n", 9));
+    }
+
+    [Fact]
+    public void GetInt_DoubleNonFinite_FallsBack()
+    {
+        // JSON 字面量不含 NaN/∞，但内存构造的 JsonValue 可能出现：防御性回默认
+        Assert.Equal(9, ToolArgs.GetInt(new JsonObject { ["n"] = JsonValue.Create(double.NaN) }, "n", 9));
+        Assert.Equal(9, ToolArgs.GetInt(new JsonObject { ["n"] = JsonValue.Create(double.PositiveInfinity) }, "n", 9));
+    }
+
+    [Fact]
+    public void GetInt_LongBeyondIntRange_FallsBack()
+    {
+        var args = new JsonObject { ["n"] = 999999999999L };
+        Assert.Equal(9, ToolArgs.GetInt(args, "n", 9));
+    }
+
+    [Fact]
+    public void GetInt_StringFloatIntegral_Accepted()
+    {
+        Assert.Equal(10, ToolArgs.GetInt(new JsonObject { ["n"] = "10.0" }, "n", 9));
+        Assert.Equal(9, ToolArgs.GetInt(new JsonObject { ["n"] = "10.5" }, "n", 9));
+    }
+
+    [Theory]
     [InlineData(true, true)]
     [InlineData(false, false)]
     [InlineData("TRUE", true)]      // 大小写不敏感
