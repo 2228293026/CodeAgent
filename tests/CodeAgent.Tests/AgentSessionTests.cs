@@ -152,6 +152,28 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void SearchSnapshot_FindsKeyword_SkipsSlashCommands()
+    {
+        // /find 的快照来源：/save 的 .json 也能搜；斜杠命令行同口径跳过
+        var path = Path.Combine(_sessionDir, "snap-search.json");
+        File.WriteAllText(path,
+            """
+            [
+              {"role":"user","content":"/model gpt-4o"},
+              {"role":"assistant","content":"已切换到 gpt-4o 模型"},
+              {"role":"user","content":"讲讲 model 层设计"}
+            ]
+            """);
+
+        // 命令行（/model gpt-4o）被跳过：搜 "gpt-4o" 只命中 assistant 回复
+        Assert.Single(AgentClass.SearchSnapshot(path, "gpt-4o"));
+        Assert.Equal("assistant", AgentClass.SearchSnapshot(path, "gpt-4o")[0].Role);
+        // 真实用户输入正常命中
+        Assert.Single(AgentClass.SearchSnapshot(path, "model"));
+        Assert.Equal("user", AgentClass.SearchSnapshot(path, "model")[0].Role);
+    }
+
+    [Fact]
     public async Task SaveLoadSession_RoundTripsMessages()
     {
         var agent = MakeAgent(_sessionDir, out var path);

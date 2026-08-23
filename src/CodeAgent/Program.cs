@@ -1507,6 +1507,22 @@ internal static class Program
                         Console.WriteLine($"历史会话中没有匹配「{kw}」的内容。");
                     else if (moreAvailable)
                         Console.WriteLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）");
+
+                    // 命名快照（/save 的 .json）也纳入搜索：快照是用户显式保存的，命中价值高
+                    var snapshotDir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
+                    var snapshotPrinted = 0;
+                    foreach (var (name, age) in SavedSessions(snapshotDir))
+                    {
+                        if (snapshotPrinted >= 3)
+                            break;
+                        var hits = AgentClass.SearchSnapshot(Path.Combine(snapshotDir, name + ".json"), kw);
+                        if (hits.Count == 0)
+                            continue;
+                        Console.WriteLine($"快照 {name} · {age}（/load {name} 恢复）:");
+                        foreach (var (role, snippet) in hits)
+                            Console.WriteLine($"  [{role}] {TextUtil.TruncateLine(snippet, 110)}");
+                        snapshotPrinted++;
+                    }
                 }
                 break;
 

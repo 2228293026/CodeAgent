@@ -296,18 +296,10 @@ public sealed partial class Agent
                     if (content is null)
                         continue;
                     // 斜杠命令行（/model gpt 等）是操作记录不是对话内容：跳过不作为命中
-                    if (n["role"]?.GetValue<string>() == "user" && content.TrimStart().StartsWith('/'))
-                        continue;
-                    var idx = content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
-                    if (idx < 0)
-                        continue;
                     var role = n["role"]?.GetValue<string>() ?? "?";
-                    // 命中点前后窗口：前 40 后 keyword+80 字符，超出部分用省略号标记
-                    var start = Math.Max(0, idx - 40);
-                    var len = Math.Min(content.Length - start, keyword.Length + 80);
-                    var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", " ⏎ ");
-                    hits.Add((role,
-                        (start > 0 ? "…" : "") + snippet + (start + len < content.Length ? "…" : "")));
+                    if (role == "user" && content.TrimStart().StartsWith('/'))
+                        continue;
+                    hits.AddRange(MatchWindow(content, keyword, role));
                 }
                 catch
                 {
@@ -320,6 +312,49 @@ public sealed partial class Agent
             // 读取失败按无命中
         }
         return hits;
+    }
+
+    /// <summary>在命名快照（/save 的 .json）里搜索关键字：返回最多 maxHits 条 (角色, 命中片段)。/find 用。</summary>
+    internal static List<(string Role, string Snippet)> SearchSnapshot(string path, string keyword, int maxHits = 3)
+    {
+        var hits = new List<(string, string)>();
+        if (string.IsNullOrEmpty(keyword))
+            return hits;
+        try
+        {
+            var dto = JsonSerializer.Deserialize<List<MessageDto>>(File.ReadAllText(path), JsonOpts);
+            if (dto is null)
+                return hits;
+            foreach (var d in dto)
+            {
+                if (hits.Count >= maxHits)
+                    break;
+                var content = d.content;
+                if (content is null)
+                    continue;
+                // 与日志搜索同口径：斜杠命令行不算命中
+                if (d.role == "user" && content.TrimStart().StartsWith('/'))
+                    continue;
+                hits.AddRange(MatchWindow(content, keyword, d.role));
+            }
+        }
+        catch
+        {
+            // 快照损坏/读取失败按无命中处理
+        }
+        return hits;
+    }
+
+    /// <summary>关键字的命中片段：前后窗口折叠换行，超出部分用省略号标记。日志与快照搜索共用。</summary>
+    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role)
+    {
+        var idx = content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            yield break;
+        var start = Math.Max(0, idx - 40);
+        var len = Math.Min(content.Length - start, keyword.Length + 80);
+        var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", " ⏎ ");
+        yield return (role, (start > 0 ? "…" : "") + snippet + (start + len < content.Length ? "…" : ""));
     }
 
     /// <summary>切换到新的会话日志文件（/clear 与恢复会话后用，使日志与新历史一一对应）。</summary>
