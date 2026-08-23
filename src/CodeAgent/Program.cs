@@ -1711,6 +1711,19 @@ internal static class Program
                 var wt = Environment.GetEnvironmentVariable("WT_SESSION");
                 var term = Environment.GetEnvironmentVariable("TERM_PROGRAM");
                 Console.WriteLine($"  Terminal          : {(wt is not null ? "Windows Terminal" : term is not null ? term : "未知（conhost 或其他）")}");
+                // 工作区环境补充：git 分支与 .codeagent 目录占用（排查磁盘/隐私时有用）
+                Console.WriteLine($"  Git branch        : {GitInfo.CurrentBranch(Environment.CurrentDirectory) ?? "(非 git 仓库)"}");
+                try
+                {
+                    var caDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
+                    if (Directory.Exists(caDir))
+                    {
+                        var bytes = Directory.EnumerateFiles(caDir, "*", SearchOption.AllDirectories)
+                            .Sum(f => new FileInfo(f).Length);
+                        Console.WriteLine($"  .codeagent 大小   : {bytes / 1024.0:F0} KB（会话日志/导出/历史，可整目录删除）");
+                    }
+                }
+                catch { /* 统计失败不影响诊断输出 */ }
                 break;
 
             case "/models":
