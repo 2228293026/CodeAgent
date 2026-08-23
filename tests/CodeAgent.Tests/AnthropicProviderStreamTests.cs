@@ -219,6 +219,36 @@ public class AnthropicProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_RedactedThinking_DataIsCaptured()
+    {
+        // redacted_thinking 在 start 事件就带完整加密 data（无增量）：捕获供回传
+        var handler = new SseHandler
+        {
+            Body = """
+                event: content_block_start
+                data: {"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"enc-xyz"}}
+
+                event: content_block_start
+                data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"ok"}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "q" }],
+            [], "high", null, null, null, CancellationToken.None);
+
+        Assert.Equal(["enc-xyz"], resp.RedactedThinkingData);
+        Assert.Equal("ok", resp.Text);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ThinkingDelta_IsReported()
     {
         var handler = new SseHandler
