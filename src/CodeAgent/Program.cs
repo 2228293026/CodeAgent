@@ -1266,6 +1266,8 @@ internal static class Program
                 Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {ctxDesc}");
                 Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}   超时: {config.CommandTimeoutSeconds}s");
                 Console.WriteLine($"工具日志 : {(config.ShowToolCalls ? "on" : "off")}   流式输出: {(config.StreamOutput ? "on" : "off")}   会话日志: {(config.SaveSessions ? $"on（保留 {config.MaxSessionLogs}）" : "off")}");
+                Console.WriteLine($"界面     : Markdown 渲染 {(config.RenderMarkdown ? "on" : "off")}   菜单 {(config.TuiAnsi ? "ANSI 原地" : "滚动式")}   默认模式 {config.DefaultMode}");
+                Console.WriteLine($"目录     : 会话 {config.SessionDir}   导出 {config.ExportDir}");
                 var roDirs = config.ReadOnlyDirs.Count == 0 ? "" : $"  只读白名单: {string.Join(", ", config.ReadOnlyDirs)}";
                 Console.WriteLine($"Access   : {config.FileAccess}{roDirs}");
                 break;
