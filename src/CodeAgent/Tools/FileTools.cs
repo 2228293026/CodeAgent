@@ -294,6 +294,8 @@ public sealed class ListDirectoryTool : ITool
 
         var sb = new StringBuilder();
         var emitted = 0;
+        var dirCount = 0;
+        var fileCount = 0;
         const int cap = 800;
 
         void Walk(string dir, int level)
@@ -313,6 +315,7 @@ public sealed class ListDirectoryTool : ITool
                         continue;
                     sb.AppendLine(indent + name + "/");
                     emitted++;
+                    dirCount++;
                     Walk(d, level + 1);
                 }
                 foreach (var f in Directory.EnumerateFiles(dir)
@@ -322,6 +325,7 @@ public sealed class ListDirectoryTool : ITool
                         break;
                     sb.AppendLine(indent + Path.GetFileName(f));
                     emitted++;
+                    fileCount++;
                 }
             }
             catch (UnauthorizedAccessException) { }
@@ -334,7 +338,9 @@ public sealed class ListDirectoryTool : ITool
         if (emitted == 0)
             return $"(目录为空或全部被跳过: {path})";
         var head = string.IsNullOrWhiteSpace(path) ? $"工作区根目录 {ctx.Workspace.Root}\n" : $"目录 {path}\n";
-        return head + sb.ToString().TrimEnd() + (emitted >= cap ? "\n…(条目过多，已截断)" : "");
+        // 统计摘要：模型与用户都能一眼看出规模（截断时尤其重要——cap 后的未计入）
+        var summary = $"\n（共 {dirCount} 个目录、{fileCount} 个文件" + (emitted >= cap ? "，已达显示上限，可能未列全）" : "）");
+        return head + sb.ToString().TrimEnd() + (emitted >= cap ? "\n…(条目过多，已截断)" : "") + summary;
     }
 
 }

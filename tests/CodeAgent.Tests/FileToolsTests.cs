@@ -251,6 +251,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_AppendsCountSummary()
+    {
+        // 统计摘要：目录数与文件数一目了然（截断时提示可能未列全）
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "sub", "c.cs"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject(), ctx, CancellationToken.None);
+
+        Assert.Contains("共 1 个目录、3 个文件）", output);   // 未截断：无「未列全」字样
+        Assert.DoesNotContain("未列全", output);
+    }
+
+    [Fact]
     public async Task ListDirectory_DepthLimit_ControlsRecursion()
     {
         // depth=0 只列直接子项，不深入任何子目录
