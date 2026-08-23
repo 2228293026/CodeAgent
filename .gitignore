@@ -10,3 +10,5 @@ TestResults/
 *.dmp
 # 本地发布产物（publish.ps1 生成的 dist/ 是平台绑定产物，不入库）
 dist/
+# 个人笔记（勿提交）
+docs/persona_cetacea_loli.md
