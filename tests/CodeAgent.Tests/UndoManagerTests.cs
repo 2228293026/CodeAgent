@@ -293,6 +293,20 @@ public class UndoManagerTests : IDisposable
         Assert.Equal(2, um.Count); // ListEntries 只读
     }
 
+    [Fact]
+    public void ListEntries_OverMax_ShowsHiddenCount()
+    {
+        // 超过 max 时提示更早条目数，且编号仍从最近计起
+        var um = new UndoManager();
+        for (int i = 1; i <= 12; i++)
+            um.Push(new UndoEntry { Kind = "write", Path = Path.Combine(_dir, $"f{i:00}.txt"), HadFile = false });
+
+        var list = um.ListEntries(max: 10);
+        Assert.Contains("更早 2 条未显示", list);
+        Assert.Contains("f12.txt", list);       // 最新一条（编号 1）在列
+        Assert.DoesNotContain("f02.txt", list); // 更早的条目被隐藏
+    }
+
     // ===== 命令副作用（cmd）条目 =====
 
     [Fact]

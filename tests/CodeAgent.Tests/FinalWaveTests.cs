@@ -53,7 +53,9 @@ public class FinalWaveTests : IDisposable
             um.Push(new UndoEntry { Kind = "write", Path = PathOf($"f{i}.txt"), HadFile = false });
 
         var list = um.ListEntries(max: 5);
-        Assert.Equal(5, list.Split('\n').Length);
+        // 首行是隐藏计数提示 + 5 条条目
+        Assert.Equal(6, list.Split('\n').Length);
+        Assert.Contains("更早 15 条未显示", list);
         Assert.DoesNotContain("f14.txt", list); // 只列最近 5 条
         Assert.Contains("f19.txt", list);
     }

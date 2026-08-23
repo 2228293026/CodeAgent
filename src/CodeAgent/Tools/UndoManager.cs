@@ -84,7 +84,8 @@ public sealed class UndoManager
         }
     }
 
-    /// <summary>列出最近 max 条可撤销操作（编号 1 = 最近），无记录返回空串。</summary>
+    /// <summary>列出最近 max 条可撤销操作（编号 1 = 最近），无记录返回空串；
+    /// 超出 max 时提示更早条目数（编号仍从最近计起）。</summary>
     public string ListEntries(int max = 10)
     {
         lock (_lock)
@@ -93,6 +94,8 @@ public sealed class UndoManager
                 return "";
             var sb = new StringBuilder();
             var start = Math.Max(0, _entries.Count - max);
+            if (start > 0)
+                sb.AppendLine($"…（更早 {start} 条未显示）");
             for (int i = _entries.Count - 1; i >= start; i--)
                 sb.AppendLine($"  {_entries.Count - i}) {Describe(_entries[i], File.Exists(_entries[i].Path))}");
             return sb.ToString().TrimEnd();
