@@ -49,6 +49,10 @@ public sealed class ProviderMessage
 
     /// <summary>Assistant 侧：Anthropic thinking 块的签名（与 ThinkingText 成对回传）。</summary>
     public string? ThinkingSignature { get; init; }
+
+    /// <summary>Assistant 侧：Anthropic redacted_thinking 块的加密 data 列表（按原始顺序）。
+    /// 与 thinking 同样必须原样回传；无法解密展示，仅透传。</summary>
+    public IReadOnlyList<string>? RedactedThinkingData { get; init; }
 }
 
 /// <summary>Provider 一次调用的返回值。</summary>
@@ -69,6 +73,9 @@ public sealed class ProviderResponse
 
     /// <summary>Anthropic thinking 块签名（与 ThinkingText 成对）。</summary>
     public string? ThinkingSignature { get; init; }
+
+    /// <summary>Anthropic redacted_thinking 加密数据列表（原样回传用）。</summary>
+    public IReadOnlyList<string>? RedactedThinkingData { get; init; }
 }
 
 /// <summary>暴露给模型的工具规范（JSON Schema 形式的参数）。</summary>

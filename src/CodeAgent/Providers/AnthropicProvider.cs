@@ -128,6 +128,7 @@ public sealed class AnthropicProvider : IAgentProvider
         var text = new StringBuilder();
         var thinking = new StringBuilder();
         string? thinkingSignature = null;
+        var redacted = new List<string>();
         var toolCalls = new List<ToolCall>();
         // is JsonArray 守卫：content 非数组形态（不合规网关）按空内容处理而非抛异常
         var blocks = root?["content"] as JsonArray;
@@ -150,6 +151,13 @@ public sealed class AnthropicProvider : IAgentProvider
                     if (bObj["thinking"] is JsonValue hv && hv.TryGetValue<string>(out var h))
                         thinking.Append(h);
                     thinkingSignature ??= bObj["signature"] is JsonValue sv && sv.TryGetValue<string>(out var s0) ? s0 : null;
+                }
+                else if (type == "redacted_thinking")
+                {
+                    // 安全系统加密的思考块：无法解密展示，但必须原样回传
+                    var data = bObj["data"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(data))
+                        redacted.Add(data);
                 }
                 else if (type == "tool_use")
                 {
@@ -185,6 +193,7 @@ public sealed class AnthropicProvider : IAgentProvider
             FinishReason = stopReason,
             ThinkingText = thinking.Length == 0 ? null : thinking.ToString(),
             ThinkingSignature = thinkingSignature,
+            RedactedThinkingData = redacted.Count > 0 ? redacted : null,
         };
     }
 
@@ -274,6 +283,7 @@ public sealed class AnthropicProvider : IAgentProvider
         var thinkingText = new StringBuilder();
         string? thinkingSignature = null;
         var thinkingBlockIndexes = new HashSet<int>();
+        var streamRedacted = new List<string>();
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
@@ -309,6 +319,13 @@ public sealed class AnthropicProvider : IAgentProvider
                             var sig0 = block?["signature"] is JsonValue sv0 && sv0.TryGetValue<string>(out var s0) ? s0 : null;
                             if (!string.IsNullOrEmpty(sig0))
                                 thinkingSignature ??= sig0;
+                        }
+                        else if (type == "redacted_thinking")
+                        {
+                            // 加密思考块在 start 事件里就带完整 data（无增量）：捕获供回传
+                            var rd = block?["data"]?.GetValue<string>();
+                            if (!string.IsNullOrEmpty(rd))
+                                streamRedacted.Add(rd);
                         }
                         else if (type == "tool_use")
                         {
@@ -448,6 +465,7 @@ public sealed class AnthropicProvider : IAgentProvider
             FinishReason = finishReason,
             ThinkingText = thinkingText.Length > 0 ? thinkingText.ToString() : null,
             ThinkingSignature = thinkingSignature,
+            RedactedThinkingData = streamRedacted.Count > 0 ? streamRedacted : null,
         };
     }
     /// <summary>列出 Anthropic 可用模型（GET /v1/models，跟随 has_more/after_id 分页——
@@ -565,6 +583,9 @@ public sealed class AnthropicProvider : IAgentProvider
                 case MessageRole.Assistant:
                     {
                         var content = new JsonArray();
+                        // redacted_thinking 块排在最前（与原始响应顺序一致），原样回传加密数据
+                        foreach (var rd in m.RedactedThinkingData ?? [])
+                            content.Add(new JsonObject { ["type"] = "redacted_thinking", ["data"] = rd });
                         // extended thinking 块必须排在 assistant 内容最前（与原始响应顺序一致）
                         // 并原样回传文本 + 签名：thinking 启用 + 工具调用时缺失它会被 API 400 拒绝
                         if (!string.IsNullOrEmpty(m.ThinkingText))

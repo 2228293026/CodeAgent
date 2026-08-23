@@ -278,6 +278,7 @@ public sealed partial class Agent
                 //（thinking + 工具调用轮缺失 thinking 块会被 API 400 拒绝）
                 ThinkingText = resp.ThinkingText,
                 ThinkingSignature = resp.ThinkingSignature,
+                RedactedThinkingData = resp.RedactedThinkingData,
             });
             LogMessage(_messages[^1]);
             await TrimHistoryAsync(ct);
@@ -1069,6 +1070,7 @@ public sealed partial class Agent
                 toolCalls = m.ToolCalls?.Select(tc => new { tc.Id, tc.Name, tc.ArgumentsJson }).ToList(),
                 thinkingText = m.ThinkingText,
                 thinkingSignature = m.ThinkingSignature,
+                redactedThinking = m.RedactedThinkingData,
                 error = m.IsError,
             };
             _sessionLog.WriteLine(JsonSerializer.Serialize(entry, LogJsonOpts));

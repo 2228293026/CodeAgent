@@ -202,6 +202,11 @@ public sealed partial class Agent
                 ToolName = n["tool"]?.GetValue<string>(),
                 ThinkingText = n["thinkingText"]?.GetValue<string>(),
                 ThinkingSignature = n["thinkingSignature"]?.GetValue<string>(),
+                RedactedThinkingData = (n["redactedThinking"] as JsonArray)?
+                    .Select(r => r?.GetValue<string>())
+                    .Where(r => !string.IsNullOrEmpty(r))
+                    .Cast<string>()
+                    .ToList(),
                 IsError = n["error"]?.GetValue<bool>() ?? false,
             };
         }
@@ -436,6 +441,7 @@ public sealed partial class Agent
         toolName = m.ToolName,
         thinkingText = m.ThinkingText,
         thinkingSignature = m.ThinkingSignature,
+        redactedThinking = m.RedactedThinkingData?.ToList(),
         isError = m.IsError,
     };
 
@@ -448,6 +454,7 @@ public sealed partial class Agent
         ToolName = d.toolName,
         ThinkingText = d.thinkingText,
         ThinkingSignature = d.thinkingSignature,
+        RedactedThinkingData = d.redactedThinking is { Count: > 0 } ? d.redactedThinking : null,
         IsError = d.isError,
     };
 
@@ -460,6 +467,7 @@ public sealed partial class Agent
         public string? toolName { get; set; }
         public string? thinkingText { get; set; }
         public string? thinkingSignature { get; set; }
+        public List<string>? redactedThinking { get; set; }
         public bool isError { get; set; }
     }
 

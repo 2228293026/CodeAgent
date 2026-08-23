@@ -342,6 +342,51 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_RedactedThinking_IsCapturedAndRoundTripped()
+    {
+        // redacted_thinking（安全加密的思考块）必须原样回传：捕获 + 请求体重建双路径
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """
+                {"content":[
+                    {"type":"redacted_thinking","data":"enc-data-1"},
+                    {"type":"text","text":"ok"}
+                ],"usage":{"input_tokens":1,"output_tokens":1}}
+                """,
+        };
+        var provider = MakeProvider(handler);
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "hi" },
+        };
+
+        var resp = await provider.ChatAsync(messages, [], "high", CancellationToken.None);
+        Assert.Equal(["enc-data-1"], resp.RedactedThinkingData);
+
+        // 第二轮：assistant 消息带 redacted 数据 → content 以 redacted_thinking 块开头
+        var round2 = new[]
+        {
+            messages[0],
+            messages[1],
+            new ProviderMessage
+            {
+                Role = MessageRole.Assistant,
+                RedactedThinkingData = resp.RedactedThinkingData,
+                ToolCalls = [new ToolCall { Id = "c1", Name = "stop", ArgumentsJson = "{}" }],
+            },
+            new ProviderMessage { Role = MessageRole.Tool, ToolCallId = "c1", ToolName = "stop", Content = "done" },
+        };
+        await provider.ChatAsync(round2, [], "high", CancellationToken.None);
+
+        var msgs = JsonNode.Parse(handler.LastBody!)?["messages"]?.AsArray();
+        var asst = msgs![^2]!;
+        var blocks = asst["content"]!.AsArray();
+        Assert.Equal("redacted_thinking", blocks[0]!["type"]!.GetValue<string>());
+        Assert.Equal("enc-data-1", blocks[0]!["data"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task ChatAsync_CacheReadTokens_TopLevelField_IsParsed()
     {
         // 回归：Anthropic 的缓存命中在 usage 顶层（cache_read_input_tokens）；
