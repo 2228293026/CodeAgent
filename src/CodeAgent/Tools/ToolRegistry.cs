@@ -103,6 +103,15 @@ public sealed class Workspace
         return false;
     }
 
+    /// <summary>目录段真实路径缓存（带 TTL）：ResolveRealPath 对每个路径逐段做符号链接解析，
+    /// grep/glob 扫描上千文件时同一目录前缀被重复解析成千次——目录段缓存后只解析一次。
+    /// 只缓存非末段（文件本身永远现解析，防止「删文件重建为外链」绕过沙箱）；
+    /// 短 TTL 兜底目录中途被换成链接的极端时序。</summary>
+    private sealed record CachedRealPath(string Real, DateTime ExpiresUtc);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, CachedRealPath> RealPathDirCache = new(
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private const double RealPathCacheTtlSeconds = 2;
+
     /// <summary>
     /// 解析路径的真实位置（从根开始逐段跟随符号链接）。只解析最深一段时，
     /// 若路径本身已存在（如 read_file 经过 symlink 目录读取一个已存在的文件），
@@ -115,9 +124,16 @@ public sealed class Workspace
             .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar,
                 StringSplitOptions.RemoveEmptyEntries);
         var current = root;
-        foreach (var seg in segments)
+        var now = DateTime.UtcNow;
+        for (int i = 0; i < segments.Length; i++)
         {
-            var next = Path.Combine(current, seg);
+            var next = Path.Combine(current, segments[i]);
+            var isLast = i == segments.Length - 1;
+            if (!isLast && RealPathDirCache.TryGetValue(next, out var hit) && hit.ExpiresUtc > now)
+            {
+                current = hit.Real; // 目录段命中缓存：跳过逐段链接解析
+                continue;
+            }
             string? resolved = null;
             try
             {
@@ -129,6 +145,8 @@ public sealed class Workspace
                 // 解析失败（无权限等）按字面路径继续，后续段仍会尝试
             }
             current = resolved ?? next;
+            if (!isLast)
+                RealPathDirCache[next] = new CachedRealPath(current, now.AddSeconds(RealPathCacheTtlSeconds));
         }
         return current;
     }
