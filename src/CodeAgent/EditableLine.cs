@@ -36,22 +36,32 @@ public sealed class EditableLine
         Cursor++;
     }
 
-    /// <summary>删除光标前一个字符；光标在行首时无操作。返回是否删除。</summary>
+    /// <summary>删除光标前一个字符；光标在行首时无操作。返回是否删除。
+    /// 代理对（emoji 等）整体删除：只删半个码点会留下损坏的孤立代理，终端渲染为乱码。</summary>
     public bool Backspace()
     {
         if (Cursor <= 0)
             return false;
-        _text.Remove(Cursor - 1, 1);
-        Cursor--;
+        var count = 1;
+        // 光标前的低代理 + 它前面的高代理是一个码点：一起删
+        if (char.IsLowSurrogate(_text[Cursor - 1]) && Cursor >= 2 && char.IsHighSurrogate(_text[Cursor - 2]))
+            count = 2;
+        _text.Remove(Cursor - count, count);
+        Cursor -= count;
         return true;
     }
 
-    /// <summary>删除光标处（后一个）字符；光标在行尾时无操作。返回是否删除。</summary>
+    /// <summary>删除光标处（后一个）字符；光标在行尾时无操作。返回是否删除。
+    /// 代理对整体删除（同 Backspace）。</summary>
     public bool Delete()
     {
         if (Cursor >= _text.Length)
             return false;
-        _text.Remove(Cursor, 1);
+        var count = 1;
+        // 光标处的高代理 + 后面的低代理是一个码点：一起删
+        if (char.IsHighSurrogate(_text[Cursor]) && Cursor + 1 < _text.Length && char.IsLowSurrogate(_text[Cursor + 1]))
+            count = 2;
+        _text.Remove(Cursor, count);
         return true;
     }
 

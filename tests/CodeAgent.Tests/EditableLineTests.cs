@@ -49,6 +49,40 @@ public class EditableLineTests
     }
 
     [Fact]
+    public void Backspace_AfterEmoji_RemovesWholeSurrogatePair()
+    {
+        // 回归：按 UTF-16 码元删除会把 emoji 劈成半个孤立代理（终端渲染为乱码替换符）
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        Assert.True(line.Backspace()); // 删 b
+        Assert.True(line.Backspace()); // 应整体删掉 😀（两个码元）
+        Assert.Equal("a", line.Text);
+        Assert.Equal(1, line.Cursor);
+    }
+
+    [Fact]
+    public void Delete_AtEmoji_RemovesWholeSurrogatePair()
+    {
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        Assert.True(line.Delete()); // 删 a
+        Assert.True(line.Delete()); // 应整体删掉 😀
+        Assert.Equal("b", line.Text);
+        Assert.Equal(0, line.Cursor);
+    }
+
+    [Fact]
+    public void Backspace_OrphanLowSurrogate_DeletesSingleChar()
+    {
+        // 已损坏的孤立代理没有配对对象：按单码元删除即可
+        var line = new EditableLine();
+        line.SetInitial("\uD83D"); // 孤立高代理
+        Assert.True(line.Backspace());
+        Assert.Equal("", line.Text);
+    }
+
+    [Fact]
     public void Delete_RemovesCharAtCursor()
     {
         var line = new EditableLine();
