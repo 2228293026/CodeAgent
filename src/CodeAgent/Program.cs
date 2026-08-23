@@ -726,6 +726,20 @@ internal static class Program
     internal static string TruncatePathHead(string path, int max = 42) =>
         path.Length <= max ? path : "…" + path[^(max - 1)..];
 
+    private static (string Cwd, string? Branch, DateTime At)? _branchCache;
+
+    /// <summary>当前 git 分支（3 秒缓存：状态栏每轮提示符都刷新，直接解析 .git/HEAD 虽廉价也不必每次读盘）。
+    /// 非 git 仓库返回 null（显示层整体省略该段）。</summary>
+    internal static string? CachedBranch(string cwd)
+    {
+        var now = DateTime.UtcNow;
+        if (_branchCache is { } c && c.Cwd == cwd && (now - c.At).TotalSeconds < 3)
+            return c.Branch;
+        var b = GitInfo.CurrentBranch(cwd);
+        _branchCache = (cwd, b, now);
+        return b;
+    }
+
     /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow, ReasoningProbeState? reasoningProbe)
     {
@@ -749,9 +763,12 @@ internal static class Program
             ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(agent.ContextTokens, contextWindow)}%)"
             : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
         var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
+        // git 分支段（非仓库整体省略）：多仓库/多分支工作流下快速确认当前所在位置
+        var branch = CachedBranch(Environment.CurrentDirectory);
+        var branchText = branch is null ? "" : $" ({branch})";
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
-            $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {shownCwd} · " +
+            $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {shownCwd}{branchText} · " +
             $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out · {ctx}{think}");
         SafeColor.Reset();
     }
@@ -911,6 +928,9 @@ internal static class Program
         Console.WriteLine($"  Thinking : {config.ThinkingEffort}{(config.ThinkingEffort == "auto" ? "（自动探测模型推理档位，状态栏显示实际生效值）" : "")}");
         Console.WriteLine($"  BaseUrl  : {opts.BaseUrl}");
         Console.WriteLine($"  Workspace: {Environment.CurrentDirectory}");
+        var bannerBranch = GitInfo.CurrentBranch(Environment.CurrentDirectory);
+        if (bannerBranch is not null)
+            Console.WriteLine($"  Git      : {bannerBranch}");
         if (agent.SessionPath is not null)
             Console.WriteLine($"  会话日志  : {agent.SessionPath}");
         if (config.SourceFile is not null)
