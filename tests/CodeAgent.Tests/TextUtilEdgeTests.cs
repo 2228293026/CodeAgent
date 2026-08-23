@@ -308,6 +308,15 @@ public class TextUtilEdgeTests : IDisposable
         Assert.Equal(0, TextUtil.EstimateTokens("\uD83D"));
     }
 
+    [Theory]
+    [InlineData(0.0042, "0.0042")]  // 小额保留 4 位（$0.00 会吞掉真实开销）
+    [InlineData(0.0099, "0.0099")]
+    [InlineData(0.01, "0.01")]       // 恰好阈值：两位
+    [InlineData(1.5, "1.50")]
+    [InlineData(123.456, "123.46")]
+    public void FormatCost_TiersByMagnitude(double cost, string expected) =>
+        Assert.Equal(expected, TextUtil.FormatCost(cost));
+
     [Fact]
     public async Task EnumerateFilesPruned_JunctionCycle_Terminates()
     {

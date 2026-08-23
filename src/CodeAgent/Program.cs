@@ -655,10 +655,7 @@ internal static class Program
             opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : agent.Context.Config.PricePerMillionOutput);
         string costText = "";
         if (cost is { } c)
-        {
-            var shown = c < 0.01 ? c.ToString("F4") : c.ToString("F2"); // 小额保留 4 位小数避免 $0.00
-            costText = $" ≈${shown}";
-        }
+            costText = $" ≈${TextUtil.FormatCost(c)}";
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(
             $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
@@ -1492,7 +1489,7 @@ internal static class Program
                         $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens" +
                         (agent.TotalCachedTokens > 0 ? $"（其中缓存命中 {agent.TotalCachedTokens:N0}）" : "") +
                         $"，当前上下文 {ctxText}，会话时长 {TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)}" +
-                        (cost is { } c ? $"，累计费用 ≈${c:F4}" : ""));
+                        (cost is { } c ? $"，累计费用 ≈${TextUtil.FormatCost(c)}" : ""));
                 }
                 break;
 

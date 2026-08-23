@@ -308,6 +308,11 @@ public static class TextUtil
         return inputTokens * pricePerMillionInput / 1_000_000.0
              + outputTokens * pricePerMillionOutput / 1_000_000.0;
     }
+
+    /// <summary>费用文本（回合摘要与 /stats 共用口径）：≥ $0.01 保留两位小数，
+    /// 小额保留四位（$0.00 会吞掉真实开销）。</summary>
+    public static string FormatCost(double cost) =>
+        cost < 0.01 ? cost.ToString("F4") : cost.ToString("F2");
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>
