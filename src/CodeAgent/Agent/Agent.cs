@@ -673,6 +673,17 @@ public sealed partial class Agent
             await sem.WaitAsync(ct);
             try
             {
+                // stop 已请求：批次内剩余工具跳过执行（结果如实告知模型而非静默丢弃）
+                if (_ctx.StopRequested)
+                {
+                    return new ProviderMessage
+                    {
+                        Role = MessageRole.Tool,
+                        ToolCallId = tc.Id,
+                        ToolName = tc.Name,
+                        Content = "（stop 已请求，本工具未执行）",
+                    };
+                }
                 return await ExecuteToolCallAsync(tc, ct);
             }
             finally

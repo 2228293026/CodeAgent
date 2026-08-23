@@ -74,6 +74,41 @@ public class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task ParallelBatch_AfterStopRequested_RemainingToolsSkipped()
+    {
+        // stop 置位后，并行批次内剩余工具跳过执行并如实告知模型（此前会全部跑完）
+        var provider = new FakeProvider
+        {
+            ResponseQueue = new Queue<ProviderResponse>([
+                new ProviderResponse
+                {
+                    ToolCalls =
+                    [
+                        new ToolCall { Id = "s", Name = "stop", ArgumentsJson = "{}" },
+                        new ToolCall { Id = "r1", Name = "read_file", ArgumentsJson = """{"path":"a.txt"}""" },
+                        new ToolCall { Id = "r2", Name = "read_file", ArgumentsJson = """{"path":"b.txt"}""" },
+                    ],
+                },
+                new ProviderResponse { Text = "done" },
+            ]),
+        };
+        var config = new AgentConfig { SaveSessions = false, SessionDir = SessionDir, MaxToolIterations = 5 };
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "A");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "B");
+        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault(), _dir);
+
+        await agent.RunAsync("finish up", CancellationToken.None);
+
+        var toolMsgs = agent.Messages.Where(m => m.Role == MessageRole.Tool).ToList();
+        Assert.Equal(3, toolMsgs.Count);
+        // stop 本身执行成功
+        Assert.Equal("s", toolMsgs.Single(m => m.ToolCallId == "s").ToolCallId);
+        // 其余两个被跳过（顺序不定，但都带跳过说明）
+        Assert.All(toolMsgs.Where(m => m.ToolCallId is "r1" or "r2"),
+            m => Assert.Contains("未执行", m.Content));
+    }
+
+    [Fact]
     public async Task ParallelToolCalls_ResultsStayInCallOrder()
     {
         // 锁定语义：并行执行的多个工具，结果必须按调用顺序回填（与 ToolCallId 一一对应），
