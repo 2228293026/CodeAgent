@@ -1211,6 +1211,11 @@ internal static class Program
                         try
                         {
                             knownModels = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                            if (knownModels.Count == 0)
+                            {
+                                Console.WriteLine("模型列表为空（服务可能不支持 /models）：直接输入完整模型名即可。");
+                                break;
+                            }
                             if (idx <= knownModels.Count)
                             {
                                 modelArg = knownModels[idx - 1];
