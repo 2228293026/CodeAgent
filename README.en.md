@@ -93,6 +93,7 @@ Lookup order: path given to `-c`, then `codeagent.json` in the current directory
   "renderMarkdown": true,        // render Markdown in replies
   "tuiAnsi": true,               // ANSI in-place menu rendering; false = scrolling menu for old terminals
   "thinkingEffort": "off",       // off/low/medium/high/auto (auto probes supported levels, uses the highest)
+  "autoCompactPercent": 0,       // auto-compress history when context usage reaches this percent; 0 = off (hint at 90%)
   "defaultMode": "code",         // startup mode (/mode switches)
   "fileAccess": "strict",        // strict (sandbox) | whitelist (sandbox + read-only allowlist) | full
   "readOnlyDirs": [],            // read-only dirs outside the workspace for whitelist mode
