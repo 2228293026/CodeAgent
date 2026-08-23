@@ -1485,10 +1485,14 @@ internal static class Program
                         break;
                     }
                     var printed = 0;
+                    var moreAvailable = false;
                     foreach (var log in logs)
                     {
                         if (printed >= 5)
-                            break; // 命中文件数上限：避免刷屏，提示里说明还有更多
+                        {
+                            moreAvailable = true; // 还有未展示的日志：提示缩小关键字
+                            break;
+                        }
                         var hits = AgentClass.SearchSessionLog(log, kw);
                         if (hits.Count == 0)
                             continue;
@@ -1501,6 +1505,8 @@ internal static class Program
                     }
                     if (printed == 0)
                         Console.WriteLine($"历史会话中没有匹配「{kw}」的内容。");
+                    else if (moreAvailable)
+                        Console.WriteLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）");
                 }
                 break;
 

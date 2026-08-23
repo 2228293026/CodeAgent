@@ -167,7 +167,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL commands: `/help` `/clear` `/compact` `/cls` `/model` `/provider` `/config` `/session` `/setup` `/undo` `/diff` `/save` `/load` `/resume` `/find <keyword>` `/export` `/copy` `/prompt` `/stats` `/retry` `/tools` `/providers` `/models` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/exit` `/quit`.
+REPL commands: `/help` `/clear` `/compact` `/cls` `/model` `/provider` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume` `/find <keyword>` `/export` `/copy` `/prompt` `/stats` `/retry` `/tools` `/providers` `/models` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/exit` `/quit`.
 
 Work modes: `/mode` lists, `/mode plan` switches. 8 built-ins: `code` (default, full power), `plan` / `explain` / `review` (read-only — write tools hidden and blocked), `debug` / `refactor` / `test` / `doc`. Custom modes live in the `modes` config list (system prompt + tool scope).
 
