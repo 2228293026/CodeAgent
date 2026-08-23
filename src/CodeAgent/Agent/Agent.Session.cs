@@ -66,6 +66,15 @@ public sealed partial class Agent
         var sb = new StringBuilder();
         sb.AppendLine($"# CodeAgent 会话{(title is null ? "" : $"：{title}")}");
         sb.AppendLine();
+        // 元信息头：归档时不用翻内容就知道来源
+        sb.AppendLine($"- 导出时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        var po = _config.Providers.TryGetValue(_config.Provider, out var o) ? o : null;
+        sb.AppendLine($"- 模型：{_config.Provider}{(string.IsNullOrWhiteSpace(po?.Model) ? "" : $" / {po!.Model}")}");
+        var branch = GitInfo.CurrentBranch(Environment.CurrentDirectory);
+        if (branch is not null)
+            sb.AppendLine($"- Git 分支：{branch}");
+        sb.AppendLine($"- 消息数：{msgs.Count}（不含本头部）");
+        sb.AppendLine();
         foreach (var m in msgs)
         {
             sb.AppendLine(m.Role switch
