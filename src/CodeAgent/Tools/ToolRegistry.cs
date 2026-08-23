@@ -325,7 +325,7 @@ public sealed class ToolRegistry
     public async Task<string> ExecuteAsync(string name, string argsJson, AgentContext ctx, CancellationToken ct)
     {
         if (!_tools.TryGetValue(name, out var tool))
-            throw new ToolException($"未知工具: {name}（可用: {string.Join(", ", _tools.Keys)}）");
+            throw new ToolException($"未知工具: {name}（可用: {string.Join(", ", _tools.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))}）");
 
         JsonObject? args;
         try
