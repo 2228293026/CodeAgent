@@ -1612,7 +1612,12 @@ internal static class Program
                 {
                     // 查看当前生效的系统提示（模式提示 + ADOFAI 注入等叠加后的实际值）
                     var p = agent.CurrentSystemPrompt;
-                    Console.WriteLine($"系统提示（{p.Length:N0} 字符，截断显示 2000）:");
+                    var source = agent.CurrentMode.Name.Equals("code", StringComparison.OrdinalIgnoreCase)
+                        ? config.SessionOnlySystemPrompt is not null
+                            ? "code（含会话级运行时注入，如 ADOFAI 上下文）"
+                            : "code（配置的 systemPrompt）"
+                        : $"模式 {agent.CurrentMode.Name}";
+                    Console.WriteLine($"系统提示（来源: {source}；{p.Length:N0} 字符，截断显示 2000）:");
                     Console.WriteLine(TextUtil.Truncate(p, 2000));
                 }
                 break;
