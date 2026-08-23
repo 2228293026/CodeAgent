@@ -324,6 +324,10 @@ public static class SkipDirs
         ".cache", ".npm", ".yarn", ".pnpm-store", ".turbo", ".eslintcache", ".parcel-cache",
         ".angular", ".svelte-kit", ".astro", ".cargo", "vendor", ".bundle",
         ".egg-info", ".eggs", ".ipynb_checkpoints", ".serverless", ".stack-work",
+        // 依赖库与测试/构建产物目录：libs（mod/游戏项目的引用 DLL）、third_party/external
+        //（vendored 源码）、TestResults（dotnet trx）、artifacts（dotnet 产物约定）、coverage
+        "libs", "third_party", "ThirdParty", "3rdparty", "external", "Externals",
+        "TestResults", "artifacts", "coverage", "Coverage",
     };
 
     public static bool IsSkipped(string dirName) => Names.Contains(dirName);

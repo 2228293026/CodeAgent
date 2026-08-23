@@ -78,4 +78,25 @@ public class SkipDirsTests : IDisposable
         Assert.Contains("app.js", files);
         Assert.DoesNotContain(files, f => f.Contains(".npm") || f.Contains(".turbo") || f.Contains("vendor"));
     }
+
+    [Fact]
+    public void EnumerateFilesPruned_SkipsVendoredLibsAndTestArtifacts()
+    {
+        // libs（mod/游戏项目引用 DLL）、third_party/external（vendored 源码）、
+        // TestResults / artifacts / coverage（测试与构建产物）
+        foreach (var d in new[] { "libs", "third_party", "external", "TestResults", "artifacts", "coverage" })
+            Directory.CreateDirectory(Path.Combine(_dir, d));
+        File.WriteAllText(Path.Combine(_dir, "libs", "Assembly-CSharp.dll"), "b");
+        File.WriteAllText(Path.Combine(_dir, "third_party", "t.cpp"), "t");
+        File.WriteAllText(Path.Combine(_dir, "TestResults", "run.trx"), "r");
+        File.WriteAllText(Path.Combine(_dir, "src.cs"), "ok");
+
+        var files = SkipDirs.EnumerateFilesPruned(_dir)
+            .Select(f => Path.GetRelativePath(_dir, f).Replace('\\', '/'))
+            .ToList();
+
+        Assert.Contains("src.cs", files);
+        Assert.DoesNotContain(files, f => f.Contains("libs/") || f.Contains("third_party") ||
+                                          f.Contains("TestResults") || f.Contains("artifacts") || f.Contains("coverage"));
+    }
 }
