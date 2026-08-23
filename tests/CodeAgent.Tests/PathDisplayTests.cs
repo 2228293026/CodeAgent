@@ -157,6 +157,19 @@ public class PathDisplayTests
         Assert.False(Program.LooksLikeUnknownFlag(arg));
 
     [Fact]
+    public void ModeListText_MarksCurrentMode()
+    {
+        var config = new AgentConfig();
+        var text = Program.ModeListText(config, "plan");
+        var lines = text.Split('\n');
+        Assert.Contains(lines, l => l.StartsWith("  code —") && !l.Contains("←"));
+        Assert.Contains(lines, l => l.StartsWith("  plan —") && l.EndsWith("←")); // 当前模式有标记
+        // 大小写不敏感匹配当前模式名
+        var text2 = Program.ModeListText(config, "PLAN");
+        Assert.Contains(text2.Split('\n'), l => l.StartsWith("  plan —") && l.EndsWith("←"));
+    }
+
+    [Fact]
     public void ConfirmFullAccess_OnlyYProceeds()
     {
         // 放开沙箱是高危操作：只有明确 y 放行；EOF / 空输入 / 其他输入一律取消

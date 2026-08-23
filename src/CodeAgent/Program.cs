@@ -1549,7 +1549,7 @@ internal static class Program
                 if (string.IsNullOrWhiteSpace(rest))
                 {
                     Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");
-                    Console.WriteLine(Modes.ListText(config));
+                    Console.WriteLine(ModeListText(config, agent.CurrentMode.Name));
                     Console.WriteLine("（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）");
                 }
                 else if (rest.Equals("next", StringComparison.OrdinalIgnoreCase))
@@ -1772,6 +1772,11 @@ internal static class Program
         // rest 保持原样（模型名/会话名区分大小写）
         return idx < 0 ? (line.ToLowerInvariant(), "") : (line[..idx].ToLowerInvariant(), line[(idx + 1)..]);
     }
+
+    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 ←。</summary>
+    internal static string ModeListText(AgentConfig config, string currentMode) =>
+        string.Join("\n", Modes.Build(config).Select(m =>
+            $"  {m.Name} — {m.Description}{(m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? "  ←" : "")}"));
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
     /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
     internal static bool IsSwitchCommand(string cmd, string rest) =>
