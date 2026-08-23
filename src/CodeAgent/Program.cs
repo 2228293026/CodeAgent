@@ -862,6 +862,12 @@ internal static class Program
             var models = await provider.ListModelsAsync(CancellationToken.None);
             var rows = NumberedModels(models, filter);
             Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个，显示 {rows.Count} 条{(filter is null ? "" : $"，过滤 “{filter.Trim()}”")}）:");
+            if (models.Count == 0)
+            {
+                // 成功响应但空列表：常见于 baseUrl 指错端点或 Key 无列表权限——给出可行动的提示
+                Console.WriteLine("  （服务未返回任何模型：检查 baseUrl 是否指向支持 /models 的端点、API Key 是否有列表权限；仍可直接 /model <名称> 使用）");
+                return;
+            }
             var marked = false;
             foreach (var (num, m) in rows)
             {

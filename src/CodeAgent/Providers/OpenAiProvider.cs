@@ -450,22 +450,15 @@ public sealed class OpenAiProvider : IAgentProvider
     {
         try
         {
-            var arr = await FetchModelsArrayAsync(ct);
-            foreach (var m in arr ?? [])
-            {
-                // 只看对象项：null/标量项没有元数据，且对非对象索引会抛异常
-                if (m is not JsonObject entry)
-                    continue;
-                if (!string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                foreach (var key in new[] { "context_length", "context_window", "max_context_length", "max_model_len", "max_input_tokens", "input_token_limit" })
-                    if (entry[key] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0)
-                        return n;
-                if (entry["top_provider"]?["context_length"] is JsonValue tv && tv.TryGetValue<int>(out var n2) && n2 > 0)
-                    return n2;
-                return null; // 找到模型但元数据无窗口字段
-            }
-            return null;
+            var entry = await FindModelEntryAsync(model, ct);
+            if (entry is null)
+                return null; // 模型不在列表（网关隐藏列表等）：交给内置表兜底
+            foreach (var key in new[] { "context_length", "context_window", "max_context_length", "max_model_len", "max_input_tokens", "input_token_limit" })
+                if (entry[key] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0)
+                    return n;
+            if (entry["top_provider"]?["context_length"] is JsonValue tv && tv.TryGetValue<int>(out var n2) && n2 > 0)
+                return n2;
+            return null; // 找到模型但元数据无窗口字段
         }
         catch
         {
@@ -492,25 +485,34 @@ public sealed class OpenAiProvider : IAgentProvider
     /// 失败结果不进缓存（否则瞬时断网让 auto 整个会话按回退值处理）。</summary>
     internal async Task<IReadOnlyList<string>?> ProbeEffortsAsync(string model, CancellationToken ct)
     {
+        var entry = await FindModelEntryAsync(model, ct);
+        if (entry is null)
+            return KnownReasoningModels.TryGet(model); // 列表里没有该模型：回退前缀表
+        // OpenRouter 等网关在 reasoning.effort 里显式声明支持的档位
+        if (entry["reasoning"]?["effort"] is JsonObject effort)
+        {
+            var levels = new List<string>();
+            foreach (var lvl in new[] { "low", "medium", "high" }) // 升序
+                if (effort[lvl] is JsonValue v && v.TryGetValue<bool>(out var b) && b)
+                    levels.Add(lvl);
+            return levels.Count > 0 ? levels : null; // effort 存在但全 false → 不支持
+        }
+        return KnownReasoningModels.TryGet(model); // 找到模型但元数据无 effort 字段 → 回退前缀表
+    }
+
+    /// <summary>在 /models 元数据里按 id 找模型条目（忽略大小写精确匹配）；找不到返回 null。
+    /// GetContextWindowAsync 与 ProbeEffortsAsync 共用——两处曾各自维护一份遍历匹配逻辑。</summary>
+    private async Task<JsonObject?> FindModelEntryAsync(string model, CancellationToken ct)
+    {
         var arr = await FetchModelsArrayAsync(ct);
         foreach (var m in arr ?? [])
         {
-            if (m is not JsonObject entry)
-                continue;
-            if (!string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
-                continue;
-            // OpenRouter 等网关在 reasoning.effort 里显式声明支持的档位
-            if (entry["reasoning"]?["effort"] is JsonObject effort)
-            {
-                var levels = new List<string>();
-                foreach (var lvl in new[] { "low", "medium", "high" }) // 升序
-                    if (effort[lvl] is JsonValue v && v.TryGetValue<bool>(out var b) && b)
-                        levels.Add(lvl);
-                return levels.Count > 0 ? levels : null; // effort 存在但全 false → 不支持
-            }
-            return KnownReasoningModels.TryGet(model); // 找到模型但元数据无 effort 字段 → 回退前缀表
+            // 只看对象项：null/标量项没有元数据，且对非对象索引会抛异常
+            if (m is JsonObject entry &&
+                string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
+                return entry;
         }
-        return KnownReasoningModels.TryGet(model);
+        return null;
     }
 
     /// <summary>GET /models 的 data 数组；失败抛 ProviderException（与 ListModelsAsync 的错误契约一致）。</summary>
