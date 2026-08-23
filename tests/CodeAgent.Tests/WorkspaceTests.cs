@@ -220,6 +220,21 @@ public class WorkspaceTests
         Assert.Equal("src", ws.ToRelative(dir));
     }
 
+    [Fact]
+    public void ToRelative_CrossDrive_ReturnsFullPath()
+    {
+        // 回归：full 模式扫描工作区外文件时，跨盘符路径曾让
+        // Path.GetRelativePath 抛 ArgumentException 直接崩溃
+        if (!OperatingSystem.IsWindows())
+            return; // Linux/macOS 单一根，不存在跨盘符场景
+        var ws = new Workspace(Root);
+        var tempRoot = Path.GetPathRoot(Path.GetFullPath(Root))!;
+        var otherDrive = tempRoot.TrimEnd('\\', '/').Equals("C:", StringComparison.OrdinalIgnoreCase)
+            ? @"Z:\outside\file.txt"
+            : @"C:\outside\file.txt";
+        Assert.Equal(otherDrive, ws.ToRelative(otherDrive));
+    }
+
     [Theory]
     [InlineData("a.txt")]
     [InlineData("dir/b.txt")]

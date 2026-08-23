@@ -144,10 +144,20 @@ public sealed class Workspace
         return fullPath.StartsWith(_rootPrefix, cmp);
     }
 
-    /// <summary>把绝对路径转为相对工作区的展示路径。</summary>
+    /// <summary>把绝对路径转为相对工作区的展示路径。
+    /// 跨盘符（D:\ 工作区 + C:\ 文件）等无法相对化的路径原样返回——
+    /// Path.GetRelativePath 对不同根会抛 ArgumentException，full 模式扫描白名单/外部目录时曾崩溃。</summary>
     public string ToRelative(string fullPath)
     {
-        var rel = Path.GetRelativePath(Root, fullPath);
+        string rel;
+        try
+        {
+            rel = Path.GetRelativePath(Root, fullPath);
+        }
+        catch (ArgumentException)
+        {
+            return fullPath;
+        }
         // 尾部分隔符（如 dir\）会让相对路径带 \ 后缀，破坏 glob 匹配与展示；归一化掉
         rel = rel.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return rel == "." ? "" : rel;
