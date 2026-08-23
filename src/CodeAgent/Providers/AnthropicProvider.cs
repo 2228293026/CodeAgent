@@ -372,6 +372,10 @@ public sealed class AnthropicProvider : IAgentProvider
 
                 case "message_delta":
                     outputTokens = ProviderJson.OptInt(root?["usage"]?["output_tokens"]);
+                    // 部分网关在 message_delta 才带 input_tokens（标准只在 message_start）：兜底更新
+                    var inDelta = ProviderJson.OptInt(root?["usage"]?["input_tokens"]);
+                    if (inDelta is not null)
+                        inputTokens = inDelta;
                     var sr = root?["delta"]?["stop_reason"]?.GetValue<string>();
                     if (!string.IsNullOrEmpty(sr))
                         finishReason = sr; // "max_tokens" 表示输出被截断

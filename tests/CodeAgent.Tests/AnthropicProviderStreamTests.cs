@@ -189,6 +189,36 @@ public class AnthropicProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_MessageDeltaInputTokens_FallbackUpdate()
+    {
+        // 部分网关在 message_delta 才带 input_tokens（标准只在 message_start）：应兜底更新
+        var handler = new SseHandler
+        {
+            Body = """
+                event: message_start
+                data: {"type":"message_start","message":{"usage":{"input_tokens":0}}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+                event: message_delta
+                data: {"type":"message_delta","usage":{"input_tokens":42,"output_tokens":3}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal(42, resp.InputTokens); // 被 message_delta 的值更新
+        Assert.Equal(3, resp.OutputTokens);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ThinkingDelta_IsReported()
     {
         var handler = new SseHandler
