@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent.Providers;
@@ -69,6 +71,52 @@ public class AgentLoopTests : IDisposable
         var config = new AgentConfig { SaveSessions = false, SessionDir = SessionDir, SystemPrompt = "自定义提示" };
         var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
         Assert.Equal("自定义提示", agent.CurrentSystemPrompt);
+    }
+
+    [Fact]
+    public async Task ParallelToolCalls_ResultsStayInCallOrder()
+    {
+        // 锁定语义：并行执行的多个工具，结果必须按调用顺序回填（与 ToolCallId 一一对应），
+        // 否则模型会把 A 工具的结果当成 B 的。Task.WhenAll 保序是依赖点。
+        var provider = new FakeProvider
+        {
+            ResponseQueue = new Queue<ProviderResponse>([
+                new ProviderResponse
+                {
+                    ToolCalls =
+                    [
+                        new ToolCall { Id = "c1", Name = "read_file", ArgumentsJson = """{"path":"a.txt"}""" },
+                        new ToolCall { Id = "c2", Name = "read_file", ArgumentsJson = """{"path":"b.txt"}""" },
+                        new ToolCall { Id = "c3", Name = "read_file", ArgumentsJson = """{"path":"c.txt"}""" },
+                    ],
+                },
+                new ProviderResponse { Text = "done" },
+            ]),
+        };
+        var agent = MakeAgent(provider, allowCommands: true);
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "AAA");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "BBB");
+        File.WriteAllText(Path.Combine(_dir, "c.txt"), "CCC");
+
+        // 工作区指向 _dir：文件工具按它解析相对路径
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            MaxToolIterations = 5,
+        };
+        agent = new AgentClass(config, provider, ToolRegistry.CreateDefault(), _dir);
+
+        await agent.RunAsync("read three files", CancellationToken.None);
+
+        var toolMsgs = agent.Messages.Where(m => m.Role == MessageRole.Tool).ToList();
+        Assert.Equal(3, toolMsgs.Count);
+        Assert.Equal("c1", toolMsgs[0].ToolCallId);
+        Assert.Contains("AAA", toolMsgs[0].Content);
+        Assert.Equal("c2", toolMsgs[1].ToolCallId);
+        Assert.Contains("BBB", toolMsgs[1].Content);
+        Assert.Equal("c3", toolMsgs[2].ToolCallId);
+        Assert.Contains("CCC", toolMsgs[2].Content);
     }
 
     [Fact]
