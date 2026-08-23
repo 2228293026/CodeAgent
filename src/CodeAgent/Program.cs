@@ -400,6 +400,7 @@ internal static class Program
                         Console.WriteLine("没有可重试的请求。");
                         continue;
                     }
+                    Console.WriteLine($"↻ 重试上一条请求: {TextUtil.TruncateLine(agent.LastPrompt, 60)}");
                     line = agent.LastPrompt; // 作为普通请求重新执行
                 }
                 else
