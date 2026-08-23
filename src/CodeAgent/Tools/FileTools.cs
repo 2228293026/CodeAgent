@@ -183,25 +183,51 @@ public sealed class EditFileTool : ITool
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
 
+        // 精确匹配优先；未命中时做换行风格容错：old_string 用 LF、文件是 CRLF（或反过来）时
+        // 逐字匹配必失败（模型输出几乎总是 LF，Windows 工程常是 CRLF）。归一化到 LF 匹配，
+        // 替换片段（new_string）同步转成文件的换行风格——CRLF 文件不混入 LF 行。
+        var workText = text;
+        var workOld = oldString;
+        var workNew = newString;
+        var normalized = false;
+        var firstIdx = workText.IndexOf(workOld, StringComparison.Ordinal);
+        if (firstIdx < 0)
+        {
+            var lfText = text.Replace("\r\n", "\n");
+            var lfOld = oldString.Replace("\r\n", "\n");
+            if (lfText.Contains(lfOld, StringComparison.Ordinal))
+            {
+                workText = lfText;
+                workOld = lfOld;
+                workNew = newString.Replace("\r\n", "\n");
+                normalized = true;
+                firstIdx = workText.IndexOf(workOld, StringComparison.Ordinal);
+            }
+        }
         // 先统一做未命中检查：replace_all 模式下未命中也不允许静默写回原文件
         // 并报「已替换 0 处」（曾让模型误以为修改成功，还往撤销栈里塞了无效条目）
-        int firstIdx = text.IndexOf(oldString, StringComparison.Ordinal);
         if (firstIdx < 0)
             throw new ToolException(
                 $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---");
-        int count = TextUtil.CountOccurrences(text, oldString);
+        int count = TextUtil.CountOccurrences(workText, workOld);
 
         string result;
         if (replaceAll)
         {
-            result = text.Replace(oldString, newString);
+            result = workText.Replace(workOld, workNew);
         }
         else
         {
             if (count > 1)
                 throw new ToolException(
                     $"old_string 在文件中出现 {count} 次，请扩大上下文使其唯一，或设置 replace_all=true。");
-            result = text.Remove(firstIdx, oldString.Length).Insert(firstIdx, newString);
+            result = workText.Remove(firstIdx, workOld.Length).Insert(firstIdx, workNew);
+        }
+        if (normalized && text.Contains("\r\n"))
+        {
+            // 归一化路径的落盘前收尾：先把替换片段可能带入的 CRLF 压平，再统一按文件的
+            // CRLF 风格还原（此刻 result 只含 LF，二次替换不会产生 \r\r\n）
+            result = result.Replace("\r\n", "\n").Replace("\n", "\r\n");
         }
 
         // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对；
@@ -218,7 +244,8 @@ public sealed class EditFileTool : ITool
             NewText = fullOld is null ? newString : null, // 仅大文件退化时使用
         });
 
-        var startLine = text.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
+        // startLine 基于 workText（归一化后）计算：firstIdx 是 workText 的下标，用原文会错位
+        var startLine = workText.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
         return $"已替换 {count} 处 → {path}（修改起始行 {startLine}）";
     }
 }

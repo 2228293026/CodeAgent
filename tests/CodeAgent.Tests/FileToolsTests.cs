@@ -449,6 +449,71 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_LfOldString_OnCrlfFile_MatchesAndKeepsCrlf()
+    {
+        // 回归：模型输出几乎总是 LF，Windows 工程常是 CRLF——逐字匹配必失败。
+        // 归一化重试命中后，替换片段与整个文件保持 CRLF 风格（不混入孤立 LF）
+        File.WriteAllText(Path.Combine(_dir, "crlf.txt"), "line1\r\nline2\r\nline3\r\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "crlf.txt",
+                ["old_string"] = "line2\nline3",   // LF 版本
+                ["new_string"] = "X\nY",           // LF 版本
+            },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 1 处", result);
+        var after = File.ReadAllText(Path.Combine(_dir, "crlf.txt"));
+        Assert.Equal("line1\r\nX\r\nY\r\n", after);   // 替换成功且全文件保持 CRLF
+    }
+
+    [Fact]
+    public async Task EditFile_CrlfOldString_OnLfFile_MatchesAndKeepsLf()
+    {
+        // 反向：CRLF 的 old_string 编辑 LF 文件——命中后文件保持纯 LF
+        File.WriteAllText(Path.Combine(_dir, "lf.txt"), "aa\nbb\ncc\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "lf.txt",
+                ["old_string"] = "bb\r\ncc",   // CRLF 版本
+                ["new_string"] = "Y\r\nZ",
+            },
+            ctx, CancellationToken.None);
+
+        Assert.Equal("aa\nY\nZ\n", File.ReadAllText(Path.Combine(_dir, "lf.txt")));
+    }
+
+    [Fact]
+    public async Task EditFile_LfOldString_ReplaceAll_CrlfFile()
+    {
+        // replace_all + 归一化：全部命中且保持 CRLF
+        File.WriteAllText(Path.Combine(_dir, "crlf2.txt"), "x\r\nA\r\nx\r\nA\r\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "crlf2.txt",
+                ["old_string"] = "x\nA",
+                ["new_string"] = "B\nC",
+                ["replace_all"] = true,
+            },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 2 处", result);
+        Assert.Equal("B\r\nC\r\nB\r\nC\r\n", File.ReadAllText(Path.Combine(_dir, "crlf2.txt")));
+    }
+
+    [Fact]
     public async Task EditFile_MissingPath_Throws()
     {
         var tool = new EditFileTool();
