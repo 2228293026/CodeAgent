@@ -1572,9 +1572,13 @@ internal static class Program
                     var ctxText = win > 0
                         ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)} ({TextUtil.PercentOf(agent.ContextTokens, win)}%)"
                         : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
+                    var avg = agent.ProviderCalls > 0
+                        ? (agent.TotalInputTokens + agent.TotalOutputTokens) / agent.ProviderCalls
+                        : 0;
                     Console.WriteLine(
                         $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
                         $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens" +
+                        (agent.ProviderCalls > 0 ? $"（平均 {avg:N0}/次）" : "") +
                         (agent.TotalCachedTokens > 0 ? $"（其中缓存命中 {agent.TotalCachedTokens:N0}）" : "") +
                         $"，当前上下文 {ctxText}，会话时长 {TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)}" +
                         (cost is { } c ? $"，累计费用 ≈${TextUtil.FormatCost(c)}" : ""));
