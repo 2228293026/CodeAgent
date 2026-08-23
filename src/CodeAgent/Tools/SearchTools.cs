@@ -118,7 +118,6 @@ public sealed class GrepTool : ITool
         var full = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(target) ? null : target);
         var sb = new StringBuilder();
         var hits = 0;
-        var matchedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void ScanFile(string path)
         {
@@ -146,7 +145,6 @@ public sealed class GrepTool : ITool
                     if (re.IsMatch(text))
                     {
                         hits++;
-                        matchedFiles.Add(rel);
                         sb.AppendLine(rel);
                     }
                     return;
