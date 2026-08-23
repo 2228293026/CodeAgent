@@ -739,7 +739,9 @@ public sealed partial class Agent
             isError = true;
         }
         sw.Stop();
-        output = TextUtil.Truncate(output, 24_000);
+        // 头尾保留截断：错误摘要常在输出末尾（dotnet test / build 的失败列表），
+        // 纯头部截断会把最关键的部分丢给模型看不到
+        output = TextUtil.TruncateHeadTail(output, 24_000);
 
         if (showLog)
         {

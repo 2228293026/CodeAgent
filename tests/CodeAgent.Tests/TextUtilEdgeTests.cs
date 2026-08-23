@@ -279,6 +279,36 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public void TruncateHeadTail_KeepsStartAndEnd()
+    {
+        // 回归：编译/测试错误摘要几乎总在输出末尾——纯头部截断会把关键报错丢掉
+        var s = "START" + new string('x', 30_000) + "FAILED 3 tests END";
+        var t = TextUtil.TruncateHeadTail(s, 24_000);
+
+        Assert.StartsWith("START", t);
+        Assert.EndsWith("FAILED 3 tests END", t);   // 尾部（关键部分）保留
+        Assert.Contains("中间省略", t);               // 中段有省略标记
+        Assert.True(t.Length <= 25_000, $"总长受控（实际 {t.Length}）");
+    }
+
+    [Fact]
+    public void TruncateHeadTail_ShortInput_Unchanged()
+    {
+        var s = new string('a', 100);
+        Assert.Equal(s, TextUtil.TruncateHeadTail(s, 24_000));
+    }
+
+    [Fact]
+    public void TruncateHeadTail_TailFitsByMarker_ReservesSpace()
+    {
+        // 极限：尾部预留不足时退化为纯头部截断，不抛异常
+        var s = "HEAD" + new string('y', 40_000) + "TAIL";
+        var t = TextUtil.TruncateHeadTail(s, 10);
+        Assert.NotNull(t);
+        Assert.True(t.Length < 200);
+    }
+
+    [Fact]
     public void Truncate_SurrogatePairAtCut_NotSplit()
     {
         // 回归：切点落在代理对中间会产生半个码点（终端显示乱码）

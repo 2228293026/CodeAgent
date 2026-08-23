@@ -217,6 +217,21 @@ public static class TextUtil
         return SafeCut(s, max) + $"\n…(共 {s.Length} 字符，已截断)";
     }
 
+    /// <summary>超长命令输出保留头尾（编译/测试的错误摘要几乎总在末尾，纯头部截断会把
+    /// 最关键的报错丢掉）：头部占 2/3、尾部占 1/3，中段以省略标记替代并注明丢弃字符数。</summary>
+    public static string TruncateHeadTail(string s, int max)
+    {
+        if (s.Length <= max)
+            return s;
+        const string markerFormat = "\n…[中间省略 {0:N0} 字符]…\n";
+        var markerLen = string.Format(markerFormat, 0L).Length + 8; // 预留数字位宽
+        var head = Math.Max(0, max * 2 / 3);
+        var tail = Math.Max(0, max - head - markerLen);
+        if (tail == 0)
+            return Truncate(s, max);
+        return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - head - tail) + s[^tail..];
+    }
+
     public static string TruncateLine(string s, int max)
     {
         s = s.Replace("\t", "    ");
