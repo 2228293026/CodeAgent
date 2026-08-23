@@ -61,8 +61,12 @@ public sealed class AnthropicProvider : IAgentProvider
         CancellationToken ct)
     {
         var system = new StringBuilder();
-        foreach (var m in messages.Where(m => m.Role == MessageRole.System))
+        foreach (var m in messages)
+        {
+            if (m.Role != MessageRole.System)
+                break; // 只取开头连续的 system；中间的（/compact 历史摘要）由 BuildMessages 转 user 块，不重复进顶层
             system.AppendLine(m.Content);
+        }
 
         var payload = new JsonObject
         {
@@ -186,8 +190,12 @@ public sealed class AnthropicProvider : IAgentProvider
         CancellationToken ct)
     {
         var system = new StringBuilder();
-        foreach (var m in messages.Where(m => m.Role == MessageRole.System))
+        foreach (var m in messages)
+        {
+            if (m.Role != MessageRole.System)
+                break; // 同非流式：只取开头连续的 system，中间的历史摘要由 BuildMessages 转 user 块
             system.AppendLine(m.Content);
+        }
 
         var payload = new JsonObject
         {
@@ -484,7 +492,12 @@ public sealed class AnthropicProvider : IAgentProvider
             switch (m.Role)
             {
                 case MessageRole.System:
-                    break; // 已作为顶层 system 发送
+                    // 首条 system 走顶层 system 字段（见方法开头的拼接）；
+                    // 中间出现的 system（如 /compact 插入的【历史摘要】）Anthropic 没有对应角色，
+                    // 直接跳过会把它静默丢弃——转成 user 文本块保留语义
+                    if (arr.Count > 0 && !string.IsNullOrEmpty(m.Content))
+                        Append(new JsonObject { ["role"] = "user", ["content"] = new JsonArray(TextBlock(m.Content)) });
+                    break;
 
                 case MessageRole.User:
                     {

@@ -310,6 +310,38 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_MidConversationSystem_BecomesUserBlock()
+    {
+        // 回归：/compact 在历史中间插入的【历史摘要】是 System 消息，
+        // Anthropic 没有中间 system 角色——此前被静默丢弃，压缩等于白做
+        var handler = new CaptureHandler();
+        var provider = MakeProvider(handler);
+
+        var messages = new[]
+        {
+            new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+            new ProviderMessage { Role = MessageRole.User, Content = "第一问" },
+            new ProviderMessage { Role = MessageRole.System, Content = "【历史摘要】用户在做 X" },
+            new ProviderMessage { Role = MessageRole.User, Content = "继续" },
+        };
+
+        await provider.ChatAsync(messages, [], "off", CancellationToken.None);
+
+        // 首条 system 只走顶层字段
+        var body = JsonNode.Parse(handler.LastBody!);
+        Assert.Equal("sys", body!["system"]!.GetValue<string>());
+
+        // 中间 system 转成 user 文本块保留：连续同角色合并后是单条 user、3 个文本块
+        var msgs = body["messages"]!.AsArray();
+        Assert.Single(msgs);
+        var content = msgs[0]!["content"]!.AsArray();
+        Assert.Equal(3, content.Count);
+        Assert.Equal("第一问", content[0]!["text"]!.GetValue<string>());
+        Assert.Contains("【历史摘要】", content[1]!["text"]!.GetValue<string>()); // 摘要没被丢
+        Assert.Equal("继续", content[2]!["text"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task ChatAsync_CacheReadTokens_TopLevelField_IsParsed()
     {
         // 回归：Anthropic 的缓存命中在 usage 顶层（cache_read_input_tokens）；
