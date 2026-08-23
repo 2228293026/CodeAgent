@@ -189,7 +189,7 @@ public sealed class OpenAiProvider : IAgentProvider
         else
             text = "";
         // o 系列安全拒绝：message.refusal 与流式 delta.refusal 同源，不读则静默丢失
-        var refusalText = choice?["refusal"]?.GetValue<string>();
+        var refusalText = ProviderJson.OptString(choice?["refusal"]);
         if (!string.IsNullOrEmpty(refusalText))
             text = text.Length == 0 ? refusalText : text + "\n" + refusalText;
 
@@ -218,7 +218,7 @@ public sealed class OpenAiProvider : IAgentProvider
         int? inTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens"]);
         int? outTok = ProviderJson.OptInt(root?["usage"]?["completion_tokens"]);
         int? cachedTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]);
-        var finish = firstChoice?["finish_reason"]?.GetValue<string>(); // "length" = 被 max_tokens 截断
+        var finish = ProviderJson.OptString(firstChoice?["finish_reason"]); // "length" = 被 max_tokens 截断
 
         return new ProviderResponse
         {
@@ -320,10 +320,10 @@ public sealed class OpenAiProvider : IAgentProvider
 
             if (root?["error"] is JsonObject errObj)
             {
-                var errType = errObj["type"]?.GetValue<string>() ?? "";
+                var errType = ProviderJson.OptString(errObj["type"]) ?? "";
                 var errCode = ProviderJson.OptInt(errObj["code"]);
                 throw new ProviderException(
-                    $"流式响应中断: {errObj["message"]?.GetValue<string>() ?? Truncate(errObj.ToJsonString(), 300)}")
+                    $"流式响应中断: {ProviderJson.OptString(errObj["message"]) ?? Truncate(errObj.ToJsonString(), 300)}")
                 {
                     StatusCode = errCode,
                     // 限流类错误允许自动重试（Agent 只在尚未输出任何文本时重试，不会重复打印）
@@ -353,7 +353,7 @@ public sealed class OpenAiProvider : IAgentProvider
             }
 
             // finish_reason 随结束 chunk 到达（可能不带 delta）：取最后一个非空值
-            var fr = firstChoice?["finish_reason"]?.GetValue<string>();
+            var fr = ProviderJson.OptString(firstChoice?["finish_reason"]);
             if (!string.IsNullOrEmpty(fr))
                 finishReason = fr;
             if (delta is null)
@@ -520,7 +520,7 @@ public sealed class OpenAiProvider : IAgentProvider
         {
             // 只看对象项：null/标量项没有元数据，且对非对象索引会抛异常
             if (m is JsonObject entry &&
-                string.Equals(entry["id"]?.GetValue<string>(), model, StringComparison.OrdinalIgnoreCase))
+                string.Equals(ProviderJson.OptString(entry["id"]), model, StringComparison.OrdinalIgnoreCase))
                 return entry;
         }
         return null;

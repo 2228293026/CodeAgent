@@ -107,7 +107,7 @@ public sealed class AnthropicProvider : IAgentProvider
         if (!resp.IsSuccessStatusCode)
         {
             var errMsg = "";
-            try { errMsg = JsonNode.Parse(body)?["error"]?["message"]?.GetValue<string>() ?? ""; }
+            try { errMsg = ProviderJson.OptString(JsonNode.Parse(body)?["error"]?["message"]) ?? ""; }
             catch { /* 保留原始响应 */ }
             throw new ProviderException(
                 $"Anthropic API 返回 {(int)resp.StatusCode} {resp.ReasonPhrase}: " +
@@ -173,7 +173,7 @@ public sealed class AnthropicProvider : IAgentProvider
         // input_tokens_details 是 OpenAI 的响应结构，真实 Anthropic 响应里不存在（保留兜底兼容网关）
         int? cachedTok = ProviderJson.OptInt(root?["usage"]?["cache_read_input_tokens"])
                          ?? ProviderJson.OptInt(root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]);
-        var stopReason = root?["stop_reason"]?.GetValue<string>(); // "max_tokens" = 输出被截断
+        var stopReason = ProviderJson.OptString(root?["stop_reason"]); // "max_tokens" = 输出被截断
 
         return new ProviderResponse
         {
@@ -250,7 +250,7 @@ public sealed class AnthropicProvider : IAgentProvider
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
             var errMsg = "";
-            try { errMsg = JsonNode.Parse(body)?["error"]?["message"]?.GetValue<string>() ?? ""; }
+            try { errMsg = ProviderJson.OptString(JsonNode.Parse(body)?["error"]?["message"]) ?? ""; }
             catch { /* 保留原始响应 */ }
             throw new ProviderException(
                 $"Anthropic API 返回 {(int)resp.StatusCode}: " +

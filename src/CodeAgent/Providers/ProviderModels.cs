@@ -318,4 +318,8 @@ internal static class ProviderJson
         }
         return null;
     }
+
+    /// <summary>宽容字符串：仅字符串形态取值；数字/null 等（不合规网关）返回 null 而不是抛异常。</summary>
+    public static string? OptString(JsonNode? node) =>
+        node is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 }
