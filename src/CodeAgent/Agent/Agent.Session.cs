@@ -237,8 +237,10 @@ public sealed partial class Agent
                 try
                 {
                     var n = JsonNode.Parse(line) as JsonObject;
+                    // 斜杠命令（/model xxx 等）不是可辨识的对话标题：跳过，取首条真实用户输入
                     if (n?["role"]?.GetValue<string>() == "user" &&
-                        n["content"]?.GetValue<string>() is { Length: > 0 } c)
+                        n["content"]?.GetValue<string>() is { Length: > 0 } c &&
+                        !c.TrimStart().StartsWith('/'))
                         preview = c.Replace("\r", "").Replace("\n", " ⏎ ").Trim();
                 }
                 catch
@@ -282,6 +284,9 @@ public sealed partial class Agent
                     var n = JsonNode.Parse(line) as JsonObject;
                     var content = n?["content"]?.GetValue<string>();
                     if (content is null)
+                        continue;
+                    // 斜杠命令行（/model gpt 等）是操作记录不是对话内容：跳过不作为命中
+                    if (n["role"]?.GetValue<string>() == "user" && content.TrimStart().StartsWith('/'))
                         continue;
                     var idx = content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
                     if (idx < 0)

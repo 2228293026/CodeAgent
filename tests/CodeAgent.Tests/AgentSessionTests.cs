@@ -134,6 +134,24 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void SearchSessionLog_SkipsSlashCommandUserLines()
+    {
+        // 回归：斜杠命令行（/model gpt 等）是操作记录不是对话内容，
+        // /find 命中它们纯属噪音
+        var path = Path.Combine(_sessionDir, "search5.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"role":"user","content":"/model gpt-4o"}""",
+            """{"role":"assistant","content":"已切换模型 gpt-4o"}""",
+            """{"role":"user","content":"帮我看看 model 层的设计"}""",
+        ]);
+
+        var hits = AgentClass.SearchSessionLog(path, "model");
+
+        Assert.Single(hits); // 只命中 assistant 回复与真实用户输入，跳过命令行
+    }
+
+    [Fact]
     public async Task SaveLoadSession_RoundTripsMessages()
     {
         var agent = MakeAgent(_sessionDir, out var path);
