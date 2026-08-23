@@ -84,7 +84,7 @@ public class InputLineCommandsTests
         var handled = new[]
         {
             "/help", "/clear", "/compact", "/cls", "/model", "/provider", "/config", "/session", "/setup",
-            "/undo", "/diff", "/save", "/load", "/resume", "/history", "/export", "/copy", "/prompt", "/files", "/stats",
+            "/undo", "/diff", "/save", "/load", "/resume", "/find", "/history", "/export", "/copy", "/prompt", "/files", "/stats",
             "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking", "/shell",
             "/exit", "/quit",
         };

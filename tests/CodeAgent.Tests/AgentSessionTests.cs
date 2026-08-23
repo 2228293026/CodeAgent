@@ -37,6 +37,72 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void SearchSessionLog_FindsKeyword_IgnoresCase_FoldsNewlines()
+    {
+        var path = Path.Combine(_sessionDir, "search.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"ts":"10:00:00","role":"user","content":"帮我修复登录bug"}""",
+            """{"ts":"10:00:01","role":"assistant","content":"好的，\n我先看看 Program.cs"}""",
+            """{"ts":"10:00:02","role":"user","content":"另一个话题"}""",
+            "{ 损坏行 ",
+        ]);
+
+        var hits = AgentClass.SearchSessionLog(path, "登录");
+
+        Assert.Single(hits);
+        Assert.Equal("user", hits[0].Role);
+        Assert.Contains("登录bug", hits[0].Snippet);
+    }
+
+    [Fact]
+    public void SearchSessionLog_MultiLineContent_SnippetFolded()
+    {
+        var path = Path.Combine(_sessionDir, "search2.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"ts":"10:00:00","role":"assistant","content":"第一行\n关键词在这里\n第三行"}""",
+        ]);
+
+        var hits = AgentClass.SearchSessionLog(path, "关键词");
+
+        Assert.Single(hits);
+        Assert.Contains("⏎", hits[0].Snippet); // 换行折叠为可见标记
+        Assert.DoesNotContain("\n", hits[0].Snippet);
+    }
+
+    [Fact]
+    public void SearchSessionLog_CapsHits_AndNoMatch_ReturnsEmpty()
+    {
+        var path = Path.Combine(_sessionDir, "search3.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"role":"user","content":"hit one fix"}""",
+            """{"role":"user","content":"hit two fix"}""",
+            """{"role":"user","content":"hit three fix"}""",
+            """{"role":"user","content":"hit four fix"}""",
+        ]);
+
+        Assert.Equal(3, AgentClass.SearchSessionLog(path, "fix").Count); // maxHits 默认 3
+        Assert.Empty(AgentClass.SearchSessionLog(path, "不存在"));
+        Assert.Empty(AgentClass.SearchSessionLog(Path.Combine(_sessionDir, "missing.jsonl"), "fix"));
+    }
+
+    [Fact]
+    public void SearchSessionLog_LongContent_SnippetWindowedWithEllipsis()
+    {
+        var path = Path.Combine(_sessionDir, "search4.jsonl");
+        var longContent = new string('前', 100) + "目标词" + new string('后', 100);
+        File.WriteAllLines(path, ["{\"role\":\"user\",\"content\":\"" + longContent + "\"}"]);
+
+        var hits = AgentClass.SearchSessionLog(path, "目标词");
+
+        Assert.Single(hits);
+        Assert.StartsWith("…", hits[0].Snippet); // 命中点前有内容：窗口前省略号
+        Assert.EndsWith("…", hits[0].Snippet);
+    }
+
+    [Fact]
     public async Task SaveLoadSession_RoundTripsMessages()
     {
         var agent = MakeAgent(_sessionDir, out var path);

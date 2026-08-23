@@ -65,6 +65,7 @@ public static class InputLine
         ("/save", "保存会话命名快照"),
         ("/load", "恢复已保存的会话"),
         ("/resume", "恢复历史会话日志"),
+        ("/find", "在历史会话日志中搜索"),
         ("/export", "导出会话为 Markdown"),
         ("/copy", "复制最近回复到剪贴板"),
         ("/prompt", "查看当前生效的系统提示"),

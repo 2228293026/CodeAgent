@@ -1386,6 +1386,41 @@ internal static class Program
                 PrintConversation(agent, int.TryParse(rest.Trim(), out var histN) && histN >= 1 ? histN : null);
                 break;
 
+            case "/find":
+                // 跨历史会话日志搜索（/resume 的同类来源，最新在前）：找「之前那段对话」用
+                {
+                    var kw = rest.Trim();
+                    if (kw.Length == 0)
+                    {
+                        Console.WriteLine("用法: /find <关键字> —— 在历史会话日志里搜索内容（与 /resume 同源，最新在前）");
+                        break;
+                    }
+                    var logs = ResumableLogs(agent, config);
+                    if (logs.Count == 0)
+                    {
+                        Console.WriteLine("没有可搜索的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+                        break;
+                    }
+                    var printed = 0;
+                    foreach (var log in logs)
+                    {
+                        if (printed >= 5)
+                            break; // 命中文件数上限：避免刷屏，提示里说明还有更多
+                        var hits = AgentClass.SearchSessionLog(log, kw);
+                        if (hits.Count == 0)
+                            continue;
+                        var label = Path.GetFileNameWithoutExtension(log);
+                        var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
+                        Console.WriteLine($"{label} · {age}（/resume 可恢复）:");
+                        foreach (var (role, snippet) in hits)
+                            Console.WriteLine($"  [{role}] {TextUtil.TruncateLine(snippet, 110)}");
+                        printed++;
+                    }
+                    if (printed == 0)
+                        Console.WriteLine($"历史会话中没有匹配「{kw}」的内容。");
+                }
+                break;
+
             case "/export":
                 // /export            导出当前对话
                 // /export <名>       导出命名快照（/save 保存的）；与编号撞名时快照优先
@@ -1722,6 +1757,7 @@ internal static class Program
               /diag            显示终端环境诊断
               /history [N]      显示对话历史（N = 最近 N 条）
               /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
+              /find <关键字>    在历史会话日志中搜索内容
               /thinking        查看或设置思考强度（off/low/medium/high/auto）
               /shell [名称]     查看或切换命令 shell（cmd/powershell/pwsh/bash/sh，auto=自动检测）
               /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）

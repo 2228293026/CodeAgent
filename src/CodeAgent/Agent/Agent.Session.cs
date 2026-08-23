@@ -262,6 +262,49 @@ public sealed partial class Agent
         return path;
     }
 
+    /// <summary>在会话日志里搜索关键字（忽略大小写）：返回最多 maxHits 条 (角色, 命中片段)。
+    /// 片段取命中点前后窗口并折叠换行；损坏行/读取失败按无命中处理。/find 用。</summary>
+    internal static List<(string Role, string Snippet)> SearchSessionLog(string path, string keyword, int maxHits = 3)
+    {
+        var hits = new List<(string, string)>();
+        if (string.IsNullOrEmpty(keyword))
+            return hits;
+        try
+        {
+            foreach (var line in ReadLogLines(path))
+            {
+                if (hits.Count >= maxHits)
+                    break;
+                try
+                {
+                    var n = JsonNode.Parse(line) as JsonObject;
+                    var content = n?["content"]?.GetValue<string>();
+                    if (content is null)
+                        continue;
+                    var idx = content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+                    if (idx < 0)
+                        continue;
+                    var role = n["role"]?.GetValue<string>() ?? "?";
+                    // 命中点前后窗口：前 40 后 keyword+80 字符，超出部分用省略号标记
+                    var start = Math.Max(0, idx - 40);
+                    var len = Math.Min(content.Length - start, keyword.Length + 80);
+                    var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", " ⏎ ");
+                    hits.Add((role,
+                        (start > 0 ? "…" : "") + snippet + (start + len < content.Length ? "…" : "")));
+                }
+                catch
+                {
+                    // 损坏行跳过（与 ParseLogLine 一致）
+                }
+            }
+        }
+        catch
+        {
+            // 读取失败按无命中
+        }
+        return hits;
+    }
+
     /// <summary>切换到新的会话日志文件（/clear 与恢复会话后用，使日志与新历史一一对应）。</summary>
     private void RollSessionLog()
     {
