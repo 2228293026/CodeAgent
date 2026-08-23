@@ -97,6 +97,17 @@ public static class SetupWizard
         opts.Model = model;
         opts.BaseUrl = baseUrl;
 
+        // 高级参数（custom 才问，回车用默认值）：自定义服务的上限/采样常需按供应商调整
+        if (p.Name == "custom")
+        {
+            var mtText = Ask(input, output, "maxTokens（单次回复 token 上限）", opts.MaxTokens.ToString());
+            if (int.TryParse(mtText, out var mt) && mt > 0)
+                opts.MaxTokens = Math.Min(mt, 1_000_000); // 防手滑天文数字
+            var tempText = Ask(input, output, "temperature（采样温度 0-2）", opts.Temperature.ToString("0.#"));
+            if (double.TryParse(tempText, System.Globalization.CultureInfo.InvariantCulture, out var t) && t is >= 0 and <= 2)
+                opts.Temperature = t;
+        }
+
         // API Key
         if (p.Name is "ollama" or "hitmargin")
         {

@@ -51,26 +51,28 @@ public class SetupWizardFlowTests : IDisposable
     [Fact]
     public void SelectCustom_WithDirectKey_WritesProvidedValues()
     {
-        // 输入：选 custom(7) → 模型 my-model → 地址 https://x/v1 → Key 方式 2(直接输入) → key sk-test
-        var (config, _) = RunWizard("7\nmy-model\nhttps://x.example/v1\n2\nsk-test\n");
+        // 输入：选 custom(7) → 模型 → 地址 → maxTokens 4096 → temperature 0.7 → Key 方式 2 → key
+        var (config, _) = RunWizard("7\nmy-model\nhttps://x.example/v1\n4096\n0.7\n2\nsk-test\n");
 
         Assert.Equal("custom", config.Provider);
         var opts = config.Providers["custom"];
         Assert.Equal("my-model", opts.Model);
         Assert.Equal("https://x.example/v1", opts.BaseUrl);
+        Assert.Equal(4096, opts.MaxTokens);   // 高级参数生效
+        Assert.Equal(0.7, opts.Temperature, precision: 5);
         Assert.Equal("sk-test", opts.ApiKey);
         Assert.Null(opts.ApiKeyEnv);
     }
 
     [Fact]
-    public void SelectCustom_EmptyModelPrompt_ReasksInsteadOfCancelling()
+    public void SelectCustom_EmptyAdvanced_UsesDefaults()
     {
-        // 回归：必填项直接回车曾把「空输入」误判为 EOF（Ask 把空输入映射回 null 默认值），
-        // 整个向导被取消；应提示必填并继续询问
-        var (config, output) = RunWizard("7\n\nmy-model\nhttps://x.example/v1\n3\n");
+        // 高级参数直接回车：保持默认（8192 / 0.2），不取消向导
+        var (config, output) = RunWizard("7\n\nmy-model\nhttps://x.example/v1\n\n\n3\n");
 
         Assert.Equal("custom", config.Provider);
         Assert.Equal("my-model", config.Providers["custom"].Model);
+        Assert.Equal(8192, config.Providers["custom"].MaxTokens);
         Assert.Contains("必填", output); // 重新询问的提示
         Assert.Contains("配置已保存", output);
     }
