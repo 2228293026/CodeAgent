@@ -72,6 +72,31 @@ public class AgentLoopTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_CancelledDuringToolExecution_PropagatesAndRollsBack()
+    {
+        // 回归：工具执行中用户取消（ESC/Ctrl+C）→ OCE 必须向上传播（不能被吞成工具错误结果），
+        // 且待执行工具调用的 assistant 轮要回滚，历史不留孤儿 tool_calls
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse
+            {
+                ToolCalls = [new ToolCall { Id = "c1", Name = "read_file", ArgumentsJson = """{"path":"a.txt"}""" }],
+            },
+        };
+        var agent = MakeAgent(provider, allowCommands: true);
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "x");
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync(); // 工具开始前就取消：ReadAllBytesAsync 立即抛 OCE
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => agent.RunAsync("q", cts.Token));
+
+        Assert.DoesNotContain(agent.Messages,
+            m => m.Role == MessageRole.Assistant && m.ToolCalls is { Count: > 0 }); // 无孤儿工具调用轮
+        Assert.Equal(2, agent.MessageCount); // system + user 保留
+    }
+
+    [Fact]
     public async Task RunAsync_ExecutesStopToolAndEndsTurn()
     {
         // 模型返回 stop 工具调用 → Agent 执行工具、置位 StopRequested、结束本轮
