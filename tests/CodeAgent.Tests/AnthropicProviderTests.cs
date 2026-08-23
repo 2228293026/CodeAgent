@@ -249,6 +249,27 @@ public class AnthropicProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_CacheReadTokens_TopLevelField_IsParsed()
+    {
+        // 回归：Anthropic 的缓存命中在 usage 顶层（cache_read_input_tokens）；
+        // 之前只读 OpenAI 风格的嵌套 input_tokens_details，真实响应恒解析为 null
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """
+                {"content":[{"type":"text","text":"ok"}],
+                 "usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":8}}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Equal(8, resp.CachedTokens);
+    }
+
+    [Fact]
     public async Task ChatAsync_NoTools_OmitsToolsField()
     {
         // 回归：空工具列表曾发送 "tools": []（/compact 摘要调用），Anthropic 对此返回 400

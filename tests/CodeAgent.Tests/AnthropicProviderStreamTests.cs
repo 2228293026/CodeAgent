@@ -73,6 +73,33 @@ public class AnthropicProviderStreamTests
     }
 
     [Fact]
+    public async Task ChatStreamAsync_CacheReadTokens_TopLevelField_IsParsed()
+    {
+        // 回归：message_start 的缓存命中在 message.usage 顶层；嵌套 input_tokens_details 是
+        // OpenAI 结构，真实 Anthropic 流里不存在——只读它会让 Claude 会话缓存 token 恒为空
+        var handler = new SseHandler
+        {
+            Body = """
+                event: message_start
+                data: {"type":"message_start","message":{"usage":{"input_tokens":10,"output_tokens":1,"cache_read_input_tokens":4}}}
+
+                event: content_block_delta
+                data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}
+
+                event: message_stop
+                data: {"type":"message_stop"}
+                """,
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal(4, resp.CachedTokens);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_ThinkingDelta_IsReported()
     {
         var handler = new SseHandler

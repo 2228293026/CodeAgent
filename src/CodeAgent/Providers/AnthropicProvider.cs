@@ -145,7 +145,10 @@ public sealed class AnthropicProvider : IAgentProvider
 
         int? inTok = root?["usage"]?["input_tokens"]?.GetValue<int>();
         int? outTok = root?["usage"]?["output_tokens"]?.GetValue<int>();
-        int? cachedTok = root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
+        // Anthropic 把缓存命中放顶层 usage.cache_read_input_tokens；
+        // input_tokens_details 是 OpenAI 的响应结构，真实 Anthropic 响应里不存在（保留兜底兼容网关）
+        int? cachedTok = root?["usage"]?["cache_read_input_tokens"]?.GetValue<int>()
+                         ?? root?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
         var stopReason = root?["stop_reason"]?.GetValue<string>(); // "max_tokens" = 输出被截断
 
         return new ProviderResponse
@@ -315,7 +318,9 @@ public sealed class AnthropicProvider : IAgentProvider
 
                 case "message_start":
                     inputTokens = root?["message"]?["usage"]?["input_tokens"]?.GetValue<int>();
-                    cachedTokens = root?["message"]?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
+                    // 同非流式：Anthropic 的缓存命中在 usage 顶层，嵌套路径只是网关兼容兜底
+                    cachedTokens = root?["message"]?["usage"]?["cache_read_input_tokens"]?.GetValue<int>()
+                                   ?? root?["message"]?["usage"]?["input_tokens_details"]?["cache_read_input_tokens"]?.GetValue<int>();
                     break;
 
                 case "message_delta":
