@@ -385,10 +385,22 @@ public static class SkipDirs
     }
 }
 
-/// <summary>把 glob 模式（支持 **、*、?、字符类 [ab]/[a-z]/[!abc]）转换为正则。</summary>
+/// <summary>把 glob 模式（支持 **、*、?、字符类 [ab]/[a-z]/[!abc]）转换为正则。
+/// 模式 → 正则结果带缓存：grep 的 include/exclude 每次调用都重复编译同样的几个模式
+/// （RegexOptions.Compiled 编译有可感知开销），缓存后只编译一次。</summary>
 public static class Glob
 {
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Regex> Cache = new();
+    private const int MaxCacheEntries = 512; // 防御：模型批量发 pattern 时缓存不无限膨胀
+
     public static Regex ToRegex(string pattern)
+    {
+        if (Cache.Count > MaxCacheEntries)
+            Cache.Clear(); // 简单兜底：超限全清（模式集合通常很小，重建代价低）
+        return Cache.GetOrAdd(pattern, static p => Build(p));
+    }
+
+    private static Regex Build(string pattern)
     {
         // Windows 风格反斜杠分隔符归一化为 /（与工具层 rel.Replace('\\','/') 一致）：
         // 否则 src\**\*.cs 的 pattern 匹配不到已归一化成正斜杠的相对路径
