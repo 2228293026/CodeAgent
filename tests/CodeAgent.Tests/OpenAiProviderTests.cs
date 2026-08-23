@@ -435,6 +435,42 @@ public class OpenAiProviderTests
     }
 
     [Fact]
+    public async Task ChatAsync_NullContent_DoesNotThrow()
+    {
+        // 回归：content 为 JSON null 时节点是 JsonNull（非 C# null），
+        // GetValue<string> 抛 InvalidOperationException 炸掉整次响应解析；
+        // 部分网关在纯工具调用轮返回 "content": null
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":null},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}""",
+        };
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Null(resp.Text); // 按空内容处理，不抛异常
+    }
+
+    [Fact]
+    public async Task ChatAsync_NumericContent_TreatedAsEmpty()
+    {
+        // 非字符串标量（不合规网关）：同样按空内容处理而非抛异常
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"choices":[{"message":{"role":"assistant","content":123}}]}""",
+        };
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "k" }, new HttpClient(handler));
+
+        var resp = await provider.ChatAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", CancellationToken.None);
+
+        Assert.Null(resp.Text);
+    }
+
+    [Fact]
     public async Task ChatAsync_StringTokenCounts_AreParsedNotFatal()
     {
         // 回归：部分 OpenAI 兼容网关把 token 计数序列化为字符串（"prompt_tokens": "123"），

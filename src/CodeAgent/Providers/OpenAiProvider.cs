@@ -176,12 +176,17 @@ public sealed class OpenAiProvider : IAgentProvider
         var choice = choicesArr is { Count: > 0 } ? choicesArr[0]?["message"] : null;
         // content 可能是分块数组（部分兼容服务返回 [{"type":"text","text":…}]）：
         // 必须先判数组再取字符串——对 JsonArray 调 GetValue<string> 会直接抛 InvalidOperationException，
-        // 原来的「先取字符串再 if 判数组」写法让数组分支永远不可达
+        // 原来的「先取字符串再 if 判数组」写法让数组分支永远不可达。
+        // JSON null（JsonNull 节点非 C# null，GetValue 会抛）与非字符串标量同样按空内容处理：
+        // 不合规网关的一个字段不该炸掉整次响应解析
         string text;
-        if (choice?["content"] is JsonArray parts)
+        var contentNode = choice?["content"];
+        if (contentNode is JsonArray parts)
             text = string.Join("", parts.Select(b => b?["text"]?.GetValue<string>() ?? ""));
+        else if (contentNode is JsonValue cv && cv.TryGetValue<string>(out var s))
+            text = s;
         else
-            text = choice?["content"]?.GetValue<string>() ?? "";
+            text = "";
         // o 系列安全拒绝：message.refusal 与流式 delta.refusal 同源，不读则静默丢失
         var refusalText = choice?["refusal"]?.GetValue<string>();
         if (!string.IsNullOrEmpty(refusalText))
