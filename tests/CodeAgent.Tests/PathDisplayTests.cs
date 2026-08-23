@@ -128,4 +128,29 @@ public class PathDisplayTests
             Environment.SetEnvironmentVariable(b, null);
         }
     }
+
+    [Theory]
+    [InlineData("--verbos")]   // 拼写错误
+    [InlineData("--contnue")]
+    [InlineData("-x")]
+    [InlineData("--cwdx")]
+    public void LooksLikeUnknownFlag_Typos_AreRejected(string arg) =>
+        Assert.True(Program.LooksLikeUnknownFlag(arg));
+
+    [Theory]
+    [InlineData("-c")]
+    [InlineData("--config")]
+    [InlineData("--continue")]
+    [InlineData("--resume")]
+    [InlineData("-h")]
+    [InlineData("--help")]
+    public void LooksLikeUnknownFlag_KnownFlags_Accepted(string arg) =>
+        Assert.False(Program.LooksLikeUnknownFlag(arg));
+
+    [Theory]
+    [InlineData("任务描述")]   // 普通位置参数不是旗标
+    [InlineData("-")]          // 单个 '-'（常见 stdin 惯例）不当旗标拒绝
+    [InlineData("")]
+    public void LooksLikeUnknownFlag_PositionalText_NotFlag(string arg) =>
+        Assert.False(Program.LooksLikeUnknownFlag(arg));
 }

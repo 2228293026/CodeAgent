@@ -99,6 +99,10 @@ internal static class Program
                         PrintHelp();
                         return 0;
                     default:
+                        // 未识别的 -flag 此前被静默拼进任务文本发给模型（--verbos 变成任务的一部分）；
+                        // 明确报错让用户发现拼写错误。纯任务文本以 "-" 开头属罕见场景（用 -- 分隔或去掉横线）。
+                        if (LooksLikeUnknownFlag(args[i]))
+                            throw new ArgumentException($"未知参数: {args[i]}（-h 查看用法）");
                         positional.Add(args[i]);
                         break;
                 }
@@ -515,6 +519,18 @@ internal static class Program
             throw new ArgumentException($"缺少 {flag} 的参数值");
         return args[++i];
     }
+
+    /// <summary>已识别的 CLI 旗标（含值型旗标本身；其参数值不经过此判断）。</summary>
+    private static readonly HashSet<string> KnownFlags = new(StringComparer.Ordinal)
+    {
+        "-c", "--config", "-p", "--provider", "-m", "--model", "--cwd", "--mode",
+        "--init", "--setup", "--models", "--continue", "--resume",
+        "-v", "--version", "-h", "--help",
+    };
+
+    /// <summary>判断是否为未识别的旗标（以 '-' 开头且不在已知列表）：拒绝而非当任务文本。</summary>
+    internal static bool LooksLikeUnknownFlag(string arg) =>
+        arg.Length > 1 && arg[0] == '-' && !KnownFlags.Contains(arg);
 
     /// <summary>
     /// 执行一轮请求：支持 Ctrl+C 与 ESC 优雅取消。
