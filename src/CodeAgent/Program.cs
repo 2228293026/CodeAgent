@@ -701,6 +701,18 @@ internal static class Program
         }
     }
 
+    /// <summary>放开沙箱（fileAccess=full）前的二次确认：工作区外可读写是高危操作。
+    /// 已处于 full 时再次经过不重复询问。EOF/非 y 一律视为取消（安全默认）。</summary>
+    internal static bool ConfirmFullAccess(TextReader input, TextWriter output)
+    {
+        output.Write("⚠ 即将完全放开文件沙箱（工作区外可读写，仅限信任场景）。确认? [y/N] ");
+        var answer = input.ReadLine()?.Trim();
+        if (string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase))
+            return true;
+        output.WriteLine($"已取消（保持当前模式）。");
+        return false;
+    }
+
     /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）——灰色 UI 层级。</summary>
     private static void PrintFileAccess(string mode, bool showHint = false)
     {
@@ -1070,6 +1082,8 @@ internal static class Program
                         "whitelist" => "full",
                         _ => "strict",
                     };
+                    if (next == "full" && !ConfirmFullAccess(Console.In, Console.Out))
+                        break; // 用户取消：保持当前模式
                     agent.SetFileAccess(next);
                     PrintFileAccess(next);
                     PersistFileAccess(config); // 写回配置文件，重启后保持
@@ -1080,6 +1094,8 @@ internal static class Program
                     var mode = rest.Trim().ToLowerInvariant();
                     if (mode is "strict" or "whitelist" or "full")
                     {
+                        if (mode == "full" && !ConfirmFullAccess(Console.In, Console.Out))
+                            break; // 用户取消：保持当前模式
                         agent.SetFileAccess(mode);
                         PrintFileAccess(mode);
                         PersistFileAccess(config);

@@ -157,6 +157,28 @@ public class PathDisplayTests
         Assert.False(Program.LooksLikeUnknownFlag(arg));
 
     [Fact]
+    public void ConfirmFullAccess_OnlyYProceeds()
+    {
+        // 放开沙箱是高危操作：只有明确 y 放行；EOF / 空输入 / 其他输入一律取消
+        using var yes = new StringReader("y\n");
+        using var outYes = new StringWriter();
+        Assert.True(Program.ConfirmFullAccess(yes, outYes));
+
+        using var no = new StringReader("n\n");
+        using var outNo = new StringWriter();
+        Assert.False(Program.ConfirmFullAccess(no, outNo));
+        Assert.Contains("已取消", outNo.ToString());
+
+        using var eof = new StringReader("");
+        using var outEof = new StringWriter();
+        Assert.False(Program.ConfirmFullAccess(eof, outEof)); // EOF 安全默认取消
+
+        using var junk = new StringReader("yes sir\n");
+        using var outJunk = new StringWriter();
+        Assert.False(Program.ConfirmFullAccess(junk, outJunk)); // 非 y 词不误触
+    }
+
+    [Fact]
     public void SaveConfig_SessionProviderOverride_NotPersisted()
     {
         // 回归：CODEAGENT_PROVIDER=deepseek 启动后，/thinking 等命令保存配置
