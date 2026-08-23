@@ -41,6 +41,25 @@ public class GrepToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_CountOnly_OutputsPerFileCounts()
+    {
+        // count_only：文件:匹配行数（rg -c 风格）；无命中的文件不出现
+        File.WriteAllText(Path.Combine(_dir, "two.cs"), "TODO a\nTODO b\ndone\n");
+        File.WriteAllText(Path.Combine(_dir, "one.cs"), "TODO c\n");
+        File.WriteAllText(Path.Combine(_dir, "clean.cs"), "nothing\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "todo", ["count_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("two.cs:2", output);
+        Assert.Contains("one.cs:1", output);
+        Assert.DoesNotContain("clean.cs", output);
+        Assert.Contains("匹配 2 个文件", output); // hits 以文件为粒度
+    }
+
+    [Fact]
     public async Task Grep_Multiline_MatchesAcrossLines()
     {
         // 跨行模式：\n 参与匹配（多行 JSON 块）；行号取命中起点

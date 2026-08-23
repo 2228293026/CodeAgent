@@ -76,6 +76,7 @@ public sealed class GrepTool : ITool
             ["include"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "仅搜索匹配这些 glob 的文件（如 \"*.cs\"），可用字符串或数组" },
             ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
+            ["count_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只输出每个文件的匹配行数（文件:行数，类似 ripgrep -c），默认 false；multiline 时按命中次数计" },
             ["case_sensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "强制区分大小写（默认智能大小写：pattern 全小写时忽略大小写）" },
             ["multiline"] = new JsonObject { ["type"] = "boolean", ["description"] = "跨行匹配（\n 视为普通字符参与匹配，适合多行块如 JSON/HTML 片段），默认 false" },
         },
@@ -92,6 +93,7 @@ public sealed class GrepTool : ITool
         var context = Math.Clamp(ToolArgs.GetInt(args, "context", 3), 0, 10);
         var max = Math.Clamp(ToolArgs.GetInt(args, "max_results", 50), 1, 500);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
+        var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
         var exclude = ToolArgs.GetStringList(args, "exclude");
         // 无分隔符的 include/exclude（如 "*.cs"）按「任意深度」匹配（与 ripgrep --glob 语义一致）：
@@ -148,6 +150,21 @@ public sealed class GrepTool : ITool
                     {
                         hits++;
                         sb.AppendLine(rel);
+                    }
+                    return;
+                }
+
+                if (countOnly)
+                {
+                    // 计数模式（rg -c 风格）：输出 文件:匹配行数；multiline 时按命中次数计。
+                    // hits 以文件为粒度递增，max_results 限制的是列出的文件数
+                    var n = multiline
+                        ? re.Matches(text).Count(m => m.Length > 0)
+                        : text.Split('\n').Count(l => re.IsMatch(l.TrimEnd('\r')));
+                    if (n > 0)
+                    {
+                        hits++;
+                        sb.AppendLine($"{rel}:{n}");
                     }
                     return;
                 }
@@ -224,7 +241,7 @@ public sealed class GrepTool : ITool
         if (hits == 0)
             return $"(无匹配: {pattern})";
         var notice = hits >= max ? $"\n…(已达 max_results={max} 上限，可能还有更多匹配；可用 max_results 参数提高)" : "";
-        return filesOnly
+        return filesOnly || countOnly
             ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd() + notice
             : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;
     }
