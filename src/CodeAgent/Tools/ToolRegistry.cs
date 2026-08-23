@@ -78,6 +78,11 @@ public sealed class Workspace
             // 非法字符（如 NUL）、空段等会让 Path 抛异常，应转为清晰的工具错误而非裸异常
             throw new ToolException($"路径非法: '{path}'（{ex.Message}）");
         }
+        // 模型常给路径带尾分隔符（如 "src/a.txt/"）：GetFullPath 会保留它，
+        // 导致 File.Exists / Directory.Exists 双双失配而误报「不存在」。归一化掉（工作区根本身除外）
+        if (full.Length > Root.Length &&
+            (full.EndsWith(Path.DirectorySeparatorChar) || full.EndsWith(Path.AltDirectorySeparatorChar)))
+            full = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         if (_fullAccess)
             return full; // full 模式：所有文件可读可写，不做沙箱检查（Path.GetFullPath 已做规范化）
         // 解析符号链接后的真实路径再检查沙箱：工作区内的 symlink 可能指向外部

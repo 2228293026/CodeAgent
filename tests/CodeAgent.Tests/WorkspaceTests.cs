@@ -36,6 +36,19 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public void Resolve_TrailingSeparator_OnFilePath_IsNormalized()
+    {
+        // 回归：模型常写 "a.txt/" —— GetFullPath 保留尾分隔符会让
+        // File.Exists / Directory.Exists 双双失配，read_file 误报「文件不存在」
+        var ws = new Workspace(Root);
+        var expected = Path.GetFullPath(Path.Combine(Root, "a.txt"));
+        Assert.Equal(expected, ws.Resolve("a.txt/"));
+        Assert.Equal(expected, ws.ResolveRead("./a.txt\\"));
+        // 工作区根本身不受影响
+        Assert.Equal(Path.GetFullPath(Root), ws.Resolve("."));
+    }
+
+    [Fact]
     public void Resolve_Escape_Throws()
     {
         var ws = new Workspace(Root);
