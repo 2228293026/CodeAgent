@@ -336,7 +336,7 @@ public sealed class OpenAiProvider : IAgentProvider
             // （new-api 等网关在结束/usage chunk 返回 {"choices":[],"usage":…}）；元素非对象同样防御
             var choicesArr = root?["choices"] as JsonArray;
             var firstChoice = choicesArr is { Count: > 0 } ? choicesArr[0] as JsonObject : null;
-            var delta = firstChoice?["delta"];
+            var delta = firstChoice?["delta"] as JsonObject; // delta 非对象（不合规网关）按无增量处理
 
             // usage 可能随任意 chunk 到达（hitmargin 在带 delta 的最后一个 chunk 里返回 usage）
             if (root?["usage"] is JsonObject u)

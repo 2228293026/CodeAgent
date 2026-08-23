@@ -323,8 +323,10 @@ public sealed class AnthropicProvider : IAgentProvider
 
                 case "content_block_delta":
                     {
-                        var delta = root?["delta"];
-                        var dtype = delta?["type"]?.GetValue<string>();
+                        // delta 非对象（不合规网关）按无增量处理，而不是抛异常中断流
+                        if (root?["delta"] is not JsonObject delta)
+                            return;
+                        var dtype = delta["type"]?.GetValue<string>();
                         var index = ProviderJson.OptInt(root?["index"]) ?? 0;
                         if (dtype == "thinking_delta")
                         {
