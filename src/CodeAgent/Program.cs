@@ -672,6 +672,25 @@ internal static class Program
         : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
         : "codeagent.json";
 
+    /// <summary>已保存的命名会话（新 → 旧，附相对时间）。/load 无参数列表用。</summary>
+    internal static IReadOnlyList<(string Name, string Age)> SavedSessions(string sessionDir)
+    {
+        try
+        {
+            if (!Directory.Exists(sessionDir))
+                return [];
+            return Directory.GetFiles(sessionDir, "*.json")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .Select(f => (Path.GetFileNameWithoutExtension(f),
+                    TextUtil.RelativeTime(File.GetLastWriteTimeUtc(f), DateTime.UtcNow)))
+                .ToList();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
     /// <summary>保存配置，但 provider 按启动时的持久值写回（见 AgentConfig.PersistedProvider）：
     /// /model、/thinking、/shell、/access 等命令的保存不把 CODEAGENT_PROVIDER 之类的
     /// 会话级覆盖固化成配置文件的默认 provider。显式 /provider 切换由调用方先更新
@@ -1373,20 +1392,17 @@ internal static class Program
             case "/load":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    // 无参数：列出已保存的命名会话
-                    var dir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
-                    var files = Directory.Exists(dir)
-                        ? Directory.GetFiles(dir, "*.json").Select(Path.GetFileNameWithoutExtension).ToList()
-                        : [];
-                    if (files.Count == 0)
+                    // 无参数：列出已保存的命名会话（按保存时间新→旧，附相对时间）
+                    var sessions = SavedSessions(Path.Combine(Environment.CurrentDirectory, config.SessionDir));
+                    if (sessions.Count == 0)
                     {
                         Console.WriteLine("没有已保存的会话（用 /save <会话名> 保存当前对话）。");
                     }
                     else
                     {
-                        Console.WriteLine($"已保存的会话（{files.Count} 个）:");
-                        foreach (var f in files)
-                            Console.WriteLine($"  {f}");
+                        Console.WriteLine($"已保存的会话（{sessions.Count} 个，新 → 旧）:");
+                        foreach (var (name, age) in sessions)
+                            Console.WriteLine($"  {name}（{age}）");
                     }
                 }
                 else

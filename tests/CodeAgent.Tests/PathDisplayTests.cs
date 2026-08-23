@@ -157,6 +157,41 @@ public class PathDisplayTests
         Assert.False(Program.LooksLikeUnknownFlag(arg));
 
     [Fact]
+    public void SavedSessions_SortedNewestFirst_WithAge()
+    {
+        // /load 列表：按保存时间新 → 旧，附相对时间（旧实现按文件名字典序）
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-saves-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var old = Path.Combine(dir, "old-session.json");
+            var new1 = Path.Combine(dir, "new-session.json");
+            File.WriteAllText(old, "{}");
+            File.WriteAllText(new1, "{}");
+            File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-3));
+            File.SetLastWriteTimeUtc(new1, DateTime.UtcNow.AddMinutes(-5));
+
+            var sessions = Program.SavedSessions(dir);
+
+            Assert.Equal(2, sessions.Count);
+            Assert.Equal("new-session", sessions[0].Name);
+            Assert.Equal("old-session", sessions[1].Name);
+            Assert.Contains("分钟前", sessions[0].Age);
+            Assert.Contains("天前", sessions[1].Age);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void SavedSessions_MissingDir_ReturnsEmpty()
+    {
+        Assert.Empty(Program.SavedSessions(Path.Combine(Path.GetTempPath(), "never-" + Guid.NewGuid().ToString("N"))));
+    }
+
+    [Fact]
     public void ModeListText_MarksCurrentMode()
     {
         var config = new AgentConfig();
