@@ -158,6 +158,19 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void SummarizeCall_EnvValues_AreRedacted()
+    {
+        // 隐私：env 键值对常携带 API Key 等敏感值，摘要行/会话日志不得出现明文
+        var s = AgentClass.SummarizeCall("run_command",
+            """{"command":"deploy","env":{"API_KEY":"sk-secret-123","TOKEN":"hunter2"}}""");
+
+        Assert.Contains("env=(已省略)", s);
+        Assert.DoesNotContain("sk-secret-123", s);
+        Assert.DoesNotContain("hunter2", s);
+        Assert.Contains("command=deploy", s); // 其他参数照常展示
+    }
+
+    [Fact]
     public void SummarizeCall_LongEmojiArg_NotSplitSurrogate()
     {
         // 回归：超长参数值曾用 v[..60] 截断，切点落在代理对中间会把 emoji 劈成半个码点（终端乱码）

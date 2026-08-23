@@ -547,6 +547,12 @@ public sealed partial class Agent
         {
             if (kv.Key == "content")
                 continue;
+            // env 键值对常携带 API Key 等敏感值：不进摘要行/会话日志，只提示存在
+            if (name is "run_command" or "bash" or "powershell" && kv.Key == "env")
+            {
+                parts.Add("env=(已省略)");
+                continue;
+            }
             // edit_file 的 old/new 两个片段常共享长前缀，截断成 60 字符后肉眼看不出差异；
             // 行内摘要只留 path，实际改动由 EditPreviewText 的 diff 预览展示
             if (name == "edit_file" && kv.Key is "old_string" or "new_string")
