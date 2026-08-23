@@ -155,6 +155,25 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void ExampleConfig_HasNoUnknownKeys_AndLoadsClean()
+    {
+        // 防漂移守护：codeagent.example.json 必须被加载器无警告解析。
+        // 新增/改名配置字段而忘了同步示例时，这个测试会红
+        var dir = new DirectoryInfo(AppContext.BaseDirectory!);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "codeagent.example.json")))
+            dir = dir.Parent;
+        Assert.NotNull(dir); // 仓库根必须能找到示例配置
+
+        var json = File.ReadAllText(Path.Combine(dir!.FullName, "codeagent.example.json"));
+        Assert.Empty(AgentConfig.ValidateUnknownKeys(json)); // 无未知键
+
+        var tmp = Path.Combine(_dir, "example.json");
+        File.WriteAllText(tmp, json);
+        var cfg = AgentConfig.Load(tmp);
+        Assert.Empty(cfg.Warnings); // 完整 Load 也无警告（枚举值合法等）
+    }
+
+    [Fact]
     public void SaveLoad_RoundTripsAllFields()
     {
         // 回归：camelCase 序列化往返后，多 provider、自定义模式、开关项都应存活
