@@ -98,12 +98,14 @@ public sealed partial class Agent
         {
             if (LastInputTokens > 0)
                 return LastInputTokens;
-            // 估算口径：无 usage 时按消息内容/工具参数的 token 估算
+            // 估算口径：无 usage 时按消息内容/工具参数/工具名与调用 Id 的 token 估算
             long total = 0;
             foreach (var m in _messages)
             {
                 if (m.Content is { Length: > 0 } c)
                     total += TextUtil.EstimateTokens(c);
+                total += TextUtil.EstimateTokens(m.ToolName ?? "");
+                total += TextUtil.EstimateTokens(m.ToolCallId ?? "");
                 if (m.ToolCalls is not null)
                     foreach (var tc in m.ToolCalls)
                         total += TextUtil.EstimateTokens(tc.ArgumentsJson);

@@ -225,9 +225,9 @@ internal static class Program
 
         var opts = EnsureSelectedProvider(config);
         if (model is not null)
-            opts.Model = model;
+            opts.Model = model.Trim(); // 手滑带上的前后空白会原样进请求（模型名 404）
         else if (!string.IsNullOrWhiteSpace(envModel))
-            opts.Model = envModel;
+            opts.Model = envModel.Trim();
 
         // --no-session：仅进程内关闭会话落盘。放在 --setup 之后（向导保存配置时不会把
         // 该覆盖持久化成 SaveSessions=false），Agent 构造前生效即可完全不创建日志文件。
