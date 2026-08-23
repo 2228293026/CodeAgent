@@ -187,10 +187,11 @@ Typing `/` opens the command menu (ANSI in-place rendering: arrows move, fill, E
 | `edit_file` | Exact text replace (patch-like); ambiguous matches error; `replace_all`; identical old/new errors; undo restores precisely |
 | `list_directory` | Directory tree, skipping build/cache dirs |
 | `glob` | Find files by pattern like `src/**/*.cs`; string or array patterns; `*`, `?`, `**`, classes `[ab]`/`[a-z]`/`[!abc]` |
-| `grep` | Regex content search, smart case + context lines; `include`/`exclude` globs; `case_sensitive` override |
+| `grep` | Regex content search, smart case + context lines; `include`/`exclude` globs; `case_sensitive` override; `multiline`; `count_only` |
 | `run_command` | Run shell commands (build/test/git) with timeout; `env` extra variables; Git Bash / PowerShell picked automatically on Windows |
 | `bash` | Run in bash (Git Bash on Windows) — pipes, env vars, Unix toolchain |
 | `powershell` | Run in PowerShell (pwsh 7 preferred, else Windows PowerShell 5.1) |
+| `session_search` | Search past session logs and named snapshots for a keyword, newest first — recall earlier conclusions across sessions |
 | `stop` | Model signals the task is done |
 
 ## Architecture
