@@ -1293,6 +1293,18 @@ internal static class Program
                     var logs = RecentSessionLogs(config, int.MaxValue);
                     if (logs.Count > 0)
                         Console.WriteLine($"目录内共 {logs.Count} 个会话日志（保留上限 maxSessionLogs={config.MaxSessionLogs}，滚动新日志时自动清理最旧的；0 = 不清理）。");
+                    // 磁盘占用速览：会话日志 + 命名快照 + 导出
+                    try
+                    {
+                        var baseDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
+                        if (Directory.Exists(baseDir))
+                        {
+                            var kb = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories)
+                                .Sum(f => new FileInfo(f).Length) / 1024.0;
+                            Console.WriteLine($".codeagent 目录占用 {kb:F0} KB（/diag 可再次查看；整目录可安全删除）。");
+                        }
+                    }
+                    catch { /* 统计失败不显示 */ }
                 }
                 break;
 
