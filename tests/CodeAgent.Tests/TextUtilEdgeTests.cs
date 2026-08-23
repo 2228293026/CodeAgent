@@ -297,9 +297,16 @@ public class TextUtilEdgeTests : IDisposable
     [InlineData("abc", 0)]         // 3 ASCII = 0（整除向下）
     [InlineData("中文", 2)]         // 每个全角字 1 token
     [InlineData("a中b文", 2)]       // 混合：2 ASCII/4=0 + 2 CJK
-    [InlineData("😀", 2)]          // emoji 代理对按 2 计（与简单口径一致，误差可接受）
+    [InlineData("😀", 1)]          // emoji 代理对整体按 1 个码点计（按码元算会高估一倍）
     public void EstimateTokens_MixedScript(string s, long expected) =>
         Assert.Equal(expected, TextUtil.EstimateTokens(s));
+
+    [Fact]
+    public void EstimateTokens_LoneSurrogate_FallsToAsciiBucket()
+    {
+        // 孤立高代理（损坏输入）：不计入 CJK，落入 ASCII 桶
+        Assert.Equal(0, TextUtil.EstimateTokens("\uD83D"));
+    }
 
     [Fact]
     public async Task EnumerateFilesPruned_JunctionCycle_Terminates()

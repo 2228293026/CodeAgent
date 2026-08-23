@@ -185,13 +185,28 @@ public static class TextUtil
         }
     }
     /// <summary>粗略 token 估算：ASCII 段按 4 字符/token，CJK/全角按每字 1 token
-    ///（spinner ↑ 与 ctx 无 usage 时的回退口径，中文会话 chars/4 会低估约 4 倍）。</summary>
+    ///（spinner ↑ 与 ctx 无 usage 时的回退口径，中文会话 chars/4 会低估约 4 倍）。
+    /// 代理对（emoji）按 1 个码点计——按码元算会把一个 emoji 记成 2 个非 ASCII 字符，高估一倍。</summary>
     public static long EstimateTokens(string s)
     {
         long cjk = 0;
-        foreach (var ch in s)
-            if (ch >= 0x2E80)
+        for (int i = 0; i < s.Length; i++)
+        {
+            var ch = s[i];
+            if (char.IsHighSurrogate(ch))
+            {
+                // 高+低代理对整体算 1 个非 ASCII 码点；孤立代理按单字符走通用分支
+                if (i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+                {
+                    cjk++;
+                    i++;
+                    continue;
+                }
+                continue; // 孤立高代理：不计入 CJK（落入 ASCII 桶按 4 字符/token）
+            }
+            if (ch >= 0x2E80 && !char.IsLowSurrogate(ch))
                 cjk++;
+        }
         return (s.Length - cjk) / 4 + cjk;
     }
 
