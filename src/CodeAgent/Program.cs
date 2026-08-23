@@ -1318,11 +1318,23 @@ internal static class Program
                 break;
 
             case "/diff":
-                var diffText = agent.Context.Undo.AllDiffs();
-                if (diffText is null)
-                    Console.WriteLine("没有可显示的改动（先让 agent 修改过文件）。");
+                if (int.TryParse(rest.Trim(), out var diffN) && diffN >= 1)
+                {
+                    // /diff <N>：只看倒数第 N 条改动（1 = 最近），多条改动时免翻全量
+                    var nthDiff = agent.Context.Undo.DiffAt(diffN);
+                    if (nthDiff is null)
+                        Console.WriteLine($"没有第 {diffN} 条改动记录（/undo list 查看现有条数）。");
+                    else
+                        PrintColoredDiff(nthDiff);
+                }
                 else
-                    PrintColoredDiff(diffText); // 着色输出：+/绿、-/红、@@/青、标题/亮白、文件头/灰
+                {
+                    var diffText = agent.Context.Undo.AllDiffs();
+                    if (diffText is null)
+                        Console.WriteLine("没有可显示的改动（先让 agent 修改过文件）。");
+                    else
+                        PrintColoredDiff(diffText); // 着色输出：+/绿、-/红、@@/青、标题/亮白、文件头/灰
+                }
                 break;
 
             case "/save":
@@ -1784,7 +1796,7 @@ internal static class Program
               /session         显示会话日志路径
               /setup           运行交互式供应商配置向导
               /undo            撤销最近一次文件修改（write/edit）
-              /diff            显示最近一次修改的 diff
+              /diff [N]        显示最近一次修改的 diff（N = 倒数第 N 条）
               /save <名>       保存当前会话（命名快照）
               /load <名>       恢复已保存的会话
               /export [名/编号] 导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话）

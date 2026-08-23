@@ -243,7 +243,19 @@ public sealed class UndoManager
     }
 
     /// <summary>显示最近一次修改的 diff（结合撤销快照与当前文件内容对比）；无记录时返回 null。</summary>
-    public string? LastDiff() => AllDiffs(max: 1);
+    public string? LastDiff() => DiffAt(1);
+
+    /// <summary>显示倒数第 N 条（1 = 最近）待撤销改动的 diff；无记录或越界返回 null。/diff &lt;N&gt; 用。</summary>
+    public string? DiffAt(int indexFromLatest)
+    {
+        lock (_lock)
+        {
+            if (indexFromLatest < 1 || indexFromLatest > _entries.Count)
+                return null;
+            var e = _entries[^indexFromLatest];
+            return $"== {Path.GetFileName(e.Path)}（{KindLabel(e)}）==\n{DiffFor(e)}";
+        }
+    }
 
     /// <summary>显示所有待撤销改动的 diff（最多 max 条，最近优先，含新建/删除文件）；无记录时返回 null。</summary>
     public string? AllDiffs(int max = 20)

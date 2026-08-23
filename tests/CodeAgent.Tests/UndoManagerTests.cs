@@ -91,6 +91,28 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void DiffAt_ReturnsNthMostRecent()
+    {
+        // /diff <N>：1 = 最近，2 = 倒数第二；越界返回 null
+        File.WriteAllText(Path.Combine(_dir, "old.txt"), "old-content");
+        File.WriteAllText(Path.Combine(_dir, "new.txt"), "new-content");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = Path.Combine(_dir, "old.txt"), OldText = "old-content", HadFile = true });
+        um.Push(new UndoEntry { Kind = "write", Path = Path.Combine(_dir, "new.txt"), OldText = "new-content", HadFile = true });
+
+        var first = um.DiffAt(1);
+        Assert.NotNull(first);
+        Assert.Contains("new.txt", first);   // 1 = 最近
+
+        var second = um.DiffAt(2);
+        Assert.NotNull(second);
+        Assert.Contains("old.txt", second);  // 2 = 倒数第二
+
+        Assert.Null(um.DiffAt(3));           // 越界
+        Assert.Null(um.DiffAt(0));
+    }
+
+    [Fact]
     public void TryUndo_EditWithFullSnapshot_RestoresExactly()
     {
         // 回归：旧实现用 text.Replace(new, old) 撤销，当新文本在文件中多处存在时会破坏内容。
