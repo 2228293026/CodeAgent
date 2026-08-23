@@ -1347,6 +1347,8 @@ internal static class Program
                 if (int.TryParse(rest.Trim(), out var undoN) && undoN >= 1)
                 {
                     Console.WriteLine(agent.Context.Undo.TryUndo(undoN) ?? "没有可撤销的操作。");
+                    // 注意：此处不自动附 diff——TryUndo 弹出条目后 DiffAt(1) 指向下一条旧记录，
+                    // 与刚撤销的改动无关；需要看内容用 /diff（对比撤销快照与当前文件）
                 }
                 else if (rest.Equals("list", StringComparison.OrdinalIgnoreCase))
                 {
