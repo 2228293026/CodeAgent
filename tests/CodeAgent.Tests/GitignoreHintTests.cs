@@ -12,7 +12,7 @@ public class GitignoreHintTests : IDisposable
     public GitignoreHintTests() => Directory.CreateDirectory(_dir);
     public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
 
-    private void Init(string gitignore)
+    private void Init(string? gitignore)
     {
         Directory.CreateDirectory(Path.Combine(_dir, ".git"));
         Directory.CreateDirectory(Path.Combine(_dir, ".codeagent"));
