@@ -30,7 +30,8 @@ public sealed partial class Agent
             Config = config,
             Workspace = new Workspace(workingDirectory ?? Environment.CurrentDirectory, config.ReadOnlyDirs, config.FileAccess),
         };
-        _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = config.SystemPrompt });
+        // 首条 system 用当前生效提示：code 模式优先会话级注入（ADOFAI 等），见 EffectivePrompt
+        _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
 
         if (config.SaveSessions)
         {
@@ -168,9 +169,10 @@ public sealed partial class Agent
                 Console.WriteLine($"⚠ 模式 {mode.Name} 引用了未知工具: {string.Join(", ", unknown)}（/tools 查看可用工具）");
         }
     }
-    /// <summary>code 模式使用配置的自定义 systemPrompt；其他模式用模式自身的提示词。</summary>
+    /// <summary>code 模式使用配置的自定义 systemPrompt（会话级注入优先——见 AgentConfig.SessionOnlySystemPrompt）；
+    /// 其他模式用模式自身的提示词。</summary>
     private string EffectivePrompt(AgentMode mode) =>
-        mode.Name == "code" ? _config.SystemPrompt : mode.SystemPrompt;
+        mode.Name == "code" ? (_config.SessionOnlySystemPrompt ?? _config.SystemPrompt) : mode.SystemPrompt;
 
     /// <summary>撤回最后一轮：移除最后一条用户消息及其回复，恢复发送前状态（ESC 撤回）。
     /// 连续调用逐轮回退（多级撤回），无轮可撤时返回 null。</summary>

@@ -227,6 +227,13 @@ public sealed class AgentConfig
     [JsonIgnore]
     public string? SourceFile { get; private set; }
 
+    /// <summary>仅会话内生效的系统提示（ADOFAI 注入等运行时增强）：
+    /// Agent 的 code 模式优先用它而非 SystemPrompt。不参与序列化——
+    /// /model、/thinking、/access 等命令会把整个 config 写回配置文件，
+    /// 直接改 SystemPrompt 会把注入的长上下文永久写进用户的 codeagent.json。</summary>
+    [JsonIgnore]
+    public string? SessionOnlySystemPrompt { get; set; }
+
     /// <summary>加载时的非致命警告（未知配置项、非法枚举回退等），由入口打印提示。
     /// 手写 JSON 的拼写错误此前会被静默忽略——「配了但不生效」且无任何线索。</summary>
     [JsonIgnore]

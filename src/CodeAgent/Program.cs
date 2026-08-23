@@ -188,11 +188,14 @@ internal static class Program
         {
             if (config.SystemPrompt == AgentConfig.DefaultSystemPrompt)
             {
-                config.SystemPrompt += "\n\n" + AdofaiContext.ExtraSystemPrompt;
+                // 只写入会话级字段：/model、/thinking、/access 等命令会保存整个 config，
+                // 直接改 SystemPrompt 会把注入的 mod 上下文永久写进用户的 codeagent.json
+                var injected = config.SystemPrompt + "\n\n" + AdofaiContext.ExtraSystemPrompt;
                 // 知识库文件存在时给出明确路径，Agent 开发前先 read_file 阅读
                 var knowledge = AdofaiContext.FindKnowledgeBase(Environment.CurrentDirectory);
                 if (knowledge is not null)
-                    config.SystemPrompt += $"\n知识库文件: {knowledge}(开发前用 read_file 阅读)";
+                    injected += $"\n知识库文件: {knowledge}(开发前用 read_file 阅读)";
+                config.SessionOnlySystemPrompt = injected;
             }
             foreach (var m in AdofaiContext.ExtraModes)
                 if (!config.Modes.Any(x => x.Name.Equals(m.Name, StringComparison.OrdinalIgnoreCase)))

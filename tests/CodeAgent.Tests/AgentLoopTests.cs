@@ -35,6 +35,43 @@ public class AgentLoopTests : IDisposable
         ToolRegistry.CreateDefault());
 
     [Fact]
+    public void SessionOnlySystemPrompt_IsUsedForCodeMode_AndNotSerialized()
+    {
+        // 回归：ADOFAI 等注入的上下文曾直接改 config.SystemPrompt，
+        // /model、/thinking、/access 等命令保存配置时会把注入内容永久写进用户的 codeagent.json
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            SessionOnlySystemPrompt = "注入的会话级提示",
+        };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+        // code 模式生效的是会话级注入提示
+        Assert.Equal("注入的会话级提示", agent.CurrentSystemPrompt);
+
+        // 切到别的模式再切回 code：会话级提示仍然生效
+        agent.SetMode(CodeAgent.Modes.Find("review", config));
+        agent.SetMode(CodeAgent.Modes.Find("code", config));
+        Assert.Equal("注入的会话级提示", agent.CurrentSystemPrompt);
+
+        // 序列化只包含原始 SystemPrompt（SessionOnlySystemPrompt 是 JsonIgnore）
+        var path = Path.Combine(_dir, "roundtrip.json");
+        AgentConfig.Save(config, path);
+        var json = File.ReadAllText(path);
+        Assert.DoesNotContain("注入的会话级提示", json);
+        Assert.Contains("systemPrompt", json); // 原字段仍在
+    }
+
+    [Fact]
+    public void SessionOnlySystemPrompt_Null_FallsBackToConfiguredPrompt()
+    {
+        var config = new AgentConfig { SaveSessions = false, SessionDir = SessionDir, SystemPrompt = "自定义提示" };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+        Assert.Equal("自定义提示", agent.CurrentSystemPrompt);
+    }
+
+    [Fact]
     public async Task RunAsync_ExecutesStopToolAndEndsTurn()
     {
         // 模型返回 stop 工具调用 → Agent 执行工具、置位 StopRequested、结束本轮
