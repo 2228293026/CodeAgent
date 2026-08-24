@@ -483,4 +483,19 @@ public class GrepToolTests : IDisposable
         Assert.DoesNotContain("skip.cs", output); // 被 exclude
         Assert.DoesNotContain("also.txt", output); // 不在 include 内
     }
+
+    [Fact]
+    public async Task Grep_Multiline_CountOnly_CountsOccurrences()
+    {
+        // multiline + count_only：统计跨行模式的命中次数（此处出现 2 次）
+        File.WriteAllText(Path.Combine(_dir, "ml.txt"),
+            "start\nmid\nend\n\nstart\nmid\nend\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "start[\\s\\S]*?end", ["multiline"] = true, ["count_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("ml.txt:2", output); // 2 次跨行命中
+    }
 }
