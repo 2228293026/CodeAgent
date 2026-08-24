@@ -235,6 +235,14 @@ public sealed class AgentConfig
                 && !cfg.Shell.Equals("powershell", StringComparison.OrdinalIgnoreCase)
                 && !cfg.Shell.Equals("bash", StringComparison.OrdinalIgnoreCase))
                 cfg.Warnings.Add($"shell='{cfg.Shell}' 不是支持的命令解释器（cmd/powershell/bash，留空=自动）——将按默认处理，请检查拼写。");
+            // Provider.type 必须是受支持的实现（openai 兼容协议 / anthropic）；非法值运行时连接会直接报错
+            foreach (var (name, p) in cfg.Providers)
+            {
+                if (!string.IsNullOrWhiteSpace(p.Type)
+                    && !p.Type.Equals("openai", StringComparison.OrdinalIgnoreCase)
+                    && !p.Type.Equals("anthropic", StringComparison.OrdinalIgnoreCase))
+                    cfg.Warnings.Add($"Provider '{name}' 的 type='{p.Type}' 不是受支持的类型（openai/anthropic）——连接时会报错，请检查拼写。");
+            }
             return cfg;
         }
         catch (JsonException ex)

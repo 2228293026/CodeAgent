@@ -282,6 +282,36 @@ public class ConfigTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Load_ProviderTypeInvalid_Warns()
+    {
+        // type 拼错（如 gemini）：连接时会直接报错——提前警告
+        var path = Path.Combine(_dir, "ptype.json");
+        File.WriteAllText(path, """
+            {
+              "providers": {
+                "my": { "type": "gemini", "model": "gemini-x" }
+              }
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("Provider 'my'") && w.Contains("type='gemini'") && w.Contains("受支持的类型"));
+    }
+
+    [Fact]
+    public void Load_ProviderTypeValid_NoWarning()
+    {
+        foreach (var type in new[] { "openai", "anthropic", "OPENAI" })
+        {
+            var path = Path.Combine(_dir, $"ptype-{type}.json");
+            File.WriteAllText(path, $"{{ \"providers\": {{ \"p\": {{ \"type\": \"{type}\", \"model\": \"m\" }} }} }}");
+            var cfg = AgentConfig.Load(path);
+            Assert.False(cfg.Warnings.Any(w => w.Contains("type='")), $"type={type} 不应警告");
+        }
+    }
+
 
     [Fact]
     public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()
