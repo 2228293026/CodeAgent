@@ -308,6 +308,40 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_Ignore_SkipsNamedDirs()
+    {
+        // ignore 跳过指定目录名（大小写不敏感），且不计入统计
+        Directory.CreateDirectory(Path.Combine(_dir, "node_modules"));
+        File.WriteAllText(Path.Combine(_dir, "node_modules", "lib.js"), "x");
+        File.WriteAllText(Path.Combine(_dir, "keep.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["ignore"] = new JsonArray("node_modules", "VENDOR") }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("node_modules", output);
+        Assert.Contains("keep.txt", output);
+    }
+
+    [Fact]
+    public async Task ListDirectory_IgnoreRecursesIntoSkippedDir()
+    {
+        // 被 ignore 的目录及其子内容都不展示（彻底跳过，而非仅折叠一层）
+        Directory.CreateDirectory(Path.Combine(_dir, "skip", "inner"));
+        File.WriteAllText(Path.Combine(_dir, "skip", "inner", "x.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["ignore"] = new JsonArray("skip") }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("skip", output);
+        Assert.DoesNotContain("inner", output);
+        Assert.DoesNotContain("x.txt", output);
+    }
+
+    [Fact]
     public async Task ListDirectory_DepthLimit_ControlsRecursion()
     {
         // depth=0 只列直接子项，不深入任何子目录
