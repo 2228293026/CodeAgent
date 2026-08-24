@@ -465,4 +465,22 @@ public class GrepToolTests : IDisposable
         Assert.Contains("case2.txt:2", output);   // 精确大小写命中
         Assert.DoesNotContain("case2.txt:1", output); // 全小写 todo 不命中
     }
+
+    [Fact]
+    public async Task Grep_IncludeAndExclude_Combine()
+    {
+        // include 与 exclude 同时作用：先按 include 选文件集，再从中剔除 exclude 命中的文件
+        File.WriteAllText(Path.Combine(_dir, "keep.cs"), "needle\n");
+        File.WriteAllText(Path.Combine(_dir, "skip.cs"), "needle\n");
+        File.WriteAllText(Path.Combine(_dir, "also.txt"), "needle\n"); // 不在 include 内
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle", ["include"] = "*.cs", ["exclude"] = "skip.cs" }, ctx, CancellationToken.None);
+
+        Assert.Contains("keep.cs", output);     // include 命中且未排除
+        Assert.DoesNotContain("skip.cs", output); // 被 exclude
+        Assert.DoesNotContain("also.txt", output); // 不在 include 内
+    }
 }
