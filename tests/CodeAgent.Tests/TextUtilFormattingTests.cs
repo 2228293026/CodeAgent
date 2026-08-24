@@ -189,4 +189,13 @@ public class TextUtilFormattingTests
     [InlineData(5_368_709_120, "5.0 GB")] // 5 * 1024^3：跨 GB 边界
     public void FormatBytes_HumanReadable(long bytes, string expected) =>
         Assert.Equal(expected, TextUtil.FormatBytes(bytes));
+
+    [Theory]
+    [InlineData(0.0, "0.0000")]        // 0 走小额四位
+    [InlineData(0.005, "0.0050")]      // 小于 $0.01 → 四位（吞掉真实开销）
+    [InlineData(0.01, "0.01")]         // 恰好阈值 → 两位
+    [InlineData(1.234, "1.23")]        // 正常两位
+    [InlineData(12.345, "12.35")]      // 四舍五入
+    public void FormatCost_PicksPrecisionByMagnitude(double cost, string expected) =>
+        Assert.Equal(expected, TextUtil.FormatCost(cost));
 }
