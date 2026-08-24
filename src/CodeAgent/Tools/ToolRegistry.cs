@@ -298,13 +298,21 @@ internal static class ToolArgs
         {
             foreach (var item in arr)
             {
-                if (item is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0)
-                    list.Add(s);
+                if (item is JsonValue v)
+                {
+                    if (v.TryGetValue<string>(out var s) && s.Length > 0)
+                        list.Add(s);
+                    else if (v.TryGetValue<int>(out var n))
+                        list.Add(n.ToString()); // 数字项按字符串处理（模型偶发把数组项发成数字）
+                }
             }
         }
-        else if (node is JsonValue v2 && v2.TryGetValue<string>(out var single) && single.Length > 0)
+        else if (node is JsonValue v2)
         {
-            list.Add(single);
+            if (v2.TryGetValue<string>(out var single) && single.Length > 0)
+                list.Add(single);
+            else if (v2.TryGetValue<int>(out var n))
+                list.Add(n.ToString());
         }
         return list.Count == 0 ? null : list;
     }

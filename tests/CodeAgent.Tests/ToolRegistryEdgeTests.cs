@@ -89,8 +89,9 @@ public class ToolRegistryEdgeTests
     }
 
     [Fact]
-    public void GetStringList_NullAndNonStringItems_AreSkipped()
+    public void GetStringList_NullSkipped_IntCoercedToString()
     {
+        // null 项跳过；数字项按字符串处理（模型偶发把数组项发成数字，如 include:["*.cs", 5]）
         var arr = new JsonArray();
         arr.Add("keep");
         arr.Add(null);
@@ -98,8 +99,18 @@ public class ToolRegistryEdgeTests
         var args = new JsonObject { ["list"] = arr };
         var list = ToolArgs.GetStringList(args, "list");
         Assert.NotNull(list);
-        Assert.Single(list);
+        Assert.Equal(2, list!.Count);
         Assert.Equal("keep", list[0]);
+        Assert.Equal("123", list[1]);
+    }
+
+    [Fact]
+    public void GetStringList_SingleIntValue_CoercedToString()
+    {
+        var args = new JsonObject { ["list"] = 7 };
+        var list = ToolArgs.GetStringList(args, "list");
+        Assert.NotNull(list);
+        Assert.Equal("7", list![0]);
     }
 
     // ===== ToolRegistry 注册与分发 =====

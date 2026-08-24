@@ -227,7 +227,7 @@ public class ToolArgsTests
         var args = new JsonObject { ["pattern"] = new JsonArray("a", "", "b", 123) };
         var list = ToolArgs.GetStringList(args, "pattern");
         Assert.NotNull(list);
-        Assert.Equal(["a", "b"], list); // 空串与数字被过滤
+        Assert.Equal(["a", "b", "123"], list); // 空串被过滤，数字项按字符串保留
     }
 
     [Fact]
