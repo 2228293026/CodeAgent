@@ -76,4 +76,36 @@ public class SessionSearchToolTests : IDisposable
             new JsonObject { ["keyword"] = "x" }, ctx, CancellationToken.None);
         Assert.Contains("还没有任何会话记录", output);
     }
+
+    [Fact]
+    public async Task SessionSearch_MaxFiles_ClampsToOne()
+    {
+        // max_files=1：只列出 1 个命中会话（即便有更多匹配）
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        for (int i = 0; i < 5; i++)
+            File.WriteAllLines(Path.Combine(sessDir, $"2026010{i}-000001.jsonl"),
+                ["{\"role\":\"user\",\"content\":\"命中 keyword-" + i + "\"}"]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "keyword", ["max_files"] = 1 }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("匹配 1 个会话", output); // 收敛到 1
+    }
+
+    [Fact]
+    public async Task SessionSearch_MaxFilesOverCap_ClampsToTen()
+    {
+        // max_files 超过上限 10 应被收敛到 10
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        for (int i = 0; i < 12; i++)
+            File.WriteAllLines(Path.Combine(sessDir, $"202601{i:00}-000001.jsonl"),
+                ["{\"role\":\"user\",\"content\":\"命中 keyword-" + i + "\"}"]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "keyword", ["max_files"] = 99 }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("匹配 10 个会话", output); // 收敛到上限 10
+    }
 }
