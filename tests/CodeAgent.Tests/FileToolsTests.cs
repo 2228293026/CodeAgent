@@ -516,6 +516,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_CreateDirsTrue_CreatesMissingParents()
+    {
+        // 默认 create_dirs=true：写入深层路径时应自动创建全部缺失父目录
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "deep/nested/dir/file.txt", ["content"] = "hello" }, ctx, CancellationToken.None);
+
+        Assert.True(File.Exists(Path.Combine(_dir, "deep", "nested", "dir", "file.txt")));
+        Assert.Contains("deep/nested/dir/file.txt", output);
+    }
+
+    [Fact]
     public async Task WriteFile_CreateDirsFalseString_IsRespected()
     {
         // 回归：create_dirs 默认 true，模型传字符串 "0" 时应解析为 false（不自动建目录），
