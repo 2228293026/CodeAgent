@@ -294,6 +294,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_RenderMarkdown_DefaultsToTrue()
+    {
+        // 未配置时默认渲染 Markdown（代码块/表格等格式化输出）
+        var path = Path.Combine(_dir, "empty21.json");
+        File.WriteAllText(path, "{}");
+        Assert.True(AgentConfig.Load(path).RenderMarkdown);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
