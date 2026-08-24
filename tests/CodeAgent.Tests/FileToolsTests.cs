@@ -792,6 +792,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_SingleOccurrence_ReplacesAndReportsLine()
+    {
+        // 核心happy path：单次精确匹配应成功替换并报告修改起始行
+        File.WriteAllText(Path.Combine(_dir, "single.txt"), "alpha\nbeta\ngamma\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "single.txt", ["old_string"] = "beta", ["new_string"] = "BETA" }, ctx, CancellationToken.None);
+
+        Assert.Equal("alpha\nBETA\ngamma\n", File.ReadAllText(Path.Combine(_dir, "single.txt")));
+        Assert.Contains("已替换 1 处", output);
+        Assert.Contains("起始行 2", output);
+    }
+
+    [Fact]
     public async Task EditFile_LfOldString_OnCrlfFile_MatchesAndKeepsCrlf()
     {
         // 回归：模型输出几乎总是 LF，Windows 工程常是 CRLF——逐字匹配必失败。
