@@ -376,6 +376,40 @@ public class ConfigTests : IDisposable
         }
     }
 
+    [Fact]
+    public void Load_ProviderMissingApiKey_Warns()
+    {
+        // apiKeyEnv/apiKey 都缺：运行时拿不到凭据直接报错——提前警告
+        var path = Path.Combine(_dir, "nokey.json");
+        File.WriteAllText(path, """
+            {
+              "providers": {
+                "remote": { "type": "openai", "model": "x" }
+              }
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("Provider 'remote'") && w.Contains("apiKeyEnv") && w.Contains("apiKey"));
+    }
+
+    [Fact]
+    public void Load_ProviderHasApiKeyEnv_NoApiKeyWarning()
+    {
+        var path = Path.Combine(_dir, "keyenv.json");
+        File.WriteAllText(path, """
+            {
+              "providers": {
+                "local": { "type": "openai", "model": "x", "apiKeyEnv": "MY_KEY" }
+              }
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.DoesNotContain(cfg.Warnings, w => w.Contains("apiKeyEnv") && w.Contains("Provider 'local'"));
+    }
 
     [Fact]
     public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()

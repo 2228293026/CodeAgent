@@ -242,6 +242,9 @@ public sealed class AgentConfig
                     && !p.Type.Equals("openai", StringComparison.OrdinalIgnoreCase)
                     && !p.Type.Equals("anthropic", StringComparison.OrdinalIgnoreCase))
                     cfg.Warnings.Add($"Provider '{name}' 的 type='{p.Type}' 不是受支持的类型（openai/anthropic）——连接时会报错，请检查拼写。");
+                // apiKeyEnv/apiKey 都缺：运行时取不到凭据会直接报错——提前警告
+                if (string.IsNullOrWhiteSpace(p.ApiKeyEnv) && string.IsNullOrWhiteSpace(p.ApiKey))
+                    cfg.Warnings.Add($"Provider '{name}' 未配置 apiKeyEnv 或 apiKey——将因缺少凭据而连接失败，请补上其中一项。");
             }
             return cfg;
         }
