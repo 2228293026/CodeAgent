@@ -85,6 +85,27 @@ public class TextUtilEdgeTests : IDisposable
         Assert.Equal(2, TextUtil.CountOccurrences("压缩压缩历史", "压缩"));
     }
 
+    // ===== NormalizeWhitespace（edit_file 未命中提示的相似度判断）=====
+
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("   ", "")]
+    [InlineData("abc", "abc")]
+    [InlineData("a  b", "a b")]          // 连续空格压成一个
+    [InlineData("  a\n\tb  ", "a b")]    // 首尾空白丢弃，换行/制表符同压
+    [InlineData("a\r\nb", "a b")]        // CRLF 也算空白
+    public void NormalizeWhitespace_CollapsesRuns(string input, string expected) =>
+        Assert.Equal(expected, TextUtil.NormalizeWhitespace(input));
+
+    [Fact]
+    public void NormalizeWhitespace_IndentationOnlyDiff_Matches()
+    {
+        // 缩进差异是 old_string 失配最常见的原因：归一化后应视为相同内容
+        var fileText = "void F()\n{\n    return;\n}";
+        var modelOld = "void F()\n{\n        return;\n}";
+        Assert.Equal(TextUtil.NormalizeWhitespace(fileText), TextUtil.NormalizeWhitespace(modelOld));
+    }
+
     // ===== CompactTokenCount =====
 
     [Theory]

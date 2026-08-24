@@ -514,7 +514,32 @@ public class FileToolsTests : IDisposable
                 new JsonObject { ["path"] = "nomatch.txt", ["old_string"] = "zzz", ["new_string"] = "x" },
                 ctx, CancellationToken.None));
         Assert.Contains("未找到 old_string", ex.Message);
+        // 内容毫无相似之处：不给出空白差异提示（避免误导）
+        Assert.DoesNotContain("提示", ex.Message);
         Assert.Equal(0, ctx.Undo.Count); // 失败编辑不入撤销栈
+    }
+
+    [Fact]
+    public async Task EditFile_WhitespaceOnlyMismatch_HintsAtSimilarContent()
+    {
+        // 回归：模型常把缩进抄错（如 8 空格当 4 空格），逐字匹配失败后只能盲试。
+        // 空白归一化能命中 → 错误信息应直接指出「只差空白」，引导从 read_file 重新复制
+        File.WriteAllText(Path.Combine(_dir, "indented.cs"), "void F()\n{\n    return;\n}\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject
+                {
+                    ["path"] = "indented.cs",
+                    ["old_string"] = "void F()\n{\n        return;\n}", // 缩进不同
+                    ["new_string"] = "void G()\n{\n        return;\n}",
+                },
+                ctx, CancellationToken.None));
+        Assert.Contains("未找到 old_string", ex.Message);
+        Assert.Contains("仅空白/缩进差异", ex.Message);
+        Assert.Equal(0, ctx.Undo.Count);
     }
 
     [Fact]

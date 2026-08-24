@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace CodeAgent;
@@ -258,6 +259,35 @@ public static class TextUtil
             idx += sub.Length;
         }
         return count;
+    }
+
+    /// <summary>
+    /// 空白归一化：把每段连续空白（含换行）压成单个空格并去首尾。
+    /// 用于「old_string 未命中」时的相似度判断——缩进/换行差异导致的失配可被识别出来并给出提示。
+    /// </summary>
+    public static string NormalizeWhitespace(string s)
+    {
+        if (string.IsNullOrEmpty(s))
+            return string.Empty;
+        var sb = new StringBuilder(s.Length);
+        bool pendingSpace = false;
+        foreach (var ch in s)
+        {
+            if (char.IsWhiteSpace(ch))
+            {
+                pendingSpace = sb.Length > 0; // 首部空白直接丢弃
+            }
+            else
+            {
+                if (pendingSpace)
+                {
+                    sb.Append(' ');
+                    pendingSpace = false;
+                }
+                sb.Append(ch);
+            }
+        }
+        return sb.ToString();
     }
 
     /// <summary>紧凑 token 数格式（如 1937 → 1.9k，1.2M → 1.2M）。</summary>

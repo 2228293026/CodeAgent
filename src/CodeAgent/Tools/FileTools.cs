@@ -223,8 +223,14 @@ public sealed class EditFileTool : ITool
         // 先统一做未命中检查：replace_all 模式下未命中也不允许静默写回原文件
         // 并报「已替换 0 处」（曾让模型误以为修改成功，还往撤销栈里塞了无效条目）
         if (firstIdx < 0)
+        {
+            // 空白归一化后能命中 → 差异只在缩进/行尾空白，给出可行动的提示而不是让模型盲试
+            var hint = TextUtil.NormalizeWhitespace(text).Contains(TextUtil.NormalizeWhitespace(oldString), StringComparison.Ordinal)
+                ? "\n提示：文件中存在仅空白/缩进差异的相似内容——请从 read_file 输出逐字复制 old_string（注意行首缩进与行尾空白）。"
+                : "";
             throw new ToolException(
-                $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---");
+                $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---{hint}");
+        }
         int count = TextUtil.CountOccurrences(workText, workOld);
 
         string result;
