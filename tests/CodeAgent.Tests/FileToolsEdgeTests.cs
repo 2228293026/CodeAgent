@@ -101,7 +101,7 @@ public class FileToolsEdgeTests : IDisposable
         var args = new JsonObject { ["path"] = "no/parent/x.txt", ["content"] = "x", ["create_dirs"] = false };
         var ex = await Assert.ThrowsAsync<ToolException>(
             () => new WriteFileTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None));
-        Assert.Contains("写入失败", ex.Message);
+        Assert.Contains("父目录不存在", ex.Message); // 清晰错误，而非笼统的「写入失败」
     }
 
     [Fact]

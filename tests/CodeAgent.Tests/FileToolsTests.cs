@@ -454,7 +454,7 @@ public class FileToolsTests : IDisposable
             tool.ExecuteAsync(
                 new JsonObject { ["path"] = "not-created/sub/f.txt", ["content"] = "x", ["create_dirs"] = "0" },
                 ctx, CancellationToken.None));
-        Assert.Contains("写入失败", ex.Message);
+        Assert.Contains("父目录不存在", ex.Message); // 清晰错误，而非笼统的「写入失败」
         Assert.False(Directory.Exists(parent)); // 父目录不应被自动创建
     }
 

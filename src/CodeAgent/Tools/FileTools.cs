@@ -140,6 +140,13 @@ public sealed class WriteFileTool : ITool
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
         }
+        else
+        {
+            // create_dirs=false 且父目录不存在：提前给清晰错误，而不是让 WriteAllText 抛笼统的「系统找不到指定的路径」
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                throw new ToolException($"父目录不存在: {dir}（如需自动创建请设置 create_dirs=true）");
+        }
 
         // 记录撤销信息（大文件不记录，避免内存占用）；先写入成功再入栈，失败不污染撤销历史
         var hadFile = File.Exists(full);
