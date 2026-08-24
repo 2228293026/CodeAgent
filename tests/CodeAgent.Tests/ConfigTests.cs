@@ -238,6 +238,17 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_SystemPrompt_DefaultsToBuiltin()
+    {
+        // 未配置时默认使用内置系统提示（务实、精确、诚实的工程师人设）
+        var path = Path.Combine(_dir, "empty15.json");
+        File.WriteAllText(path, "{}");
+        var sp = AgentConfig.Load(path).SystemPrompt;
+        Assert.False(string.IsNullOrWhiteSpace(sp));
+        Assert.Contains("CodeAgent", sp);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
