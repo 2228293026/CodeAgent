@@ -260,6 +260,16 @@ public class WorkspaceTests
         Assert.Equal(Path.GetFullPath(Path.Combine(Root, rel)), full);
     }
 
+    [Fact]
+    public void ResolveRead_AbsolutePathInsideRoot_ResolvesToIt()
+    {
+        // 绝对路径若落在工作区内（如拼接 Root 后），应被接受而非误判为越界
+        var ws = new Workspace(Root);
+        var inside = Path.GetFullPath(Path.Combine(Root, "sub", "a.cs"));
+        Directory.CreateDirectory(Path.GetDirectoryName(inside)!);
+        Assert.Equal(inside, ws.ResolveRead(inside));
+    }
+
     [Theory]
     [InlineData("../x.txt")]
     [InlineData("../../x.txt")]
