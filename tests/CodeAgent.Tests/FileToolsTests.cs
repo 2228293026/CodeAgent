@@ -624,6 +624,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_HeadZero_FallsBackToDefaultLimit()
+    {
+        // head=0 视为未指定：回退到默认 limit（300 行），而非报错或空结果
+        File.WriteAllText(Path.Combine(_dir, "hz.txt"), "line1\nline2\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "hz.txt", ["head"] = 0 }, ctx, CancellationToken.None);
+
+        Assert.Contains("line1", output);
+        Assert.Contains("line2", output); // 默认 limit 足够覆盖全部 2 行
+    }
+
+    [Fact]
     public async Task ReadFile_LimitTooLarge_ClampsTo5000()
     {
         // limit 超过 5000 应收敛到 5000（最多输出 5000 行），不崩溃
