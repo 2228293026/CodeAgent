@@ -708,6 +708,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_IdenticalStrings_Throws()
+    {
+        // old_string == new_string 是无操作，应明确报错而非写入无意义撤销条目
+        File.WriteAllText(Path.Combine(_dir, "id.txt"), "SAME");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "id.txt", ["old_string"] = "SAME", ["new_string"] = "SAME" }, ctx, CancellationToken.None));
+
+        Assert.Contains("old_string", ex.Message);
+    }
+
+    [Fact]
     public async Task EditFile_LfOldString_OnCrlfFile_MatchesAndKeepsCrlf()
     {
         // 回归：模型输出几乎总是 LF，Windows 工程常是 CRLF——逐字匹配必失败。
