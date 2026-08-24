@@ -229,6 +229,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_DefaultMode_DefaultsToCode()
+    {
+        // 未配置时默认 code 模式（全工具可用）
+        var path = Path.Combine(_dir, "empty14.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal("code", AgentConfig.Load(path).DefaultMode);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
