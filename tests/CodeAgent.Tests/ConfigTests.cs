@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using CodeAgent;
 using Xunit;
 
@@ -255,6 +256,30 @@ public class ConfigTests : IDisposable
         var cfg = AgentConfig.Load(path);
 
         Assert.DoesNotContain(cfg.Warnings, w => w.Contains("provider='"));
+    }
+
+    [Fact]
+    public void Load_ShellInvalid_Warns()
+    {
+        // shell 拼错（如 fish/zsh）：会被静默当默认处理——警告而非无提示失效
+        var path = Path.Combine(_dir, "shell.json");
+        File.WriteAllText(path, "{ \"shell\": \"fish\" }");
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("shell='fish'") && w.Contains("支持的命令解释器"));
+    }
+
+    [Fact]
+    public void Load_ShellValid_NoWarning()
+    {
+        foreach (var shell in new[] { "", "cmd", "powershell", "bash", "BASH" })
+        {
+            var path = Path.Combine(_dir, $"shell-{shell}.json");
+            File.WriteAllText(path, $"{{ \"shell\": \"{shell}\" }}");
+            var cfg = AgentConfig.Load(path);
+            Assert.False(cfg.Warnings.Any(w => w.Contains("shell='")), $"shell={shell} 不应警告，实际警告: {string.Join("; ", cfg.Warnings)}");
+        }
     }
 
 
