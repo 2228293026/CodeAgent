@@ -83,7 +83,16 @@ public sealed class ReadFileTool : ITool
         }
 
         var head = count < lines.Length ? $"（{path} 共 {lines.Length} 行，已显示 {start + 1}-{start + count}）\n" : "";
-        return head + sb.ToString().TrimEnd();
+
+        // 编码提示：非纯 UTF-8（带 BOM 或 GBK/ANSI 旧编码）时显式标注，避免模型误判文件为 UTF-8 去改写
+        var enc = TextUtil.DetectFileEncoding(full);
+        var encNote = enc switch
+        {
+            "utf8-bom" => "（编码: UTF-8 BOM）",
+            "gb18030" => "（编码: GBK/GB18030）",
+            _ => "",
+        };
+        return (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
     }
 }
 

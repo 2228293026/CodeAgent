@@ -813,4 +813,33 @@ public class FileToolsTests : IDisposable
             new System.Text.UTF8Encoding(false, true).GetString(restored)); // 不是 UTF-8
     }
 
+    [Fact]
+    public async Task ReadFile_PlainUtf8_NoEncodingNote()
+    {
+        // 纯 UTF-8 文件不应被附编码提示（避免噪声，也不破坏现有逐字断言）
+        File.WriteAllText(Path.Combine(_dir, "u.txt"), "hello\nworld\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "u.txt" }, ctx, CancellationToken.None);
+        Assert.DoesNotContain("编码", output);
+        Assert.Contains("hello", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_GbkFile_ShowsEncodingNote()
+    {
+        // 回归：非 UTF-8（GBK/ANSI）文件必须显式标注编码，否则模型可能误当 UTF-8 去改写
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        var path = Path.Combine(_dir, "g.txt");
+        File.WriteAllBytes(path, gbk.GetBytes("第一行旧编码\n第二行\n"));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "g.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("编码: GBK", output);
+        Assert.Contains("第一行旧编码", output); // 内容仍正确解码
+    }
+
 }
