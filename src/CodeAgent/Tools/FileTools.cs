@@ -90,7 +90,8 @@ public sealed class ReadFileTool : ITool
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
         }
 
-        var head = count < lines.Length ? $"（{path} 共 {lines.Length} 行，已显示 {start + 1}-{start + count}）\n" : "";
+        var range = count < lines.Length ? $"，已显示 {start + 1}-{start + count}" : "";
+        var head = $"（{path} 共 {lines.Length} 行{range}）\n";
 
         // 编码提示：非纯 UTF-8（带 BOM 或 GBK/ANSI 旧编码）时显式标注，避免模型误判文件为 UTF-8 去改写
         var enc = TextUtil.DetectFileEncoding(full);

@@ -157,6 +157,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_FullRead_ShowsTotalLineCountHeader()
+    {
+        // 回归：即便未截断，也应告知总行数，便于模型判断是否需要 offset 分段续读
+        var path = Path.Combine(_dir, "r3.txt");
+        File.WriteAllText(path, "a\nb\nc\nd");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "r3.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("共 4 行", output);
+        Assert.DoesNotContain("已显示", output); // 未截断时不标「已显示 x-y」
+    }
+
+    [Fact]
     public async Task ReadFile_BinaryFile_ThrowsInsteadOfGarbage()
     {
         // 回归：二进制文件（含 NUL 字节）不应输出乱码行，应明确报错
