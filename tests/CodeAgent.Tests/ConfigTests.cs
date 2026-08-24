@@ -276,6 +276,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ShowToolCalls_DefaultsToTrue()
+    {
+        // 未配置时默认展示工具调用（便于用户观察代理行为）
+        var path = Path.Combine(_dir, "empty19.json");
+        File.WriteAllText(path, "{}");
+        Assert.True(AgentConfig.Load(path).ShowToolCalls);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
