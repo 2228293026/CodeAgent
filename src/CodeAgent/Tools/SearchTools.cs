@@ -86,6 +86,7 @@ public sealed class GrepTool : ITool
             ["case_sensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "强制区分大小写（默认智能大小写：pattern 全小写时忽略大小写）" },
             ["multiline"] = new JsonObject { ["type"] = "boolean", ["description"] = "跨行匹配（\n 视为普通字符参与匹配，适合多行块如 JSON/HTML 片段），默认 false" },
             ["invert"] = new JsonObject { ["type"] = "boolean", ["description"] = "反转匹配（类似 rg -v）：输出不匹配 pattern 的行，默认 false；不支持 multiline 模式" },
+            ["word"] = new JsonObject { ["type"] = "boolean", ["description"] = "整词匹配（类似 rg -w）：pattern 两侧加单词边界 \\b，避免命中更长单词的子串（如搜 cat 不命中 category），默认 false" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -114,11 +115,14 @@ public sealed class GrepTool : ITool
         var caseSensitive = ToolArgs.GetBool(args, "case_sensitive", false);
         if (!caseSensitive && pattern == pattern.ToLowerInvariant())
             opts |= RegexOptions.IgnoreCase;
+        // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
+        var word = ToolArgs.GetBool(args, "word", false);
+        var effectivePattern = word ? $"\\b{pattern}\\b" : pattern;
 
         Regex re;
         try
         {
-            re = new Regex(pattern, opts);
+            re = new Regex(effectivePattern, opts);
         }
         catch (ArgumentException ex)
         {

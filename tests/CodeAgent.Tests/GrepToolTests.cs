@@ -336,4 +336,35 @@ public class GrepToolTests : IDisposable
         Assert.Contains("invert", ex.Message);
     }
 
+    [Fact]
+    public async Task Grep_Word_MatchesWholeWordsOnly()
+    {
+        // word（rg -w）：cat 不应命中 category，但应命中 "a cat sat" 中的独立 cat
+        File.WriteAllText(Path.Combine(_dir, "w.txt"), "category\na cat sat\nconcat\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "cat", ["word"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("w.txt:2", output);          // 整词 cat 命中（第 2 行）
+        Assert.Contains("a cat sat", output);         // 命中行内容
+        Assert.DoesNotContain("w.txt:1", output);     // category（第 1 行）不是命中行
+        Assert.DoesNotContain("w.txt:3", output);     // concat（第 3 行）不是命中行
+    }
+
+    [Fact]
+    public async Task Grep_WithoutWord_MatchesSubstring()
+    {
+        // 不加 word：默认子串匹配，cat 命中 category
+        File.WriteAllText(Path.Combine(_dir, "w2.txt"), "category\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "cat" }, ctx, CancellationToken.None);
+
+        Assert.Contains("category", output);
+    }
+
 }
