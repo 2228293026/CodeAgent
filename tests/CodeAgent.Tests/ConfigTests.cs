@@ -203,6 +203,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ThinkingEffort_DefaultsToOff()
+    {
+        // 未配置时默认关闭思考模式（off），避免无谓延迟
+        var path = Path.Combine(_dir, "empty8.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal("off", AgentConfig.Load(path).ThinkingEffort);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
