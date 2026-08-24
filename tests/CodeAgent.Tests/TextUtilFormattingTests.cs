@@ -178,4 +178,15 @@ public class TextUtilFormattingTests
     [InlineData("a/1234", "a/1234")]                                   // 末段 4 字符过短
     public void ShortModelName_AdditionalBounds(string model, string expected) =>
         Assert.Equal(expected, TextUtil.ShortModelName(model));
+
+    [Theory]
+    [InlineData(0, "0 B")]
+    [InlineData(512, "512 B")]
+    [InlineData(1023, "1023 B")]
+    [InlineData(1024, "1.0 KB")]
+    [InlineData(1536, "1.5 KB")]
+    [InlineData(1_048_576, "1.0 MB")]
+    [InlineData(5_368_709_120, "5.0 GB")] // 5 * 1024^3：跨 GB 边界
+    public void FormatBytes_HumanReadable(long bytes, string expected) =>
+        Assert.Equal(expected, TextUtil.FormatBytes(bytes));
 }

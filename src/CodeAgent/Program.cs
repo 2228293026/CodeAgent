@@ -1315,9 +1315,9 @@ internal static class Program
                         var baseDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
                         if (Directory.Exists(baseDir))
                         {
-                            var kb = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories)
-                                .Sum(f => new FileInfo(f).Length) / 1024.0;
-                            Console.WriteLine($".codeagent 目录占用 {kb:F0} KB（/diag 可再次查看；整目录可安全删除）。");
+                            var totalBytes = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories)
+                                .Sum(f => new FileInfo(f).Length);
+                            Console.WriteLine($".codeagent 目录占用 {TextUtil.FormatBytes(totalBytes)}（/diag 可再次查看；整目录可安全删除）。");
                         }
                     }
                     catch { /* 统计失败不显示 */ }
@@ -1813,7 +1813,7 @@ internal static class Program
                     {
                         var bytes = Directory.EnumerateFiles(caDir, "*", SearchOption.AllDirectories)
                             .Sum(f => new FileInfo(f).Length);
-                        Console.WriteLine($"  .codeagent 大小   : {bytes / 1024.0:F0} KB（会话日志/导出/历史，可整目录删除）");
+                        Console.WriteLine($"  .codeagent 大小   : {TextUtil.FormatBytes(bytes)}（会话日志/导出/历史，可整目录删除）");
                     }
                 }
                 catch { /* 统计失败不影响诊断输出 */ }

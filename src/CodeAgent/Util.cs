@@ -343,6 +343,20 @@ public static class TextUtil
     public static string FormatDuration(TimeSpan t) =>
         t.TotalSeconds < 1 ? $"{t.TotalMilliseconds:F0}ms" : $"{t.TotalSeconds:F1}s";
 
+    /// <summary>人类可读字节数（B/KB/MB/GB/TB，1024 进制）：/session、/diag 等展示文件大小时共用，避免裸字节数难以辨认。</summary>
+    public static string FormatBytes(long bytes)
+    {
+        double v = bytes;
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        int i = 0;
+        while (i < units.Length - 1 && v >= 1024)
+        {
+            v /= 1024.0;
+            i++;
+        }
+        return i == 0 ? $"{bytes} B" : $"{v:F1} {units[i]}";
+    }
+
     /// <summary>模型短名：取 '/' 后的末段；末段过短（&lt;5 字符）不具辨识度时保留完整名。</summary>
     public static string ShortModelName(string model)
     {
