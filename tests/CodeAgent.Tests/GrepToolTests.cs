@@ -367,4 +367,22 @@ public class GrepToolTests : IDisposable
         Assert.Contains("category", output);
     }
 
+    [Fact]
+    public async Task Grep_SingleFileManyMatches_CappedAtMaxResults()
+    {
+        // 回归：单个文件内大量命中时，默认 max_results=50 应收敛，并附「可能还有更多」提示
+        var lines = Enumerable.Range(1, 100).Select(i => $"needle line {i}");
+        File.WriteAllText(Path.Combine(_dir, "many.txt"), string.Join('\n', lines));
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle" }, ctx, CancellationToken.None);
+
+        Assert.Contains("已达 max_results", output); // 截断提示
+        Assert.Contains("many.txt:1", output);          // 第一个命中行
+        Assert.Contains("many.txt:50", output);         // 第 50 个是最后一个命中行
+        Assert.DoesNotContain("many.txt:51", output);   // 第 51 行不是命中行（仅可能作为上下文出现）
+    }
+
 }
