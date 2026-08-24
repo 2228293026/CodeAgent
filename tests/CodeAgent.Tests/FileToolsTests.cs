@@ -287,6 +287,28 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_DepthClamp_HandlesOutOfRange()
+    {
+        // depth 越界应被收敛：负数→0（只列根子项），超过 5→5（足够深，能显示多层嵌套）
+        Directory.CreateDirectory(Path.Combine(_dir, "a", "b", "c", "d"));
+        File.WriteAllText(Path.Combine(_dir, "a", "top.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "a", "b", "c", "d", "deep.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var neg = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "a", ["depth"] = -5 }, ctx, CancellationToken.None);
+        Assert.Contains("top.txt", neg);
+        Assert.Contains("b/", neg);
+        Assert.DoesNotContain("deep.txt", neg); // 收敛到 0，不递归
+
+        var big = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "a", ["depth"] = 99 }, ctx, CancellationToken.None);
+        Assert.Contains("deep.txt", big); // 收敛到 5，足够深
+        Assert.Contains("d/", big);
+    }
+
+    [Fact]
     public async Task ListDirectory_FlatDirWithManyFiles_RespectsCap()
     {
         // 回归：cap 曾只在 Walk 入口检查，平铺目录里 foreach 会把 cap 之后的文件行全部输出
