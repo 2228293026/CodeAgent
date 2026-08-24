@@ -79,6 +79,7 @@ public sealed class GrepTool : ITool
             ["count_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只输出每个文件的匹配行数（文件:行数，类似 ripgrep -c），默认 false；multiline 时按命中次数计" },
             ["case_sensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "强制区分大小写（默认智能大小写：pattern 全小写时忽略大小写）" },
             ["multiline"] = new JsonObject { ["type"] = "boolean", ["description"] = "跨行匹配（\n 视为普通字符参与匹配，适合多行块如 JSON/HTML 片段），默认 false" },
+            ["invert"] = new JsonObject { ["type"] = "boolean", ["description"] = "反转匹配（类似 rg -v）：输出不匹配 pattern 的行，默认 false；不支持 multiline 模式" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -122,6 +123,11 @@ public sealed class GrepTool : ITool
         var sb = new StringBuilder();
         var hits = 0;
         var multiline = ToolArgs.GetBool(args, "multiline", false);
+        var invert = ToolArgs.GetBool(args, "invert", false);
+        if (multiline && invert)
+            throw new ToolException("invert 不支持 multiline 模式（跨行反转无意义），请关闭 multiline 或 invert。");
+        // 匹配判定（invert 时取反，类似 rg -v）；集中一处，files_only/count_only/普通模式共用
+        bool Hit(string s) => invert ? !re.IsMatch(s) : re.IsMatch(s);
 
         void ScanFile(string path)
         {
@@ -145,8 +151,13 @@ public sealed class GrepTool : ITool
 
                 if (filesOnly)
                 {
-                    // 只统计匹配文件数：每文件最多计一次
-                    if (re.IsMatch(text))
+                    // 只统计匹配文件数：每文件最多计一次。
+                    // 正常模式按整文件是否含匹配行判断；invert 时按「是否含任一非匹配行」判断（逐行），
+                    // 否则含匹配行的文件（如 DROP\nkeep）会被整文件命中误判为「无匹配」
+                    var fileHits = invert
+                        ? text.Split('\n').Any(l => !re.IsMatch(l.TrimEnd('\r')))
+                        : re.IsMatch(text);
+                    if (fileHits)
                     {
                         hits++;
                         sb.AppendLine(rel);
@@ -157,10 +168,10 @@ public sealed class GrepTool : ITool
                 if (countOnly)
                 {
                     // 计数模式（rg -c 风格）：输出 文件:匹配行数；multiline 时按命中次数计。
-                    // hits 以文件为粒度递增，max_results 限制的是列出的文件数
+                    // invert 时统计非匹配行数。hits 以文件为粒度递增，max_results 限制列出的文件数
                     var n = multiline
                         ? re.Matches(text).Count(m => m.Length > 0)
-                        : text.Split('\n').Count(l => re.IsMatch(l.TrimEnd('\r')));
+                        : text.Split('\n').Count(l => Hit(l.TrimEnd('\r')));
                     if (n > 0)
                     {
                         hits++;
@@ -198,7 +209,7 @@ public sealed class GrepTool : ITool
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {
                     var line = lines[i].TrimEnd('\r');
-                    if (!re.IsMatch(line))
+                    if (!Hit(line))
                         continue;
                     hits++;
                     sb.AppendLine($"{rel}:{i + 1}: {TextUtil.TruncateLine(line, 300)}");

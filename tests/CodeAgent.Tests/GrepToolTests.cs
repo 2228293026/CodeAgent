@@ -275,4 +275,65 @@ public class GrepToolTests : IDisposable
         Assert.DoesNotContain("a.cs:2", output); // ID 不再命中
     }
 
+    [Fact]
+    public async Task Grep_Invert_OutputsNonMatchingLines()
+    {
+        // 类似 rg -v：输出不匹配 pattern 的行，而非匹配的
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "alpha\nBETA\ngamma");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "alpha", ["invert"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a.txt:2", output);
+        Assert.Contains("a.txt:3", output);
+        Assert.DoesNotContain("a.txt:1", output); // 匹配行被排除
+        Assert.Contains("BETA", output);
+        Assert.Contains("gamma", output);
+    }
+
+    [Fact]
+    public async Task Grep_Invert_CountOnly_CountsNonMatching()
+    {
+        // invert + count_only：统计非匹配行数（无尾随换行，避免空行被计入）
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "keep\nDROP\nkeep2");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "DROP", ["invert"] = true, ["count_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a.txt:2", output); // 2 行非匹配（keep / keep2）
+    }
+
+    [Fact]
+    public async Task Grep_Invert_FilesOnly_MarksFilesWithNonMatchingLine()
+    {
+        File.WriteAllText(Path.Combine(_dir, "onlymatch.txt"), "DROP\nDROP");
+        File.WriteAllText(Path.Combine(_dir, "hasmix.txt"), "DROP\nkeep");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "DROP", ["invert"] = true, ["files_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hasmix.txt", output);
+        Assert.DoesNotContain("onlymatch.txt", output); // 全是匹配行 → invert 下无命中
+    }
+
+    [Fact]
+    public async Task Grep_Invert_WithMultiline_Throws()
+    {
+        // invert 跨行反转无意义，应明确报错而非给出误导结果
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "x\ny\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["pattern"] = "x", ["invert"] = true, ["multiline"] = true }, ctx, CancellationToken.None));
+        Assert.Contains("invert", ex.Message);
+    }
+
 }
