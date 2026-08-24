@@ -583,4 +583,21 @@ public class UndoManagerTests : IDisposable
         Assert.Null(um.TryUndo()); // 清空后无可撤销
     }
 
+    [Fact]
+    public void TryUndo_LargeWrite_ReportsCannotUndo()
+    {
+        // 回归：>4MB 文件写入时未记录原内容（OldText=null），撤销只能如实说明无法回滚，
+        // 而非谎报成功把文件改回（实际并未恢复）
+        var path = Path.Combine(_dir, "big.txt");
+        File.WriteAllText(path, "current content");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = path, HadFile = true, OldText = null });
+
+        var desc = um.TryUndo();
+
+        Assert.NotNull(desc);
+        Assert.Contains("无法撤销", desc!);
+        Assert.Equal("current content", File.ReadAllText(path)); // 文件未被改动（如实）
+    }
+
 }
