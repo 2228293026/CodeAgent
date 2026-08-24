@@ -354,6 +354,19 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_OnlySkippedDirs_ReportsEmpty()
+    {
+        // 目录本身存在，但唯一子目录全是 SkipDirs（如 bin/）时，应友好提示为空/全跳过
+        Directory.CreateDirectory(Path.Combine(_dir, "bin"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "." }, ctx, CancellationToken.None);
+
+        Assert.Contains("全部被跳过", output);
+    }
+
+    [Fact]
     public async Task ListDirectory_DepthLimit_ControlsRecursion()
     {
         // depth=0 只列直接子项，不深入任何子目录
