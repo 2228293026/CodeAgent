@@ -498,4 +498,22 @@ public class GrepToolTests : IDisposable
 
         Assert.Contains("ml.txt:2", output); // 2 次跨行命中
     }
+
+    [Fact]
+    public async Task Grep_Word_WithCaseSensitive_MatchesExactly()
+    {
+        // word + case_sensitive 组合：整词且区分大小写，精确命中独立单词 "Cat"，
+        // 不命中小写 cat / 大写 CAT / 含 cat 子串的 concatenate（用 count_only 隔离行内容干扰）
+        File.WriteAllText(Path.Combine(_dir, "wc.txt"), "Cat\ncat\nCAT\nconcatenate\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "Cat", ["word"] = true, ["case_sensitive"] = true, ["count_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("wc.txt:1", output);      // 仅第 1 行（独立单词 Cat）命中
+        Assert.DoesNotContain("wc.txt:2", output); // 小写 cat 不命中（大小写敏感）
+        Assert.DoesNotContain("wc.txt:3", output); // 大写 CAT 不命中
+        Assert.DoesNotContain("wc.txt:4", output); // concatenate 中的 cat 子串不命中（无单词边界）
+    }
 }
