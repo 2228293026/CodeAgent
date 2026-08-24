@@ -296,6 +296,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_Modes_DefaultsToEmpty()
+    {
+        // 未配置时默认无自定义模式（仅内置 8 个）
+        var path = Path.Combine(_dir, "empty25.json");
+        File.WriteAllText(path, "{}");
+        Assert.Empty(AgentConfig.Load(path).Modes);
+    }
+
+    [Fact]
     public void Load_ConfirmCommands_DefaultsToFalse()
     {
         // 未配置时默认不确认命令（命令类工具直接执行，交互式场景可开启）
