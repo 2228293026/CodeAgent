@@ -305,6 +305,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_Providers_DefaultsToEmpty()
+    {
+        // 未配置时默认无 Provider 配置（需运行前补上 provider + 凭据）
+        var path = Path.Combine(_dir, "empty26.json");
+        File.WriteAllText(path, "{}");
+        Assert.Empty(AgentConfig.Load(path).Providers);
+    }
+
+    [Fact]
     public void Load_ConfirmCommands_DefaultsToFalse()
     {
         // 未配置时默认不确认命令（命令类工具直接执行，交互式场景可开启）
