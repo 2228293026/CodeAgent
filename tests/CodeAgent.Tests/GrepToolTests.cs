@@ -450,4 +450,19 @@ public class GrepToolTests : IDisposable
         Assert.DoesNotContain(" 1| ", output);   // 第 1 行距离 12 > 10，不应出现
         Assert.DoesNotContain(" 24| ", output);  // 第 24 行距离 11 > 10，不应出现
     }
+
+    [Fact]
+    public async Task Grep_SmartCase_MixedCasePattern_IsCaseSensitiveByDefault()
+    {
+        // 智能大小写：pattern 含大写（ToDo）时默认区分大小写，不应命中全小写文本
+        File.WriteAllText(Path.Combine(_dir, "case2.txt"), "todo buy milk\nToDo items\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "ToDo" }, ctx, CancellationToken.None);
+
+        Assert.Contains("case2.txt:2", output);   // 精确大小写命中
+        Assert.DoesNotContain("case2.txt:1", output); // 全小写 todo 不命中
+    }
 }
