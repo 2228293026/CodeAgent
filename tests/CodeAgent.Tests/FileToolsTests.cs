@@ -694,6 +694,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_EmptyOldString_Throws()
+    {
+        // 空 old_string 是无意义操作：工具应明确报错而非静默写回原文件
+        File.WriteAllText(Path.Combine(_dir, "e.txt"), "hello");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "e.txt", ["old_string"] = "", ["new_string"] = "x" }, ctx, CancellationToken.None));
+
+        Assert.Contains("old_string", ex.Message);
+    }
+
+    [Fact]
     public async Task EditFile_LfOldString_OnCrlfFile_MatchesAndKeepsCrlf()
     {
         // 回归：模型输出几乎总是 LF，Windows 工程常是 CRLF——逐字匹配必失败。
