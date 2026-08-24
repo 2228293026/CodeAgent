@@ -282,7 +282,7 @@ public sealed class UndoManager
                 var diff = DiffFor(e);
                 if (string.IsNullOrEmpty(diff))
                     continue;
-                sb.AppendLine($"== {Path.GetFileName(e.Path)}（{KindLabel(e)}）==");
+                sb.AppendLine($"== {Path.GetFileName(e.Path)}（{KindLabel(e)} · {TextUtil.RelativeTime(e.Timestamp, DateTime.Now)}）==");
                 sb.AppendLine(diff);
                 sb.AppendLine();
             }
