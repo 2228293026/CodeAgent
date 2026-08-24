@@ -233,6 +233,21 @@ public static class TextUtil
         return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - head - tail) + s[^tail..];
     }
 
+    /// <summary>
+    /// 工具输出截断（供 Agent 落给模型前调用）：保留头部约 2/3 与尾部 1/3，中间省略，
+    /// 并附一行明确说明——模型据此知道输出被裁剪、需要改用 offset/分段或换参数缩小范围，
+    /// 而不是把残缺内容当完整结果。
+    /// </summary>
+    public static string TruncateToolOutput(string s, int max)
+    {
+        if (s.Length <= max)
+            return s;
+        var head = Math.Max(0, max * 2 / 3);
+        var tail = Math.Max(0, max - head);
+        var marker = $"\n…[工具输出过长，已截断：原 {s.Length:N0} 字符，保留头 {head:N0} 与尾 {tail:N0}，中间省略]…\n";
+        return SafeCut(s, head) + marker + s[^tail..];
+    }
+
     public static string TruncateLine(string s, int max)
     {
         s = s.Replace("\t", "    ");

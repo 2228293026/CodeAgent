@@ -329,6 +329,30 @@ public class TextUtilEdgeTests : IDisposable
         Assert.True(t.Length < 200);
     }
 
+    // ===== TruncateToolOutput（落给模型的工具输出截断，明确告知被裁剪）=====
+
+    [Fact]
+    public void TruncateToolOutput_ShortInput_Unchanged()
+    {
+        var s = new string('a', 1000);
+        Assert.Equal(s, TextUtil.TruncateToolOutput(s, 24_000));
+    }
+
+    [Fact]
+    public void TruncateToolOutput_KeepsHeadAndTail_WithNotice()
+    {
+        // 模型需要知道输出被截断，才能决定改参数/分段而非误用残缺结果
+        var s = "BUILD START" + new string('x', 40_000) + "error CS1002: ; expected";
+        var t = TextUtil.TruncateToolOutput(s, 24_000);
+
+        Assert.StartsWith("BUILD START", t);
+        Assert.EndsWith("error CS1002: ; expected", t);
+        Assert.Contains("工具输出过长，已截断", t);
+        Assert.Contains("字符", t);      // 原字符数显式告知模型（含千分位）
+        Assert.True(t.Length <= 25_500, $"总长受控（实际 {t.Length}）");
+    }
+
+
     [Fact]
     public void Truncate_SurrogatePairAtCut_NotSplit()
     {
