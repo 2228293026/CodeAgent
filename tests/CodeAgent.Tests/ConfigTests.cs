@@ -135,6 +135,19 @@ public class ConfigTests : IDisposable
         Assert.Equal(1_000, AgentConfig.Load(path2).MaxHistoryChars);
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(-5, 1)]
+    [InlineData(500, 300)]
+    [InlineData(60, 60)]
+    public void Load_CommandTimeoutSeconds_ClampedToRange(int input, int expected)
+    {
+        // 命令超时必须收敛到 [1,300]（0/负=立即超时无意义；过大超过全局上限）
+        var path = Path.Combine(_dir, $"to-{input}.json");
+        File.WriteAllText(path, $"{{ \"commandTimeoutSeconds\": {input} }}");
+        Assert.Equal(expected, AgentConfig.Load(path).CommandTimeoutSeconds);
+    }
+
     [Fact]
     public void Load_UnknownProviderAndModeKeys_ProduceWarnings()
     {
