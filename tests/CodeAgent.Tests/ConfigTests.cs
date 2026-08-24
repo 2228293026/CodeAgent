@@ -230,6 +230,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_Shell_DefaultsToEmpty()
+    {
+        // 未配置时默认空字符串（自动选择 cmd/powershell/bash）
+        var path = Path.Combine(_dir, "empty11.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal("", AgentConfig.Load(path).Shell);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
