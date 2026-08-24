@@ -22,6 +22,9 @@ public sealed class UndoEntry
 
     /// <summary>撤销时按原编码写回（"utf8-bom" | "gb18030" | null=无 BOM UTF-8）：GBK 文件撤销后仍是 GBK。</summary>
     public string? EncodingName { get; init; }
+
+    /// <summary>入栈时间（/undo list 的相对时间展示用；默认即入栈时刻）。</summary>
+    public DateTime Timestamp { get; init; } = DateTime.Now;
 }
 
 /// <summary>文件修改撤销栈（REPL 的 /undo 命令）。</summary>
@@ -97,7 +100,11 @@ public sealed class UndoManager
             if (start > 0)
                 sb.AppendLine($"…（更早 {start} 条未显示）");
             for (int i = _entries.Count - 1; i >= start; i--)
-                sb.AppendLine($"  {_entries.Count - i}) {Describe(_entries[i], File.Exists(_entries[i].Path))}");
+            {
+                var e = _entries[i];
+                var age = TextUtil.RelativeTime(e.Timestamp, DateTime.Now);
+                sb.AppendLine($"  {_entries.Count - i}) {Describe(e, File.Exists(e.Path))}（{age}）");
+            }
             return sb.ToString().TrimEnd();
         }
     }
