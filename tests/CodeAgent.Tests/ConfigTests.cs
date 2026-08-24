@@ -258,6 +258,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_SessionDir_DefaultsToCodeagentSessions()
+    {
+        // 未配置时默认会话日志目录为 .codeagent/sessions
+        var path = Path.Combine(_dir, "empty17.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal(".codeagent/sessions", AgentConfig.Load(path).SessionDir);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
