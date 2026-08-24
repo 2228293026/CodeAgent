@@ -285,6 +285,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_TuiAnsi_DefaultsToTrue()
+    {
+        // 未配置时默认开启 TUI ANSI 渲染（菜单/框线使用转义码）
+        var path = Path.Combine(_dir, "empty20.json");
+        File.WriteAllText(path, "{}");
+        Assert.True(AgentConfig.Load(path).TuiAnsi);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
