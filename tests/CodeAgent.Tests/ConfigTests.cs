@@ -211,6 +211,23 @@ public class ConfigTests : IDisposable
         Assert.Equal("off", AgentConfig.Load(path).ThinkingEffort);
     }
 
+    [Theory]
+    [InlineData("off")]
+    [InlineData("low")]
+    [InlineData("medium")]
+    [InlineData("high")]
+    [InlineData("auto")]
+    public void Load_ThinkingEffort_ValidValues_NoWarning(string value)
+    {
+        // 合法档位不应触发警告
+        var path = Path.Combine(_dir, $"te-{value}.json");
+        File.WriteAllText(path, $"{{ \"thinkingEffort\": \"{value}\" }}");
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Equal(value, cfg.ThinkingEffort);
+        Assert.False(cfg.Warnings.Any(w => w.Contains("thinkingEffort")), $"档位 {value} 不应警告");
+    }
+
     [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
