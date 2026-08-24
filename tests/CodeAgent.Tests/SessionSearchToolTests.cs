@@ -108,4 +108,21 @@ public class SessionSearchToolTests : IDisposable
 
         Assert.Contains("匹配 10 个会话", output); // 收敛到上限 10
     }
+
+    [Fact]
+    public async Task SessionSearch_NoMatch_ReturnsFriendlyMessage()
+    {
+        // 会话目录存在且不为空，但关键字不命中任何内容——应友好说明
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        Directory.CreateDirectory(sessDir);
+        File.WriteAllLines(Path.Combine(sessDir, "20260101-000001.jsonl"),
+            ["{\"role\":\"user\",\"content\":\"hello world\"}"]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "zzzz-not-found" }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("没有匹配", output);
+        Assert.Contains("zzzz-not-found", output);
+    }
 }
