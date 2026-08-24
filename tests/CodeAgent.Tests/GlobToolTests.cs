@@ -111,4 +111,39 @@ public class GlobToolTests : IDisposable
         Assert.Contains("可能不完整", output);
         Assert.Contains("g000.tmp", output);
     }
+
+    [Fact]
+    public async Task Glob_Ignore_ExcludesMatchingResults()
+    {
+        // ignore 排除命中 glob 的结果（如 secret*），而其它匹配项保留
+        File.WriteAllText(Path.Combine(_dir, "public.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "secret.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "secret2.txt"), "x");
+        var tool = new GlobTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "*.txt", ["ignore"] = "secret*" }, ctx, CancellationToken.None);
+
+        Assert.Contains("public.txt", output);
+        Assert.DoesNotContain("secret.txt", output);
+        Assert.DoesNotContain("secret2.txt", output);
+    }
+
+    [Fact]
+    public async Task Glob_IgnoreAsArray_Works()
+    {
+        File.WriteAllText(Path.Combine(_dir, "a.log"), "x");
+        File.WriteAllText(Path.Combine(_dir, "b.tmp"), "x");
+        File.WriteAllText(Path.Combine(_dir, "c.txt"), "x");
+        var tool = new GlobTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "*", ["ignore"] = new JsonArray("*.log", "*.tmp") }, ctx, CancellationToken.None);
+
+        Assert.Contains("c.txt", output);
+        Assert.DoesNotContain("a.log", output);
+        Assert.DoesNotContain("b.tmp", output);
+    }
 }

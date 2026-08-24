@@ -16,6 +16,7 @@ public sealed class GlobTool : ITool
         {
             ["pattern"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "glob 模式，支持 ** 跨目录、*、?；可用字符串或字符串数组" },
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索起点目录，默认工作区根目录" },
+            ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "排除匹配这些 glob 的结果（如 \"*.min.js\"、\"secret*\"），可用字符串或字符串数组" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -32,6 +33,10 @@ public sealed class GlobTool : ITool
             throw new ToolException($"目录不存在: {basePath}");
 
         var regexes = patterns.Select(Glob.ToRegex).ToList();
+        // ignore 模式与 grep 的 include/exclude 同口径：裸 glob 视为任意深度匹配
+        static string AsIgnorePattern(string p) => p.Contains('/') || p.Contains('\\') ? p : "**/" + p;
+        var ignore = ToolArgs.GetStringList(args, "ignore");
+        var ignoreRes = ignore?.Select(p => Glob.ToRegex(AsIgnorePattern(p))).ToList();
         var results = new List<string>();
         var scanned = 0;
 
@@ -44,7 +49,8 @@ public sealed class GlobTool : ITool
                 break;
             }
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
-            if (regexes.Any(r => r.IsMatch(rel)))
+            // 命中 pattern 且未被 ignore 排除才保留
+            if (regexes.Any(r => r.IsMatch(rel)) && (ignoreRes is null || !ignoreRes.Any(r => r.IsMatch(rel))))
                 results.Add(rel);
         }
 
