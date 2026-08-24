@@ -93,6 +93,12 @@ public sealed partial class Agent
                     sb.AppendLine($"- 调用工具 `{tc.Name}`：`{argsPreview}`");
                 }
             }
+            if (m.Role == MessageRole.Assistant && !string.IsNullOrEmpty(m.ThinkingText))
+            {
+                // 思考内容只入摘要不入全文（可能很长且属推理过程）
+                var redactedNote = m.RedactedThinkingData is { Count: > 0 } r ? $"，另有 {r.Count} 个加密块" : "";
+                sb.AppendLine($"- 思考：{TextUtil.TruncateLine(m.ThinkingText, 120)}{redactedNote}");
+            }
             if (!string.IsNullOrEmpty(m.Content))
                 sb.AppendLine();
             sb.AppendLine(m.Content ?? "");
