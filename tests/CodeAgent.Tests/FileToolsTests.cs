@@ -103,6 +103,32 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_ResultIncludesByteAndLineCount()
+    {
+        // 结果含字节数与行数，模型可据此与预期对照
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var args = new JsonObject { ["path"] = "c.txt", ["content"] = "line1\nline2\nline3" };
+
+        var result = await tool.ExecuteAsync(args, ctx, CancellationToken.None);
+
+        Assert.Contains("字节", result);
+        Assert.Contains("（3 行）", result); // 3 行非空内容
+    }
+
+    [Fact]
+    public async Task WriteFile_EmptyResultReportsZeroLines()
+    {
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var args = new JsonObject { ["path"] = "e.txt", ["content"] = "" };
+
+        var result = await tool.ExecuteAsync(args, ctx, CancellationToken.None);
+
+        Assert.Contains("（0 行）", result);
+    }
+
+    [Fact]
     public async Task ReadFile_DefaultsToLineNumbers()
     {
         var path = Path.Combine(_dir, "r1.txt");

@@ -172,7 +172,9 @@ public sealed class WriteFileTool : ITool
         });
 
         var bytes = Encoding.UTF8.GetByteCount(content);
-        return $"已写入 {bytes:N0} 字节 → {path}";
+        // 行数（按 \n 计；纯空白/空内容记为 0）：让模型快速知道写了多少，便于与预期对照
+        var lineCount = content.Length == 0 ? 0 : content.Split('\n').Length;
+        return $"已写入 {bytes:N0} 字节（{lineCount} 行）→ {path}";
     }
 }
 
