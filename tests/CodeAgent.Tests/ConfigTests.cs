@@ -183,6 +183,45 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_DefaultModeNotKnown_ProducesWarning()
+    {
+        // defaultMode 指向不存在的模式会静默回退到 code——必须警告，否则「配了不生效」无线索
+        var path = Path.Combine(_dir, "defmode.json");
+        File.WriteAllText(path, """
+            {
+              "defaultMode": "nonexistent",
+              "modes": [
+                { "name": "fix", "systemPrompt": "fix things" }
+              ]
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("defaultMode='nonexistent'") && w.Contains("回退到 code"));
+    }
+
+    [Fact]
+    public void Load_DefaultModeReferencesCustomMode_NoWarning()
+    {
+        // 引用了确实存在的自定义模式 → 不应警告
+        var path = Path.Combine(_dir, "defmode2.json");
+        File.WriteAllText(path, """
+            {
+              "defaultMode": "fix",
+              "modes": [
+                { "name": "fix", "systemPrompt": "fix things" }
+              ]
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.DoesNotContain(cfg.Warnings, w => w.Contains("defaultMode"));
+    }
+
+
+    [Fact]
     public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()
     {
         // 解析失败交给反序列化统一报错，校验器不重复抛异常

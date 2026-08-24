@@ -304,6 +304,21 @@ public sealed class AgentConfig
             if (cfg.Modes.Any(m => m.Name?.Trim().Equals(builtin, StringComparison.OrdinalIgnoreCase) == true))
                 cfg.Warnings.Add($"自定义模式 '{builtin}' 与内置模式同名——/mode 会始终选中内置项，该自定义配置不会生效（请改名）。");
         }
+        ValidateDefaultMode(cfg);
+    }
+
+    /// <summary>校验 defaultMode：若指向不存在的内置/自定义模式，启动会静默回退到 code——给出明确警告而非无提示失效。</summary>
+    private static void ValidateDefaultMode(AgentConfig cfg)
+    {
+        var name = cfg.DefaultMode?.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Equals("code", StringComparison.OrdinalIgnoreCase))
+            return; // code 始终存在，无需校验
+        var known = new HashSet<string>(BuiltinModeNames, StringComparer.OrdinalIgnoreCase);
+        foreach (var m in cfg.Modes)
+            if (!string.IsNullOrWhiteSpace(m.Name))
+                known.Add(m.Name.Trim());
+        if (!known.Contains(name))
+            cfg.Warnings.Add($"defaultMode='{name}' 不是已知模式（内置或自定义）——启动将回退到 code 模式，请检查拼写或先定义该自定义模式。");
     }
 
     /// <summary>校验配置文件键名：未知顶层/供应商/自定义模式字段多半是拼写错误，
