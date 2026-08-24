@@ -17,6 +17,7 @@ public sealed class ReadFileTool : ITool
             ["offset"] = new JsonObject { ["type"] = "integer", ["description"] = "起始行号（1 起，默认 1）" },
             ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（默认 300，最大 5000）" },
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
+            ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（1-5000，limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
@@ -41,6 +42,13 @@ public sealed class ReadFileTool : ITool
         var offset = Math.Max(1, ToolArgs.GetInt(args, "offset", 1));
         var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
         var tail = Math.Clamp(ToolArgs.GetInt(args, "tail", 0), 0, 5000);
+        var headCount = Math.Clamp(ToolArgs.GetInt(args, "head", 0), 0, 5000);
+        // head 是 limit 的便捷写法（读开头 N 行）：未给 tail 时优先于 limit 生效
+        if (headCount > 0 && tail == 0)
+        {
+            offset = 1;
+            limit = headCount;
+        }
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);

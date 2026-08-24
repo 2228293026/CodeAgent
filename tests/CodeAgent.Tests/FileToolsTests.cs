@@ -525,6 +525,36 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_ReadsFirstNLines()
+    {
+        // head 是 limit 的便捷写法：读开头 N 行（tail 未给时优先）
+        File.WriteAllText(Path.Combine(_dir, "h.txt"), string.Join('\n', Enumerable.Range(1, 100).Select(i => $"row{i}")));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "h.txt", ["head"] = 5 }, ctx, CancellationToken.None);
+        Assert.Contains("row1", output);
+        Assert.Contains("row5", output);
+        Assert.DoesNotContain("row6", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_HeadIgnoredWhenTailGiven()
+    {
+        // tail 优先于 head：同时给 head 和 tail 时读末尾 N 行
+        File.WriteAllText(Path.Combine(_dir, "ht.txt"), string.Join('\n', Enumerable.Range(1, 100).Select(i => $"row{i}")));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ht.txt", ["head"] = 5, ["tail"] = 3 }, ctx, CancellationToken.None);
+        Assert.Contains("row98", output);
+        Assert.Contains("row100", output);
+        Assert.DoesNotContain("row50", output); // 中部行不在末尾 N 行内，证明 head 被忽略
+    }
+
+    [Fact]
     public async Task EditFile_MissingOldString_ThrowsHelpfulError()
     {
         File.WriteAllText(Path.Combine(_dir, "nomatch.txt"), "hello world");
