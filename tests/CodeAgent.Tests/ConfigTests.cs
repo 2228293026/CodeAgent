@@ -158,6 +158,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_MaxToolIterations_DefaultsToZero()
+    {
+        // 未配置时默认 0（表示不限制工具调用轮数）
+        var path = Path.Combine(_dir, "empty3.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal(0, AgentConfig.Load(path).MaxToolIterations);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
