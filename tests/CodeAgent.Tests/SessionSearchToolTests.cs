@@ -78,6 +78,22 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task SessionSearch_MaxFilesZero_ClampsToOne()
+    {
+        // max_files=0 是无意义输入：应收敛到 1（至少返回首个命中），而非空结果
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        for (int i = 0; i < 3; i++)
+            File.WriteAllLines(Path.Combine(sessDir, $"2026010{i}-000001.jsonl"),
+                ["{\"role\":\"user\",\"content\":\"命中 keyword-" + i + "\"}"]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "keyword", ["max_files"] = 0 }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("匹配 1 个会话", output); // 0 → 1
+    }
+
+    [Fact]
     public async Task SessionSearch_MaxFiles_ClampsToOne()
     {
         // max_files=1：只列出 1 个命中会话（即便有更多匹配）
