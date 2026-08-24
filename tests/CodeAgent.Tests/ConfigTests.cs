@@ -220,6 +220,43 @@ public class ConfigTests : IDisposable
         Assert.DoesNotContain(cfg.Warnings, w => w.Contains("defaultMode"));
     }
 
+    [Fact]
+    public void Load_ProviderNotInProviders_Warns()
+    {
+        // provider 名拼错/漏配：运行时取不到连接配置会直接报错——提前警告
+        var path = Path.Combine(_dir, "prov.json");
+        File.WriteAllText(path, """
+            {
+              "provider": "mistral",
+              "providers": {
+                "openai": { "model": "gpt-4o" }
+              }
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("provider='mistral'") && w.Contains("不存在"));
+    }
+
+    [Fact]
+    public void Load_ProviderMatchesProviders_NoWarning()
+    {
+        var path = Path.Combine(_dir, "prov2.json");
+        File.WriteAllText(path, """
+            {
+              "provider": "openai",
+              "providers": {
+                "openai": { "model": "gpt-4o" }
+              }
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.DoesNotContain(cfg.Warnings, w => w.Contains("provider='"));
+    }
+
 
     [Fact]
     public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()

@@ -225,6 +225,10 @@ public sealed class AgentConfig
                 cfg.Warnings.Add($"fileAccess='{accessRaw}' 不是有效级别（strict/whitelist/full），已回退为更严格的 '{cfg.FileAccess}'。");
             cfg.Warnings.AddRange(ValidateUnknownKeys(text));
             ValidateModeNames(cfg);
+            // provider 指向不存在的 Provider 配置：运行时取连接信息会失败，提前警告而非崩溃
+            if (cfg.Providers.Count > 0 && !string.IsNullOrWhiteSpace(cfg.Provider)
+                && !cfg.Providers.ContainsKey(cfg.Provider))
+                cfg.Warnings.Add($"provider='{cfg.Provider}' 在 Providers 中不存在（已配置：{string.Join("/", cfg.Providers.Keys)}）——将因找不到连接配置而报错，请检查拼写或补上该 Provider。");
             return cfg;
         }
         catch (JsonException ex)
