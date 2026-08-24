@@ -149,6 +149,26 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_OtherClampedFields_StayInRange()
+    {
+        // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
+        var path = Path.Combine(_dir, "clamp.json");
+        File.WriteAllText(path, """
+            {
+              "autoCompactPercent": 200,
+              "contextWindow": -5,
+              "maxToolIterations": 99999,
+              "maxSessionLogs": -1
+            }
+            """);
+        var cfg = AgentConfig.Load(path);
+        Assert.InRange(cfg.AutoCompactPercent, 0, 99);   // 200 → 99
+        Assert.InRange(cfg.ContextWindow, 0, 10_000_000); // -5 → 0
+        Assert.InRange(cfg.MaxToolIterations, 0, 200);    // 99999 → 200
+        Assert.InRange(cfg.MaxSessionLogs, 0, 1000);       // -1 → 0
+    }
+
+    [Fact]
     public void Load_UnknownProviderAndModeKeys_ProduceWarnings()
     {
         var path = Path.Combine(_dir, "nested-typo.json");
