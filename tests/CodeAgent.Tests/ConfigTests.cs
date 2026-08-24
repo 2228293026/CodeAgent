@@ -239,6 +239,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_SaveSessions_DefaultsToTrue()
+    {
+        // 未配置时默认保存会话日志（供 /find 回顾历史）
+        var path = Path.Combine(_dir, "empty12.json");
+        File.WriteAllText(path, "{}");
+        Assert.True(AgentConfig.Load(path).SaveSessions);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
