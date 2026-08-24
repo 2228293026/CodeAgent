@@ -653,8 +653,25 @@ public class FileToolsTests : IDisposable
             ctx, CancellationToken.None);
 
         Assert.Contains("已替换 1 处", result);
+        Assert.Contains("保留原 CRLF 换行", result); // 提示换行风格被保留
         var after = File.ReadAllText(Path.Combine(_dir, "crlf.txt"));
         Assert.Equal("line1\r\nX\r\nY\r\n", after);   // 替换成功且全文件保持 CRLF
+    }
+
+    [Fact]
+    public async Task EditFile_LfFile_NoCrlfNote()
+    {
+        // LF 文件不应出现「保留原 CRLF 换行」提示（用原始 LF 字节写，避免 Windows 上 WriteAllText 写入 CRLF）
+        File.WriteAllBytes(Path.Combine(_dir, "lf.txt"), System.Text.Encoding.UTF8.GetBytes("line1\nline2\n"));
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "lf.txt", ["old_string"] = "line2", ["new_string"] = "X" },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 1 处", result);
+        Assert.DoesNotContain("CRLF", result);
     }
 
     [Fact]

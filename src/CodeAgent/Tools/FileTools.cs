@@ -295,7 +295,9 @@ public sealed class EditFileTool : ITool
 
         // startLine 基于 workText（归一化后）计算：firstIdx 是 workText 的下标，用原文会错位
         var startLine = workText.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
-        return $"已替换 {count} 处 → {path}（修改起始行 {startLine}）";
+        // 归一化命中且原文件是 CRLF：提示换行风格被保留（避免模型以为改成了 LF）
+        var crlfNote = normalized && text.Contains("\r\n") ? "，保留原 CRLF 换行" : "";
+        return $"已替换 {count} 处 → {path}（修改起始行 {startLine}{crlfNote}）";
     }
 }
 
