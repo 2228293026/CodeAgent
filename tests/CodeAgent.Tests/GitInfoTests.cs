@@ -82,4 +82,28 @@ public class GitInfoTests : IDisposable
         InitRepo("abc\n"); // 损坏/异常内容：不足 7 位不显示
         Assert.Null(GitInfo.CurrentBranch(_dir));
     }
+
+    [Fact]
+    public void CurrentBranch_DetachedHead_Exactly7Chars_ReturnsDetached()
+    {
+        // 恰好 7 位裸 SHA：应显示为 detached:xxxxxxxx
+        InitRepo("abcdef1\n");
+        Assert.Equal("detached:abcdef1", GitInfo.CurrentBranch(_dir));
+    }
+
+    [Fact]
+    public void CurrentBranch_WorktreePointerFile_RelativePath_ResolvesGitDir()
+    {
+        // worktree 指针里的路径是相对路径（非绝对）：应按 worktree 目录拼接后解析
+        var target = Path.Combine(_dir, "wt-real", ".git");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "HEAD"), "ref: refs/heads/rel-branch\n");
+
+        var worktree = Path.Combine(_dir, "wt");
+        Directory.CreateDirectory(worktree);
+        // 用相对路径指向真实 gitdir
+        File.WriteAllText(Path.Combine(worktree, ".git"), "gitdir: ../wt-real/.git\n");
+
+        Assert.Equal("rel-branch", GitInfo.CurrentBranch(worktree));
+    }
 }
