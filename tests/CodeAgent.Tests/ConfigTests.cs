@@ -123,6 +123,19 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_MaxHistoryChars_ClampedToBounds()
+    {
+        // 越界值必须收敛到安全范围（过大→历史永不裁剪撑爆请求；过小→几乎无历史）
+        var path = Path.Combine(_dir, "mh.json");
+        File.WriteAllText(path, "{ \"maxHistoryChars\": 999999999 }");
+        Assert.Equal(20_000_000, AgentConfig.Load(path).MaxHistoryChars);
+
+        var path2 = Path.Combine(_dir, "mh2.json");
+        File.WriteAllText(path2, "{ \"maxHistoryChars\": 10 }");
+        Assert.Equal(1_000, AgentConfig.Load(path2).MaxHistoryChars);
+    }
+
+    [Fact]
     public void Load_UnknownProviderAndModeKeys_ProduceWarnings()
     {
         var path = Path.Combine(_dir, "nested-typo.json");
