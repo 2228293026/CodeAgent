@@ -412,6 +412,24 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ProviderHasApiKey_NoApiKeyWarning()
+    {
+        // apiKey 直接配置也满足凭据要求，不应触发 apiKeyEnv/apiKey 缺失警告
+        var path = Path.Combine(_dir, "key.json");
+        File.WriteAllText(path, """
+            {
+              "providers": {
+                "direct": { "type": "openai", "model": "x", "apiKey": "sk-123" }
+              }
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.DoesNotContain(cfg.Warnings, w => w.Contains("apiKeyEnv") && w.Contains("Provider 'direct'"));
+    }
+
+    [Fact]
     public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()
     {
         // 解析失败交给反序列化统一报错，校验器不重复抛异常
