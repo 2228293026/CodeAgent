@@ -267,6 +267,17 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_PriceDefaults_ToZero()
+    {
+        // 未配置单价时默认 0：/stats 不显示费用（无单价则费用无意义）
+        var path = Path.Combine(_dir, "empty17b.json");
+        File.WriteAllText(path, "{}");
+        var cfg = AgentConfig.Load(path);
+        Assert.Equal(0, cfg.PricePerMillionInput);
+        Assert.Equal(0, cfg.PricePerMillionOutput);
+    }
+
+    [Fact]
     public void Load_ConfirmCommands_DefaultsToFalse()
     {
         // 未配置时默认不确认命令（命令类工具直接执行，交互式场景可开启）
