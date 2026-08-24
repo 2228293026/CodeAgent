@@ -185,6 +185,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_CommandTimeoutSeconds_DefaultsToSixty()
+    {
+        // 未配置时默认 60 秒，给绝大多数命令留出充裕时间
+        var path = Path.Combine(_dir, "empty6.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal(60, AgentConfig.Load(path).CommandTimeoutSeconds);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
