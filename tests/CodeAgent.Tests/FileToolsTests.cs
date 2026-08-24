@@ -530,6 +530,19 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_PreservesCrlfContent()
+    {
+        // 内容含 \r\n 时应原样写入（Windows 工程保持 CRLF，不强行转 LF）
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "crlf.txt", ["content"] = "line1\r\nline2\r\n" }, ctx, CancellationToken.None);
+
+        Assert.Equal("line1\r\nline2\r\n", File.ReadAllText(Path.Combine(_dir, "crlf.txt")));
+    }
+
+    [Fact]
     public async Task WriteFile_CreateDirsFalseString_IsRespected()
     {
         // 回归：create_dirs 默认 true，模型传字符串 "0" 时应解析为 false（不自动建目录），
