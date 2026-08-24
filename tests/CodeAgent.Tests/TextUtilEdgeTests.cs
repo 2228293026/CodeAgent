@@ -329,6 +329,23 @@ public class TextUtilEdgeTests : IDisposable
         Assert.True(t.Length < 200);
     }
 
+    [Fact]
+    public void TruncateHeadTail_ExactLimit_Unchanged()
+    {
+        // 恰好等于 max 时不应引入省略标记或截断内容
+        var s = new string('a', 50);
+        Assert.Equal(s, TextUtil.TruncateHeadTail(s, 50));
+    }
+
+    [Fact]
+    public void TruncateHeadTail_VerySmallMax_StillReturnsNonEmpty()
+    {
+        // max 极小时仍应返回非空摘要（不应为空字符串或抛异常）
+        var s = "HEAD" + new string('x', 500) + "TAIL";
+        var t = TextUtil.TruncateHeadTail(s, 6);
+        Assert.False(string.IsNullOrEmpty(t));
+    }
+
     // ===== TruncateToolOutput（落给模型的工具输出截断，明确告知被裁剪）=====
 
     [Fact]
