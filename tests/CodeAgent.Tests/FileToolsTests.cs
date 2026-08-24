@@ -337,6 +337,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_Ignore_IsCaseInsensitive()
+    {
+        // ignore 列表区分大小写不应影响跳过行为：NODE_MODULES / Node_Modules 都应命中
+        Directory.CreateDirectory(Path.Combine(_dir, "NODE_MODULES"));
+        File.WriteAllText(Path.Combine(_dir, "NODE_MODULES", "pkg"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["ignore"] = new JsonArray("node_modules") }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("NODE_MODULES", output);
+    }
+
+    [Fact]
     public async Task ListDirectory_IgnoreRecursesIntoSkippedDir()
     {
         // 被 ignore 的目录及其子内容都不展示（彻底跳过，而非仅折叠一层）
