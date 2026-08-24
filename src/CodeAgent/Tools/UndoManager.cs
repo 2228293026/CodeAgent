@@ -294,7 +294,9 @@ public sealed class UndoManager
     {
         try
         {
-            var current = File.Exists(e.Path) ? TextUtil.ReadTextSmart(e.Path) : ""; // GBK 文件的 diff 不乱码
+            if (!File.Exists(e.Path))
+                return "（文件已不存在——可能被后续命令删除；撤销该条可重建）";
+            var current = TextUtil.ReadTextSmart(e.Path); // GBK 文件的 diff 不乱码
             string original;
             if (e.Kind == "write")
                 original = e.HadFile ? e.OldText ?? "" : "";
