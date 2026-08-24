@@ -212,6 +212,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_Provider_DefaultsToOpenai()
+    {
+        // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
+        var path = Path.Combine(_dir, "empty9.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal("openai", AgentConfig.Load(path).Provider);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
