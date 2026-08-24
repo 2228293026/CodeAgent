@@ -221,6 +221,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_FileAccess_DefaultsToStrict()
+    {
+        // 未配置时默认严格模式（strict）：仅允许工作区内的文件读写，最安全
+        var path = Path.Combine(_dir, "empty10.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal("strict", AgentConfig.Load(path).FileAccess);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
