@@ -167,6 +167,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ContextWindow_DefaultsToZero()
+    {
+        // 未配置时默认 0（表示使用模型/Provider 默认上下文窗口）
+        var path = Path.Combine(_dir, "empty4.json");
+        File.WriteAllText(path, "{}");
+        Assert.Equal(0, AgentConfig.Load(path).ContextWindow);
+    }
+
+    [Fact]
     public void Load_OtherClampedFields_StayInRange()
     {
         // 其余带上下界的字段也应在加载时收敛，避免非法值导致空转/异常
