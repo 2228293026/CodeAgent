@@ -267,6 +267,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ConfirmCommands_DefaultsToFalse()
+    {
+        // 未配置时默认不确认命令（命令类工具直接执行，交互式场景可开启）
+        var path = Path.Combine(_dir, "empty18.json");
+        File.WriteAllText(path, "{}");
+        Assert.False(AgentConfig.Load(path).ConfirmCommands);
+    }
+
+    [Fact]
     public void Load_Provider_DefaultsToOpenai()
     {
         // 未配置时默认使用 openai 协议 Provider（与 Providers 键约定一致）
