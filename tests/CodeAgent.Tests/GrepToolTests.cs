@@ -385,4 +385,20 @@ public class GrepToolTests : IDisposable
         Assert.DoesNotContain("many.txt:51", output);   // 第 51 行不是命中行（仅可能作为上下文出现）
     }
 
+    [Fact]
+    public async Task Grep_SmartCase_LowercasePattern_IgnoresCase()
+    {
+        // 智能大小写（ripgrep 风格）的另一面：全小写 pattern 默认忽略大小写，
+        // 大写文本也能命中（与 case_sensitive=true 的强制精确匹配互为补充）
+        File.WriteAllText(Path.Combine(_dir, "case.txt"), "TODO buy milk\nDone items\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "todo" }, ctx, CancellationToken.None);
+
+        Assert.Contains("case.txt:1", output);
+        Assert.Contains("TODO buy milk", output);
+        Assert.DoesNotContain("case.txt:2", output); // Done 与 pattern 无关
+    }
 }
