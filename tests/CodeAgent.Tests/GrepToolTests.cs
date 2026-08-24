@@ -386,6 +386,21 @@ public class GrepToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_MaxResultsZero_ClampsToOne()
+    {
+        // max_results=0 是无意义输入：应收敛到 1（至少返回首个命中），而非空结果或报错
+        File.WriteAllText(Path.Combine(_dir, "z.txt"), "hit\nother\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "hit", ["max_results"] = 0 }, ctx, CancellationToken.None);
+
+        Assert.Contains("z.txt:1", output);   // 首个命中仍返回
+        Assert.DoesNotContain("z.txt:2", output); // 其余被截断
+    }
+
+    [Fact]
     public async Task Grep_SmartCase_LowercasePattern_IgnoresCase()
     {
         // 智能大小写（ripgrep 风格）的另一面：全小写 pattern 默认忽略大小写，
