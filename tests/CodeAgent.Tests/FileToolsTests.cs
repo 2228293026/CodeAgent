@@ -142,6 +142,18 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_EmptyFile_ReturnsFriendlyMessage()
+    {
+        // 0 字节文件不应报错或输出幽灵空行，应明确提示「文件为空」
+        File.WriteAllText(Path.Combine(_dir, "empty.txt"), "");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "empty.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("为空", output);
+    }
+
+    [Fact]
     public async Task ReadFile_NoLineNumbers_OutputsRawText()
     {
         var path = Path.Combine(_dir, "r2.txt");
