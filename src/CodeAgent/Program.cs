@@ -649,6 +649,12 @@ internal static class Program
                 var calls = string.Join(", ", m.ToolCalls.Select(tc => tc.Name));
                 content = (content.Length > 0 ? content + " " : "") + $"[调用 {calls}]";
             }
+            if (m.Role == MessageRole.Assistant && !string.IsNullOrEmpty(m.ThinkingText))
+            {
+                // 思考轮标记：内容被折叠进历史时仍能看出该轮带推理
+                var redactedNote = m.RedactedThinkingData is { Count: > 0 } ? $" +{m.RedactedThinkingData.Count} 加密块" : "";
+                content = (content.Length > 0 ? content + " " : "") + $"[思考 {m.ThinkingText.Length} 字符{redactedNote}]";
+            }
             if (content.Length > 300)
                 content = TextUtil.TruncateLine(content, 300);
             // 多行内容折叠为一行（工具结果常带换行，否则会打乱逐条列表）
