@@ -67,6 +67,15 @@ public class ToolRegistryEdgeTests
     }
 
     [Fact]
+    public void GetBool_NumericValue_IsCoerced()
+    {
+        // 回归：模型常把布尔参数误发成整数（1/0）——数字 1/非0 视为 true，0 视为 false
+        Assert.True(ToolArgs.GetBool(new JsonObject { ["b"] = 1 }, "b", false));
+        Assert.True(ToolArgs.GetBool(new JsonObject { ["b"] = 5 }, "b", false));
+        Assert.False(ToolArgs.GetBool(new JsonObject { ["b"] = 0 }, "b", true));
+    }
+
+    [Fact]
     public void GetStringDict_NullValue_IsSkipped()
     {
         var args = new JsonObject

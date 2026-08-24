@@ -248,7 +248,7 @@ internal static class ToolArgs
         return def;
     }
 
-    /// <summary>读取布尔；兼容 "true"/"false"/"1"/"0"/"yes"/"no" 字符串。</summary>
+    /// <summary>读取布尔；兼容原生布尔、JSON 布尔字符串（"true"/"false"/"yes"/"no"）以及数字 1/0（模型常把布尔参数误发成整数）。</summary>
     public static bool GetBool(JsonObject? args, string key, bool def)
     {
         if (args?[key] is not JsonValue v)
@@ -268,6 +268,9 @@ internal static class ToolArgs
                 s.Equals("n", StringComparison.OrdinalIgnoreCase))
                 return false;
         }
+        // 数字兜底：1/非0 视为 true，0 视为 false（JSON 里布尔误写成整数时也能正确解析）
+        if (v.TryGetValue<int>(out var n))
+            return n != 0;
         return def;
     }
 
