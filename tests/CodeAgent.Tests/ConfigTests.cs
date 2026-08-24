@@ -278,6 +278,15 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_StreamOutput_DefaultsToTrue()
+    {
+        // 未配置时默认开启流式输出（逐 token 显示，体验更流畅）
+        var path = Path.Combine(_dir, "empty22.json");
+        File.WriteAllText(path, "{}");
+        Assert.True(AgentConfig.Load(path).StreamOutput);
+    }
+
+    [Fact]
     public void Load_ConfirmCommands_DefaultsToFalse()
     {
         // 未配置时默认不确认命令（命令类工具直接执行，交互式场景可开启）
