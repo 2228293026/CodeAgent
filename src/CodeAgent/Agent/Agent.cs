@@ -141,6 +141,13 @@ public sealed partial class Agent
         _messages.Add(new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) });
         // 清空后没有「上一轮」可撤回：清空起点栈，避免 ESC 撤回按过期索引误删
         _turnStarts.Clear();
+        // 回合统计归零：状态栏在新对话首轮前不应残留上一回合的 token/耗时
+        TurnRounds = 0;
+        _turnToolCalls = 0;
+        TurnInputTokens = 0;
+        TurnOutputTokens = 0;
+        TurnCachedTokens = 0;
+        TurnThinkingSeconds = 0;
         LastInputTokens = 0; // 上下文回到仅系统提示，ctx 退回估算口径
         LastPrompt = null; // 对话已清空：/retry 不应把旧问题复活进新会话
         // 新开一个日志文件：--continue 恢复最近会话时不会带回已清空的历史；

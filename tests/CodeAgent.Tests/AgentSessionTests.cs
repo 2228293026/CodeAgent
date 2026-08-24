@@ -174,6 +174,23 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task Reset_ZeroesTurnStats()
+    {
+        // /clear 后状态栏不应残留上一回合的 token 统计
+        var provider = new FakeProvider { NextResponse = new Providers.ProviderResponse { Text = "ok", InputTokens = 100, OutputTokens = 50 } };
+        var agent = new AgentClass(new AgentConfig { SaveSessions = false, SessionDir = _sessionDir }, provider, ToolRegistry.CreateDefault());
+        await agent.RunAsync("hi", CancellationToken.None);
+        Assert.True(agent.TurnInputTokens > 0);
+
+        agent.Reset();
+
+        Assert.Equal(0, agent.TurnInputTokens);
+        Assert.Equal(0, agent.TurnOutputTokens);
+        Assert.Equal(0, agent.TurnToolCalls);
+        Assert.Equal(0, agent.TurnRounds);
+    }
+
+    [Fact]
     public async Task SaveLoadSession_RoundTripsMessages()
     {
         var agent = MakeAgent(_sessionDir, out var path);
