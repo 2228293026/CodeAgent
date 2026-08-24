@@ -567,4 +567,20 @@ public class UndoManagerTests : IDisposable
         Assert.Equal(path, paths[0]); // 最近（b.txt 是最后 push？）——按插入序，a 在前
     }
 
+    [Fact]
+    public void Clear_EmptiesStack_AndTryUndoReturnsNull()
+    {
+        // /undo clear：仅丢弃历史记录，已落盘改动不回滚
+        var path = Path.Combine(_dir, "a.txt");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "1", NewText = "2" });
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "2", NewText = "3" });
+        Assert.Equal(2, um.Count);
+
+        um.Clear();
+
+        Assert.Equal(0, um.Count);
+        Assert.Null(um.TryUndo()); // 清空后无可撤销
+    }
+
 }

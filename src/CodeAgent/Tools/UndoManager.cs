@@ -36,6 +36,13 @@ public sealed class UndoManager
 
     public int Count => _entries.Count;
 
+    /// <summary>清空撤销栈（/undo clear 用）：已落盘的文件修改无法回滚，仅丢弃历史记录。</summary>
+    public void Clear()
+    {
+        lock (_lock)
+            _entries.Clear();
+    }
+
     public void Push(UndoEntry entry)
     {
         lock (_lock)

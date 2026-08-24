@@ -189,7 +189,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 
-`/undo` 会撤销最近一次 `write_file` / `edit_file` 对文件的修改：新建的文件被删除，覆盖的文件恢复原内容（最多记住最近 50 次修改）。
+`/undo` 会撤销最近一次 `write_file` / `edit_file` 对文件的修改：新建的文件被删除，覆盖的文件恢复原内容（最多记住最近 50 次修改）。用法：`/undo`（撤销最近一次）、`/undo N`（撤销最近 N 次）、`/undo list`（列出历史）、`/undo clear`（清空撤销记录，已落盘改动不会回滚）。
 
 `/diff` 显示最近一次修改的 diff（基于撤销快照与当前文件内容对比），方便审查 agent 的改动。
 

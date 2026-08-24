@@ -1361,6 +1361,18 @@ internal static class Program
                     var list = agent.Context.Undo.ListEntries();
                     Console.WriteLine(list.Length == 0 ? "没有可撤销的操作。" : $"可撤销操作（编号 1 = 最近）:\n{list}");
                 }
+                else if (rest.Equals("clear", StringComparison.OrdinalIgnoreCase))
+                {
+                    // 清空撤销历史：已落盘的文件修改无法回滚，仅丢弃可撤销记录
+                    if (agent.Context.Undo.Count == 0)
+                        Console.WriteLine("撤销历史已经是空的。");
+                    else
+                    {
+                        var n = agent.Context.Undo.Count;
+                        agent.Context.Undo.Clear();
+                        Console.WriteLine($"已清空 {n} 条撤销记录（已写入文件的修改不会被回滚）。");
+                    }
+                }
                 else if (string.IsNullOrWhiteSpace(rest))
                 {
                     var list = agent.Context.Undo.ListEntries();
@@ -1386,7 +1398,7 @@ internal static class Program
                 }
                 else
                 {
-                    Console.WriteLine("用法: /undo [N|list] —— N = 撤销最近 N 次, list = 列出历史");
+                    Console.WriteLine("用法: /undo [N|list|clear] —— N = 撤销最近 N 次, list = 列出历史, clear = 清空撤销记录");
                 }
                 break;
 
