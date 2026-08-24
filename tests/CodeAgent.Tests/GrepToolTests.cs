@@ -417,4 +417,22 @@ public class GrepToolTests : IDisposable
         Assert.Contains("a.txt", output);   // 仅列文件名
         Assert.DoesNotContain("a.txt:", output); // 不出现「文件:行数」计数格式
     }
+
+    [Fact]
+    public async Task Grep_Context_ClampsToMaxTen()
+    {
+        // context 超过上限 10 应收敛：距离命中行超过 10 的行不应作为上下文出现
+        var lines = Enumerable.Range(1, 25).Select(i => i == 13 ? "TARGET" : $"line{i}");
+        File.WriteAllText(Path.Combine(_dir, "ctx.txt"), string.Join('\n', lines));
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "TARGET", ["context"] = 100 }, ctx, CancellationToken.None);
+
+        Assert.Contains("ctx.txt:13", output);   // 命中行
+        Assert.Contains(" 3| ", output);          // 第 3 行在 context=10 范围内（距离 10）
+        Assert.DoesNotContain(" 1| ", output);   // 第 1 行距离 12 > 10，不应出现
+        Assert.DoesNotContain(" 24| ", output);  // 第 24 行距离 11 > 10，不应出现
+    }
 }
