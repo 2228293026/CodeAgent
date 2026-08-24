@@ -224,6 +224,7 @@ public sealed class AgentConfig
             if (!string.IsNullOrWhiteSpace(accessRaw) && cfg.FileAccess != accessRaw.Trim().ToLowerInvariant())
                 cfg.Warnings.Add($"fileAccess='{accessRaw}' 不是有效级别（strict/whitelist/full），已回退为更严格的 '{cfg.FileAccess}'。");
             cfg.Warnings.AddRange(ValidateUnknownKeys(text));
+            ValidateModeNames(cfg);
             return cfg;
         }
         catch (JsonException ex)
@@ -282,6 +283,28 @@ public sealed class AgentConfig
     {
         "name", "description", "systemPrompt", "tools",
     };
+
+    private static readonly string[] BuiltinModeNames =
+        ["code", "plan", "explain", "review", "debug", "refactor", "test", "doc"];
+
+    /// <summary>自定义模式名体检：重名（只有第一个生效）与内置同名（内置在目录前列，
+    /// /mode 永远选中内置——自定义项被静默遮蔽）都是「配了不生效」的隐形坑。</summary>
+    private static void ValidateModeNames(AgentConfig cfg)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in cfg.Modes)
+        {
+            if (string.IsNullOrWhiteSpace(m.Name))
+                continue;
+            if (!seen.Add(m.Name.Trim()))
+                cfg.Warnings.Add($"自定义模式名 '{m.Name}' 重复——只有第一个会生效，请删除或改名。");
+        }
+        foreach (var builtin in BuiltinModeNames)
+        {
+            if (cfg.Modes.Any(m => m.Name?.Trim().Equals(builtin, StringComparison.OrdinalIgnoreCase) == true))
+                cfg.Warnings.Add($"自定义模式 '{builtin}' 与内置模式同名——/mode 会始终选中内置项，该自定义配置不会生效（请改名）。");
+        }
+    }
 
     /// <summary>校验配置文件键名：未知顶层/供应商/自定义模式字段多半是拼写错误，
     /// 反序列化会静默丢弃——「配了但不生效」且无任何线索。返回人类可读警告。</summary>

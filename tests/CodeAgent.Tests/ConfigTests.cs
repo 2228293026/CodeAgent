@@ -161,6 +161,28 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_DuplicateOrShadowedModeNames_ProduceWarnings()
+    {
+        // 重名：只有第一个生效；与内置同名：内置优先，自定义被静默遮蔽——都是隐形坑
+        var path = Path.Combine(_dir, "modes.json");
+        File.WriteAllText(path, """
+            {
+              "modes": [
+                { "name": "fix", "systemPrompt": "first" },
+                { "name": "FIX", "systemPrompt": "second" },
+                { "name": "review", "systemPrompt": "shadowing builtin" }
+              ]
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        // 警告点名后出现的重复项（大小写不敏感地与首个撞名）
+        Assert.Contains(cfg.Warnings, w => w.Contains("'FIX' 重复"));
+        Assert.Contains(cfg.Warnings, w => w.Contains("'review'") && w.Contains("内置模式同名"));
+    }
+
+    [Fact]
     public void ValidateUnknownKeys_MalformedJson_ReturnsEmpty()
     {
         // 解析失败交给反序列化统一报错，校验器不重复抛异常
