@@ -142,6 +142,19 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SingleLineNoTrailingNewline_ReadsAsOneLine()
+    {
+        // 文件只有一行且无结尾换行：不应出现幽灵空行或行号错位
+        File.WriteAllText(Path.Combine(_dir, "single.txt"), "only line");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "single.txt" }, ctx, CancellationToken.None);
+        Assert.Contains("1\tonly line", output);
+        Assert.False(output.Contains("2\t"), "不应有第 2 行");
+    }
+
+    [Fact]
     public async Task ReadFile_EmptyFile_ReturnsFriendlyMessage()
     {
         // 0 字节文件不应报错或输出幽灵空行，应明确提示「文件为空」
