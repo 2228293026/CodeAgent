@@ -1823,8 +1823,7 @@ internal static class Program
                     var caDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
                     if (Directory.Exists(caDir))
                     {
-                        var bytes = Directory.EnumerateFiles(caDir, "*", SearchOption.AllDirectories)
-                            .Sum(f => new FileInfo(f).Length);
+                        var bytes = TextUtil.GetDirectorySizeBytes(caDir);
                         Console.WriteLine($"  .codeagent 大小   : {TextUtil.FormatBytes(bytes)}（会话日志/导出/历史，可整目录删除）");
                     }
                 }

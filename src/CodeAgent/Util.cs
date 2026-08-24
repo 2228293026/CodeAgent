@@ -387,6 +387,20 @@ public static class TextUtil
     /// 小额保留四位（$0.00 会吞掉真实开销）。</summary>
     public static string FormatCost(double cost) =>
         cost < 0.01 ? cost.ToString("F4") : cost.ToString("F2");
+
+    /// <summary>递归统计目录下所有文件的总字节数（不含目录自身）。</summary>
+    public static long GetDirectorySizeBytes(string dir)
+    {
+        if (!Directory.Exists(dir))
+            return 0;
+        long total = 0;
+        foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+        {
+            try { total += new FileInfo(f).Length; }
+            catch { /* 无权限/竞态文件跳过，不影响其余统计 */ }
+        }
+        return total;
+    }
 }
 
 /// <summary>搜索时需要跳过的构建/缓存/版本控制目录。</summary>

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using CodeAgent;
 using Xunit;
 
@@ -198,4 +199,30 @@ public class TextUtilFormattingTests
     [InlineData(12.345, "12.35")]      // 四舍五入
     public void FormatCost_PicksPrecisionByMagnitude(double cost, string expected) =>
         Assert.Equal(expected, TextUtil.FormatCost(cost));
+
+    [Fact]
+    public void GetDirectorySizeBytes_EmptyDir_ReturnsZero()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            Assert.Equal(0, TextUtil.GetDirectorySizeBytes(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void GetDirectorySizeBytes_SumOfFiles_ReturnsTotalBytes()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "a.bin"), new byte[100]);
+            File.WriteAllBytes(Path.Combine(dir, "b.bin"), new byte[250]);
+            Assert.Equal(350, TextUtil.GetDirectorySizeBytes(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }
