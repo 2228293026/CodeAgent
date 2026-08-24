@@ -313,7 +313,11 @@ public sealed class AgentConfig
         foreach (var m in cfg.Modes)
         {
             if (string.IsNullOrWhiteSpace(m.Name))
+            {
+                // 无名模式无法被 /mode 选中，会被静默忽略——明确告知而非无提示失效
+                cfg.Warnings.Add("自定义模式缺少 name 字段——该项将被忽略，请补上 name。");
                 continue;
+            }
             if (!seen.Add(m.Name.Trim()))
                 cfg.Warnings.Add($"自定义模式名 '{m.Name}' 重复——只有第一个会生效，请删除或改名。");
         }

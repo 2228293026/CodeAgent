@@ -205,7 +205,6 @@ public class ConfigTests : IDisposable
     [Fact]
     public void Load_DefaultModeReferencesCustomMode_NoWarning()
     {
-        // 引用了确实存在的自定义模式 → 不应警告
         var path = Path.Combine(_dir, "defmode2.json");
         File.WriteAllText(path, """
             {
@@ -219,6 +218,25 @@ public class ConfigTests : IDisposable
         var cfg = AgentConfig.Load(path);
 
         Assert.DoesNotContain(cfg.Warnings, w => w.Contains("defaultMode"));
+    }
+
+    [Fact]
+    public void Load_ModeEntryMissingName_Warns()
+    {
+        // 自定义模式缺 name：会被 /mode 静默忽略——必须警告
+        var path = Path.Combine(_dir, "modename.json");
+        File.WriteAllText(path, """
+            {
+              "modes": [
+                { "systemPrompt": "no name here" },
+                { "name": "ok", "systemPrompt": "fine" }
+              ]
+            }
+            """);
+
+        var cfg = AgentConfig.Load(path);
+
+        Assert.Contains(cfg.Warnings, w => w.Contains("自定义模式缺少 name 字段"));
     }
 
     [Fact]
