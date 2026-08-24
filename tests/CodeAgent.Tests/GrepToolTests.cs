@@ -401,4 +401,20 @@ public class GrepToolTests : IDisposable
         Assert.Contains("TODO buy milk", output);
         Assert.DoesNotContain("case.txt:2", output); // Done 与 pattern 无关
     }
+
+    [Fact]
+    public async Task Grep_FilesOnlyBeatsCountOnly()
+    {
+        // 同时给 files_only 与 count_only 时，files_only 优先：输出文件名而非「文件:行数」
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "alpha\nbeta\n");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "gamma\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "a", ["files_only"] = true, ["count_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a.txt", output);   // 仅列文件名
+        Assert.DoesNotContain("a.txt:", output); // 不出现「文件:行数」计数格式
+    }
 }
