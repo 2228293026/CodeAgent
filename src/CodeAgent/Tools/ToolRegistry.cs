@@ -370,6 +370,7 @@ public sealed class ToolRegistry
         registry.Register(new PowerShellTool());
         registry.Register(new SessionSearchTool());
         registry.Register(new StopTool());
+        registry.Register(new ApplyPatchTool());
         return registry;
     }
 }
