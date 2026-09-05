@@ -344,8 +344,7 @@ public sealed class ListDirectoryTool : ITool
         var maxItems = Math.Clamp(ToolArgs.GetInt(args, "max_items", 800), 1, 5000);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
-        var ignore = ToolArgs.GetStringList(args, "ignore");
-        var ignoreSet = ignore is null ? null : new HashSet<string>(ignore, StringComparer.OrdinalIgnoreCase);
+        var ignoreSet = ToolArgs.GetStringSet(args, "ignore");
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))

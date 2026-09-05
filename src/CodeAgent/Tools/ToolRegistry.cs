@@ -316,6 +316,15 @@ internal static class ToolArgs
         }
         return list.Count == 0 ? null : list;
     }
+
+    /// <summary>读取字符串集合（忽略大小写）；缺失或空值时返回 null。</summary>
+    public static HashSet<string>? GetStringSet(JsonObject? args, string key)
+    {
+        var list = GetStringList(args, key);
+        if (list is null)
+            return null;
+        return new HashSet<string>(list, StringComparer.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>工具注册表：注册、生成 ToolSpec、按名分发执行。</summary>
