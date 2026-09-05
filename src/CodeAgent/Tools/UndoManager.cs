@@ -73,6 +73,21 @@ public sealed class UndoManager
         }
     }
 
+    /// <summary>查看下一次可撤销的操作（不消费栈）：返回 entry 或 false（空栈时）。</summary>
+    public bool TryPeek(out UndoEntry entry)
+    {
+        lock (_lock)
+        {
+            if (_entries.Count == 0)
+            {
+                entry = default!;
+                return false;
+            }
+            entry = _entries[^1];
+            return true;
+        }
+    }
+
     /// <summary>撤销最近 count 次文件修改（/undo N 与 /undo 选择用），返回合并描述；无记录时返回 null。</summary>
     public string? TryUndo(int count = 1)
     {

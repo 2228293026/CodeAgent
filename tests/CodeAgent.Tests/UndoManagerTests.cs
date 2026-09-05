@@ -617,6 +617,21 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void TryPeek_ReturnsTopEntryWithoutConsuming()
+    {
+        var path = Path.Combine(_dir, "p.txt");
+        File.WriteAllText(path, "v");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = path, HadFile = true });
+
+        var ok = um.TryPeek(out var entry);
+
+        Assert.True(ok);
+        Assert.Equal("write", entry.Kind);
+        Assert.Equal(1, um.Count); // 未消费
+    }
+
+    [Fact]
     public void PeekNext_ReturnsTopEntrySummaryWithoutConsuming()
     {
         var path = Path.Combine(_dir, "p.txt");
