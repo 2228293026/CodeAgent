@@ -505,6 +505,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_FilesOnly_DeepNested_SkipsAllDirectories()
+    {
+        // files_only + depth=3: 深层嵌套目录中的文件也不应出现（目录被完全跳过）
+        Directory.CreateDirectory(Path.Combine(_dir, "a", "b", "c"));
+        File.WriteAllText(Path.Combine(_dir, "a", "b", "c", "deep.txt"), "z");
+        File.WriteAllText(Path.Combine(_dir, "root.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["files_only"] = true, ["depth"] = 3 }, ctx, CancellationToken.None);
+
+        Assert.Contains("root.txt", outText); // 根目录文件
+        Assert.DoesNotContain("deep.txt", outText); // 深层文件被跳过（因为目录被跳过）
+        Assert.DoesNotContain("a/", outText); // 目录名也不出现
+    }
+
+    [Fact]
     public async Task ListDirectory_MaxItems_OverridesCap()
     {
         // max_items 可把默认 800 的上限放大或缩小：默认不传时为 800；传参可任意调整
