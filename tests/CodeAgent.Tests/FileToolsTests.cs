@@ -1651,6 +1651,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithMaxLineLength_TrimsBeforeTruncate()
+    {
+        // trim + max_line_length:先 trim 再截断（trim 移除的首尾空白不计入截断长度）
+        File.WriteAllText(Path.Combine(_dir, "tml2.txt"), "  " + new string('X', 100) + "  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tml2.txt", ["trim"] = true, ["max_line_length"] = 50 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 截断生效
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
