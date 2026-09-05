@@ -93,8 +93,8 @@ public sealed class ReadFileTool : ITool
         for (int i = 0; i < count; i++)
         {
             var raw = lines[start + i].TrimEnd('\r');
-            if (skipEmpty && raw.Length == 0)
-                continue; // 跳过空行：行号仍按原文件保持（不重排）
+            if (skipEmpty && string.IsNullOrWhiteSpace(raw))
+                continue; // 跳过空行/空白行：行号仍按原文件保持（不重排）
             // 单行截断保护：压缩 JSON / base64 等超长行会撑爆上下文（默认 2000 字符/行）
             var line = maxLineLength == 0 ? raw : TextUtil.TruncateLine(raw, maxLineLength);
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");

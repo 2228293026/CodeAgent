@@ -1252,6 +1252,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_AlsoSkipsWhitespaceOnlyLines()
+    {
+        // skip_empty:空白行(空格、Tab)也视为空行跳过
+        File.WriteAllText(Path.Combine(_dir, "ws.txt"), "a\n   \n\t\nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ws.txt", ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("4\tb", output);
+        Assert.DoesNotContain("2\t", output);
+        Assert.DoesNotContain("3\t", output);
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_WithMaxLineLength_StillHidesBlanks()
     {
         // skip_empty + max_line_length 组合:空行被隐藏,长行仍按 max_line_length 截断
