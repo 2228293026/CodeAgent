@@ -758,6 +758,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_LimitZero_ReadsOneLine()
+    {
+        // limit=0 被 clamp 到 1：返回第 1 行而非空结果
+        File.WriteAllText(Path.Combine(_dir, "lz.txt"), "alpha\nbeta\ngamma\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "lz.txt", ["limit"] = 0 }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\talpha", output);
+        Assert.DoesNotContain("beta", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Head_ReadsFirstNLines()
     {
         // head 是 limit 的便捷写法：读开头 N 行（tail 未给时优先）
