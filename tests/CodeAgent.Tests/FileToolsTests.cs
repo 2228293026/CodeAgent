@@ -1681,6 +1681,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithHeadAndMaxLineLength_TrimsThenTruncatesInRange()
+    {
+        // trim + head + max_line_length:先在 head 范围内 trim，再截断
+        File.WriteAllText(Path.Combine(_dir, "thml.txt"), "  hello world  \n  foo bar  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "thml.txt", ["trim"] = true, ["head"] = 1, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello", output); // trim 后仍含原词
+        Assert.Contains("…", output); // 截断生效
+        Assert.DoesNotContain("foo", output); // head=1 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
