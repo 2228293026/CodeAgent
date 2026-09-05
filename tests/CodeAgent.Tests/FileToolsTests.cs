@@ -529,6 +529,39 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_MaxLineLength_CustomCap_RespectsOverride()
+    {
+        // max_line_length: 可把截断阈值从默认 2000 调到更大（或 0 表示不截断），
+        // 方便模型读取 base64 / 压缩 JSON 等超长行。
+        var path = Path.Combine(_dir, "long.txt");
+        File.WriteAllText(path, new string('A', 8000) + "\nshort\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "long.txt", ["max_line_length"] = 50 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 有截断标记
+        Assert.True(output.Length < 200, $"自定义 max_line_length=50 时应更早截断（当前输出 {output.Length} 字符）");
+        Assert.Contains("short", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_MaxLineLength_Zero_DisablesTruncation()
+    {
+        // max_line_length=0：不截断超长行（用于模型需要完整取回极长行的场景）
+        var path = Path.Combine(_dir, "long.txt");
+        File.WriteAllText(path, new string('Z', 8000) + "\nshort\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(new JsonObject { ["path"] = "long.txt", ["max_line_length"] = 0 }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("…", output); // 不截断时不应有省略标记
+        Assert.Contains(new string('Z', 8000), output); // 完整超长行可回
+        Assert.Contains("short", output);
+    }
+
+    [Fact]
     public async Task WriteFile_CreateDirsTrue_CreatesMissingParents()
     {
         // 默认 create_dirs=true：写入深层路径时应自动创建全部缺失父目录

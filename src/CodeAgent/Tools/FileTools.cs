@@ -19,6 +19,7 @@ public sealed class ReadFileTool : ITool
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
             ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（1-5000，limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
+            ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（1-50000 字符，默认 2000；设 0 表示不截断）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -50,6 +51,9 @@ public sealed class ReadFileTool : ITool
             limit = headCount;
         }
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
+        var maxLineLength = ToolArgs.GetInt(args, "max_line_length", 2000);
+        if (maxLineLength < 0) maxLineLength = 2000; // 负值回退默认值，避免误伤
+        if (maxLineLength > 50000) maxLineLength = 50000;
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         if (SkipDirs.LooksBinary(text))
@@ -86,7 +90,7 @@ public sealed class ReadFileTool : ITool
         {
             var line = lines[start + i].TrimEnd('\r');
             // 单行截断保护：压缩 JSON / base64 等超长行会撑爆上下文（默认 2000 字符/行）
-            line = TextUtil.TruncateLine(line, 2000);
+            line = maxLineLength == 0 ? line : TextUtil.TruncateLine(line, maxLineLength);
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
         }
 
