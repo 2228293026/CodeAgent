@@ -1097,6 +1097,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_MaxLineLength_OverMax_ClampsTo50000()
+    {
+        // max_line_length 上限 50000：超限输入会被 clamp，不抛出异常
+        var path = Path.Combine(_dir, "big.txt");
+        File.WriteAllText(path, new string('Z', 100_000) + "\nend\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "big.txt", ["max_line_length"] = 100_000 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 被 50000 截断
+        Assert.Contains("end", output);
+    }
+
+    [Fact]
     public async Task ReadFile_MaxLineLength_NegativeValue_FallsBackToDefault()
     {
         // 负值 max_line_length 应回退到默认 2000，不引发异常
