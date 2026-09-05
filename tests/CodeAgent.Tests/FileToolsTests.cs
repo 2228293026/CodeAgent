@@ -1876,6 +1876,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithOffsetAndLimitAndMaxLineLength_TrimsThenTruncatesInRange()
+    {
+        // trim + offset + limit + max_line_length:在 offset/limit 范围内 trim 并截断
+        File.WriteAllText(Path.Combine(_dir, "tolml.txt"), "  hello world  \n  foo bar  \n  baz  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tolml.txt", ["trim"] = true, ["offset"] = 2, ["limit"] = 1, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("foo", output); // offset=2, limit=1 显示第 2 行
+        Assert.Contains("…", output); // 截断生效
+        Assert.DoesNotContain("hello", output); // offset 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
