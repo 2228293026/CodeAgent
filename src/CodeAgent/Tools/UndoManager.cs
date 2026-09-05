@@ -47,6 +47,8 @@ public sealed class UndoManager
     {
         lock (_lock)
         {
+            if (string.IsNullOrWhiteSpace(entry.Path))
+                return; // 路径缺失的撤销条目无意义：不污染撤销栈
             _entries.Add(entry);
             if (_entries.Count > MaxEntries)
                 _entries.RemoveAt(0);

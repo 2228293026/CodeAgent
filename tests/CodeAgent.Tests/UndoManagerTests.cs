@@ -601,6 +601,15 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void Push_MissingPath_DoesNotPolluteStack()
+    {
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = "" });
+        um.Push(new UndoEntry { Kind = "edit", Path = "   " });
+        Assert.Equal(0, um.Count);
+    }
+
+    [Fact]
     public void PeekNext_EmptyStack_ReturnsNull()
     {
         var um = new UndoManager();
