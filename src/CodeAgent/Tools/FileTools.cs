@@ -19,7 +19,7 @@ public sealed class ReadFileTool : ITool
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
             ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（0=不使用, 1-5000；limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
-            ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（1-50000 字符，默认 2000；设 0 表示不截断）" },
+            ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
             ["skip_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空行（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
