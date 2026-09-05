@@ -18,6 +18,13 @@ public sealed class HistoryStore
 
     public int Count => _entries.Count;
 
+    /// <summary>清空历史条目（/history clear 用）；文件也会删除。</summary>
+    public void Clear()
+    {
+        _entries.Clear();
+        try { File.Delete(_path); } catch { }
+    }
+
     /// <summary>记录一条输入：空白忽略；重复条目移到末尾（↑/↓ 与 Ctrl+R 里不再出现
     /// 散落的旧副本）；超上限丢最旧。</summary>
     public void Remember(string line)

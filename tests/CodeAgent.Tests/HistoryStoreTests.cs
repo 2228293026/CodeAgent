@@ -166,6 +166,19 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Clear_RemovesAllEntriesAndDeletesFile()
+    {
+        var store = new HistoryStore(_file);
+        store.Remember("a");
+        store.Remember("b");
+        Assert.Equal(2, store.Count);
+
+        store.Clear();
+        Assert.Empty(store.Entries);
+        Assert.False(File.Exists(_file));
+    }
+
+    [Fact]
     public void Load_LegacyFileWithBackslashPaths_Unchanged()
     {
         // 旧版写入的单行条目（Windows 路径含未转义反斜杠）：未识别的转义序列保持原样
