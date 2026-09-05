@@ -1666,6 +1666,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithNoLineNumbersAndMaxLineLength_OutputsCleanText()
+    {
+        // trim + no_line_numbers + max_line_length:无行号，trim 后截断
+        File.WriteAllText(Path.Combine(_dir, "tnlml.txt"), "  hello world  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tnlml.txt", ["trim"] = true, ["no_line_numbers"] = true, ["max_line_length"] = 5 }, ctx, CancellationToken.None);
+
+        Assert.Contains("（tnlml.txt 共 1 行）", output); // 头部仍在（no_line_numbers 不删头部）
+        Assert.Contains("hel", output); // 内容被截断（max_line_length=5 含省略号）
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
