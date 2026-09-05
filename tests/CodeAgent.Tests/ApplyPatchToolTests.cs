@@ -159,6 +159,18 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_AllowNewFile_ValidateOnly_ReportsWithoutWriting()
+    {
+        // allow_new_file + validate_only:报告将创建文件，但不实际写盘
+        var patch = "@@ -0,0 +1,2 @@\n+line1\n+line2\n";
+
+        var result = await Apply(patch, "new.txt", allowNewFile: true, validateOnly: true);
+
+        Assert.Contains("验证通过(新建)", result);
+        Assert.False(File.Exists(Path.Combine(_dir, "new.txt")));
+    }
+
+    [Fact]
     public async Task Apply_MissingTarget_WithoutAllowNewFile_Throws()
     {
         var patch = "@@ -0,0 +1 @@\n+x\n";
