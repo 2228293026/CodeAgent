@@ -1538,6 +1538,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_AllWhitespaceLine_BecomesEmpty()
+    {
+        // trim=true:全空白行 trim 后变成空串，但仍占一行（行号保留）
+        File.WriteAllText(Path.Combine(_dir, "tw.txt"), "  \n\ta\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tw.txt", ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\t", output); // 第 1 行 trim 后为空
+        Assert.Contains("2\ta", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
