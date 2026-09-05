@@ -231,6 +231,19 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadSession_DoesNotPreserveStreamedLastRun()
+    {
+        // 回归：加载的会话不应残留上一轮的流式输出状态
+        var agent = MakeAgent(_sessionDir, out var path);
+        agent.StreamedLastRun = true;
+        agent.SaveSession("s");
+
+        var restored = MakeAgent(_sessionDir, out _);
+        restored.LoadSession("s");
+        Assert.False(restored.StreamedLastRun);
+    }
+
+    [Fact]
     public async Task LoadSession_ResetsTurnCounters()
     {
         // 加载的会话在首轮前不应残留上一会话的回合 token/耗时（/stats 等显示误导）

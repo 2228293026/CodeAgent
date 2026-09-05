@@ -32,6 +32,7 @@ public sealed partial class Agent
         // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
         _turnStarts.Clear();
         LastTurnFailed = false; // 加载的历史不应残留上一会话的失败状态：状态栏红标会误导
+        StreamedLastRun = false; // 加载的会话不应残留上一轮流式输出状态
         // 回合统计归零：加载的会话在首轮前不应残留上一会话的 token/耗时
         TurnRounds = 0;
         _turnToolCalls = 0;

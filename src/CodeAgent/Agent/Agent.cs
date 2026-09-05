@@ -53,7 +53,7 @@ public sealed partial class Agent
     public string? SessionPath { get; private set; }
 
     /// <summary>本轮运行是否已把最终答复流式打印到控制台（Program 据此避免重复打印）。</summary>
-    public bool StreamedLastRun { get; private set; }
+    public bool StreamedLastRun { get; internal set; }
 
     private bool _streamedThisCall;
 
