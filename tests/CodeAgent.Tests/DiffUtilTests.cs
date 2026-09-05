@@ -90,4 +90,13 @@ public class DiffUtilTests
         // 第二处在 line28：旧侧行号应为 26（28-2 上下文），不再是 1
         Assert.Equal("26", headers[^1].Groups[1].Value);
     }
+
+    [Fact]
+    public void Unified_NoTrailingNewline_TreatedSameAsWithNewline()
+    {
+        // 无尾换行与有尾换行应得到相同 diff（SplitLines  stripping 后逻辑行数一致）
+        var withNewline = DiffUtil.Unified("a\nb\n", "a\nB\n", "f.txt");
+        var withoutNewline = DiffUtil.Unified("a\nb", "a\nB", "f.txt");
+        Assert.Equal(withNewline, withoutNewline);
+    }
 }
