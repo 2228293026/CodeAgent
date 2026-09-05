@@ -75,6 +75,20 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Contains("仅显示前 300", result);
     }
 
+    [Fact]
+    public async Task Glob_MaxResults_RespectsCap()
+    {
+        // max_results 控制返回上限（默认 500）；超限时提示可能不完整
+        Directory.CreateDirectory(PathOf("mr"));
+        for (int i = 0; i < 10; i++)
+            File.WriteAllText(PathOf("mr", $"f{i}.txt"), "x");
+        var args = new JsonObject { ["pattern"] = "mr/*.txt", ["max_results"] = 3 };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(3, lines.Length); // 恰好 max_results=3 个文件
+        Assert.DoesNotContain("f3.txt", result); // 第 4 个被截断
+    }
+
     // ===== grep =====
 
     [Fact]

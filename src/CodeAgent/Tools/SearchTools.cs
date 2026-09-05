@@ -17,6 +17,7 @@ public sealed class GlobTool : ITool
             ["pattern"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "glob 模式，支持 ** 跨目录、*、?；可用字符串或字符串数组" },
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索起点目录，默认工作区根目录" },
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "排除匹配这些 glob 的结果（如 \"*.min.js\"、\"secret*\"），可用字符串或字符串数组" },
+            ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最多返回的匹配文件数（默认 500，最大 5000）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -37,13 +38,14 @@ public sealed class GlobTool : ITool
         static string AsIgnorePattern(string p) => p.Contains('/') || p.Contains('\\') ? p : "**/" + p;
         var ignore = ToolArgs.GetStringList(args, "ignore");
         var ignoreRes = ignore?.Select(p => Glob.ToRegex(AsIgnorePattern(p))).ToList();
+        var maxResults = Math.Clamp(ToolArgs.GetInt(args, "max_results", 500), 1, 5000);
         var results = new List<string>();
         var scanned = 0;
 
         var capped = false;
         foreach (var file in SkipDirs.EnumerateFilesPruned(start))
         {
-            if (scanned++ > 200_000 || results.Count > 500)
+            if (scanned++ > 200_000 || results.Count >= maxResults)
             {
                 capped = true; // 提前停止：结果可能不完整（曾静默截断，总数显示还误导）
                 break;
