@@ -17,9 +17,10 @@ public sealed class ReadFileTool : ITool
             ["offset"] = new JsonObject { ["type"] = "integer", ["description"] = "起始行号（1 起，默认 1）" },
             ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（默认 300，最大 5000）" },
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
-            ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（1-5000，limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
+            ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（0=不使用, 1-5000；limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（1-50000 字符，默认 2000；设 0 表示不截断）" },
+            ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -54,6 +55,7 @@ public sealed class ReadFileTool : ITool
         var maxLineLength = ToolArgs.GetInt(args, "max_line_length", 2000);
         if (maxLineLength < 0) maxLineLength = 2000; // 负值回退默认值，避免误伤
         if (maxLineLength > 50000) maxLineLength = 50000;
+        var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         if (SkipDirs.LooksBinary(text))
@@ -98,13 +100,12 @@ public sealed class ReadFileTool : ITool
         var head = $"（{path} 共 {lines.Length} 行{range}）\n";
 
         // 编码提示：非纯 UTF-8（带 BOM 或 GBK/ANSI 旧编码）时显式标注，避免模型误判文件为 UTF-8 去改写
-        var enc = TextUtil.DetectFileEncoding(full);
-        var encNote = enc switch
+        var encNote = noEncodingNote ? "" : (TextUtil.DetectFileEncoding(full) switch
         {
             "utf8-bom" => "（编码: UTF-8 BOM）",
             "gb18030" => "（编码: GBK/GB18030）",
             _ => "",
-        };
+        });
         return (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
     }
 }

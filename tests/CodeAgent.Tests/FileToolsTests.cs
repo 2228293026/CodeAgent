@@ -1097,6 +1097,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_NoEncodingNote_SuppressesEncodingHint()
+    {
+        // no_encoding_note=true：已知编码时抑制开头的"（编码: …）"提示，减少输出噪音
+        _ = TextUtil.EstimateTokens("");
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(Path.Combine(_dir, "ansi.txt"), gbk.GetBytes("中文内容"));
+        var tool = new ReadFileTool();
+        var ctx = new AgentContext { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ansi.txt", ["no_encoding_note"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("中文内容", output);
+        Assert.DoesNotContain("GBK", output); // 不应出现编码提示
+    }
+
+    [Fact]
     public async Task EditFile_PreservesUtf8Bom()
     {
         // 回归：改写曾丢 BOM——PowerShell 5.1 等工具靠 BOM 识别 UTF-8，丢掉后中文变乱码
