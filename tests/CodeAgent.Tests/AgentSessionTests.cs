@@ -231,6 +231,22 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadSession_ResetsTurnCounters()
+    {
+        // 加载的会话在首轮前不应残留上一会话的回合 token/耗时（/stats 等显示误导）
+        var agent = MakeAgent(_sessionDir, out var path);
+        await agent.RunAsync("你好", CancellationToken.None);
+        agent.SaveSession("s");
+        Assert.True(agent.TurnRounds > 0);
+
+        var restored = MakeAgent(_sessionDir, out _);
+        restored.LoadSession("s");
+        Assert.Equal(0, restored.TurnRounds);
+        Assert.Equal(0, restored.TurnToolCalls);
+        Assert.Equal(0, restored.TurnInputTokens);
+    }
+
+    [Fact]
     public void LoadSession_MissingName_Throws()
     {
         var agent = MakeAgent(_sessionDir, out _);
