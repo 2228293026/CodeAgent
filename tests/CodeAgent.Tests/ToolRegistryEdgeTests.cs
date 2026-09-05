@@ -113,6 +113,24 @@ public class ToolRegistryEdgeTests
         Assert.Equal("7", list![0]);
     }
 
+    [Fact]
+    public void GetStringSet_StringArray_ReturnsCaseInsensitiveSet()
+    {
+        var args = new JsonObject { ["set"] = new JsonArray("A", "b", "A") };
+        var set = ToolArgs.GetStringSet(args, "set");
+        Assert.NotNull(set);
+        Assert.Equal(2, set!.Count);
+        Assert.Contains("a", set);
+        Assert.Contains("B", set);
+    }
+
+    [Fact]
+    public void GetStringSet_MissingKey_ReturnsNull()
+    {
+        var set = ToolArgs.GetStringSet(new JsonObject(), "missing");
+        Assert.Null(set);
+    }
+
     // ===== ToolRegistry 注册与分发 =====
 
     private sealed class FakeTool(string name, string result = "ok") : ITool
