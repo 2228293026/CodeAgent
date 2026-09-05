@@ -1287,6 +1287,25 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
+    {
+        // raw=true:不带行号、不截断、不显示编码提示，原样输出
+        _ = TextUtil.EstimateTokens("");
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(Path.Combine(_dir, "raw.txt"), gbk.GetBytes("中文\n" + new string('X', 3000) + "\nend\n"));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "raw.txt", ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("中文", output);
+        Assert.Contains(new string('X', 3000), output); // 不截断
+        Assert.DoesNotContain("1\t", output); // 无行号
+        Assert.DoesNotContain("（编码", output); // 无编码提示
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_WithMaxLineLength_StillHidesBlanks()
     {
         // skip_empty + max_line_length 组合:空行被隐藏,长行仍按 max_line_length 截断

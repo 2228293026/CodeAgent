@@ -22,6 +22,7 @@ public sealed class ReadFileTool : ITool
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（1-50000 字符，默认 2000；设 0 表示不截断）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
             ["skip_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空行（默认 false）" },
+            ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -58,6 +59,13 @@ public sealed class ReadFileTool : ITool
         if (maxLineLength > 50000) maxLineLength = 50000;
         var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
         var skipEmpty = ToolArgs.GetBool(args, "skip_empty", false);
+        var isRaw = ToolArgs.GetBool(args, "raw", false);
+        if (isRaw)
+        {
+            noLineNumbers = true;
+            maxLineLength = 0;
+            noEncodingNote = true;
+        }
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         if (SkipDirs.LooksBinary(text))
