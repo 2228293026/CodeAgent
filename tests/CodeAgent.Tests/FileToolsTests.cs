@@ -1861,6 +1861,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithHeadAndTailAndMaxLineLength_TrimsThenTruncatesInRange()
+    {
+        // trim + head + tail + max_line_length:在范围内 trim 并截断
+        File.WriteAllText(Path.Combine(_dir, "thtml.txt"), "  hello world  \n  foo bar  \n  baz  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "thtml.txt", ["trim"] = true, ["head"] = 2, ["tail"] = 2, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("foo", output); // head=2, tail=2 显示后 2 行（head 被忽略）
+        Assert.Contains("…", output); // 截断生效
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
