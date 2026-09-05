@@ -1811,6 +1811,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithTailAndSkipEmpty_TrimsAndSkipsInTailRange()
+    {
+        // trim + tail + skip_empty:在 tail 范围内 trim 并跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "tts.txt"), "  \n  a  \n   \nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tts.txt", ["trim"] = true, ["tail"] = 2, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("4\tb", output); // tail=2 显示最后 2 行，但空白行被 skip
+        Assert.DoesNotContain("1\t", output);
+        Assert.DoesNotContain("2\ta", output); // 被 skip_empty 跳过
+        Assert.DoesNotContain("3\t", output); // 空白行被 skip
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
