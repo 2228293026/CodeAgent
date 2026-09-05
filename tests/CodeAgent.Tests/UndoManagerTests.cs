@@ -600,4 +600,27 @@ public class UndoManagerTests : IDisposable
         Assert.Equal("current content", File.ReadAllText(path)); // 文件未被改动（如实）
     }
 
+    [Fact]
+    public void PeekNext_EmptyStack_ReturnsNull()
+    {
+        var um = new UndoManager();
+        Assert.Null(um.PeekNext());
+    }
+
+    [Fact]
+    public void PeekNext_ReturnsTopEntrySummaryWithoutConsuming()
+    {
+        var path = Path.Combine(_dir, "p.txt");
+        File.WriteAllText(path, "v");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "write", Path = path, HadFile = true });
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "before", NewText = "v" });
+
+        var peek = um.PeekNext();
+        Assert.NotNull(peek);
+        Assert.Contains("edit", peek!);
+        Assert.Equal(2, um.Count); // 未消费
+        Assert.DoesNotContain("before", peek); // 不应泄露原始内容（摘要即可）
+    }
+
 }

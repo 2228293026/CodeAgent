@@ -53,6 +53,24 @@ public sealed class UndoManager
         }
     }
 
+    /// <summary>查看下一次可撤销的操作（不消费栈）：返回摘要或 null（空栈时）。</summary>
+    public string? PeekNext()
+    {
+        lock (_lock)
+        {
+            if (_entries.Count == 0)
+                return null;
+            var e = _entries[^1];
+            return e.Kind switch
+            {
+                "write" => $"write {Path.GetFileName(e.Path)}（{(e.HadFile ? "覆盖" : "新建")}）",
+                "edit" => $"edit {Path.GetFileName(e.Path)}（{(e.OldText?.Length ?? 0)} 字符 → ...）",
+                "cmd" => $"cmd {Path.GetFileName(e.Path)}",
+                _ => $"{e.Kind} {Path.GetFileName(e.Path)}",
+            };
+        }
+    }
+
     /// <summary>撤销最近 count 次文件修改（/undo N 与 /undo 选择用），返回合并描述；无记录时返回 null。</summary>
     public string? TryUndo(int count = 1)
     {
