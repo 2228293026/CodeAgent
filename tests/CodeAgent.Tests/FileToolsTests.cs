@@ -1097,6 +1097,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_MaxLineLength_ExactlyAtCap_NoTruncation()
+    {
+        // max_line_length 恰好等于 50000 时不截断
+        var path = Path.Combine(_dir, "cap.txt");
+        File.WriteAllText(path, new string('A', 50000) + "\nend\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "cap.txt", ["max_line_length"] = 50000 }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("…", output);
+        Assert.Contains("end", output);
+    }
+
+    [Fact]
     public async Task ReadFile_MaxLineLength_OverMax_ClampsTo50000()
     {
         // max_line_length 上限 50000：超限输入会被 clamp，不抛出异常
