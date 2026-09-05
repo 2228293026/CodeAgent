@@ -166,6 +166,9 @@ public sealed class ApplyPatchTool : ITool
             if (validateOnly)
                 return $"验证通过(新建): {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
             var createText = string.Join('\n', ApplyHunks(file.Hunks, [], file.Path, true));
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
             await TextUtil.WriteTextPreserveEncodingAsync(full, createText, ct);
             ctx.Undo.Push(new UndoEntry
             {

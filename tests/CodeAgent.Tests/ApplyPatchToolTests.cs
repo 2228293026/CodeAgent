@@ -183,6 +183,17 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_AllowNewFile_Subdirectory_AutoCreatesParentDirs()
+    {
+        // allow_new_file=true:补丁创建的文件在子目录中时，父目录也应自动创建
+        var patch = "@@ -0,0 +1 @@\n+hello\n";
+
+        await Apply(patch, "subdir/deep/new.txt", allowNewFile: true);
+
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(_dir, "subdir", "deep", "new.txt")));
+    }
+
+    [Fact]
     public async Task Apply_MissingTarget_WithoutAllowNewFile_Throws()
     {
         var patch = "@@ -0,0 +1 @@\n+x\n";
