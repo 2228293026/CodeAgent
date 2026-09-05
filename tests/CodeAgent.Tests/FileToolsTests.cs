@@ -1570,6 +1570,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_MixedLineEndings_TrimsEachLine()
+    {
+        // trim=true:混合换行风格的文件，每行独立 trim
+        File.WriteAllText(Path.Combine(_dir, "mix.txt"), "  a  \r\n\tb\t\n  c  \r\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mix.txt", ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("2\tb", output);
+        Assert.Contains("3\tc", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
