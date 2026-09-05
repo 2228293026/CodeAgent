@@ -454,6 +454,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_MaxItems_OverridesCap()
+    {
+        // max_items 可把默认 800 的上限放大或缩小：默认不传时为 800；传参可任意调整
+        for (int i = 0; i < 200; i++)
+            File.WriteAllText(Path.Combine(_dir, $"m{i:000}.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(new JsonObject { ["path"] = ".", ["max_items"] = 30 }, ctx, CancellationToken.None);
+
+        Assert.Contains("已截断", outText); // 自定义上限后仍会被截断
+        Assert.DoesNotContain("m099.txt", outText); // 超出 max_items 的尾部被截掉
+        Assert.Contains("m000.txt", outText); // 头部保留
+    }
+
+    [Fact]
     public async Task ListDirectory_EmptyDir_ReportsHelpfully()
     {
         Directory.CreateDirectory(Path.Combine(_dir, "empty"));

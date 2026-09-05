@@ -318,6 +318,7 @@ public sealed class ListDirectoryTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "目录路径，默认工作区根目录" },
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度（默认 2，最大 5）" },
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过这些目录名（大小写不敏感），如 [\"node_modules\", \"vendor\"]；在 SkipDirs 之外额外排除" },
+            ["max_items"] = new JsonObject { ["type"] = "integer", ["description"] = "最多列出条目数（默认 800，最大 5000）" },
         },
     };
 
@@ -325,6 +326,7 @@ public sealed class ListDirectoryTool : ITool
     {
         var path = ToolArgs.GetString(args, "path");
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
+        var maxItems = Math.Clamp(ToolArgs.GetInt(args, "max_items", 800), 1, 5000);
         var ignore = ToolArgs.GetStringList(args, "ignore");
         var ignoreSet = ignore is null ? null : new HashSet<string>(ignore, StringComparer.OrdinalIgnoreCase);
 
@@ -338,11 +340,10 @@ public sealed class ListDirectoryTool : ITool
         var emitted = 0;
         var dirCount = 0;
         var fileCount = 0;
-        const int cap = 800;
 
         void Walk(string dir, int level)
         {
-            if (level > depth || emitted >= cap)
+            if (level > depth || emitted >= maxItems)
                 return;
             var indent = new string(' ', level * 2);
             try
@@ -350,8 +351,8 @@ public sealed class ListDirectoryTool : ITool
                 foreach (var d in Directory.EnumerateDirectories(dir)
                              .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
                 {
-                    if (emitted >= cap)
-                        break; // 上限在循环内也生效：平铺大目录不再把 cap 之后的行全部输出
+                    if (emitted >= maxItems)
+                        break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
                     var name = Path.GetFileName(d);
                     if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
                         continue;
@@ -363,7 +364,7 @@ public sealed class ListDirectoryTool : ITool
                 foreach (var f in Directory.EnumerateFiles(dir)
                              .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
                 {
-                    if (emitted >= cap)
+                    if (emitted >= maxItems)
                         break;
                     sb.AppendLine(indent + Path.GetFileName(f));
                     emitted++;
@@ -381,8 +382,8 @@ public sealed class ListDirectoryTool : ITool
             return $"(目录为空或全部被跳过: {path})";
         var head = string.IsNullOrWhiteSpace(path) ? $"工作区根目录 {ctx.Workspace.Root}\n" : $"目录 {path}\n";
         // 统计摘要：模型与用户都能一眼看出规模（截断时尤其重要——cap 后的未计入）
-        var summary = $"\n（共 {dirCount} 个目录、{fileCount} 个文件" + (emitted >= cap ? "，已达显示上限，可能未列全）" : "）");
-        return head + sb.ToString().TrimEnd() + (emitted >= cap ? "\n…(条目过多，已截断)" : "") + summary;
+        var summary = $"\n（共 {dirCount} 个目录、{fileCount} 个文件" + (emitted >= maxItems ? "，已达显示上限，可能未列全）" : "）");
+        return head + sb.ToString().TrimEnd() + (emitted >= maxItems ? "\n…(条目过多，已截断)" : "") + summary;
     }
 
 }
