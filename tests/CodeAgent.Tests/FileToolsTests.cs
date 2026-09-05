@@ -1746,6 +1746,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithSkipEmptyAndNoEncodingNote_HidesBlanksAndSuppressesHint()
+    {
+        // trim + skip_empty + no_encoding_note:空白被 trim 并跳过，编码提示也隐藏
+        File.WriteAllText(Path.Combine(_dir, "tsenn.txt"), "  \n\ta  \n   \nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tsenn.txt", ["trim"] = true, ["skip_empty"] = true, ["no_encoding_note"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\ta", output);
+        Assert.Contains("4\tb", output);
+        Assert.DoesNotContain("1\t", output); // trim 后空行被 skip
+        Assert.DoesNotContain("3\t", output);
+        Assert.DoesNotContain("（编码", output); // 编码提示隐藏
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
