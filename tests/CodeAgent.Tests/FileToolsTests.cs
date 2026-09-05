@@ -1175,6 +1175,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_AllEmptyFile_ReturnsEmptyOutput()
+    {
+        // 全空文件 + skip_empty:结果为空字符串（而非"(文件为空)"）
+        File.WriteAllText(Path.Combine(_dir, "empty.txt"), "\n\n\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "empty.txt", ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("（empty.txt 共 3 行）\n", output); // 空行全被 skip，仅剩头部 + 尾换行
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_HidesBlankLines()
     {
         // skip_empty=true:空行不输出，但行号仍按原文件保持
