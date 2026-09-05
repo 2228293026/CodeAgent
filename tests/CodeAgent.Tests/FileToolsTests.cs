@@ -1508,6 +1508,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRaw_TrimIsRedundantButAllowed()
+    {
+        // raw 已隐含不截断/无行号；trim=true 在 raw 下仍生效（去掉首尾空白）
+        File.WriteAllText(Path.Combine(_dir, "tr.txt"), "  hello  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tr.txt", ["trim"] = true, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello", output); // 无行号，无空白，无尾换行
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
