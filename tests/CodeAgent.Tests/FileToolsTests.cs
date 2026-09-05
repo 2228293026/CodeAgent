@@ -1429,6 +1429,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithNoLineNumbers_OutputsCleanText()
+    {
+        // trim + no_line_numbers:无行号，首尾空白去掉
+        File.WriteAllText(Path.Combine(_dir, "tnl.txt"), "  hello  \n\tworld\t\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tnl.txt", ["trim"] = true, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello" + Environment.NewLine + "world", output);
+        Assert.DoesNotContain("  hello", output);
+        Assert.DoesNotContain("\t\t", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
