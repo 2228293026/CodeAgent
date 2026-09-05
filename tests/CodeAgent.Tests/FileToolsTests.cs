@@ -1713,6 +1713,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithOffsetAndMaxLineLength_TrimsThenTruncatesInRange()
+    {
+        // trim + offset + max_line_length:先在 offset 范围内 trim，再截断
+        File.WriteAllText(Path.Combine(_dir, "toml.txt"), "  hello world  \n  foo bar  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "toml.txt", ["trim"] = true, ["offset"] = 2, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("foo", output); // offset=2 显示第 2 行
+        Assert.Contains("…", output); // 截断生效
+        Assert.DoesNotContain("hello", output); // offset 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
