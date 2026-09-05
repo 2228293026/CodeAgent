@@ -1989,6 +1989,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndHeadAndSkipEmptyAndMaxLineLength_TrimsThenTruncatesInRawMode()
+    {
+        // trim + raw + head + skip_empty + max_line_length:raw 模式下 trim、skip、截断
+        File.WriteAllText(Path.Combine(_dir, "trhsml.txt"), "  \n  hello world  \n   \nfoo\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trhsml.txt", ["trim"] = true, ["raw"] = true, ["head"] = 3, ["skip_empty"] = true, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello world", output); // head=3 范围内 trim 后非空（raw 不截断）
+        Assert.DoesNotContain("foo", output); // head 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
