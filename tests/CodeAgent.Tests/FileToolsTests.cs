@@ -1603,6 +1603,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRaw_AllWhitespace_ReturnsTrimmedContent()
+    {
+        // trim + raw:全空白行 trim 后为空，raw 模式仍输出（无行号）
+        File.WriteAllText(Path.Combine(_dir, "twr.txt"), "  \n\ta  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "twr.txt", ["trim"] = true, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a", output); // trim 后只剩非空行
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
