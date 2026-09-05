@@ -18,6 +18,9 @@ public sealed class HistoryStore
 
     public int Count => _entries.Count;
 
+    /// <summary>检查历史中是否包含指定字符串（忽略大小写）。</summary>
+    public bool Contains(string line) => _entries.Contains(line, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>清空历史条目（/history clear 用）；文件也会删除。</summary>
     public void Clear()
     {

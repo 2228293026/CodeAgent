@@ -166,6 +166,17 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Contains_ReturnsTrueForExistingEntry()
+    {
+        var store = new HistoryStore(_file);
+        store.Remember("abc");
+        store.Remember("def");
+        Assert.True(store.Contains("ABC")); // 忽略大小写
+        Assert.True(store.Contains("def"));
+        Assert.False(store.Contains("xyz"));
+    }
+
+    [Fact]
     public void Clear_RemovesAllEntriesAndDeletesFile()
     {
         var store = new HistoryStore(_file);
