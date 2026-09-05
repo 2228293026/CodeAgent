@@ -2004,6 +2004,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndTailAndSkipEmptyAndMaxLineLength_TrimsThenTruncatesInRawMode()
+    {
+        // trim + raw + tail + skip_empty + max_line_length:raw 模式下 trim、skip、截断
+        File.WriteAllText(Path.Combine(_dir, "trtsml.txt"), "  \n  hello world  \n   \nfoo\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trtsml.txt", ["trim"] = true, ["raw"] = true, ["tail"] = 2, ["skip_empty"] = true, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("foo", output); // tail=2 范围内 trim 后非空（raw 不截断）
+        Assert.DoesNotContain("hello", output); // tail 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
