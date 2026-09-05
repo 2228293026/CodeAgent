@@ -194,6 +194,18 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_AllowNewFile_InvalidPatch_ThrowsWithoutCreatingFile()
+    {
+        // allow_new_file=true 但补丁本身无效：不应创建文件，应抛出校验错误
+        var patch = "@@ -0,0 +1,1 @@\n context\n"; // 没有 +/- 前缀，无效补丁行
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "new.txt", allowNewFile: true));
+
+        Assert.Contains("补丁上下文不匹配", ex.Message);
+        Assert.False(File.Exists(Path.Combine(_dir, "new.txt")));
+    }
+
+    [Fact]
     public async Task Apply_MissingTarget_WithoutAllowNewFile_Throws()
     {
         var patch = "@@ -0,0 +1 @@\n+x\n";
