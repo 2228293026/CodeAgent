@@ -541,6 +541,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_FilesOnlyAndDirsOnly_ReturnsEmpty()
+    {
+        // files_only=true 且 dirs_only=true:矛盾条件，结果为空
+        File.WriteAllText(Path.Combine(_dir, "f.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(_dir, "d"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["files_only"] = true, ["dirs_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("(目录为空或全部被跳过: .)", outText);
+    }
+
+    [Fact]
     public async Task ListDirectory_MaxItems_OverridesCap()
     {
         // max_items 可把默认 800 的上限放大或缩小：默认不传时为 800；传参可任意调整
