@@ -543,6 +543,25 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_DirsOnly_WithIgnore_SkipsMatchingDirs()
+    {
+        // dirs_only + ignore: ignore 只作用于目录名，文件本来就不显示
+        Directory.CreateDirectory(Path.Combine(_dir, "skipdir"));
+        Directory.CreateDirectory(Path.Combine(_dir, "keepdir"));
+        File.WriteAllText(Path.Combine(_dir, "keepdir", "f.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "root.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["dirs_only"] = true, ["ignore"] = new JsonArray("skipdir") }, ctx, CancellationToken.None);
+
+        Assert.Contains("keepdir/", outText);
+        Assert.DoesNotContain("skipdir/", outText); // 被 ignore 跳过
+        Assert.DoesNotContain("root.txt", outText); // 文件不显示
+    }
+
+    [Fact]
     public async Task ListDirectory_DirsOnly_OmitsFiles()
     {
         // dirs_only=true:只列目录，文件全部跳过
