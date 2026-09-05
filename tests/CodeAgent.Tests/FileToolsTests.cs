@@ -2049,6 +2049,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndOffsetAndSkipEmptyAndMaxLineLength_TrimsThenTruncatesInRawMode()
+    {
+        // trim + raw + offset + skip_empty + max_line_length:raw 不截断，但验证组合不报错
+        File.WriteAllText(Path.Combine(_dir, "trosml.txt"), "  \n  hello world  \n   \nfoo\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trosml.txt", ["trim"] = true, ["raw"] = true, ["offset"] = 2, ["skip_empty"] = true, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello world", output); // raw 不截断
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
