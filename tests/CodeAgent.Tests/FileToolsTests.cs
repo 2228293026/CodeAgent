@@ -1189,6 +1189,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_WithMaxLineLength_StillHidesBlanks()
+    {
+        // skip_empty + max_line_length 组合:空行被隐藏,长行仍按 max_line_length 截断
+        File.WriteAllText(Path.Combine(_dir, "combo.txt"), "A\n\n" + new string('X', 5000) + "\nB\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "combo.txt", ["skip_empty"] = true, ["max_line_length"] = 50 }, ctx, CancellationToken.None);
+
+        Assert.Contains("A", output);
+        Assert.Contains("B", output);
+        Assert.DoesNotContain("  ", output); // 空行不输出
+        Assert.Contains("…", output); // 长行被截断
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_WithNoLineNumbers_HidesBlankLines()
     {
         // skip_empty + no_line_numbers:空行不输出,且无行号前缀
