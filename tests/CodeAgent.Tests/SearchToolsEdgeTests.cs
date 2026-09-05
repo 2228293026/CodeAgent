@@ -200,4 +200,16 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Contains("top.txt", result);
         Assert.Contains("sub/deep.txt", result); // 裸 glob 匹配任意深度
     }
+
+    [Fact]
+    public async Task Grep_Invert_ExcludesMatchingLines()
+    {
+        // invert=true（rg -v）：输出不匹配 pattern 的行；context 行里仍会出现被排除的关键字
+        File.WriteAllText(PathOf("inv.txt"), "keep\nskip\nkeep\n");
+        var args = new JsonObject { ["pattern"] = "skip", ["invert"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("inv.txt:1: keep", result);
+        Assert.Contains("inv.txt:3: keep", result);
+        Assert.DoesNotContain("inv.txt:2:", result); // 第 2 行不输出
+    }
 }
