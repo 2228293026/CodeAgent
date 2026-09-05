@@ -1189,6 +1189,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_WithNoLineNumbers_HidesBlankLines()
+    {
+        // skip_empty + no_line_numbers:空行不输出,且无行号前缀
+        File.WriteAllText(Path.Combine(_dir, "nb.txt"), "a\n\nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "nb.txt", ["skip_empty"] = true, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a" + Environment.NewLine + "b", output); // 无行号,无空行
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_HidesBlankLines()
     {
         // skip_empty=true:空行不输出，但行号仍按原文件保持
