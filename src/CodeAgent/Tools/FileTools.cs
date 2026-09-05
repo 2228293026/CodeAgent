@@ -59,12 +59,14 @@ public sealed class ReadFileTool : ITool
         if (maxLineLength > 50000) maxLineLength = 50000;
         var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
         var skipEmpty = ToolArgs.GetBool(args, "skip_empty", false);
+        var noHeader = false;
         var isRaw = ToolArgs.GetBool(args, "raw", false);
         if (isRaw)
         {
             noLineNumbers = true;
             maxLineLength = 0;
             noEncodingNote = true;
+            noHeader = true;
         }
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
@@ -109,7 +111,7 @@ public sealed class ReadFileTool : ITool
         }
 
         var range = count < lines.Length ? $"，已显示 {start + 1}-{start + count}" : "";
-        var head = $"（{path} 共 {lines.Length} 行{range}）\n";
+        var head = noHeader ? "" : $"（{path} 共 {lines.Length} 行{range}）\n";
 
         // 编码提示：非纯 UTF-8（带 BOM 或 GBK/ANSI 旧编码）时显式标注，避免模型误判文件为 UTF-8 去改写
         var encNote = noEncodingNote ? "" : (TextUtil.DetectFileEncoding(full) switch

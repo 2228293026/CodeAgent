@@ -1375,6 +1375,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Raw_WithHead_StillLimitsLines()
+    {
+        // raw=true + head:仍按 head 限制行数，只是不显示行号/不截断
+        File.WriteAllText(Path.Combine(_dir, "rh.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "rh.txt", ["raw"] = true, ["head"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("a" + Environment.NewLine + "b", output); // 无行号，无尾换行（head 不补）
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_WithMaxLineLength_StillHidesBlanks()
     {
         // skip_empty + max_line_length 组合:空行被隐藏,长行仍按 max_line_length 截断
