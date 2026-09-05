@@ -1795,6 +1795,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithHeadAndSkipEmpty_TrimsAndSkipsInHeadRange()
+    {
+        // trim + head + skip_empty:在 head 范围内 trim 并跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "ths.txt"), "  \n  a  \n   \nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ths.txt", ["trim"] = true, ["head"] = 3, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\ta", output); // head=3 范围内，trim 后非空
+        Assert.DoesNotContain("1\t", output); // trim 后空行被 skip
+        Assert.DoesNotContain("b", output); // head 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
