@@ -1097,6 +1097,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_MaxLineLength_NegativeValue_FallsBackToDefault()
+    {
+        // 负值 max_line_length 应回退到默认 2000，不引发异常
+        var path = Path.Combine(_dir, "neg.txt");
+        File.WriteAllText(path, new string('A', 3000) + "\nshort\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "neg.txt", ["max_line_length"] = -1 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 使用默认截断
+        Assert.Contains("short", output);
+    }
+
+    [Fact]
     public async Task ReadFile_NoEncodingNote_SuppressesEncodingHint()
     {
         // no_encoding_note=true：已知编码时抑制开头的"（编码: …）"提示，减少输出噪音
