@@ -1144,6 +1144,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_HeadAtMax_ReturnsUpTo5000Lines()
+    {
+        // head 上限 5000：写 5001 行，head=5000 时应精确返回前 5000 行
+        var path = Path.Combine(_dir, "many.txt");
+        File.WriteAllText(path, string.Join("\n", Enumerable.Range(0, 5001).Select(i => $"L{i:D5}")) + "\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "many.txt", ["head"] = 5000 }, ctx, CancellationToken.None);
+
+        Assert.Contains("L00000", output);
+        Assert.DoesNotContain("L05000", output); // 第 5001 行被 head 截掉
+    }
+
+    [Fact]
     public async Task ReadFile_MaxLineLength_NegativeValue_FallsBackToDefault()
     {
         // 负值 max_line_length 应回退到默认 2000，不引发异常
