@@ -1941,6 +1941,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndHeadAndSkipEmpty_TrimsAndSkipsInRawMode()
+    {
+        // trim + raw + head + skip_empty:raw 模式无行号，trim 并跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "trhs.txt"), "  \n  hello  \n   \nworld\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trhs.txt", ["trim"] = true, ["raw"] = true, ["head"] = 3, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello", output); // head=3 范围内只有 hello 非空
+        Assert.DoesNotContain("world", output); // head 范围外
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
