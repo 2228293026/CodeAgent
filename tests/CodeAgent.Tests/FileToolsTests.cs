@@ -1909,6 +1909,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithTailAndSkipEmptyAndMaxLineLength_TrimsThenTruncatesInRange()
+    {
+        // trim + tail + skip_empty + max_line_length:在 tail 范围内 trim、skip、截断
+        File.WriteAllText(Path.Combine(_dir, "ttsml.txt"), "  \n  hello world  \n   \n  foo bar  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ttsml.txt", ["trim"] = true, ["tail"] = 2, ["skip_empty"] = true, ["max_line_length"] = 8 }, ctx, CancellationToken.None);
+
+        Assert.Contains("foo", output); // tail=2 范围内 trim 后非空
+        Assert.Contains("…", output); // 截断生效
+        Assert.DoesNotContain("hello", output); // tail 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
