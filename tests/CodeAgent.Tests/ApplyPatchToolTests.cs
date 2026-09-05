@@ -171,6 +171,18 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_AllowNewFile_ExistingTarget_EditsFile()
+    {
+        // allow_new_file=true 但目标已存在：仍按 edit 处理（不是覆盖为新文件）
+        File.WriteAllText(Path.Combine(_dir, "exist.txt"), "old\n");
+        var patch = "@@ -1,1 +1,1 @@\n-old\n+new\n";
+
+        await Apply(patch, "exist.txt", allowNewFile: true);
+
+        Assert.Equal("new\n", File.ReadAllText(Path.Combine(_dir, "exist.txt")));
+    }
+
+    [Fact]
     public async Task Apply_MissingTarget_WithoutAllowNewFile_Throws()
     {
         var patch = "@@ -0,0 +1 @@\n+x\n";
