@@ -24,6 +24,7 @@ public sealed class ApplyPatchTool : ITool
             ["patch"] = new JsonObject { ["type"] = "string", ["description"] = "统一差分文本,可含多个文件(每文件 '+++ b/路径' + hunks;也可省略文件头,此时用 path 参数指定单文件)" },
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "补丁不含 +++ 文件头时的目标文件路径(相对工作区)" },
             ["validate_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只校验并报告将发生的改动,不写盘(默认 false)" },
+            ["allow_new_file"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许补丁创建目标文件(默认 false；设为 true 时目标不存在会新建文件)" },
         },
         ["required"] = new JsonArray("patch"),
     };
@@ -36,6 +37,7 @@ public sealed class ApplyPatchTool : ITool
 
         var fallbackPath = ToolArgs.GetString(args, "path");
         var validateOnly = ToolArgs.GetBool(args, "validate_only", false);
+        var allowNewFile = ToolArgs.GetBool(args, "allow_new_file", false);
 
         var files = ParsePatch(patch, fallbackPath);
         if (files.Count == 0)
@@ -45,7 +47,7 @@ public sealed class ApplyPatchTool : ITool
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
-            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, ct));
+            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, ct));
         }
         return "已应用补丁:\n" + sb.ToString().TrimEnd();
     }
@@ -150,13 +152,30 @@ public sealed class ApplyPatchTool : ITool
         return path;
     }
 
-    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, CancellationToken ct)
+    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, CancellationToken ct)
     {
         var full = ctx.Workspace.Resolve(file.Path); // 写工具:白名单只读目录也拒绝
         if (Directory.Exists(full))
             throw new ToolException($"目标路径是目录,无法应用补丁: {file.Path}");
         if (!File.Exists(full))
-            throw new ToolException($"目标文件不存在,无法应用补丁(请先 write_file 创建或改对路径): {file.Path}");
+        {
+            if (!allowNewFile)
+                throw new ToolException($"目标文件不存在,无法应用补丁(请先 write_file 创建,或设置 allow_new_file=true): {file.Path}");
+            // 新建文件:补丁全量由 additions 组成(original 为空),旧内容为 null
+            var createStat = StatHunks(file.Hunks);
+            if (validateOnly)
+                return $"验证通过(新建): {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
+            var createText = string.Join('\n', ApplyHunks(file.Hunks, [], file.Path, true));
+            await TextUtil.WriteTextPreserveEncodingAsync(full, createText, ct);
+            ctx.Undo.Push(new UndoEntry
+            {
+                Kind = "write",
+                Path = full,
+                HadFile = false,
+                EncodingName = TextUtil.DetectFileEncoding(full),
+            });
+            return $"已创建 {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk)";
+        }
 
         var text = TextUtil.ReadTextSmart(full); // GBK 等旧编码按原编码读取
         var crlf = text.Contains("\r\n");

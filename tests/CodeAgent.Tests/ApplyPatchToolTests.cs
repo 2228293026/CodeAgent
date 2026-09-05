@@ -18,13 +18,14 @@ public class ApplyPatchToolTests : IDisposable
 
     private AgentContext MakeContext() => new() { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
 
-    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false)
+    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false)
     {
         var tool = new ApplyPatchTool();
         var ctx = MakeContext();
         var args = new JsonObject { ["patch"] = patch };
         if (path is not null) args["path"] = path;
         if (validateOnly) args["validate_only"] = true;
+        if (allowNewFile) args["allow_new_file"] = true;
         return await tool.ExecuteAsync(args, ctx, CancellationToken.None);
     }
 
@@ -144,5 +145,27 @@ public class ApplyPatchToolTests : IDisposable
         await Apply(patch, "f.txt");
 
         Assert.Equal("a\nB\n", File.ReadAllText(Path.Combine(_dir, "f.txt")));
+    }
+
+    [Fact]
+    public async Task Apply_AllowNewFile_CreatesFileWhenTargetMissing()
+    {
+        // allow_new_file=true:补丁可创建新文件(常用于模型首次生成文件)
+        var patch = "@@ -0,0 +1,2 @@\n+line1\n+line2\n";
+
+        await Apply(patch, "new.txt", allowNewFile: true);
+
+        Assert.Equal("line1\nline2", File.ReadAllText(Path.Combine(_dir, "new.txt")));
+    }
+
+    [Fact]
+    public async Task Apply_MissingTarget_WithoutAllowNewFile_Throws()
+    {
+        var patch = "@@ -0,0 +1 @@\n+x\n";
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "nope.txt"));
+
+        Assert.Contains("不存在", ex.Message);
+        Assert.False(File.Exists(Path.Combine(_dir, "nope.txt")));
     }
 }
