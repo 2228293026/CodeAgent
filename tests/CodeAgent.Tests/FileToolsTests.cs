@@ -1189,6 +1189,37 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_Head_StillSkipsBlanksWithinRange()
+    {
+        // skip_empty + head:只在 head 范围内跳过空行
+        File.WriteAllText(Path.Combine(_dir, "sh.txt"), "a\n\nb\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "sh.txt", ["skip_empty"] = true, ["head"] = 3 }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("3\tb", output); // 第 2 行空行被跳过
+        Assert.DoesNotContain("4\tc", output); // head=3 范围外
+    }
+
+    [Fact]
+    public async Task ReadFile_SkipEmpty_Tail_StillSkipsBlanksWithinRange()
+    {
+        // skip_empty + tail:只在 tail 范围内跳过空行
+        File.WriteAllText(Path.Combine(_dir, "st.txt"), "a\n\nb\n\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "st.txt", ["skip_empty"] = true, ["tail"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("5\tc", output); // tail 范围内最后一个非空行
+        Assert.DoesNotContain("4\t", output); // 空行被跳过
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_WithMaxLineLength_StillHidesBlanks()
     {
         // skip_empty + max_line_length 组合:空行被隐藏,长行仍按 max_line_length 截断
