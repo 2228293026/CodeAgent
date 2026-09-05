@@ -1553,6 +1553,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithSkipEmpty_TrimsThenSkipsEmptyLines()
+    {
+        // trim + skip_empty:先 trim 再跳过空白行（trim 后的空行也会被跳过）
+        File.WriteAllText(Path.Combine(_dir, "tse2.txt"), "  \n\ta  \n   \nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tse2.txt", ["trim"] = true, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\ta", output); // trim 后非空
+        Assert.Contains("4\tb", output);
+        Assert.DoesNotContain("1\t", output); // trim 后空行被 skip_empty 跳过
+        Assert.DoesNotContain("3\t", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
