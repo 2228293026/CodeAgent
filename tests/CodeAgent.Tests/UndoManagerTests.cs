@@ -617,6 +617,14 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void TryPeek_EmptyStack_ReturnsFalse()
+    {
+        var um = new UndoManager();
+        Assert.False(um.TryPeek(out var entry));
+        Assert.Null(entry);
+    }
+
+    [Fact]
     public void TryPeek_ReturnsTopEntryWithoutConsuming()
     {
         var path = Path.Combine(_dir, "p.txt");
