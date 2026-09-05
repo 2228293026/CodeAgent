@@ -9,7 +9,7 @@ namespace CodeAgent.Tools;
 public sealed class CommandTool : ITool
 {
     public string Name => "run_command";
-    public string Description => "在工作区中执行 shell 命令并返回输出（stdout+stderr）与退出码。用于运行构建、测试、git 等（受配置 allowCommands 控制）。每次调用都是独立进程：cd 等目录切换不会保留，需在单条命令内完成（如 cd sub && dotnet build）或用 cwd 参数。";
+    public string Description => "在工作区中执行 shell 命令并返回输出（stdout+stderr）与退出码。用于运行构建、测试、git 等（受配置 allowCommands 控制）。每次调用都是独立进程：cd 等目录切换不会保留，需在单条命令内完成（如 cd sub && dotnet build）或用 cwd 参数。Windows 下优先 Git Bash，否则用 PowerShell。";
 
     public JsonObject Parameters { get; } = new()
     {
