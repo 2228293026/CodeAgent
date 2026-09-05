@@ -1189,6 +1189,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_Offset_StillSkipsBlanksWithinRange()
+    {
+        // skip_empty + offset:只在 offset 开始的范围内跳过空行
+        File.WriteAllText(Path.Combine(_dir, "so.txt"), "a\n\nb\n\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "so.txt", ["skip_empty"] = true, ["offset"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tb", output); // 第 2 行空行被跳过,b 在第 3 行
+        Assert.DoesNotContain("1\t", output); // offset 之前的内容不出现在输出
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_Head_StillSkipsBlanksWithinRange()
     {
         // skip_empty + head:只在 head 范围内跳过空行
