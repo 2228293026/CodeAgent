@@ -614,26 +614,23 @@ public static class DiffUtil
             return "";
 
         // 空原文（新建文件）或空新文（文件被清空/删除）：跳过 LCS，直接输出全新增/全删除行。
-        // 结尾换行会让 SplitLines 多出一个空串元素，计数时去掉（如 "a\nb\n" 逻辑上是 2 行）
-        if (oldLines.Length == 1 && oldLines[0].Length == 0 && newLines.Length > 0)
+        if (oldLines.Length == 0 && newLines.Length > 0)
         {
-            var newCount = newLines[^1].Length == 0 ? newLines.Length - 1 : newLines.Length;
             var sbNew = new System.Text.StringBuilder();
             sbNew.AppendLine($"--- a/{path}");
             sbNew.AppendLine($"+++ b/{path}");
-            sbNew.AppendLine($"@@ -0,0 +1,{newCount} @@");
-            for (int i = 0; i < newCount; i++)
+            sbNew.AppendLine($"@@ -0,0 +1,{newLines.Length} @@");
+            for (int i = 0; i < newLines.Length; i++)
                 sbNew.AppendLine("+ " + newLines[i]);
             return sbNew.ToString().TrimEnd();
         }
-        if (newLines.Length == 1 && newLines[0].Length == 0 && oldLines.Length > 0)
+        if (newLines.Length == 0 && oldLines.Length > 0)
         {
-            var oldCount = oldLines[^1].Length == 0 ? oldLines.Length - 1 : oldLines.Length;
             var sbDel = new System.Text.StringBuilder();
             sbDel.AppendLine($"--- a/{path}");
             sbDel.AppendLine($"+++ b/{path}");
-            sbDel.AppendLine($"@@ -1,{oldCount} +0,0 @@");
-            for (int i = 0; i < oldCount; i++)
+            sbDel.AppendLine($"@@ -1,{oldLines.Length} +0,0 @@");
+            for (int i = 0; i < oldLines.Length; i++)
                 sbDel.AppendLine("- " + oldLines[i]);
             return sbDel.ToString().TrimEnd();
         }
@@ -699,6 +696,12 @@ public static class DiffUtil
         return sb.ToString().TrimEnd();
     }
 
-    private static string[] SplitLines(string text) =>
-        text.Replace("\r\n", "\n").Split('\n');
+    private static string[] SplitLines(string text)
+    {
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        // 去掉末尾空串（结尾换行产生的），使 "a\nb\n" 与 "a\nb" 都得到 ["a","b"]
+        if (lines.Length > 0 && lines[^1].Length == 0)
+            lines = lines[..^1];
+        return lines;
+    }
 }
