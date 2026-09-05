@@ -333,6 +333,7 @@ public sealed class ListDirectoryTool : ITool
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过这些目录名（大小写不敏感），如 [\"node_modules\", \"vendor\"]；在 SkipDirs 之外额外排除" },
             ["max_items"] = new JsonObject { ["type"] = "integer", ["description"] = "最多列出条目数（默认 800，最大 5000）" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出文件（跳过目录），默认 false" },
+            ["dirs_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出目录（跳过文件），默认 false" },
         },
     };
 
@@ -342,6 +343,7 @@ public sealed class ListDirectoryTool : ITool
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
         var maxItems = Math.Clamp(ToolArgs.GetInt(args, "max_items", 800), 1, 5000);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
+        var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
         var ignore = ToolArgs.GetStringList(args, "ignore");
         var ignoreSet = ignore is null ? null : new HashSet<string>(ignore, StringComparer.OrdinalIgnoreCase);
 
@@ -379,14 +381,17 @@ public sealed class ListDirectoryTool : ITool
                         Walk(d, level + 1);
                     }
                 }
-                foreach (var f in Directory.EnumerateFiles(dir)
-                             .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                if (!dirsOnly)
                 {
-                    if (emitted >= maxItems)
-                        break;
-                    sb.AppendLine(indent + Path.GetFileName(f));
-                    emitted++;
-                    fileCount++;
+                    foreach (var f in Directory.EnumerateFiles(dir)
+                             .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (emitted >= maxItems)
+                            break;
+                        sb.AppendLine(indent + Path.GetFileName(f));
+                        emitted++;
+                        fileCount++;
+                    }
                 }
             }
             catch (UnauthorizedAccessException) { }
