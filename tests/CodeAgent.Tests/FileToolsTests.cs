@@ -1492,6 +1492,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithOffset_TrimsWithinOffsetRange()
+    {
+        // trim + offset:只在 offset 范围内 trim
+        File.WriteAllText(Path.Combine(_dir, "to.txt"), "  a  \n  b  \n  c  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "to.txt", ["trim"] = true, ["offset"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\tb", output);
+        Assert.Contains("3\tc", output);
+        Assert.DoesNotContain("1\ta", output); // offset 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
