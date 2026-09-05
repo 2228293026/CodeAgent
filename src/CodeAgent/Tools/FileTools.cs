@@ -324,6 +324,7 @@ public sealed class ListDirectoryTool : ITool
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度（默认 2，最大 5）" },
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过这些目录名（大小写不敏感），如 [\"node_modules\", \"vendor\"]；在 SkipDirs 之外额外排除" },
             ["max_items"] = new JsonObject { ["type"] = "integer", ["description"] = "最多列出条目数（默认 800，最大 5000）" },
+            ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出文件（跳过目录），默认 false" },
         },
     };
 
@@ -332,6 +333,7 @@ public sealed class ListDirectoryTool : ITool
         var path = ToolArgs.GetString(args, "path");
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
         var maxItems = Math.Clamp(ToolArgs.GetInt(args, "max_items", 800), 1, 5000);
+        var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var ignore = ToolArgs.GetStringList(args, "ignore");
         var ignoreSet = ignore is null ? null : new HashSet<string>(ignore, StringComparer.OrdinalIgnoreCase);
 
@@ -353,18 +355,21 @@ public sealed class ListDirectoryTool : ITool
             var indent = new string(' ', level * 2);
             try
             {
-                foreach (var d in Directory.EnumerateDirectories(dir)
-                             .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                if (!filesOnly)
                 {
-                    if (emitted >= maxItems)
-                        break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
-                    var name = Path.GetFileName(d);
-                    if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
-                        continue;
-                    sb.AppendLine(indent + name + "/");
-                    emitted++;
-                    dirCount++;
-                    Walk(d, level + 1);
+                    foreach (var d in Directory.EnumerateDirectories(dir)
+                                 .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (emitted >= maxItems)
+                            break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
+                        var name = Path.GetFileName(d);
+                        if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
+                            continue;
+                        sb.AppendLine(indent + name + "/");
+                        emitted++;
+                        dirCount++;
+                        Walk(d, level + 1);
+                    }
                 }
                 foreach (var f in Directory.EnumerateFiles(dir)
                              .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
