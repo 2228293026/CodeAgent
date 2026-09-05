@@ -1395,6 +1395,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_StripsLeadingAndTrailingWhitespace()
+    {
+        // trim=true:每行首尾空白被去掉，行号仍保留
+        File.WriteAllText(Path.Combine(_dir, "trim.txt"), "  a  \n\tb\t\n  \nc  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trim.txt", ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("2\tb", output);
+        Assert.Contains("4\tc", output); // c 在第 4 行
+        Assert.DoesNotContain("  a", output);
+        Assert.DoesNotContain("\t\t", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出

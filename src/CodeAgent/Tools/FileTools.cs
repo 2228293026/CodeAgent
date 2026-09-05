@@ -22,6 +22,7 @@ public sealed class ReadFileTool : ITool
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
             ["skip_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空行（默认 false）" },
+            ["trim"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉每行首尾空白（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
@@ -59,6 +60,7 @@ public sealed class ReadFileTool : ITool
         if (maxLineLength > 50000) maxLineLength = 50000;
         var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
         var skipEmpty = ToolArgs.GetBool(args, "skip_empty", false);
+        var trim = ToolArgs.GetBool(args, "trim", false);
         var noHeader = false;
         var isRaw = ToolArgs.GetBool(args, "raw", false);
         if (isRaw)
@@ -107,6 +109,8 @@ public sealed class ReadFileTool : ITool
                 continue; // 跳过空行/空白行：行号仍按原文件保持（不重排）
             // 单行截断保护：压缩 JSON / base64 等超长行会撑爆上下文（默认 2000 字符/行）
             var line = maxLineLength == 0 ? raw : TextUtil.TruncateLine(raw, maxLineLength);
+            if (trim)
+                line = line.Trim(); // 去掉首尾空白（缩进、尾随空格）
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
         }
 
