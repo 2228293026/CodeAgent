@@ -1764,6 +1764,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndNoEncodingNote_TrimsAndSuppressesHint()
+    {
+        // trim + raw + no_encoding_note:raw 已隐含无行号/无编码提示，trim 仍生效
+        File.WriteAllText(Path.Combine(_dir, "trn.txt"), "  hello  \n  world  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trn.txt", ["trim"] = true, ["raw"] = true, ["no_encoding_note"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello", output);
+        Assert.Contains("world", output);
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
