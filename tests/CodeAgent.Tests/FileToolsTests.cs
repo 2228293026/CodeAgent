@@ -1460,6 +1460,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithHead_TrimsWithinHeadRange()
+    {
+        // trim + head:只在 head 范围内 trim
+        File.WriteAllText(Path.Combine(_dir, "th.txt"), "  a  \n  b  \nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "th.txt", ["trim"] = true, ["head"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("2\tb", output);
+        Assert.DoesNotContain("3\tc", output); // head=2 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
