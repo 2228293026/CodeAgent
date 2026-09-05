@@ -454,6 +454,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_MaxItems_MinimumOneItem()
+    {
+        // max_items 下限为 1：传 0 或负值时回退到 1（至少能看到一个条目以确认目录存在）
+        for (int i = 0; i < 10; i++)
+            File.WriteAllText(Path.Combine(_dir, $"min{i:00}.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(new JsonObject { ["path"] = ".", ["max_items"] = 0 }, ctx, CancellationToken.None);
+
+        Assert.Contains("min00.txt", outText); // 至少第一个
+        Assert.DoesNotContain("min09.txt", outText); // 超出 max_items 被截断
+    }
+
+    [Fact]
     public async Task ListDirectory_MaxItems_OverridesCap()
     {
         // max_items 可把默认 800 的上限放大或缩小：默认不传时为 800；传参可任意调整
