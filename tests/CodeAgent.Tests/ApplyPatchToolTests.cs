@@ -206,6 +206,17 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_AllowNewFile_CrlfPatch_NormalizesToLf()
+    {
+        // allow_new_file=true:补丁中的 CRLF 被归一化为 LF（patch 格式本身用 LF）
+        var patch = "@@ -0,0 +1,2 @@\r\n+line1\r\n+line2\r\n";
+
+        await Apply(patch, "crlf_new.txt", allowNewFile: true);
+
+        Assert.Equal("line1\nline2", File.ReadAllText(Path.Combine(_dir, "crlf_new.txt")));
+    }
+
+    [Fact]
     public async Task Apply_MissingTarget_WithoutAllowNewFile_Throws()
     {
         var patch = "@@ -0,0 +1 @@\n+x\n";
