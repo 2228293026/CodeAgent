@@ -153,7 +153,32 @@ public static class TextUtil
                 }
             }
         }
-        await File.WriteAllTextAsync(path, content, enc, ct);
+        // 原子写：先写到同目录临时文件再 rename 覆盖，避免进程在写入中途崩溃/断电时把目标文件留在半截（损坏）。
+        // File.Move(overwrite: true) 在同一卷上是原子操作；临时文件写在目标同目录确保在同一卷、不会被并行 GC 偷走。
+        var dir = Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(dir))
+            dir = ".";
+        var tmp = Path.Combine(dir, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await File.WriteAllTextAsync(tmp, content, enc, ct);
+            // File.Move(overwrite: true) 是原子替换：移动失败回退到 File.Copy+Delete,覆盖到 .NET 5 之前不支持的旧环境时也工作
+            try
+            {
+                File.Move(tmp, path, overwrite: true);
+            }
+            catch (PlatformNotSupportedException)
+            {
+                File.Copy(tmp, path, overwrite: true);
+                File.Delete(tmp);
+            }
+        }
+        catch
+        {
+            // 任何步骤失败:尝试清理临时文件后重新抛出原始异常
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
     }
     public static void WriteTextPreserveBom(string path, string content)
     {

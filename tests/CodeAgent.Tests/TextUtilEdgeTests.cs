@@ -463,4 +463,27 @@ public class TextUtilEdgeTests : IDisposable
         Assert.Null(TextUtil.DetectFileEncoding(utf8));
     }
 
+    [Fact]
+    public async Task WriteTextPreserveEncodingAsync_Atomic_NoLeftoverTmp()
+    {
+        // 写文件时应使用原子写（tmp → rename），不应在目录留下 .tmp 残留
+        var path = Path.Combine(_dir, "t.txt");
+        await File.WriteAllTextAsync(path, "before");
+        await TextUtil.WriteTextPreserveEncodingAsync(path, "after");
+        Assert.Equal("after", await File.ReadAllTextAsync(path));
+        Assert.DoesNotContain(Directory.GetFiles(_dir, "*.tmp"), f => true);
+    }
+
+    [Fact]
+    public async Task WriteTextPreserveEncodingAsync_Atomic_CleansUpTmpOnFailure()
+    {
+        // 写入中途失败时临时文件也应清理（不泄漏垃圾 .tmp）
+        var missingDir = Path.Combine(_dir, "missing", "sub");
+        var path = Path.Combine(missingDir, "t.txt");
+        var ex = await Record.ExceptionAsync(() => TextUtil.WriteTextPreserveEncodingAsync(path, "x"));
+        Assert.NotNull(ex);
+        // 递归检查目录树不应残留 .tmp 文件
+        Assert.DoesNotContain(Directory.EnumerateFiles(_dir, "*.tmp", SearchOption.AllDirectories), f => true);
+    }
+
 }
