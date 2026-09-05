@@ -1635,6 +1635,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_LeadingTrailingBlanks_AreTrimmed()
+    {
+        // trim=true:首尾空白行被 trim（变成空串），但行号仍保留
+        File.WriteAllText(Path.Combine(_dir, "lt.txt"), "  \n  middle  \n   \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "lt.txt", ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\t", output); // trim 后空行仍占位
+        Assert.Contains("2\tmiddle", output);
+        Assert.Contains("3", output); // 第 3 行 trim 后为空
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
