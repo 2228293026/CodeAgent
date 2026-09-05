@@ -1058,6 +1058,24 @@ public class FileToolsTests : IDisposable
         Assert.Contains("相同", ex.Message);
         Assert.Equal(0, ctx.Undo.Count);
     }
+
+    [Fact]
+    public async Task EditFile_ReplaceEntireFile_WithEmptyString()
+    {
+        // 全量替换：old_string == 整个文件 → new_string 为空时应得到空文件（可撤销）
+        File.WriteAllText(Path.Combine(_dir, "full.txt"), "only content here\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "full.txt", ["old_string"] = "only content here\n", ["new_string"] = "" },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 1 处", result);
+        Assert.Equal("", File.ReadAllText(Path.Combine(_dir, "full.txt")));
+        Assert.Equal(1, ctx.Undo.Count); // 可撤销
+    }
+
     [Fact]
     public async Task ReadFile_GbkEncoded_DecodesViaFallback()
     {
