@@ -220,6 +220,16 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Reset_ClearsStreamedLastRun()
+    {
+        // /clear 后新会话不应残留上一轮的流式输出状态
+        var agent = MakeAgent(new FakeProvider());
+        agent.StreamedLastRun = true;
+        agent.Reset();
+        Assert.False(agent.StreamedLastRun);
+    }
+
+    [Fact]
     public void ContextTokens_Estimate_WhenNoUsage()
     {
         var agent = MakeAgent(new FakeProvider()); // 未运行：无 usage
