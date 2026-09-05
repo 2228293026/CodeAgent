@@ -115,6 +115,10 @@ public sealed class GrepTool : ITool
         var caseSensitive = ToolArgs.GetBool(args, "case_sensitive", false);
         if (!caseSensitive && pattern == pattern.ToLowerInvariant())
             opts |= RegexOptions.IgnoreCase;
+        // 跨行匹配：让 `.` 与 `.*` 能匹配换行符（否则 multiline 只改 ^/$ 语义，'.*' 仍被 \n 截断）
+        var multiline = ToolArgs.GetBool(args, "multiline", false);
+        if (multiline)
+            opts |= RegexOptions.Singleline;
         // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
         var word = ToolArgs.GetBool(args, "word", false);
         var effectivePattern = word ? $"\\b{pattern}\\b" : pattern;
@@ -132,7 +136,6 @@ public sealed class GrepTool : ITool
         var full = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(target) ? null : target);
         var sb = new StringBuilder();
         var hits = 0;
-        var multiline = ToolArgs.GetBool(args, "multiline", false);
         var invert = ToolArgs.GetBool(args, "invert", false);
         if (multiline && invert)
             throw new ToolException("invert 不支持 multiline 模式（跨行反转无意义），请关闭 multiline 或 invert。");

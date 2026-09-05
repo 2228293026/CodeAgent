@@ -80,6 +80,21 @@ public class GrepToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Multiline_DotMatchesNewline_WithSingleline()
+    {
+        // 回归：multiline=true 时 '.' 应能匹配换行符，否则 "prefix.*suffix" 这种常见跨行模式失效
+        File.WriteAllText(Path.Combine(_dir, "span.txt"), "prefix\nMIDDLE\nsuffix\n");
+        var tool = new GrepTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["pattern"] = "prefix.*suffix", ["multiline"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("匹配 1 处", output);
+        Assert.Contains("span.txt:1", output);
+    }
+
+    [Fact]
     public async Task Grep_Multiline_LongSpan_FoldedWithRangeNotice()
     {
         // 跨 5 行以上的命中：显示前 3 行 + 跨行范围提示
