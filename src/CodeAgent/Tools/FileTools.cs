@@ -15,12 +15,13 @@ public sealed class ReadFileTool : ITool
         {
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "文件路径，相对工作区根目录" },
             ["offset"] = new JsonObject { ["type"] = "integer", ["description"] = "起始行号（1 起，默认 1）" },
-            ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（默认 300，最大 5000）" },
+            ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（0=不使用, 默认 300，最大 5000）" },
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
             ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（0=不使用, 1-5000；limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（1-50000 字符，默认 2000；设 0 表示不截断）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
+            ["skip_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空行（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -56,6 +57,7 @@ public sealed class ReadFileTool : ITool
         if (maxLineLength < 0) maxLineLength = 2000; // 负值回退默认值，避免误伤
         if (maxLineLength > 50000) maxLineLength = 50000;
         var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
+        var skipEmpty = ToolArgs.GetBool(args, "skip_empty", false);
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         if (SkipDirs.LooksBinary(text))
@@ -90,9 +92,11 @@ public sealed class ReadFileTool : ITool
         var sb = new StringBuilder();
         for (int i = 0; i < count; i++)
         {
-            var line = lines[start + i].TrimEnd('\r');
+            var raw = lines[start + i].TrimEnd('\r');
+            if (skipEmpty && raw.Length == 0)
+                continue; // 跳过空行：行号仍按原文件保持（不重排）
             // 单行截断保护：压缩 JSON / base64 等超长行会撑爆上下文（默认 2000 字符/行）
-            line = maxLineLength == 0 ? line : TextUtil.TruncateLine(line, maxLineLength);
+            var line = maxLineLength == 0 ? raw : TextUtil.TruncateLine(raw, maxLineLength);
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
         }
 

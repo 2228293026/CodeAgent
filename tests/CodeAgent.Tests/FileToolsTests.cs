@@ -1175,6 +1175,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_HidesBlankLines()
+    {
+        // skip_empty=true:空行不输出，但行号仍按原文件保持
+        File.WriteAllText(Path.Combine(_dir, "blank.txt"), "a\n\nb\n\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "blank.txt", ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("3\tb", output); // 行号仍按原文件
+        Assert.DoesNotContain("2\t", output); // 空行不输出
+        Assert.DoesNotContain("4\t", output);
+    }
+
+    [Fact]
     public async Task ReadFile_MaxLineLength_NegativeValue_FallsBackToDefault()
     {
         // 负值 max_line_length 应回退到默认 2000，不引发异常
