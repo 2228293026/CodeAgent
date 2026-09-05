@@ -201,6 +201,25 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Reset_ClearsLastTurnFailed()
+    {
+        // /clear 后新会话不应残留上一回合的失败状态：状态栏红标会误导用户
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse
+            {
+                ToolCalls = [new ToolCall { Id = "l", Name = "read_file", ArgumentsJson = """{"path":"no-such"}""" }],
+            },
+        };
+        var agent = MakeAgent(provider);
+        await agent.RunAsync("触发失败", CancellationToken.None);
+        Assert.True(agent.LastTurnFailed);
+
+        agent.Reset();
+        Assert.False(agent.LastTurnFailed);
+    }
+
+    [Fact]
     public void ContextTokens_Estimate_WhenNoUsage()
     {
         var agent = MakeAgent(new FakeProvider()); // 未运行：无 usage

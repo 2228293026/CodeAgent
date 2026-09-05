@@ -150,6 +150,7 @@ public sealed partial class Agent
         TurnThinkingSeconds = 0;
         LastInputTokens = 0; // 上下文回到仅系统提示，ctx 退回估算口径
         LastPrompt = null; // 对话已清空：/retry 不应把旧问题复活进新会话
+        LastTurnFailed = false; // 新会话不应残留上一回合的失败状态：状态栏红标会误导
         // 新开一个日志文件：--continue 恢复最近会话时不会带回已清空的历史；
         // 新日志先写入当前 system 提示，保持自包含
         RollSessionLog();
