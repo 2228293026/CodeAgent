@@ -1729,6 +1729,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithHeadAndTail_TrimsInRange()
+    {
+        // trim + head + tail:先在 head/tail 范围内 trim
+        File.WriteAllText(Path.Combine(_dir, "tht.txt"), "  a  \n  b  \n  c  \n  d  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tht.txt", ["trim"] = true, ["head"] = 3, ["tail"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tc", output); // tail=2 显示最后 2 行（head 在 tail 存在时被忽略）
+        Assert.Contains("4\td", output);
+        Assert.DoesNotContain("1\ta", output);
+        Assert.DoesNotContain("2\tb", output);
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
