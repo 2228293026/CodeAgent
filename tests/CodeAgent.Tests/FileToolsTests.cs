@@ -1235,6 +1235,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_WithNoEncodingNote_HidesBlanksAndSuppressesHint()
+    {
+        // skip_empty + no_encoding_note:空行隐藏,编码提示也隐藏
+        File.WriteAllText(Path.Combine(_dir, "combo2.txt"), "a\n\nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "combo2.txt", ["skip_empty"] = true, ["no_encoding_note"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("3\tb", output);
+        Assert.DoesNotContain("2\t", output); // 空行被跳过
+        Assert.DoesNotContain("（编码", output);
+    }
+
+    [Fact]
     public async Task ReadFile_SkipEmpty_WithMaxLineLength_StillHidesBlanks()
     {
         // skip_empty + max_line_length 组合:空行被隐藏,长行仍按 max_line_length 截断
