@@ -469,6 +469,26 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_FilesOnly_WithIgnore_SkipsMatchingDirs()
+    {
+        // files_only + ignore:目录被跳过（不递归）；ignore 对文件无效（仅作用于目录名）
+        Directory.CreateDirectory(Path.Combine(_dir, "skipdir"));
+        File.WriteAllText(Path.Combine(_dir, "skipdir", "inner.txt"), "y");
+        File.WriteAllText(Path.Combine(_dir, "root.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "skip.me"), "z");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["files_only"] = true, ["ignore"] = new JsonArray("skipdir") }, ctx, CancellationToken.None);
+
+        Assert.Contains("root.txt", outText);
+        Assert.Contains("skip.me", outText); // ignore 仅作用于目录，不影响文件
+        Assert.DoesNotContain("inner.txt", outText); // 目录被跳过
+        Assert.DoesNotContain("skipdir/", outText);
+    }
+
+    [Fact]
     public async Task ListDirectory_FilesOnly_OmitsDirectories()
     {
         // files_only=true：只列文件，目录及其子项全部跳过
