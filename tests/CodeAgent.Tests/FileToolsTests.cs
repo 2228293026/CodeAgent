@@ -1413,6 +1413,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithSkipEmpty_HidesBlankLines()
+    {
+        // trim + skip_empty:空白行被跳过，非空行的首尾空白被trim
+        File.WriteAllText(Path.Combine(_dir, "tse.txt"), "  a  \n   \n\tb\t\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tse.txt", ["trim"] = true, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("3\tb", output);
+        Assert.DoesNotContain("2\t", output); // 空白行被跳过
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
