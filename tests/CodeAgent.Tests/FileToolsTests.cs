@@ -1586,6 +1586,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_AllWhitespaceFile_ProducesEmptyLines()
+    {
+        // trim=true:全空白文件 trim 后每行仍占位（空内容 + 行号），只有 skip_empty 才会跳过
+        File.WriteAllText(Path.Combine(_dir, "aw.txt"), "  \n\t\n   \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "aw.txt", ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\t", output);
+        Assert.Contains("2\t", output);
+        Assert.Contains("3", output); // 第 3 行 trim 后为空，行号仍保留
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
