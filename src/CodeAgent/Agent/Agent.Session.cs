@@ -31,6 +31,7 @@ public sealed partial class Agent
             _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) };
         // 加载的会话没有「上一轮」可撤回：清空起点栈，否则 ESC 撤回会按过期索引删掉刚加载的消息
         _turnStarts.Clear();
+        LastTurnFailed = false; // 加载的历史不应残留上一会话的失败状态：状态栏红标会误导
         LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
         LastPrompt = null;   // 加载前的「上一条请求」不应被 /retry 复活进加载的对话
         // 与 LoadSessionLog 一致：滚动新日志并重写，--continue 恢复的是加载后的对话而非旧日志

@@ -29,6 +29,7 @@ public class AgentSessionTests : IDisposable
         {
             SaveSessions = false, // 测试不写 jsonl 日志
             SessionDir = sessionDir, // 绝对路径：与工作目录无关
+            MaxToolIterations = 5,  // 防止无限制循环：FakeProvider 返回 ToolCall 时依赖此限
         };
         provider ??= new FakeProvider { NextResponse = new Providers.ProviderResponse { Text = "ok" } };
         var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
@@ -206,6 +207,27 @@ public class AgentSessionTests : IDisposable
         Assert.Equal(3, restored.MessageCount);
         Assert.Equal("你好", restored.Messages[1].Content);
         Assert.Equal("ok", restored.Messages[2].Content);
+    }
+
+    [Fact]
+    public async Task LoadSession_DoesNotPreserveLastTurnFailed()
+    {
+        // 回归：/resume 加载的会话不应残留上一回合的失败状态（状态栏红标误导）
+        var provider = new FakeProvider
+        {
+            NextResponse = new ProviderResponse
+            {
+                ToolCalls = [new ToolCall { Id = "l", Name = "read_file", ArgumentsJson = """{"path":"no-such"}""" }],
+            },
+        };
+        var agent = MakeAgent(_sessionDir, out var path, provider);
+        await agent.RunAsync("触发", CancellationToken.None);
+        Assert.True(agent.LastTurnFailed);
+        agent.SaveSession("s");
+
+        var restored = MakeAgent(_sessionDir, out _);
+        restored.LoadSession("s");
+        Assert.False(restored.LastTurnFailed);
     }
 
     [Fact]
