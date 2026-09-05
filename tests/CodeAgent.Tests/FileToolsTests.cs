@@ -1957,6 +1957,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndTailAndSkipEmpty_TrimsAndSkipsInRawMode()
+    {
+        // trim + raw + tail + skip_empty:raw 模式无行号，trim 并跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "trts.txt"), "  \n  hello  \n   \nworld\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trts.txt", ["trim"] = true, ["raw"] = true, ["tail"] = 2, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("world", output); // tail=2 范围内只有 world 非空
+        Assert.DoesNotContain("hello", output); // tail 范围外
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
