@@ -177,6 +177,34 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Remove_RemovesFirstMatchCaseInsensitively()
+    {
+        var store = new HistoryStore(_file);
+        store.Remember("abc");
+        store.Remember("def");
+        store.Remember("ABC");
+
+        var removed = store.Remove("def");
+
+        Assert.True(removed);
+        Assert.Equal(2, store.Count);
+        Assert.DoesNotContain("def", store.Entries);
+        Assert.Equal(["abc", "ABC"], store.Entries);
+    }
+
+    [Fact]
+    public void Remove_Missing_ReturnsFalse()
+    {
+        var store = new HistoryStore(_file);
+        store.Remember("abc");
+
+        var removed = store.Remove("zzz");
+
+        Assert.False(removed);
+        Assert.Single(store.Entries);
+    }
+
+    [Fact]
     public void Clear_RemovesAllEntriesAndDeletesFile()
     {
         var store = new HistoryStore(_file);

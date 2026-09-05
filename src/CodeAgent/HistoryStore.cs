@@ -21,6 +21,17 @@ public sealed class HistoryStore
     /// <summary>检查历史中是否包含指定字符串（忽略大小写）。</summary>
     public bool Contains(string line) => _entries.Contains(line, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>移除历史中第一条匹配的条目（忽略大小写）；未找到返回 false。</summary>
+    public bool Remove(string line)
+    {
+        var idx = _entries.FindIndex(l => l.Equals(line, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0)
+            return false;
+        _entries.RemoveAt(idx);
+        Save();
+        return true;
+    }
+
     /// <summary>清空历史条目（/history clear 用）；文件也会删除。</summary>
     public void Clear()
     {
