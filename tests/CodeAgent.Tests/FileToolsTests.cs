@@ -2064,6 +2064,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithRawAndOffsetAndLimit_TrimsInRawMode()
+    {
+        // trim + raw + offset + limit:raw 模式下在 offset/limit 范围内 trim
+        File.WriteAllText(Path.Combine(_dir, "trol.txt"), "  hello  \n  world  \n  foo  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "trol.txt", ["trim"] = true, ["raw"] = true, ["offset"] = 2, ["limit"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("world" + Environment.NewLine + "foo", output); // offset=2, limit=2
+        Assert.DoesNotContain("hello", output); // offset 范围外
+        Assert.DoesNotContain("  ", output); // 首尾空白被 trim
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
