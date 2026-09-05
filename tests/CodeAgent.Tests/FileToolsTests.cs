@@ -1828,6 +1828,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Trim_WithOffsetAndSkipEmpty_TrimsAndSkipsInOffsetRange()
+    {
+        // trim + offset + skip_empty:在 offset 范围内 trim 并跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "tos.txt"), "  \n  a  \n   \nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tos.txt", ["trim"] = true, ["offset"] = 2, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\ta", output); // offset=2 显示第 2 行起
+        Assert.DoesNotContain("1\t", output);
+        Assert.DoesNotContain("3\t", output); // 被 skip_empty 跳过
+    }
+
+    [Fact]
     public async Task ReadFile_Raw_ReturnsUnmodifiedContent()
     {
         // raw=true:不带行号、不截断、不显示编码提示，原样输出
