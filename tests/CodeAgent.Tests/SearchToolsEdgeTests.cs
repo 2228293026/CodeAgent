@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -418,5 +419,29 @@ public class SearchToolsEdgeTests : IDisposable
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains(new string('b', 100), result); // 完整行
         Assert.DoesNotContain(" …", result); // 无截断标记
+    }
+
+    [Fact]
+    public async Task Grep_BinaryFiles_Skip_SkipsBinary()
+    {
+        // binary_files=skip（默认）:跳过二进制文件
+        File.WriteAllBytes(PathOf("bin.dat"), [0x00, 0x01, 0x02, 0x03]);
+        var args = new JsonObject { ["pattern"] = "target", ["path"] = "bin.dat" };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("无匹配", result); // 二进制文件被跳过
+    }
+
+    [Fact]
+    public async Task Grep_BinaryFiles_Text_TreatsAsText()
+    {
+        // binary_files=text:把二进制文件当作文本搜索（可能产生乱码，但用户显式要求）
+        var bytes = new List<byte>();
+        foreach (var c in "target")
+            bytes.AddRange(System.Text.Encoding.ASCII.GetBytes(c.ToString()));
+        bytes.Add(0x00);
+        File.WriteAllBytes(PathOf("bin2.dat"), bytes.ToArray());
+        var args = new JsonObject { ["pattern"] = "target", ["path"] = "bin2.dat", ["binary_files"] = "text" };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("target", result); // 找到了文本内容
     }
 }

@@ -93,6 +93,7 @@ public sealed class GrepTool : ITool
             ["multiline"] = new JsonObject { ["type"] = "boolean", ["description"] = "跨行匹配（\n 视为普通字符参与匹配，适合多行块如 JSON/HTML 片段），默认 false" },
             ["invert"] = new JsonObject { ["type"] = "boolean", ["description"] = "反转匹配（类似 rg -v）：输出不匹配 pattern 的行，默认 false；不支持 multiline 模式" },
             ["word"] = new JsonObject { ["type"] = "boolean", ["description"] = "整词匹配（类似 rg -w）：pattern 两侧加单词边界 \\b，避免命中更长单词的子串（如搜 cat 不命中 category），默认 false" },
+            ["binary_files"] = new JsonObject { ["type"] = "string", ["description"] = "二进制文件处理：skip（默认，跳过）、text（当作文本搜索）、without-match（视为不匹配）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -109,6 +110,8 @@ public sealed class GrepTool : ITool
         var depth = ToolArgs.GetInt(args, "depth", -1);
         var maxLineLength = Math.Clamp(ToolArgs.GetInt(args, "max_line_length", 2000), 0, 50000);
         var truncateLine = maxLineLength == 0 ? (Func<string, string>)(s => s) : s => TextUtil.TruncateLine(s, maxLineLength);
+        var binaryFiles = ToolArgs.GetString(args, "binary_files");
+        var skipBinary = string.IsNullOrEmpty(binaryFiles) || binaryFiles == "skip";
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
@@ -170,7 +173,11 @@ public sealed class GrepTool : ITool
                     return;
                 var text = TextUtil.ReadTextSmart(path); // GBK/ANSI 兜底，避免中文文件乱码
                 if (SkipDirs.LooksBinary(text))
-                    return;
+                {
+                    if (skipBinary || binaryFiles == "without-match")
+                        return; // skip 或 without-match：二进制文件不处理
+                    // binary_files=text:当作文本继续搜索（可能产生乱码，但用户显式要求）
+                }
 
                 if (filesOnly)
                 {
