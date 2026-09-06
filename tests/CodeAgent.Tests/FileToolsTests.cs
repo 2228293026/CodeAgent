@@ -563,6 +563,54 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_WithTrim_TrimsLeadingWhitespace()
+    {
+        // head + trim:在 head 范围内去掉每行首尾空白
+        File.WriteAllText(Path.Combine(_dir, "htt.txt"), "  a  \n  b  \n  c  \n  d  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "htt.txt", ["head"] = 2, ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output); // 首尾空白被 trim
+        Assert.Contains("2\tb", output);
+        Assert.DoesNotContain("  a  ", output); // 原始带空白内容不应出现
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithTrim_TrimsLeadingWhitespace()
+    {
+        // tail + trim:在 tail 范围内去掉每行首尾空白
+        File.WriteAllText(Path.Combine(_dir, "ttt.txt"), "  a  \n  b  \n  c  \n  d  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ttt.txt", ["tail"] = 2, ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tc", output); // 首尾空白被 trim
+        Assert.Contains("4\td", output);
+        Assert.DoesNotContain("  c  ", output); // 原始带空白内容不应出现
+    }
+
+    [Fact]
+    public async Task ReadFile_Offset_WithTrim_TrimsLeadingWhitespace()
+    {
+        // offset + trim:在 offset 范围内去掉每行首尾空白
+        File.WriteAllText(Path.Combine(_dir, "ot.txt"), "  a  \n  b  \n  c  \n  d  \n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ot.txt", ["offset"] = 2, ["trim"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\tb", output); // 首尾空白被 trim
+        Assert.Contains("3\tc", output);
+        Assert.DoesNotContain("  b  ", output); // 原始带空白内容不应出现
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
