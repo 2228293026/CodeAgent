@@ -1302,6 +1302,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_WithIdenticalContent_SkipsWrite()
+    {
+        // append=true 但追加后内容未变化：跳过写入（不刷 mtime）
+        File.WriteAllText(Path.Combine(_dir, "same_app.txt"), "stable\n");
+        var before = File.GetLastWriteTimeUtc(Path.Combine(_dir, "same_app.txt"));
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "same_app.txt", ["content"] = "", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("跳过写入", result);
+        Assert.Equal(0, ctx.Undo.Count);
+        Assert.Equal(before, File.GetLastWriteTimeUtc(Path.Combine(_dir, "same_app.txt")));
+    }
+
+    [Fact]
     public async Task WriteFile_Append_MultipleTimes_Accumulates()
     {
         // append=true 多次调用：内容依次累积
