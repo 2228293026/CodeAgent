@@ -1781,6 +1781,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_LargeContent_AppendsSuccessfully()
+    {
+        // append=true:大内容追加成功，返回正确的字节数
+        var largeContent = new string('X', 100_000);
+        File.WriteAllText(Path.Combine(_dir, "large.txt"), "start\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "large.txt", ["content"] = largeContent, ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("100,006", result); // 大内容被正确追加（含原有内容）
+        var text = File.ReadAllText(Path.Combine(_dir, "large.txt"));
+        Assert.StartsWith("start\n", text);
+        Assert.EndsWith(new string('X', 100_000), text);
+    }
+
+    [Fact]
     public async Task WriteFile_Append_MultipleTimes_Accumulates()
     {
         // append=true 多次调用：内容依次累积
