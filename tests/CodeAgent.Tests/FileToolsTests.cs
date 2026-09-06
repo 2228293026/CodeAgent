@@ -1244,6 +1244,64 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_WithCreateDirs_CreatesParentsAndAppends()
+    {
+        // append=true + create_dirs=true:父目录不存在时自动创建并追加
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "sub/app.txt", ["content"] = "line1\n", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("line1\n", File.ReadAllText(Path.Combine(_dir, "sub", "app.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_PreservesUndoStack()
+    {
+        // append=true:撤销应恢复原文件内容（不是追加后的内容）
+        File.WriteAllText(Path.Combine(_dir, "undo_app.txt"), "original\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "undo_app.txt", ["content"] = "appended\n", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal(1, ctx.Undo.Count); // 有撤销条目
+        ctx.Undo.TryUndo();
+        Assert.Equal("original\n", File.ReadAllText(Path.Combine(_dir, "undo_app.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_WithCrlf_PreservesLineEndings()
+    {
+        // append=true:原文件 CRLF 和新内容 LF 都应保留（WriteTextPreserveEncoding 处理）
+        File.WriteAllText(Path.Combine(_dir, "crlf_app.txt"), "line1\r\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "crlf_app.txt", ["content"] = "line2", ["append"] = true }, ctx, CancellationToken.None);
+
+        var text = File.ReadAllText(Path.Combine(_dir, "crlf_app.txt"));
+        Assert.Contains("line1", text);
+        Assert.Contains("line2", text);
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_EmptyFile_BehavesLikeWrite()
+    {
+        // append=true 追加到空文件： behave 像普通写入
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "empty_app.txt", ["content"] = "first", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("first", File.ReadAllText(Path.Combine(_dir, "empty_app.txt")));
+    }
+
+    [Fact]
     public async Task WriteFile_Append_MultipleTimes_Accumulates()
     {
         // append=true 多次调用：内容依次累积
