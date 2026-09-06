@@ -25,6 +25,7 @@ public sealed class ReadFileTool : ITool
             ["trim"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉每行首尾空白（默认 false）" },
             ["no_header"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示头部范围提示（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
+            ["hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "在输出末尾附加 SHA256 哈希（默认 false；可用于校验文件完整性）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -64,6 +65,7 @@ public sealed class ReadFileTool : ITool
         var trim = ToolArgs.GetBool(args, "trim", false);
         var noHeader = ToolArgs.GetBool(args, "no_header", false);
         var isRaw = ToolArgs.GetBool(args, "raw", false);
+        var includeHash = ToolArgs.GetBool(args, "hash", false);
         if (isRaw)
         {
             noLineNumbers = true;
@@ -131,7 +133,14 @@ public sealed class ReadFileTool : ITool
             "gb18030" => "（编码: GBK/GB18030）",
             _ => "",
         });
-        return (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
+        var output = (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
+        if (includeHash)
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(full)));
+            output += $"\nsha256:{hash}";
+        }
+        return output;
     }
 }
 

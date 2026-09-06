@@ -3378,4 +3378,22 @@ public class FileToolsTests : IDisposable
         Assert.Contains("第一行旧编码", output); // 内容仍正确解码
     }
 
+    [Fact]
+    public async Task ReadFile_Hash_AppendsSha256()
+    {
+        // hash=true:输出末尾附加 SHA256 哈希，可用于校验文件完整性
+        File.WriteAllText(Path.Combine(_dir, "hash.txt"), "hello world");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "hash.txt", ["hash"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("sha256:", output);
+        // 计算预期哈希并验证
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var expected = Convert.ToHexString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes("hello world")));
+        Assert.Contains(expected, output);
+    }
+
 }
