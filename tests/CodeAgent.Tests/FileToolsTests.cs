@@ -185,6 +185,51 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_MaxLineLength_WithHead_TruncatesInHeadRange()
+    {
+        // max_line_length + head:在 head 范围内截断超长行
+        File.WriteAllText(Path.Combine(_dir, "mlh.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mlh.txt", ["max_line_length"] = 20, ["head"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.DoesNotContain("last", output); // head=2 范围外
+    }
+
+    [Fact]
+    public async Task ReadFile_MaxLineLength_WithTail_TruncatesInTailRange()
+    {
+        // max_line_length + tail:在 tail 范围内截断超长行
+        File.WriteAllText(Path.Combine(_dir, "mlt.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mlt.txt", ["max_line_length"] = 20, ["tail"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.DoesNotContain("short", output); // tail 范围外
+    }
+
+    [Fact]
+    public async Task ReadFile_MaxLineLength_WithOffset_TruncatesInOffsetRange()
+    {
+        // max_line_length + offset:在 offset 范围内截断超长行
+        File.WriteAllText(Path.Combine(_dir, "mlo.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mlo.txt", ["max_line_length"] = 20, ["offset"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.DoesNotContain("short", output); // offset 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
