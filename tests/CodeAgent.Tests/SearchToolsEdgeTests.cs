@@ -110,6 +110,18 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Glob_Ignore_SkipsMatchingFiles()
+    {
+        // ignore:排除匹配 glob 的文件
+        File.WriteAllText(PathOf("keep.txt"), "x");
+        File.WriteAllText(PathOf("skip.min.js"), "x");
+        var args = new JsonObject { ["pattern"] = "*.*", ["ignore"] = "*.min.js" };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("keep.txt", result);
+        Assert.DoesNotContain("skip.min.js", result);
+    }
+
+    [Fact]
     public async Task Glob_MaxResults_RespectsCap()
     {
         // max_results 控制返回上限（默认 500）；超限时提示可能不完整
