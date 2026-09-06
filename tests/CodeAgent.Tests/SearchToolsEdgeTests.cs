@@ -226,4 +226,62 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Contains("inv.txt:3: keep", result);
         Assert.DoesNotContain("inv.txt:2:", result); // 第 2 行不输出
     }
+
+    [Fact]
+    public async Task Grep_Word_MatchWholeWordOnly()
+    {
+        // word=true:只匹配完整单词（cat 不命中 category）
+        File.WriteAllText(PathOf("word.txt"), "cat\ncategory\nconcatenate\n");
+        var args = new JsonObject { ["pattern"] = "cat", ["word"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("word.txt:1: cat", result);
+        Assert.DoesNotContain("word.txt:2: category", result); // category 不应作为匹配行
+        Assert.DoesNotContain("word.txt:3: concat", result); // concatenate 不应作为匹配行
+    }
+
+    [Fact]
+    public async Task Grep_Multiline_MatchesAcrossLines()
+    {
+        // multiline=true:\n 参与匹配，可跨行搜索块
+        File.WriteAllText(PathOf("multi.txt"), "start\nTARGET\nend\nother\n");
+        var args = new JsonObject { ["pattern"] = "start\\nTARGET", ["multiline"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("multi.txt:1: start", result);
+        Assert.Contains("  +1| TARGET", result); // 跨行匹配的第 2 行以 +1| 前缀显示
+    }
+
+    [Fact]
+    public async Task Grep_CountOnly_ReturnsMatchCounts()
+    {
+        // count_only=true:只返回每个文件的匹配行数
+        File.WriteAllText(PathOf("cnt.txt"), "aa\nbb\naa\ncc\naa\n");
+        var args = new JsonObject { ["pattern"] = "aa", ["count_only"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("cnt.txt:3", result); // 3 处匹配
+    }
+
+    [Fact]
+    public async Task Grep_Exclude_SkipsMatchingFiles()
+    {
+        // exclude:跳过匹配 glob 的文件
+        File.WriteAllText(PathOf("inc.txt"), "target\n");
+        File.WriteAllText(PathOf("inc.g.txt"), "target\n");
+        var args = new JsonObject { ["pattern"] = "target", ["exclude"] = "*.g.txt" };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("inc.txt:1: target", result);
+        Assert.DoesNotContain("inc.g.txt", result);
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ReturnsOnlyFilenames()
+    {
+        // files_only=true:只返回匹配的文件名，不返回行内容
+        File.WriteAllText(PathOf("fo1.txt"), "target\n");
+        File.WriteAllText(PathOf("fo2.txt"), "target\n");
+        var args = new JsonObject { ["pattern"] = "target", ["files_only"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("fo1.txt", result);
+        Assert.Contains("fo2.txt", result);
+        Assert.DoesNotContain(":target", result); // 无行内容
+    }
 }
