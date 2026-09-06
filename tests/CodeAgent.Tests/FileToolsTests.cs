@@ -497,6 +497,38 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_WithTail_AndRaw_OutputsUnmodifiedContent()
+    {
+        // head + tail + raw:tail 优先，raw 模式无行号不截断
+        File.WriteAllText(Path.Combine(_dir, "htr.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "htr.txt", ["head"] = 3, ["tail"] = 2, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c" + Environment.NewLine + "d", output); // tail=2 显示最后 2 行
+        Assert.DoesNotContain("1\t", output); // 无行号
+        Assert.DoesNotContain("a", output); // head 被忽略
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithHead_AndRaw_OutputsUnmodifiedContent()
+    {
+        // tail + head + raw:tail 优先，raw 模式无行号不截断
+        File.WriteAllText(Path.Combine(_dir, "thr.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "thr.txt", ["tail"] = 2, ["head"] = 1, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c" + Environment.NewLine + "d", output); // tail=2 显示最后 2 行
+        Assert.DoesNotContain("1\t", output); // 无行号
+        Assert.DoesNotContain("a", output); // head 被忽略
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
