@@ -243,7 +243,7 @@ public class SearchToolsEdgeTests : IDisposable
     {
         var longLine = new string('x', 500) + "needle";
         File.WriteAllText(PathOf("long.txt"), longLine);
-        var args = new JsonObject { ["pattern"] = "needle" };
+        var args = new JsonObject { ["pattern"] = "needle", ["max_line_length"] = 300 };
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("…", result); // 超长行被截断提示
         Assert.DoesNotContain(new string('x', 400), result); // 未输出完整超长行
@@ -396,5 +396,27 @@ public class SearchToolsEdgeTests : IDisposable
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("root.txt:1: target", result);
         Assert.DoesNotContain("inner.txt", result); // 不递归
+    }
+
+    [Fact]
+    public async Task Grep_MaxLineLength_TruncatesLongMatches()
+    {
+        // max_line_length=20:超长匹配行被截断并附加 " …"
+        File.WriteAllText(PathOf("long.txt"), new string('a', 100) + "\n");
+        var args = new JsonObject { ["pattern"] = new string('a', 100), ["max_line_length"] = 20 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains(" …", result); // 截断标记
+        Assert.Contains(new string('a', 20), result); // 保留前 20 字符
+    }
+
+    [Fact]
+    public async Task Grep_MaxLineLength_Zero_DisablesTruncation()
+    {
+        // max_line_length=0:不截断，返回完整行
+        File.WriteAllText(PathOf("full.txt"), new string('b', 100) + "\n");
+        var args = new JsonObject { ["pattern"] = new string('b', 100), ["max_line_length"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains(new string('b', 100), result); // 完整行
+        Assert.DoesNotContain(" …", result); // 无截断标记
     }
 }

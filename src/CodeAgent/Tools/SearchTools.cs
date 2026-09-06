@@ -84,6 +84,7 @@ public sealed class GrepTool : ITool
             ["context"] = new JsonObject { ["type"] = "integer", ["description"] = "上下文行数（默认 3，最大 10）" },
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最大结果数（默认 50，最大 500）" },
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅目标文件/目录本身，默认无限制）" },
+            ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000；匹配内容过长时压缩输出）" },
             ["include"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "仅搜索匹配这些 glob 的文件（如 \"*.cs\"），可用字符串或数组" },
             ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
@@ -106,6 +107,8 @@ public sealed class GrepTool : ITool
         var context = Math.Clamp(ToolArgs.GetInt(args, "context", 3), 0, 10);
         var max = Math.Clamp(ToolArgs.GetInt(args, "max_results", 50), 1, 500);
         var depth = ToolArgs.GetInt(args, "depth", -1);
+        var maxLineLength = Math.Clamp(ToolArgs.GetInt(args, "max_line_length", 2000), 0, 50000);
+        var truncateLine = maxLineLength == 0 ? (Func<string, string>)(s => s) : s => TextUtil.TruncateLine(s, maxLineLength);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
@@ -215,9 +218,9 @@ public sealed class GrepTool : ITool
                         var startLine = 1 + CountNewlines(text, 0, m.Index);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
                         var spanLines = m.Value.Replace("\r", "").Split('\n');
-                        sb.AppendLine($"{rel}:{startLine}: {TextUtil.TruncateLine(spanLines[0], 300)}");
+                        sb.AppendLine($"{rel}:{startLine}: {truncateLine(spanLines[0])}");
                         for (int li = 1; li < Math.Min(spanLines.Length, 4); li++)
-                            sb.AppendLine($"  +{li}| {TextUtil.TruncateLine(spanLines[li], 300)}");
+                            sb.AppendLine($"  +{li}| {truncateLine(spanLines[li])}");
                         if (spanLines.Length > 4)
                             sb.AppendLine($"  …(命中跨 {startLine}-{endLine} 共 {spanLines.Length} 行)");
                         sb.AppendLine();
@@ -233,12 +236,12 @@ public sealed class GrepTool : ITool
                     if (!Hit(line))
                         continue;
                     hits++;
-                    sb.AppendLine($"{rel}:{i + 1}: {TextUtil.TruncateLine(line, 300)}");
+                    sb.AppendLine($"{rel}:{i + 1}: {truncateLine(line)}");
                     for (int c = Math.Max(0, i - context); c <= Math.Min(lines.Length - 1, i + context); c++)
                     {
                         // 跳过已作为上个匹配上下文输出过的行，避免重复
                         if (c != i && c > printedUntil)
-                            sb.AppendLine($"  {c + 1}| {TextUtil.TruncateLine(lines[c].TrimEnd('\r'), 300)}");
+                            sb.AppendLine($"  {c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}");
                     }
                     printedUntil = Math.Max(printedUntil, Math.Min(lines.Length - 1, i + context));
                     sb.AppendLine();
