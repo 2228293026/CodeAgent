@@ -23,6 +23,7 @@ public sealed class ReadFileTool : ITool
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
             ["skip_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空行（默认 false）" },
             ["trim"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉每行首尾空白（默认 false）" },
+            ["no_header"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示头部范围提示（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
         },
         ["required"] = new JsonArray("path"),
@@ -61,7 +62,7 @@ public sealed class ReadFileTool : ITool
         var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
         var skipEmpty = ToolArgs.GetBool(args, "skip_empty", false);
         var trim = ToolArgs.GetBool(args, "trim", false);
-        var noHeader = false;
+        var noHeader = ToolArgs.GetBool(args, "no_header", false);
         var isRaw = ToolArgs.GetBool(args, "raw", false);
         if (isRaw)
         {

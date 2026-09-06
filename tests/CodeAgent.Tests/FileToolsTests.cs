@@ -662,6 +662,37 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_NoHeader_SuppressesRangeHint()
+    {
+        // no_header=true:隐藏头部范围提示
+        File.WriteAllText(Path.Combine(_dir, "nh.txt"), "a\nb\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "nh.txt", ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("2\tb", output);
+        Assert.DoesNotContain("（nh.txt", output); // 头部提示被隐藏
+    }
+
+    [Fact]
+    public async Task ReadFile_NoHeader_WithRaw_StillNoHeader()
+    {
+        // no_header=true + raw=true:raw 已隐含 no_header，但验证输出无头部
+        File.WriteAllText(Path.Combine(_dir, "nhr.txt"), "a\nb\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "nhr.txt", ["no_header"] = true, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a" + Environment.NewLine + "b", output);
+        Assert.DoesNotContain("（nhr.txt", output); // 头部提示被隐藏
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
