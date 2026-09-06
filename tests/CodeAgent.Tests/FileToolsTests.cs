@@ -433,6 +433,38 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_WithTail_AndSkipEmpty_SkipsBlanksInRange()
+    {
+        // head + tail + skip_empty:tail 优先，在范围内跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "hts.txt"), "a\n  \nb\n  \nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "hts.txt", ["head"] = 3, ["tail"] = 2, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c", output); // tail=2 范围内跳过空白后只剩 c
+        Assert.DoesNotContain("a", output); // head 被忽略
+        Assert.DoesNotContain("b", output); // tail 范围外
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithHead_AndSkipEmpty_SkipsBlanksInRange()
+    {
+        // tail + head + skip_empty:tail 优先，在范围内跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "ths.txt"), "a\n  \nb\n  \nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ths.txt", ["tail"] = 2, ["head"] = 3, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c", output); // tail=2 范围内跳过空白后只剩 c
+        Assert.DoesNotContain("a", output); // head 被忽略
+        Assert.DoesNotContain("b", output); // tail 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
