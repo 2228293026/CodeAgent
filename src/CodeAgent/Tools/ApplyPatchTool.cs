@@ -251,10 +251,7 @@ public sealed class ApplyPatchTool : ITool
                     if (!effective)
                         throw new ToolException(
                             $"补丁上下文不匹配: 文件 {displayPath} 第 {pos + 1} 行应为 '{Short(l.Text)}' 但实际是 '{Short(pos < original.Length ? original[pos] : "<文件已到结尾>")}'。未做任何修改。请基于 read_file 的最新内容重新生成补丁。");
-                    // 搜索命中且该行是上下文/删除:继续按同一行逻辑处理(下面统一推进)
-                    if (pos >= original.Length || original[pos] != l.Text)
-                        throw new ToolException(
-                            $"补丁上下文不匹配: 文件 {displayPath} 第 {pos + 1} 行应为 '{Short(l.Text)}' 但实际是 '{Short(pos < original.Length ? original[pos] : "<文件已到结尾>")}'。未做任何修改。");
+                    // TryLocateAfterFuzz 保证命中时 original[pos] == l.Text，此处无需二次校验
                 }
                 pos++; // 消费该行
                 if (l.Op == ' ')
