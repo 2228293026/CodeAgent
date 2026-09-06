@@ -25,6 +25,7 @@ public sealed class ApplyPatchTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "补丁不含 +++ 文件头时的目标文件路径(相对工作区)" },
             ["validate_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只校验并报告将发生的改动,不写盘(默认 false)" },
             ["allow_new_file"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许补丁创建目标文件(默认 false；设为 true 时目标不存在会新建文件)" },
+            ["allow_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许空补丁（无可用文件块时返回提示而非报错，默认 false）" },
         },
         ["required"] = new JsonArray("patch"),
     };
@@ -38,10 +39,15 @@ public sealed class ApplyPatchTool : ITool
         var fallbackPath = ToolArgs.GetString(args, "path");
         var validateOnly = ToolArgs.GetBool(args, "validate_only", false);
         var allowNewFile = ToolArgs.GetBool(args, "allow_new_file", false);
+        var allowEmpty = ToolArgs.GetBool(args, "allow_empty", false);
 
         var files = ParsePatch(patch, fallbackPath);
         if (files.Count == 0)
+        {
+            if (allowEmpty)
+                return "补丁为空：没有可用的文件块，未做任何修改（allow_empty=true）。";
             throw new ToolException("补丁中没有可用的文件块:需要至少一个 '@@ -N,M +... @@' hunk(以及 +++ 文件头,或提供 path 参数)。");
+        }
 
         var sb = new StringBuilder();
         foreach (var file in files)

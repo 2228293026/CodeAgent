@@ -18,7 +18,7 @@ public class ApplyPatchToolTests : IDisposable
 
     private AgentContext MakeContext() => new() { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
 
-    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false)
+    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false)
     {
         var tool = new ApplyPatchTool();
         var ctx = MakeContext();
@@ -26,6 +26,7 @@ public class ApplyPatchToolTests : IDisposable
         if (path is not null) args["path"] = path;
         if (validateOnly) args["validate_only"] = true;
         if (allowNewFile) args["allow_new_file"] = true;
+        if (allowEmpty) args["allow_empty"] = true;
         return await tool.ExecuteAsync(args, ctx, CancellationToken.None);
     }
 
@@ -261,5 +262,17 @@ public class ApplyPatchToolTests : IDisposable
         var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "empty.txt"));
 
         Assert.Contains("没有可用的文件块", ex.Message);
+    }
+
+    [Fact]
+    public async Task Apply_EmptyPatch_WithAllowEmpty_ReturnsMessage()
+    {
+        // allow_empty=true:无可用文件块的补丁返回提示而非报错
+        var patch = "# this is just a comment, no hunks";
+
+        var result = await Apply(patch, "empty.txt", allowEmpty: true);
+
+        Assert.Contains("补丁为空", result);
+        Assert.Contains("allow_empty=true", result);
     }
 }
