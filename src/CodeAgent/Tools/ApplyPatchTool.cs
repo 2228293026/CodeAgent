@@ -26,6 +26,7 @@ public sealed class ApplyPatchTool : ITool
             ["validate_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只校验并报告将发生的改动,不写盘(默认 false)" },
             ["allow_new_file"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许补丁创建目标文件(默认 false；设为 true 时目标不存在会新建文件)" },
             ["allow_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许空补丁（无可用文件块时返回提示而非报错，默认 false）" },
+            ["generous"] = new JsonObject { ["type"] = "boolean", ["description"] = "放宽上下文匹配：多 hunk 补丁也允许行号漂移容错（默认 false；单 hunk 默认已放宽）" },
         },
         ["required"] = new JsonArray("patch"),
     };
@@ -40,6 +41,7 @@ public sealed class ApplyPatchTool : ITool
         var validateOnly = ToolArgs.GetBool(args, "validate_only", false);
         var allowNewFile = ToolArgs.GetBool(args, "allow_new_file", false);
         var allowEmpty = ToolArgs.GetBool(args, "allow_empty", false);
+        var generous = ToolArgs.GetBool(args, "generous", false);
 
         var files = ParsePatch(patch, fallbackPath);
         if (files.Count == 0)
@@ -53,7 +55,7 @@ public sealed class ApplyPatchTool : ITool
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
-            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, ct));
+            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, generous, ct));
         }
         return "已应用补丁:\n" + sb.ToString().TrimEnd();
     }
@@ -158,7 +160,7 @@ public sealed class ApplyPatchTool : ITool
         return path;
     }
 
-    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, CancellationToken ct)
+    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, bool generous, CancellationToken ct)
     {
         var full = ctx.Workspace.Resolve(file.Path); // 写工具:白名单只读目录也拒绝
         if (Directory.Exists(full))
@@ -193,7 +195,7 @@ public sealed class ApplyPatchTool : ITool
         if (original.Length > 0 && original[^1].Length == 0)
             original = original[..^1]; // 去掉末尾空段
 
-        var applied = ApplyHunks(file.Hunks, original, file.Path, file.Hunks.Count == 1);
+        var applied = ApplyHunks(file.Hunks, original, file.Path, generous || file.Hunks.Count == 1);
 
         var stat = StatHunks(file.Hunks);
         if (validateOnly)
@@ -253,7 +255,7 @@ public sealed class ApplyPatchTool : ITool
                 if (pos >= original.Length || original[pos] != l.Text)
                 {
                     // 上下文不匹配:单 hunk 且允许搜索时,尝试从 pos 往后找首数据行(行号漂移容错)
-                    var effective = TryLocateAfterFuzz(hunks.Count == 1 && generousLocate, original, ref pos, l, hunk);
+                    var effective = TryLocateAfterFuzz(generousLocate || hunks.Count == 1, original, ref pos, l, hunk);
                     if (!effective)
                         throw new ToolException(
                             $"补丁上下文不匹配: 文件 {displayPath} 第 {pos + 1} 行应为 '{Short(l.Text)}' 但实际是 '{Short(pos < original.Length ? original[pos] : "<文件已到结尾>")}'。未做任何修改。请基于 read_file 的最新内容重新生成补丁。");

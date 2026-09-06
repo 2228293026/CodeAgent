@@ -18,7 +18,7 @@ public class ApplyPatchToolTests : IDisposable
 
     private AgentContext MakeContext() => new() { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
 
-    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false)
+    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false)
     {
         var tool = new ApplyPatchTool();
         var ctx = MakeContext();
@@ -27,6 +27,7 @@ public class ApplyPatchToolTests : IDisposable
         if (validateOnly) args["validate_only"] = true;
         if (allowNewFile) args["allow_new_file"] = true;
         if (allowEmpty) args["allow_empty"] = true;
+        if (generous) args["generous"] = true;
         return await tool.ExecuteAsync(args, ctx, CancellationToken.None);
     }
 
@@ -274,5 +275,48 @@ public class ApplyPatchToolTests : IDisposable
 
         Assert.Contains("补丁为空", result);
         Assert.Contains("allow_empty=true", result);
+    }
+
+    [Fact]
+    public async Task Apply_Generous_MultiHunk_WithFuzz_AppliesSuccessfully()
+    {
+        // generous=true + 多 hunk + 行号漂移：放宽匹配后仍能应用
+        // 文件在第一个 hunk 之后多一行 lineX，导致第二个 hunk 行号偏移
+        File.WriteAllText(Path.Combine(_dir, "gh.txt"), "line1\nline2\nlineX\nline3\nline4\nline5\n");
+        var patch = @"@@ -1,2 +1,2 @@
+ line1
+-line2
++new2
+@@ -3,2 +3,2 @@
+ line3
+-line4
++new4";
+
+        var result = await Apply(patch, "gh.txt", generous: true);
+
+        Assert.Contains("已应用", result);
+        var text = File.ReadAllText(Path.Combine(_dir, "gh.txt"));
+        Assert.Contains("new2", text);
+        Assert.Contains("new4", text);
+        Assert.Contains("line5", text); // 末尾内容保留
+    }
+
+    [Fact]
+    public async Task Apply_GenerousFalse_MultiHunk_WithFuzz_Throws()
+    {
+        // generous=false + 多 hunk + 行号漂移：严格匹配失败
+        File.WriteAllText(Path.Combine(_dir, "gs.txt"), "line1\nline2\nlineX\nline3\nline4\nline5\n");
+        var patch = @"@@ -1,2 +1,2 @@
+ line1
+-line2
++new2
+@@ -3,2 +3,2 @@
+ line3
+-line4
++new4";
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "gs.txt", generous: false));
+
+        Assert.Contains("上下文不匹配", ex.Message);
     }
 }
