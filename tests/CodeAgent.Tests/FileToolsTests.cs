@@ -94,6 +94,35 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Tail_WithMaxLineLength_TruncatesInTailRange()
+    {
+        // tail + max_line_length:在 tail 范围内截断超长行
+        File.WriteAllText(Path.Combine(_dir, "tml_tail.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tml_tail.txt", ["tail"] = 2, ["max_line_length"] = 20 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.Contains("last", output); // 最后一行 intact
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithRaw_OutputsUnmodifiedContent()
+    {
+        // tail + raw:无行号，不截断，输出 tail 范围内的原始内容
+        File.WriteAllText(Path.Combine(_dir, "raw_tail.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "raw_tail.txt", ["tail"] = 2, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("c" + Environment.NewLine + "d", output);
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
