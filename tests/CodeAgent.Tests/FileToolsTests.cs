@@ -647,6 +647,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Raw_WithSkipEmpty_OmitsBlanks()
+    {
+        // raw + skip_empty:raw 模式仍可跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "rse.txt"), "a\n  \nb\n  \nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "rse.txt", ["raw"] = true, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("a" + Environment.NewLine + "b" + Environment.NewLine + "c", output); // 空白行被 skip
+        Assert.DoesNotContain("  ", output); // 空白行不出现
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
