@@ -141,6 +141,7 @@ public sealed class WriteFileTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "目标文件路径，相对工作区根目录" },
             ["content"] = new JsonObject { ["type"] = "string", ["description"] = "文件完整内容" },
             ["create_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "自动创建父目录（默认 true）" },
+            ["append"] = new JsonObject { ["type"] = "boolean", ["description"] = "追加模式：在文件末尾添加内容（默认 false；与 content 配合使用）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -154,6 +155,7 @@ public sealed class WriteFileTool : ITool
             throw new ToolException("缺少必填参数 content");
 
         var content = ToolArgs.GetString(args, "content");
+        var append = ToolArgs.GetBool(args, "append", false);
         var full = ctx.Workspace.Resolve(path);
         if (Directory.Exists(full))
             throw new ToolException($"'{path}' 是目录，不能作为文件写入（目标应为文件路径）。");
@@ -181,13 +183,24 @@ public sealed class WriteFileTool : ITool
                 old = await TextUtil.ReadTextSmartAsync(full, ct);
         }
 
+        string finalContent;
+        if (append && hadFile && old is not null)
+        {
+            // 追加模式：保留原文件内容，在末尾添加新内容（中间用换行分隔，避免粘连）
+            finalContent = old.EndsWith("\n") ? old + content : old + "\n" + content;
+        }
+        else
+        {
+            finalContent = content;
+        }
+
         // 内容与现状完全一致：跳过写入（不刷 mtime、不污染撤销栈）
-        if (hadFile && old == content)
-            return $"内容未变化，跳过写入: {path}（{TextUtil.TruncateLine(content, 60)}）";
+        if (hadFile && old == finalContent)
+            return $"内容未变化，跳过写入: {path}（{TextUtil.TruncateLine(finalContent, 60)}）";
 
         try
         {
-            await TextUtil.WriteTextPreserveEncodingAsync(full, content, ct); // 保原编码：GBK 文件不被动转 UTF-8
+            await TextUtil.WriteTextPreserveEncodingAsync(full, finalContent, ct); // 保原编码：GBK 文件不被动转 UTF-8
         }
         catch (IOException ex)
         {
@@ -202,10 +215,11 @@ public sealed class WriteFileTool : ITool
             EncodingName = hadFile ? TextUtil.DetectFileEncoding(full) : null, // 撤销按原编码写回
         });
 
-        var bytes = Encoding.UTF8.GetByteCount(content);
+        var bytes = Encoding.UTF8.GetByteCount(finalContent);
         // 行数（按 \n 计；纯空白/空内容记为 0）：让模型快速知道写了多少，便于与预期对照
-        var lineCount = content.Length == 0 ? 0 : content.Split('\n').Length;
-        return $"已写入 {bytes:N0} 字节（{lineCount} 行）→ {path}";
+        var lineCount = finalContent.Length == 0 ? 0 : finalContent.Split('\n').Length;
+        var action = append ? "追加" : "写入";
+        return $"{action} {bytes:N0} 字节（{lineCount} 行）→ {path}";
     }
 }
 

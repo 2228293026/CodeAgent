@@ -1200,6 +1200,64 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_AddsContentToExistingFile()
+    {
+        // append=true:在已有文件末尾追加内容（中间自动补换行）
+        File.WriteAllText(Path.Combine(_dir, "app.txt"), "line1\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "app.txt", ["content"] = "line2", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("line1\nline2", File.ReadAllText(Path.Combine(_dir, "app.txt")));
+        Assert.Contains("追加", result);
+        Assert.Contains("2 行", result);
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_ToNewFile_CreatesFile()
+    {
+        // append=true 但文件不存在： behave 像普通写入
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "new_app.txt", ["content"] = "first", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("first", File.ReadAllText(Path.Combine(_dir, "new_app.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_IdenticalContent_SkipsWrite()
+    {
+        // append=true 但追加后内容未变：跳过写入
+        File.WriteAllText(Path.Combine(_dir, "same_app.txt"), "stable\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "same_app.txt", ["content"] = "", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("跳过写入", result);
+        Assert.Equal(0, ctx.Undo.Count);
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_MultipleTimes_Accumulates()
+    {
+        // append=true 多次调用：内容依次累积
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(new JsonObject { ["path"] = "multi.txt", ["content"] = "a\n", ["append"] = true }, ctx, CancellationToken.None);
+        await tool.ExecuteAsync(new JsonObject { ["path"] = "multi.txt", ["content"] = "b\n", ["append"] = true }, ctx, CancellationToken.None);
+        await tool.ExecuteAsync(new JsonObject { ["path"] = "multi.txt", ["content"] = "c", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("a\nb\nc", File.ReadAllText(Path.Combine(_dir, "multi.txt")));
+    }
+
+    [Fact]
     public async Task EditFile_IdenticalStrings_ThrowsInsteadOfNoOp()
     {
         // 回归：old == new 曾静默重写文件并报「已替换 N 处」，误导模型以为做了修改
