@@ -264,6 +264,36 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Raw_DisablesMaxLineLength()
+    {
+        // raw=true:max_line_length 被忽略（raw 不截断）
+        File.WriteAllText(Path.Combine(_dir, "rrml.txt"), new string('X', 100) + "\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "rrml.txt", ["raw"] = true, ["max_line_length"] = 10 }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("…", output); // raw 不截断
+    }
+
+    [Fact]
+    public async Task ReadFile_Raw_DisablesNoLineNumbers()
+    {
+        // raw=true:no_line_numbers 已隐含，但验证输出无行号
+        File.WriteAllText(Path.Combine(_dir, "rrnl.txt"), "a\nb\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "rrnl.txt", ["raw"] = true, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("1\t", output);
+        Assert.DoesNotContain("2\t", output);
+        Assert.Contains("a" + Environment.NewLine + "b", output);
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
