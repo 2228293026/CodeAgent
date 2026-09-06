@@ -62,6 +62,38 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Tail_WithSkipEmpty_SkipsBlanksInTailRange()
+    {
+        // tail + skip_empty:在 tail 范围内跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "tse_tail.txt"), "a\n  \nb\n  \nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tse_tail.txt", ["tail"] = 3, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tb", output); // tail=3 范围内跳过空白
+        Assert.Contains("5\tc", output);
+        Assert.DoesNotContain("2\t", output); // 空白行被 skip
+        Assert.DoesNotContain("4\t", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithNoLineNumbers_OutputsRawLines()
+    {
+        // tail + no_line_numbers:无行号，只输出 tail 范围内的内容
+        File.WriteAllText(Path.Combine(_dir, "nl_tail.txt"), "a\nb\nc\nd\ne\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "nl_tail.txt", ["tail"] = 2, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("d" + Environment.NewLine + "e", output);
+        Assert.DoesNotContain("3\tc", output); // tail 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
