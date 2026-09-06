@@ -76,6 +76,40 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Glob_RecursivePattern_FindsNestedFiles()
+    {
+        // **/*.cs:递归匹配子目录中的文件
+        Directory.CreateDirectory(Path.Combine(_dir, "src", "lib"));
+        File.WriteAllText(Path.Combine(_dir, "src", "a.cs"), "x");
+        File.WriteAllText(Path.Combine(_dir, "src", "lib", "b.cs"), "x");
+        var args = new JsonObject { ["pattern"] = "**/*.cs" };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("src/a.cs", result);
+        Assert.Contains("src/lib/b.cs", result);
+    }
+
+    [Fact]
+    public async Task Glob_HiddenFiles_AreIncluded()
+    {
+        // 以点开头的文件（如 .gitignore）也应被 glob 匹配
+        File.WriteAllText(PathOf(".gitignore"), "x");
+        File.WriteAllText(PathOf("normal.txt"), "x");
+        var args = new JsonObject { ["pattern"] = ".*" };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains(".gitignore", result);
+        Assert.DoesNotContain("normal.txt", result);
+    }
+
+    [Fact]
+    public async Task Glob_NoMatch_ReturnsEmpty()
+    {
+        // 无匹配时返回空（或提示）
+        var args = new JsonObject { ["pattern"] = "*.nonexistent" };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.DoesNotContain(".cs", result); // 无匹配项
+    }
+
+    [Fact]
     public async Task Glob_MaxResults_RespectsCap()
     {
         // max_results 控制返回上限（默认 500）；超限时提示可能不完整
