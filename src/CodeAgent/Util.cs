@@ -301,6 +301,19 @@ public static class TextUtil
         return count;
     }
 
+    public static int CountOccurrences(string text, string sub, StringComparison comparison)
+    {
+        if (sub.Length == 0)
+            return 0;
+        int count = 0, idx = 0;
+        while ((idx = text.IndexOf(sub, idx, comparison)) >= 0)
+        {
+            count++;
+            idx += sub.Length;
+        }
+        return count;
+    }
+
     /// <summary>
     /// 空白归一化：把每段连续空白（含换行）压成单个空格并去首尾。
     /// 用于「old_string 未命中」时的相似度判断——缩进/换行差异导致的失配可被识别出来并给出提示。

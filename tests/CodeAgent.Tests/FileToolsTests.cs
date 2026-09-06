@@ -2480,6 +2480,50 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_CaseInsensitive_MatchesDifferentCase()
+    {
+        // case_insensitive=true:old_string 忽略大小写匹配，new_string 按原样写入
+        File.WriteAllText(Path.Combine(_dir, "ci.txt"), "Hello World\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ci.txt", ["old_string"] = "hello world", ["new_string"] = "HI", ["case_insensitive"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("HI\n", File.ReadAllText(Path.Combine(_dir, "ci.txt")));
+        Assert.Contains("1 处", result);
+    }
+
+    [Fact]
+    public async Task EditFile_CaseInsensitive_NoMatch_Throws()
+    {
+        // case_insensitive=true 但完全不匹配：仍报未找到
+        File.WriteAllText(Path.Combine(_dir, "ci2.txt"), "Hello World\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ci2.txt", ["old_string"] = "zzz", ["new_string"] = "HI", ["case_insensitive"] = true }, ctx, CancellationToken.None));
+
+        Assert.Contains("未找到", ex.Message);
+    }
+
+    [Fact]
+    public async Task EditFile_CaseInsensitive_ReplaceAll_ReplacesAllOccurrences()
+    {
+        // case_insensitive=true + replace_all=true:所有大小写变体都被替换
+        File.WriteAllText(Path.Combine(_dir, "cia.txt"), "Cat\ncat\nCAT\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "cia.txt", ["old_string"] = "cat", ["new_string"] = "dog", ["case_insensitive"] = true, ["replace_all"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("dog\ndog\ndog\n", File.ReadAllText(Path.Combine(_dir, "cia.txt")));
+        Assert.Contains("3 处", result);
+    }
+
+    [Fact]
     public async Task EditFile_PreservesUtf8Bom()
     {
         // 回归：改写曾丢 BOM——PowerShell 5.1 等工具靠 BOM 识别 UTF-8，丢掉后中文变乱码

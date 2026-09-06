@@ -237,6 +237,7 @@ public sealed class EditFileTool : ITool
             ["old_string"] = new JsonObject { ["type"] = "string", ["description"] = "要替换的原文（精确匹配）" },
             ["new_string"] = new JsonObject { ["type"] = "string", ["description"] = "替换后的文本" },
             ["replace_all"] = new JsonObject { ["type"] = "boolean", ["description"] = "出现多次时是否全部替换（默认 false，重复会报错）" },
+            ["case_insensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "忽略大小写匹配（默认 false；匹配后仍按 new_string 原样写入）" },
         },
         ["required"] = new JsonArray("path", "old_string", "new_string"),
     };
@@ -262,6 +263,8 @@ public sealed class EditFileTool : ITool
 
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
+        var caseInsensitive = ToolArgs.GetBool(args, "case_insensitive", false);
+        var cmp = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         // 精确匹配优先；未命中时做换行风格容错：old_string 用 LF、文件是 CRLF（或反过来）时
         // 逐字匹配必失败（模型输出几乎总是 LF，Windows 工程常是 CRLF）。归一化到 LF 匹配，
@@ -270,18 +273,18 @@ public sealed class EditFileTool : ITool
         var workOld = oldString;
         var workNew = newString;
         var normalized = false;
-        var firstIdx = workText.IndexOf(workOld, StringComparison.Ordinal);
+        var firstIdx = workText.IndexOf(workOld, cmp);
         if (firstIdx < 0)
         {
             var lfText = text.Replace("\r\n", "\n");
             var lfOld = oldString.Replace("\r\n", "\n");
-            if (lfText.Contains(lfOld, StringComparison.Ordinal))
+            if (lfText.Contains(lfOld, cmp))
             {
                 workText = lfText;
                 workOld = lfOld;
                 workNew = newString.Replace("\r\n", "\n");
                 normalized = true;
-                firstIdx = workText.IndexOf(workOld, StringComparison.Ordinal);
+                firstIdx = workText.IndexOf(workOld, cmp);
             }
         }
         // 先统一做未命中检查：replace_all 模式下未命中也不允许静默写回原文件
@@ -289,18 +292,34 @@ public sealed class EditFileTool : ITool
         if (firstIdx < 0)
         {
             // 空白归一化后能命中 → 差异只在缩进/行尾空白，给出可行动的提示而不是让模型盲试
-            var hint = TextUtil.NormalizeWhitespace(text).Contains(TextUtil.NormalizeWhitespace(oldString), StringComparison.Ordinal)
+            var hint = TextUtil.NormalizeWhitespace(text).Contains(TextUtil.NormalizeWhitespace(oldString), cmp)
                 ? "\n提示：文件中存在仅空白/缩进差异的相似内容——请从 read_file 输出逐字复制 old_string（注意行首缩进与行尾空白）。"
                 : "";
             throw new ToolException(
                 $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---{hint}");
         }
-        int count = TextUtil.CountOccurrences(workText, workOld);
+        int count = TextUtil.CountOccurrences(workText, workOld, cmp);
 
         string result;
         if (replaceAll)
         {
-            result = workText.Replace(workOld, workNew);
+            // replace_all + case_insensitive:需要自定义不区分大小写的替换
+            if (caseInsensitive)
+            {
+                result = workText;
+                int start = 0;
+                while (true)
+                {
+                    var idx = result.IndexOf(workOld, start, cmp);
+                    if (idx < 0) break;
+                    result = result.Remove(idx, workOld.Length).Insert(idx, workNew);
+                    start = idx + workNew.Length;
+                }
+            }
+            else
+            {
+                result = workText.Replace(workOld, workNew);
+            }
         }
         else
         {
