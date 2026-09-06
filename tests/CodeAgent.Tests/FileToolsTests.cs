@@ -2103,6 +2103,59 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_LineEnding_Lf_ForcesLf()
+    {
+        // line_ending=lf:强制 LF 换行
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "lf.txt", ["content"] = "a\r\nb\r\nc", ["line_ending"] = "lf" }, ctx, CancellationToken.None);
+
+        Assert.Equal("a\nb\nc", File.ReadAllText(Path.Combine(_dir, "lf.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_LineEnding_Crlf_ForcesCrlf()
+    {
+        // line_ending=crlf:强制 CRLF 换行
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "crlf.txt", ["content"] = "a\nb\nc", ["line_ending"] = "crlf" }, ctx, CancellationToken.None);
+
+        Assert.Equal("a\r\nb\r\nc", File.ReadAllText(Path.Combine(_dir, "crlf.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_LineEnding_Preserve_MatchesExisting()
+    {
+        // line_ending=preserve:匹配已有文件的换行风格
+        File.WriteAllText(Path.Combine(_dir, "exist.txt"), "a\r\nb\r\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "exist.txt", ["content"] = "x\ny\nz", ["line_ending"] = "preserve" }, ctx, CancellationToken.None);
+
+        Assert.Equal("x\r\ny\r\nz", File.ReadAllText(Path.Combine(_dir, "exist.txt"))); // 无尾部换行则不加
+    }
+
+    [Fact]
+    public async Task WriteFile_LineEnding_Preserve_NewFile_UsesLf()
+    {
+        // line_ending=preserve + 新文件：默认 LF
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "new.txt", ["content"] = "a\nb\n", ["line_ending"] = "preserve" }, ctx, CancellationToken.None);
+
+        Assert.Equal("a\nb\n", File.ReadAllText(Path.Combine(_dir, "new.txt")));
+    }
+
+    [Fact]
     public async Task EditFile_IdenticalStrings_ThrowsInsteadOfNoOp()
     {
         // 回归：old == new 曾静默重写文件并报「已替换 N 处」，误导模型以为做了修改

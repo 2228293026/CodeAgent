@@ -150,6 +150,7 @@ public sealed class WriteFileTool : ITool
             ["create_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "自动创建父目录（默认 true）" },
             ["append"] = new JsonObject { ["type"] = "boolean", ["description"] = "追加模式：在文件末尾添加内容（默认 false；与 content 配合使用）" },
             ["bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "写入 UTF-8 BOM（默认 false；新建文件时生效，已有文件保留原编码）" },
+            ["line_ending"] = new JsonObject { ["type"] = "string", ["description"] = "换行符模式：preserve（默认，保留原文件风格；新建文件用 LF）、lf（强制 LF）、crlf（强制 CRLF）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -192,10 +193,44 @@ public sealed class WriteFileTool : ITool
                 old = await TextUtil.ReadTextSmartAsync(full, ct);
         }
 
-        string finalContent;
-        if (append && hadFile && old is not null)
+        var lineEnding = ToolArgs.GetString(args, "line_ending");
+        string? targetEnding = null;
+        if (!string.IsNullOrEmpty(lineEnding))
         {
-            // 追加模式：保留原文件内容，在末尾添加新内容（中间用换行分隔，避免粘连）
+            if (lineEnding == "preserve" && hadFile && old is not null)
+            {
+                // preserve:检测已有文件的换行风格
+                targetEnding = old.Contains("\r\n") ? "crlf" : "lf";
+            }
+            else if (lineEnding == "lf" || lineEnding == "crlf")
+            {
+                targetEnding = lineEnding;
+            }
+        }
+
+        string finalContent;
+        if (targetEnding is not null)
+        {
+            string NormalizeLineEndings(string text, string target)
+            {
+                if (target == "crlf")
+                    return text.Replace("\r\n", "\n").Replace("\n", "\r\n");
+                return text.Replace("\r\n", "\n");
+            }
+            var normalized = NormalizeLineEndings(content, targetEnding);
+            if (append && hadFile && old is not null)
+            {
+                var sep = targetEnding == "crlf" ? "\r\n" : "\n";
+                finalContent = (old.EndsWith("\n") || old.EndsWith("\r\n")) ? old + normalized : old + sep + normalized;
+            }
+            else
+            {
+                finalContent = normalized;
+            }
+        }
+        else if (append && hadFile && old is not null)
+        {
+            // 未指定 line_ending:追加模式保留原行为
             finalContent = old.EndsWith("\n") ? old + content : old + "\n" + content;
         }
         else
