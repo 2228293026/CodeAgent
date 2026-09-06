@@ -856,6 +856,39 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_DepthZero_FilesOnly_OnlyRootFiles()
+    {
+        // depth=0 + files_only:只列根目录文件，不递归
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(Path.Combine(_dir, "root.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "sub", "inner.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["depth"] = 0, ["files_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("root.txt", output);
+        Assert.DoesNotContain("inner.txt", output); // 不递归
+    }
+
+    [Fact]
+    public async Task ListDirectory_DepthZero_DirsOnly_OnlyRootDirs()
+    {
+        // depth=0 + dirs_only:只列根目录目录，不递归
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        Directory.CreateDirectory(Path.Combine(_dir, "sub", "inner"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["depth"] = 0, ["dirs_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("sub/", output);
+        Assert.DoesNotContain("inner/", output); // 不递归
+    }
+
+    [Fact]
     public async Task ListDirectory_Entries_AreSorted()
     {
         // 输出确定性：目录组与文件组各自按名称排序（目录先于文件）
