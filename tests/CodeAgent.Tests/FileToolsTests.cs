@@ -2524,6 +2524,34 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_CaseInsensitive_PreservesOriginalCaseInResult()
+    {
+        // case_insensitive=true:匹配时忽略大小写，但替换后文件内容按 new_string 写入
+        File.WriteAllText(Path.Combine(_dir, "cip.txt"), "Hello World\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "cip.txt", ["old_string"] = "hello world", ["new_string"] = "HI", ["case_insensitive"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("HI\n", File.ReadAllText(Path.Combine(_dir, "cip.txt")));
+    }
+
+    [Fact]
+    public async Task EditFile_CaseInsensitive_WithCrlf_PreservesLineEndings()
+    {
+        // case_insensitive=true + CRLF 文件：匹配忽略大小写，保留 CRLF
+        File.WriteAllText(Path.Combine(_dir, "cicrlf.txt"), "Hello World\r\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "cicrlf.txt", ["old_string"] = "hello world", ["new_string"] = "HI", ["case_insensitive"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("HI\r\n", File.ReadAllText(Path.Combine(_dir, "cicrlf.txt")));
+    }
+
+    [Fact]
     public async Task EditFile_PreservesUtf8Bom()
     {
         // 回归：改写曾丢 BOM——PowerShell 5.1 等工具靠 BOM 识别 UTF-8，丢掉后中文变乱码
