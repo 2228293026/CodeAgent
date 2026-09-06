@@ -529,6 +529,40 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_WithTail_AndNoEncodingNote_SuppressesHint()
+    {
+        // head + tail + no_encoding_note:tail 优先，编码提示隐藏
+        File.WriteAllText(Path.Combine(_dir, "htenn.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "htenn.txt", ["head"] = 3, ["tail"] = 2, ["no_encoding_note"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tc", output); // tail=2 显示最后 2 行
+        Assert.Contains("4\td", output);
+        Assert.DoesNotContain("（编码", output); // 编码提示隐藏
+        Assert.DoesNotContain("a", output); // head 被忽略
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithHead_AndNoEncodingNote_SuppressesHint()
+    {
+        // tail + head + no_encoding_note:tail 优先，编码提示隐藏
+        File.WriteAllText(Path.Combine(_dir, "thenn.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "thenn.txt", ["tail"] = 2, ["head"] = 1, ["no_encoding_note"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tc", output); // tail=2 显示最后 2 行
+        Assert.Contains("4\td", output);
+        Assert.DoesNotContain("（编码", output); // 编码提示隐藏
+        Assert.DoesNotContain("a", output); // head 被忽略
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
