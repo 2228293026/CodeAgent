@@ -604,6 +604,36 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_DirsOnly_RespectsMaxItems()
+    {
+        // dirs_only + max_items:只列目录，且条目不超过 max_items
+        for (int i = 0; i < 5; i++)
+            Directory.CreateDirectory(Path.Combine(_dir, $"d{i:00}"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = ".", ["dirs_only"] = true, ["max_items"] = 3 }, ctx, CancellationToken.None);
+
+        Assert.Contains("d00/", outText);
+        Assert.DoesNotContain("d03/", outText); // 被 max_items=3 截断
+    }
+
+    [Fact]
+    public async Task ListDirectory_EmptyDir_ReportsEmpty()
+    {
+        // 空目录：返回空提示
+        Directory.CreateDirectory(Path.Combine(_dir, "emptydir"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var outText = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "emptydir" }, ctx, CancellationToken.None);
+
+        Assert.Contains("为空", outText); // 空目录提示
+    }
+
+    [Fact]
     public async Task ListDirectory_DirsOnly_WithIgnore_SkipsMatchingDirs()
     {
         // dirs_only + ignore: ignore 只作用于目录名，文件本来就不显示
