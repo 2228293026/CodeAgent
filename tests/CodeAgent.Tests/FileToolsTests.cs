@@ -2552,6 +2552,21 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_CaseInsensitive_ReplaceAll_WithCrlf_Works()
+    {
+        // case_insensitive=true + replace_all=true + CRLF 文件：所有变体被替换，保留 CRLF
+        File.WriteAllText(Path.Combine(_dir, "cicrlf2.txt"), "Cat\r\ncat\r\nCAT\r\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "cicrlf2.txt", ["old_string"] = "cat", ["new_string"] = "dog", ["case_insensitive"] = true, ["replace_all"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("dog\r\ndog\r\ndog\r\n", File.ReadAllText(Path.Combine(_dir, "cicrlf2.txt")));
+        Assert.Contains("3 处", result);
+    }
+
+    [Fact]
     public async Task EditFile_PreservesUtf8Bom()
     {
         // 回归：改写曾丢 BOM——PowerShell 5.1 等工具靠 BOM 识别 UTF-8，丢掉后中文变乱码
