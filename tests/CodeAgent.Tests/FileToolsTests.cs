@@ -371,6 +371,37 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Offset_WithMaxLineLength_TruncatesInOffsetRange()
+    {
+        // offset + max_line_length:在 offset 范围内截断超长行
+        File.WriteAllText(Path.Combine(_dir, "oml.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "oml.txt", ["offset"] = 2, ["max_line_length"] = 20 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.DoesNotContain("short", output); // offset 范围外
+    }
+
+    [Fact]
+    public async Task ReadFile_Offset_WithMaxLineLength_AndSkipEmpty_TruncatesInOffsetRange()
+    {
+        // offset + max_line_length + skip_empty:在 offset 范围内跳过空白并截断
+        File.WriteAllText(Path.Combine(_dir, "omlse.txt"), "  \n" + new string('X', 100) + "\nshort\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "omlse.txt", ["offset"] = 2, ["max_line_length"] = 20, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.Contains("short", output); // offset 范围内
+        Assert.DoesNotContain("1\t", output); // 空白行被 skip
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
