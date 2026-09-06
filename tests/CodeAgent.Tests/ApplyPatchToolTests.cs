@@ -226,4 +226,40 @@ public class ApplyPatchToolTests : IDisposable
         Assert.Contains("不存在", ex.Message);
         Assert.False(File.Exists(Path.Combine(_dir, "nope.txt")));
     }
+
+    [Fact]
+    public async Task Apply_OnlyContextLines_NoOp()
+    {
+        // 补丁只有上下文行（无 +/- 变更）：文件应保持不变，报告 0 变更
+        var patch = "@@ -1,2 +1,2 @@\n line1\n line2\n";
+        File.WriteAllText(Path.Combine(_dir, "ctx.txt"), "line1\nline2\n");
+
+        var result = await Apply(patch, "ctx.txt");
+
+        Assert.Equal("line1\nline2\n", File.ReadAllText(Path.Combine(_dir, "ctx.txt")));
+        Assert.Contains("(-0 +0)", result); // 无增删
+    }
+
+    [Fact]
+    public async Task Apply_MultipleHunks_WithGaps_Works()
+    {
+        // 多个 hunk 之间有间隔：应正确保留间隔内容
+        var patch = "@@ -1,1 +1,1 @@\n-old1\n+new1\n@@ -3,1 +3,1 @@\n-old3\n+new3\n";
+        File.WriteAllText(Path.Combine(_dir, "gap.txt"), "old1\nkeep\nold3\n");
+
+        await Apply(patch, "gap.txt");
+
+        Assert.Equal("new1\nkeep\nnew3\n", File.ReadAllText(Path.Combine(_dir, "gap.txt")));
+    }
+
+    [Fact]
+    public async Task Apply_EmptyHunk_Throws()
+    {
+        // 空 hunk（无数据行）：补丁无效，应抛出错误
+        var patch = "@@ -1,1 +1,1 @@\n";
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "empty.txt"));
+
+        Assert.Contains("没有可用的文件块", ex.Message);
+    }
 }
