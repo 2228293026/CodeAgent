@@ -1644,6 +1644,34 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_WithCreateDirsFalse_ExistingDir_Appends()
+    {
+        // append=true + create_dirs=false:父目录已存在时正常追加
+        Directory.CreateDirectory(Path.Combine(_dir, "existing"));
+        File.WriteAllText(Path.Combine(_dir, "existing", "cf.txt"), "old\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "existing/cf.txt", ["content"] = "new\n", ["append"] = true, ["create_dirs"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("old\nnew\n", File.ReadAllText(Path.Combine(_dir, "existing", "cf.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_Append_WithCreateDirsFalse_MissingDir_Throws()
+    {
+        // append=true + create_dirs=false:父目录不存在时抛出清晰错误
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+            new JsonObject { ["path"] = "missing/app.txt", ["content"] = "new\n", ["append"] = true, ["create_dirs"] = false }, ctx, CancellationToken.None));
+
+        Assert.Contains("父目录不存在", ex.Message);
+    }
+
+    [Fact]
     public async Task WriteFile_Append_MultipleTimes_Accumulates()
     {
         // append=true 多次调用：内容依次累积
