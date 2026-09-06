@@ -2073,6 +2073,36 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Bom_NewFile_WritesUtf8Bom()
+    {
+        // bom=true + 新文件：写入 UTF-8 BOM
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bom.txt", ["content"] = "hello", ["bom"] = true }, ctx, CancellationToken.None);
+
+        var bytes = File.ReadAllBytes(Path.Combine(_dir, "bom.txt"));
+        Assert.Equal(3, bytes.Take(3).Count(b => b == 0xEF || b == 0xBB || b == 0xBF)); // BOM 头
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
+    }
+
+    [Fact]
+    public async Task WriteFile_Bom_ExistingFile_PreservesOriginalEncoding()
+    {
+        // bom=true + 已有文件：保留原编码（不强行加 BOM）
+        File.WriteAllText(Path.Combine(_dir, "exist.txt"), "hello", new System.Text.UTF8Encoding(false));
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "exist.txt", ["content"] = "world", ["bom"] = true }, ctx, CancellationToken.None);
+
+        var bytes = File.ReadAllBytes(Path.Combine(_dir, "exist.txt"));
+        Assert.DoesNotContain(bytes, b => b == 0xEF && bytes.Length > 1 && bytes[1] == 0xBB); // 无 BOM
+    }
+
+    [Fact]
     public async Task EditFile_IdenticalStrings_ThrowsInsteadOfNoOp()
     {
         // 回归：old == new 曾静默重写文件并报「已替换 N 处」，误导模型以为做了修改

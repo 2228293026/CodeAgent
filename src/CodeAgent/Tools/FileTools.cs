@@ -149,6 +149,7 @@ public sealed class WriteFileTool : ITool
             ["content"] = new JsonObject { ["type"] = "string", ["description"] = "文件完整内容" },
             ["create_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "自动创建父目录（默认 true）" },
             ["append"] = new JsonObject { ["type"] = "boolean", ["description"] = "追加模式：在文件末尾添加内容（默认 false；与 content 配合使用）" },
+            ["bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "写入 UTF-8 BOM（默认 false；新建文件时生效，已有文件保留原编码）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -163,6 +164,7 @@ public sealed class WriteFileTool : ITool
 
         var content = ToolArgs.GetString(args, "content");
         var append = ToolArgs.GetBool(args, "append", false);
+        var bom = ToolArgs.GetBool(args, "bom", false);
         var full = ctx.Workspace.Resolve(path);
         if (Directory.Exists(full))
             throw new ToolException($"'{path}' 是目录，不能作为文件写入（目标应为文件路径）。");
@@ -207,7 +209,20 @@ public sealed class WriteFileTool : ITool
 
         try
         {
-            await TextUtil.WriteTextPreserveEncodingAsync(full, finalContent, ct); // 保原编码：GBK 文件不被动转 UTF-8
+            if (bom && !hadFile)
+            {
+                // 新建文件 + bom=true:原子写 UTF-8 BOM（临时文件同目录确保同卷，rename 原子）
+                var dir = Path.GetDirectoryName(full);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+                var tmp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
+                await File.WriteAllTextAsync(tmp, finalContent, new System.Text.UTF8Encoding(true), ct);
+                File.Move(tmp, full, overwrite: true);
+            }
+            else
+            {
+                await TextUtil.WriteTextPreserveEncodingAsync(full, finalContent, ct); // 保原编码：GBK 文件不被动转 UTF-8
+            }
         }
         catch (IOException ex)
         {
