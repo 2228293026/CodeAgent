@@ -151,6 +151,7 @@ public sealed class WriteFileTool : ITool
             ["append"] = new JsonObject { ["type"] = "boolean", ["description"] = "追加模式：在文件末尾添加内容（默认 false；与 content 配合使用）" },
             ["bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "写入 UTF-8 BOM（默认 false；新建文件时生效，已有文件保留原编码）" },
             ["line_ending"] = new JsonObject { ["type"] = "string", ["description"] = "换行符模式：preserve（默认，保留原文件风格；新建文件用 LF）、lf（强制 LF）、crlf（强制 CRLF）" },
+            ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "覆盖已有文件前先创建 .bak 备份（默认 false）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -191,6 +192,13 @@ public sealed class WriteFileTool : ITool
             var info = new FileInfo(full);
             if (info.Length <= 4 * 1024 * 1024)
                 old = await TextUtil.ReadTextSmartAsync(full, ct);
+        }
+
+        // backup=true:覆盖前创建 .bak 副本
+        if (hadFile && ToolArgs.GetBool(args, "backup", false))
+        {
+            var bak = full + ".bak";
+            File.Copy(full, bak, overwrite: true);
         }
 
         var lineEnding = ToolArgs.GetString(args, "line_ending");

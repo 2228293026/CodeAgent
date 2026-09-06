@@ -2156,6 +2156,35 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Backup_CreatesBakBeforeOverwrite()
+    {
+        // backup=true:覆盖已有文件前创建 .bak 副本
+        File.WriteAllText(Path.Combine(_dir, "orig.txt"), "old content");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "orig.txt", ["content"] = "new content", ["backup"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("new content", File.ReadAllText(Path.Combine(_dir, "orig.txt")));
+        Assert.Equal("old content", File.ReadAllText(Path.Combine(_dir, "orig.txt.bak"))); // .bak 保留原内容
+    }
+
+    [Fact]
+    public async Task WriteFile_Backup_NewFile_NoBakCreated()
+    {
+        // backup=true + 新文件：不创建 .bak（因为无旧文件可备份）
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "fresh.txt", ["content"] = "hello", ["backup"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(_dir, "fresh.txt")));
+        Assert.False(File.Exists(Path.Combine(_dir, "fresh.txt.bak"))); // 无 .bak
+    }
+
+    [Fact]
     public async Task EditFile_IdenticalStrings_ThrowsInsteadOfNoOp()
     {
         // 回归：old == new 曾静默重写文件并报「已替换 N 处」，误导模型以为做了修改
