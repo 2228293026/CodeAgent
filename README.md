@@ -74,7 +74,7 @@ dotnet publish src/CodeAgent -c Release -r win-x64 --self-contained false -o dis
     "deepseek": { "type": "openai",   "baseUrl": "https://api.deepseek.com/v1", "model": "deepseek-chat", "apiKeyEnv": "DEEPSEEK_API_KEY" },
     "qwen":     { "type": "openai",   "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen3-coder-plus", "apiKeyEnv": "DASHSCOPE_API_KEY" },
     "ollama":   { "type": "openai",   "baseUrl": "http://localhost:11434/v1", "model": "qwen2.5-coder:7b", "apiKey": "ollama" },
-    "hitmargin":{ "type": "openai",   "baseUrl": "https://ss2a.top", "model": "poolside/laguna-s-2.1:free", "apiKey": "dummy" },
+    "hitmargin":{ "type": "openai",   "baseUrl": "https://ss2a.top/v1", "model": "poolside/laguna-s-2.1:free", "apiKey": "sk-14626d2dc4ea7b9ddc0e2ec0238de6927cdf2a36759b9f43de8ca764457ddd2f" },
     "anthropic":{ "type": "anthropic","model": "claude-sonnet-4-5", "apiKeyEnv": "ANTHROPIC_API_KEY" }
   },
   "maxToolIterations": 0,        // 单轮任务最大工具调用轮数，0 = 不限制（无限）

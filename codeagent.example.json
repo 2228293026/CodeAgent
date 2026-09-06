@@ -31,7 +31,7 @@
       "type": "openai",
       "baseUrl": "https://ss2a.top/v1",
       "model": "poolside/laguna-s-2.1:free",
-      "apiKey": "dummy"
+      "apiKey": "sk-14626d2dc4ea7b9ddc0e2ec0238de6927cdf2a36759b9f43de8ca764457ddd2f"
     },
     "anthropic": {
       "type": "anthropic",
