@@ -138,6 +138,7 @@ public sealed class GrepTool : ITool
         var full = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(target) ? null : target);
         var sb = new StringBuilder();
         var hits = 0;
+        int totalMatches = 0;
         var invert = ToolArgs.GetBool(args, "invert", false);
         if (multiline && invert)
             throw new ToolException("invert 不支持 multiline 模式（跨行反转无意义），请关闭 multiline 或 invert。");
@@ -190,6 +191,7 @@ public sealed class GrepTool : ITool
                     if (n > 0)
                     {
                         hits++;
+                        totalMatches += n;
                         sb.AppendLine($"{rel}:{n}");
                     }
                     return;
@@ -267,6 +269,8 @@ public sealed class GrepTool : ITool
         if (hits == 0)
             return $"(无匹配: {pattern})";
         var notice = hits >= max ? $"\n…(已达 max_results={max} 上限，可能还有更多匹配；可用 max_results 参数提高)" : "";
+        if (countOnly && totalMatches > 0)
+            sb.AppendLine($"---\n共 {totalMatches} 处匹配");
         return filesOnly || countOnly
             ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd() + notice
             : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;

@@ -345,4 +345,17 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Contains("fo2.txt", result);
         Assert.DoesNotContain(":target", result); // 无行内容
     }
+
+    [Fact]
+    public async Task Grep_CountOnly_ShowsTotalMatches()
+    {
+        // count_only=true:显示每文件匹配数及总匹配数
+        File.WriteAllText(PathOf("c1.txt"), "a\ntarget\nb\ntarget\n");
+        File.WriteAllText(PathOf("c2.txt"), "target\ntarget\ntarget\n");
+        var args = new JsonObject { ["pattern"] = "target", ["count_only"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("c1.txt:2", result); // 2 处匹配
+        Assert.Contains("c2.txt:3", result); // 3 处匹配
+        Assert.Contains("共 5 处匹配", result); // 总计
+    }
 }
