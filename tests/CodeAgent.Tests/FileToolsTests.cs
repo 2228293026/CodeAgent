@@ -465,6 +465,38 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_WithTail_AndNoLineNumbers_OutputsRawLines()
+    {
+        // head + tail + no_line_numbers:tail 优先，无行号
+        File.WriteAllText(Path.Combine(_dir, "htnl.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "htnl.txt", ["head"] = 3, ["tail"] = 2, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c" + Environment.NewLine + "d", output); // tail=2 显示最后 2 行
+        Assert.DoesNotContain("1\t", output); // 无行号
+        Assert.DoesNotContain("a", output); // head 被忽略
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithHead_AndNoLineNumbers_OutputsRawLines()
+    {
+        // tail + head + no_line_numbers:tail 优先，无行号
+        File.WriteAllText(Path.Combine(_dir, "thnl.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "thnl.txt", ["tail"] = 2, ["head"] = 1, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c" + Environment.NewLine + "d", output); // tail=2 显示最后 2 行
+        Assert.DoesNotContain("1\t", output); // 无行号
+        Assert.DoesNotContain("a", output); // head 被忽略
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
