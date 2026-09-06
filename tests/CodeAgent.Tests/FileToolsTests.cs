@@ -294,6 +294,36 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_MaxLineLength_WithSkipEmpty_TruncatesNonBlankLines()
+    {
+        // max_line_length + skip_empty:跳过空白行，非空白行仍截断
+        File.WriteAllText(Path.Combine(_dir, "mlse.txt"), "  \n" + new string('X', 100) + "\nshort\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mlse.txt", ["max_line_length"] = 20, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.Contains("short", output); // 短行 intact
+        Assert.DoesNotContain("1\t", output); // 空白行被 skip
+    }
+
+    [Fact]
+    public async Task ReadFile_MaxLineLength_WithRaw_NoTruncation()
+    {
+        // max_line_length + raw:raw 模式不截断，max_line_length 被忽略
+        File.WriteAllText(Path.Combine(_dir, "mlr.txt"), new string('X', 100) + "\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mlr.txt", ["max_line_length"] = 10, ["raw"] = true }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("…", output); // raw 不截断
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
