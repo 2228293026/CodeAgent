@@ -230,6 +230,40 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_NoEncodingNote_WithHead_SuppressesHintInHeadRange()
+    {
+        // no_encoding_note + head:编码提示隐藏，只显示 head 范围
+        File.WriteAllText(Path.Combine(_dir, "neh.txt"), "a\nb\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "neh.txt", ["no_encoding_note"] = true, ["head"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("1\ta", output);
+        Assert.Contains("2\tb", output);
+        Assert.DoesNotContain("（编码", output); // 编码提示隐藏
+        Assert.DoesNotContain("c", output); // head 范围外
+    }
+
+    [Fact]
+    public async Task ReadFile_NoEncodingNote_WithTail_SuppressesHintInTailRange()
+    {
+        // no_encoding_note + tail:编码提示隐藏，只显示 tail 范围
+        File.WriteAllText(Path.Combine(_dir, "net.txt"), "a\nb\nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "net.txt", ["no_encoding_note"] = true, ["tail"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("2\tb", output);
+        Assert.Contains("3\tc", output);
+        Assert.DoesNotContain("（编码", output); // 编码提示隐藏
+        Assert.DoesNotContain("a", output); // tail 范围外
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
