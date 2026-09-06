@@ -2185,6 +2185,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_DryRun_DoesNotModifyFileOrUndoStack()
+    {
+        // dry_run=true:预览改动但不写盘，不污染撤销栈
+        File.WriteAllText(Path.Combine(_dir, "dry.txt"), "hello world");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "dry.txt", ["old_string"] = "world", ["new_string"] = "moon", ["dry_run"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("[dry_run]", result);
+        Assert.Contains("将替换", result);
+        Assert.Equal("hello world", File.ReadAllText(Path.Combine(_dir, "dry.txt"))); // 文件未变
+        Assert.Equal(0, ctx.Undo.Count); // 撤销栈未污染
+    }
+
+    [Fact]
     public async Task EditFile_IdenticalStrings_ThrowsInsteadOfNoOp()
     {
         // 回归：old == new 曾静默重写文件并报「已替换 N 处」，误导模型以为做了修改

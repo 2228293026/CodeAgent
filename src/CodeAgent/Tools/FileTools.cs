@@ -303,6 +303,7 @@ public sealed class EditFileTool : ITool
             ["new_string"] = new JsonObject { ["type"] = "string", ["description"] = "替换后的文本" },
             ["replace_all"] = new JsonObject { ["type"] = "boolean", ["description"] = "出现多次时是否全部替换（默认 false，重复会报错）" },
             ["case_insensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "忽略大小写匹配（默认 false；匹配后仍按 new_string 原样写入）" },
+            ["dry_run"] = new JsonObject { ["type"] = "boolean", ["description"] = "仅预览改动（返回将发生的变更摘要，不写盘、不污染撤销栈），默认 false" },
         },
         ["required"] = new JsonArray("path", "old_string", "new_string"),
     };
@@ -329,6 +330,7 @@ public sealed class EditFileTool : ITool
         var text = await TextUtil.ReadTextSmartAsync(full, ct);
         var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
         var caseInsensitive = ToolArgs.GetBool(args, "case_insensitive", false);
+        var dryRun = ToolArgs.GetBool(args, "dry_run", false);
         var cmp = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         // 精确匹配优先；未命中时做换行风格容错：old_string 用 LF、文件是 CRLF（或反过来）时
@@ -403,6 +405,14 @@ public sealed class EditFileTool : ITool
         // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对；
         // 先写入成功再入栈，失败不污染撤销历史
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
+
+        if (dryRun)
+        {
+            var dryStartLine = workText.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
+            var dryCrlfNote = normalized && text.Contains("\r\n") ? "，保留原 CRLF 换行" : "";
+            return $"[dry_run] 将替换 {count} 处 → {path}（修改起始行 {dryStartLine}{dryCrlfNote}）。未写盘。";
+        }
+
         await TextUtil.WriteTextPreserveEncodingAsync(full, result, ct);
 
         ctx.Undo.Push(new UndoEntry
