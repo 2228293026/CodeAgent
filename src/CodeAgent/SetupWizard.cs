@@ -16,7 +16,7 @@ public static class SetupWizard
         new("qwen", "通义千问 DashScope（OpenAI 兼容）", "openai", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen3-coder-plus", "DASHSCOPE_API_KEY"),
         new("ollama", "本地 Ollama（免费，无需 Key）", "openai", "http://localhost:11434/v1", "qwen2.5-coder:7b", ""),
         new("anthropic", "Anthropic Claude", "anthropic", "https://api.anthropic.com", "claude-sonnet-4-5", "ANTHROPIC_API_KEY"),
-        new("hitmargin", "hitmargin 免费模型代理（Key 随意）", "openai", "https://api.hitmargin.workers.dev/v1", "poolside/laguna-s-2.1:free", ""),
+        new("hitmargin", "hitmargin 免费模型代理（Key 随意）", "openai", "https://ss2a.top", "poolside/laguna-s-2.1:free", ""),
         new("custom", "自定义 OpenAI 兼容服务", "openai", "", "", ""),
     ];
 
