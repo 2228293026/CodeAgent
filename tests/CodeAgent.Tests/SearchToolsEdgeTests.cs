@@ -274,6 +274,21 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Word_WithAlternation_MatchesWholeWords()
+    {
+        // word=true + 含 | 的模式：两侧加 \b 应包裹整个模式
+        File.WriteAllText(Path.Combine(_dir, "wwa.txt"), "cat\ncategory\ndog\ndogma\nhotdog\ncatdog\n");
+        var args = new JsonObject { ["pattern"] = "cat|dog", ["word"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("wwa.txt:1: cat", result); // 完整单词
+        Assert.Contains("wwa.txt:3: dog", result); // 完整单词
+        Assert.DoesNotContain("wwa.txt:2: category", result); // category 不匹配
+        Assert.DoesNotContain("wwa.txt:4: dogma", result); // dogma 不匹配
+        Assert.DoesNotContain("wwa.txt:5: hotdog", result); // hotdog 不匹配
+        Assert.DoesNotContain("wwa.txt:6: catdog", result); // catdog 不匹配
+    }
+
+    [Fact]
     public async Task Grep_Word_MatchWholeWordOnly()
     {
         // word=true:只匹配完整单词（cat 不命中 category）

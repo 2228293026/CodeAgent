@@ -123,7 +123,7 @@ public sealed class GrepTool : ITool
             opts |= RegexOptions.Singleline;
         // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
         var word = ToolArgs.GetBool(args, "word", false);
-        var effectivePattern = word ? $"\\b{pattern}\\b" : pattern;
+        var effectivePattern = word ? $"\\b(?:{pattern})\\b" : pattern;
 
         Regex re;
         try
