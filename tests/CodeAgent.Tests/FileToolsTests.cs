@@ -402,6 +402,37 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Head_WithTail_AndMaxLineLength_TailTakesPriority()
+    {
+        // head + tail + max_line_length:tail 优先（head 被忽略），截断生效
+        File.WriteAllText(Path.Combine(_dir, "html.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "html.txt", ["head"] = 2, ["tail"] = 2, ["max_line_length"] = 20 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.Contains("last", output); // tail 优先
+        Assert.DoesNotContain("short", output); // head 被忽略
+    }
+
+    [Fact]
+    public async Task ReadFile_Tail_WithHead_AndMaxLineLength_TruncatesInRange()
+    {
+        // tail + head + max_line_length:tail 优先（head 被忽略），截断生效
+        File.WriteAllText(Path.Combine(_dir, "tlhl.txt"), "short\n" + new string('X', 100) + "\nlast\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "tlhl.txt", ["tail"] = 2, ["head"] = 1, ["max_line_length"] = 20 }, ctx, CancellationToken.None);
+
+        Assert.Contains("…", output); // 超长行被截断
+        Assert.DoesNotContain("short", output); // tail 优先，head 被忽略
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
