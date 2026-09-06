@@ -154,6 +154,37 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Offset_WithSkipEmpty_SkipsBlanksInOffsetRange()
+    {
+        // offset + skip_empty:在 offset 范围内跳过空白行
+        File.WriteAllText(Path.Combine(_dir, "ose.txt"), "a\n  \nb\n  \nc\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ose.txt", ["offset"] = 2, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("3\tb", output); // offset=2 范围内跳过空白后第 3 行
+        Assert.DoesNotContain("1\ta", output); // offset 范围外
+        Assert.DoesNotContain("2\t", output); // 空白行被 skip
+    }
+
+    [Fact]
+    public async Task ReadFile_Offset_WithNoLineNumbers_OutputsRawLines()
+    {
+        // offset + no_line_numbers:无行号，只输出 offset 范围内的内容
+        File.WriteAllText(Path.Combine(_dir, "nl_off.txt"), "a\nb\nc\nd\ne\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "nl_off.txt", ["offset"] = 3, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("c" + Environment.NewLine + "d" + Environment.NewLine + "e", output);
+        Assert.DoesNotContain("a", output);
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）
