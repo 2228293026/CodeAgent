@@ -611,6 +611,42 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_SkipEmpty_WithHead_ShowsCorrectRange()
+    {
+        // skip_empty + head:范围显示应反映实际显示的行（跳过空白行后）
+        File.WriteAllText(Path.Combine(_dir, "sehr.txt"), "a\n  \nb\n  \nc\n  \nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "sehr.txt", ["head"] = 5, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("已显示 1-5", output); // 范围显示为 1-5（跳过了空白行但行号不变）
+        Assert.Contains("1\ta", output);
+        Assert.Contains("3\tb", output);
+        Assert.Contains("5\tc", output);
+        Assert.DoesNotContain("2\t", output); // 第 2 行是空白，被 skip
+        Assert.DoesNotContain("4\t", output); // 第 4 行是空白，被 skip
+    }
+
+    [Fact]
+    public async Task ReadFile_SkipEmpty_WithTail_ShowsCorrectRange()
+    {
+        // skip_empty + tail:范围显示应反映实际显示的行
+        File.WriteAllText(Path.Combine(_dir, "setr.txt"), "a\n  \nb\n  \nc\n  \nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "setr.txt", ["tail"] = 3, ["skip_empty"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("已显示 5-7", output); // 范围显示为 5-7（tail=3 的范围）
+        Assert.Contains("5\tc", output);
+        Assert.Contains("7\td", output);
+        Assert.DoesNotContain("6\t", output); // 第 6 行是空白，被 skip
+    }
+
+    [Fact]
     public async Task ReadFile_TailZero_FallsBackToOffsetLimit()
     {
         // tail=0（默认）：行为与之前完全一致（offset/limit 从头读）

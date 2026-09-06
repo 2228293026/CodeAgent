@@ -102,6 +102,8 @@ public sealed class ReadFileTool : ITool
             count = Math.Min(limit, lines.Length - start);
         }
         var sb = new StringBuilder();
+        int displayedCount = 0;
+        int lastDisplayedLine = start;
         for (int i = 0; i < count; i++)
         {
             var raw = lines[start + i].TrimEnd('\r');
@@ -112,9 +114,13 @@ public sealed class ReadFileTool : ITool
             if (trim)
                 line = line.Trim(); // 去掉首尾空白（缩进、尾随空格）
             sb.AppendLine(noLineNumbers ? line : $"{start + i + 1}\t{line}");
+            displayedCount++;
+            lastDisplayedLine = start + i;
         }
 
-        var range = count < lines.Length ? $"，已显示 {start + 1}-{start + count}" : "";
+        var range = displayedCount > 0 && displayedCount < lines.Length
+            ? $"，已显示 {start + 1}-{lastDisplayedLine + 1}"
+            : "";
         var head = noHeader ? "" : $"（{path} 共 {lines.Length} 行{range}）\n";
 
         // 编码提示：非纯 UTF-8（带 BOM 或 GBK/ANSI 旧编码）时显式标注，避免模型误判文件为 UTF-8 去改写
