@@ -358,4 +358,43 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Contains("c2.txt:3", result); // 3 处匹配
         Assert.Contains("共 5 处匹配", result); // 总计
     }
+
+    [Fact]
+    public async Task Glob_Depth_Zero_OnlyRoot()
+    {
+        // depth=0:只返回根目录匹配的文件
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(PathOf("root.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "sub", "inner.txt"), "x");
+        var args = new JsonObject { ["pattern"] = "*.txt", ["depth"] = 0 };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("root.txt", result);
+        Assert.DoesNotContain("inner.txt", result); // 不递归
+    }
+
+    [Fact]
+    public async Task Glob_Depth_One_IncludesImmediateChildren()
+    {
+        // depth=1:返回根目录 + 直接子目录
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(PathOf("root.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "sub", "inner.txt"), "x");
+        var args = new JsonObject { ["pattern"] = "**/*.txt", ["depth"] = 1 };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("root.txt", result);
+        Assert.Contains("sub/inner.txt", result);
+    }
+
+    [Fact]
+    public async Task Grep_Depth_Zero_OnlyRoot()
+    {
+        // depth=0:只搜索根目录
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(PathOf("root.txt"), "target\n");
+        File.WriteAllText(Path.Combine(_dir, "sub", "inner.txt"), "target\n");
+        var args = new JsonObject { ["pattern"] = "target", ["depth"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("root.txt:1: target", result);
+        Assert.DoesNotContain("inner.txt", result); // 不递归
+    }
 }

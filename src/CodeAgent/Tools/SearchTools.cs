@@ -18,6 +18,7 @@ public sealed class GlobTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索起点目录，默认工作区根目录" },
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "排除匹配这些 glob 的结果（如 \"*.min.js\"、\"secret*\"），可用字符串或字符串数组" },
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最多返回的匹配文件数（默认 500，最大 5000）" },
+            ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅根目录，默认无限制）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -39,11 +40,12 @@ public sealed class GlobTool : ITool
         var ignore = ToolArgs.GetStringList(args, "ignore");
         var ignoreRes = ignore?.Select(p => Glob.ToRegex(AsIgnorePattern(p))).ToList();
         var maxResults = Math.Clamp(ToolArgs.GetInt(args, "max_results", 500), 1, 5000);
+        var depth = ToolArgs.GetInt(args, "depth", -1);
         var results = new List<string>();
         var scanned = 0;
 
         var capped = false;
-        foreach (var file in SkipDirs.EnumerateFilesPruned(start))
+        foreach (var file in SkipDirs.EnumerateFilesPruned(start, depth >= 0 ? depth : int.MaxValue))
         {
             if (scanned++ > 200_000 || results.Count >= maxResults)
             {
@@ -81,6 +83,7 @@ public sealed class GrepTool : ITool
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索的文件或目录，默认工作区根目录" },
             ["context"] = new JsonObject { ["type"] = "integer", ["description"] = "上下文行数（默认 3，最大 10）" },
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最大结果数（默认 50，最大 500）" },
+            ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅目标文件/目录本身，默认无限制）" },
             ["include"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "仅搜索匹配这些 glob 的文件（如 \"*.cs\"），可用字符串或数组" },
             ["exclude"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过匹配这些 glob 的文件（如 \"**/*.g.cs\"），可用字符串或数组" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只返回匹配的文件路径列表（不返回行内容），默认 false" },
@@ -102,6 +105,7 @@ public sealed class GrepTool : ITool
         var target = ToolArgs.GetString(args, "path");
         var context = Math.Clamp(ToolArgs.GetInt(args, "context", 3), 0, 10);
         var max = Math.Clamp(ToolArgs.GetInt(args, "max_results", 50), 1, 500);
+        var depth = ToolArgs.GetInt(args, "depth", -1);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
@@ -252,7 +256,7 @@ public sealed class GrepTool : ITool
         else if (Directory.Exists(full))
         {
             // 确定性输出：先收集再排序（枚举顺序跨平台不定），与 glob 保持一致
-            var files = SkipDirs.EnumerateFilesPruned(full).ToList();
+            var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue).ToList();
             files.Sort(StringComparer.Ordinal);
             foreach (var file in files)
             {
