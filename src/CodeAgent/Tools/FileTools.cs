@@ -467,6 +467,7 @@ public sealed class ListDirectoryTool : ITool
             ["max_items"] = new JsonObject { ["type"] = "integer", ["description"] = "最多列出条目数（默认 800，最大 5000）" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出文件（跳过目录），默认 false" },
             ["dirs_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出目录（跳过文件），默认 false" },
+            ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按名称）、size（按文件大小降序）、modified（按修改时间降序）" },
         },
     };
 
@@ -478,6 +479,7 @@ public sealed class ListDirectoryTool : ITool
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
         var ignoreSet = ToolArgs.GetStringSet(args, "ignore");
+        var sortBy = ToolArgs.GetString(args, "sort_by");
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -499,8 +501,7 @@ public sealed class ListDirectoryTool : ITool
             {
                 if (!filesOnly)
                 {
-                    foreach (var d in Directory.EnumerateDirectories(dir)
-                                 .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                    foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy))
                     {
                         if (emitted >= maxItems)
                             break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
@@ -515,8 +516,7 @@ public sealed class ListDirectoryTool : ITool
                 }
                 if (!dirsOnly)
                 {
-                    foreach (var f in Directory.EnumerateFiles(dir)
-                             .OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase))
+                    foreach (var f in OrderEntries(Directory.EnumerateFiles(dir), sortBy))
                     {
                         if (emitted >= maxItems)
                             break;
@@ -541,4 +541,15 @@ public sealed class ListDirectoryTool : ITool
         return head + sb.ToString().TrimEnd() + (emitted >= maxItems ? "\n…(条目过多，已截断)" : "") + summary;
     }
 
+    /// <summary>对目录/文件列表做排序（按名称、大小或修改时间）。</summary>
+    private static IEnumerable<string> OrderEntries(IEnumerable<string> entries, string? sortBy)
+    {
+        if (string.IsNullOrEmpty(sortBy) || sortBy == "name")
+            return entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase);
+        if (sortBy == "size")
+            return entries.OrderByDescending(x => new FileInfo(x).Length);
+        if (sortBy == "modified")
+            return entries.OrderByDescending(x => File.GetLastWriteTimeUtc(x));
+        return entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase);
+    }
 }

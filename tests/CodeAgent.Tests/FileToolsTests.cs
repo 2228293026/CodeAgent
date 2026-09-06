@@ -1337,6 +1337,59 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SortByName_IsAlphabetical()
+    {
+        // sort_by=name:目录和文件均按名称字母序排列
+        Directory.CreateDirectory(Path.Combine(_dir, "zeta"));
+        Directory.CreateDirectory(Path.Combine(_dir, "alpha"));
+        File.WriteAllText(Path.Combine(_dir, "mid.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["sort_by"] = "name" }, ctx, CancellationToken.None);
+
+        var idxAlpha = output.IndexOf("alpha/", StringComparison.Ordinal);
+        var idxZeta = output.IndexOf("zeta/", StringComparison.Ordinal);
+        Assert.True(idxAlpha >= 0 && idxZeta > idxAlpha, $"sort_by=name 应按字母序:\n{output}");
+    }
+
+    [Fact]
+    public async Task ListDirectory_SortBySize_LargestFirst()
+    {
+        // sort_by=size:文件按大小降序排列（大文件在前）
+        File.WriteAllText(Path.Combine(_dir, "small.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "large.txt"), new string('a', 1000));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["sort_by"] = "size", ["files_only"] = true }, ctx, CancellationToken.None);
+
+        var idxLarge = output.IndexOf("large.txt", StringComparison.Ordinal);
+        var idxSmall = output.IndexOf("small.txt", StringComparison.Ordinal);
+        Assert.True(idxLarge >= 0 && idxSmall > idxLarge, $"sort_by=size 应大文件在前:\n{output}");
+    }
+
+    [Fact]
+    public async Task ListDirectory_SortByModified_NewestFirst()
+    {
+        // sort_by=modified:按修改时间降序（最新修改在前）
+        File.WriteAllText(Path.Combine(_dir, "old.txt"), "x");
+        Thread.Sleep(50); // 确保时间戳不同
+        File.WriteAllText(Path.Combine(_dir, "new.txt"), "y");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["sort_by"] = "modified", ["files_only"] = true }, ctx, CancellationToken.None);
+
+        var idxNew = output.IndexOf("new.txt", StringComparison.Ordinal);
+        var idxOld = output.IndexOf("old.txt", StringComparison.Ordinal);
+        Assert.True(idxNew >= 0 && idxOld > idxNew, $"sort_by=modified 应最新在前:\n{output}");
+    }
+
+    [Fact]
     public async Task WriteFile_NumericContent_IsCoercedToString()
     {
         // 回归：模型偶尔把字符串参数序列化为数字，GetString 应容错转换而非抛 InvalidOperationException
