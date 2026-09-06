@@ -3475,4 +3475,49 @@ public class FileToolsTests : IDisposable
         Assert.Contains(expected, output);
     }
 
+    [Fact]
+    public async Task ReadFile_EncodingGbk_DecodesCorrectly()
+    {
+        // encoding=gbk:强制以 GBK 解码，避免自动检测误判
+        _ = TextUtil.EstimateTokens(""); // 触发静态构造，注册 GB18030 代码页
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(Path.Combine(_dir, "gbk.txt"), gbk.GetBytes("中文内容"));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "gbk.txt", ["encoding"] = "gbk" }, ctx, CancellationToken.None);
+
+        Assert.Contains("中文内容", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_EncodingUtf8Bom_DecodesCorrectly()
+    {
+        // encoding=utf8-bom:强制以 UTF-8 BOM 解码
+        var bom = new System.Text.UTF8Encoding(true);
+        File.WriteAllBytes(Path.Combine(_dir, "bom.txt"), [0xEF, 0xBB, 0xBF, .. bom.GetBytes("bom content")]);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bom.txt", ["encoding"] = "utf8-bom" }, ctx, CancellationToken.None);
+
+        Assert.Contains("bom content", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_EncodingUnsupported_Throws()
+    {
+        // encoding 不识别：返回清晰的错误而非崩溃
+        File.WriteAllText(Path.Combine(_dir, "plain.txt"), "hello");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "plain.txt", ["encoding"] = "utf-16" }, ctx, CancellationToken.None));
+
+        Assert.Contains("不支持的编码", ex.Message);
+    }
+
 }

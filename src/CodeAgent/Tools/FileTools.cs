@@ -26,6 +26,7 @@ public sealed class ReadFileTool : ITool
             ["no_header"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示头部范围提示（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
             ["hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "在输出末尾附加 SHA256 哈希（默认 false；可用于校验文件完整性）" },
+            ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "强制指定编码：utf8、utf8-bom、gbk、gb18030、ascii（默认自动检测）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -66,6 +67,7 @@ public sealed class ReadFileTool : ITool
         var noHeader = ToolArgs.GetBool(args, "no_header", false);
         var isRaw = ToolArgs.GetBool(args, "raw", false);
         var includeHash = ToolArgs.GetBool(args, "hash", false);
+        var encoding = ToolArgs.GetString(args, "encoding");
         if (isRaw)
         {
             noLineNumbers = true;
@@ -74,7 +76,24 @@ public sealed class ReadFileTool : ITool
             noHeader = true;
         }
 
-        var text = await TextUtil.ReadTextSmartAsync(full, ct);
+        string text;
+        if (!string.IsNullOrEmpty(encoding))
+        {
+            // 显式指定编码：绕过自动检测，直接按指定编码读取
+            var enc = encoding.ToLowerInvariant() switch
+            {
+                "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
+                "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
+                "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
+                "ascii" => System.Text.Encoding.ASCII,
+                _ => throw new ToolException($"不支持的编码: {encoding}（支持: utf8, utf8-bom, gbk, gb18030, ascii）"),
+            };
+            text = await File.ReadAllTextAsync(full, enc, ct);
+        }
+        else
+        {
+            text = await TextUtil.ReadTextSmartAsync(full, ct);
+        }
         if (SkipDirs.LooksBinary(text))
             throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
 
