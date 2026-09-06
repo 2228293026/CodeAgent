@@ -2185,6 +2185,32 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_PreserveTrailingNewline_True_KeepsNewline()
+    {
+        // preserve_trailing_newline=true（默认）:保留 content 末尾换行
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "keep.txt", ["content"] = "hello\n", ["preserve_trailing_newline"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello\n", File.ReadAllText(Path.Combine(_dir, "keep.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_PreserveTrailingNewline_False_StripsNewline()
+    {
+        // preserve_trailing_newline=false:去掉 content 末尾换行
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "strip.txt", ["content"] = "hello\n", ["preserve_trailing_newline"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(_dir, "strip.txt"))); // 末尾换行被去掉
+    }
+
+    [Fact]
     public async Task EditFile_DryRun_DoesNotModifyFileOrUndoStack()
     {
         // dry_run=true:预览改动但不写盘，不污染撤销栈

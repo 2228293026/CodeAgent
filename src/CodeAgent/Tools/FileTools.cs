@@ -161,6 +161,7 @@ public sealed class WriteFileTool : ITool
             ["bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "写入 UTF-8 BOM（默认 false；新建文件时生效，已有文件保留原编码）" },
             ["line_ending"] = new JsonObject { ["type"] = "string", ["description"] = "换行符模式：preserve（默认，保留原文件风格；新建文件用 LF）、lf（强制 LF）、crlf（强制 CRLF）" },
             ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "覆盖已有文件前先创建 .bak 备份（默认 false）" },
+            ["preserve_trailing_newline"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留末尾换行（默认 true；设为 false 时自动去掉 content 末尾的换行符）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -253,6 +254,15 @@ public sealed class WriteFileTool : ITool
         else
         {
             finalContent = content;
+        }
+
+        // preserve_trailing_newline=false:去掉末尾换行符
+        if (!ToolArgs.GetBool(args, "preserve_trailing_newline", true) && !string.IsNullOrEmpty(finalContent))
+        {
+            if (finalContent.EndsWith("\r\n"))
+                finalContent = finalContent[..^2];
+            else if (finalContent.EndsWith('\n'))
+                finalContent = finalContent[..^1];
         }
 
         // 内容与现状完全一致：跳过写入（不刷 mtime、不污染撤销栈）
