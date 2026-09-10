@@ -4583,19 +4583,11 @@ public class FileToolsTests : IDisposable
     [Fact]
     public async Task ListDirectory_ShowSymlink_True_DisplaysSymlinkTarget()
     {
-        // show_symlink=true:符号链接后附加目标路径
+        // show_symlink=true:符号链接后附加目标路径（不是目标文件的内容）
         var targetPath = Path.Combine(_dir, "target.txt");
         var linkPath = Path.Combine(_dir, "link.txt");
-        File.WriteAllText(targetPath, "hello\n");
-        // 创建符号链接（仅 Windows 支持，Linux 也支持）
-        if (OperatingSystem.IsWindows())
-        {
-            File.CreateSymbolicLink(linkPath, targetPath);
-        }
-        else
-        {
-            File.CreateSymbolicLink(linkPath, targetPath);
-        }
+        File.WriteAllText(targetPath, "UNIQUE_TARGET_CONTENT\n");
+        File.CreateSymbolicLink(linkPath, targetPath);
         var tool = new ListDirectoryTool();
         var ctx = MakeContext(_dir);
 
@@ -4604,6 +4596,8 @@ public class FileToolsTests : IDisposable
 
         Assert.Contains("link.txt", output); // 链接文件名
         Assert.Contains("->", output); // 链接符号
+        Assert.Contains("target.txt", output); // 显示的是目标路径
+        Assert.DoesNotContain("UNIQUE_TARGET_CONTENT", output); // 不是目标文件的内容
     }
 
     [Fact]
@@ -4613,14 +4607,7 @@ public class FileToolsTests : IDisposable
         var targetPath = Path.Combine(_dir, "target2.txt");
         var linkPath = Path.Combine(_dir, "link2.txt");
         File.WriteAllText(targetPath, "hello\n");
-        if (OperatingSystem.IsWindows())
-        {
-            File.CreateSymbolicLink(linkPath, targetPath);
-        }
-        else
-        {
-            File.CreateSymbolicLink(linkPath, targetPath);
-        }
+        File.CreateSymbolicLink(linkPath, targetPath);
         var tool = new ListDirectoryTool();
         var ctx = MakeContext(_dir);
 

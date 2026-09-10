@@ -862,11 +862,11 @@ public sealed class ListDirectoryTool : ITool
                         {
                             try
                             {
-                                if (File.Exists(f) && (File.GetAttributes(f) & FileAttributes.ReparsePoint) != 0)
-                                {
-                                    var target = File.ReadAllText(f);
-                                    parenParts.Add($"-> {target}");
-                                }
+                                // 必须用 LinkTarget（链接指向的路径）：File.ReadAllText 会读成
+                                // 目标文件的内容，把链接显示成 "-> 文件正文" 而不是 "-> 路径"
+                                var linkTarget = new FileInfo(f).LinkTarget;
+                                if (!string.IsNullOrEmpty(linkTarget))
+                                    parenParts.Add($"-> {linkTarget}");
                             }
                             catch
                             {
