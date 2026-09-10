@@ -858,4 +858,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("bytes", result); // 无字节数信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowWordCount_True_DisplaysWordCount()
+    {
+        // show_word_count=true + files_only=true:文件路径后附加单词数
+        File.WriteAllText(PathOf("gwc.txt"), "alpha beta gamma\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_word_count"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gwc.txt [", result); // 单词数格式
+        Assert.Contains("words]", result); // 包含 words 标记
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowWordCount_False_NoWordCountInfo()
+    {
+        // show_word_count=false（默认）:不显示单词数
+        File.WriteAllText(PathOf("gwc2.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_word_count"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gwc2.txt", result);
+        Assert.DoesNotContain("words", result); // 无单词数信息
+    }
+
 }

@@ -157,6 +157,7 @@ public sealed class GrepTool : ITool
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；files_only=true 时在文件路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；files_only=true 时在文件路径后附加编码信息，如 file.txt (UTF-8 BOM)）" },
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；files_only=true 时在文件路径后附加大小，如 file.txt (1.2 KB)）" },
+            ["show_word_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示单词数（默认 false；files_only=true 时在文件路径后附加单词数，如 file.txt [42 words]）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -232,6 +233,7 @@ public sealed class GrepTool : ITool
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);
+        var showWordCount = ToolArgs.GetBool(args, "show_word_count", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -309,6 +311,12 @@ public sealed class GrepTool : ITool
                             var size = new FileInfo(path).Length;
                             var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
                             extra += $" ({sizeStr})";
+                        }
+                        if (showWordCount)
+                        {
+                            var fileText = File.ReadAllText(path);
+                            var words = fileText.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                            extra += $" [{words} words]";
                         }
                         sb.AppendLine(rel + extra);
                     }
