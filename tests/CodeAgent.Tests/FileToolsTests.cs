@@ -4520,4 +4520,64 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("owner:", output); // 无所有者信息
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowGroup_True_DisplaysFileGroup()
+    {
+        // show_group=true:文件名后附加文件组
+        File.WriteAllText(Path.Combine(_dir, "group.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_group"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("group.txt", output); // 文件名
+        Assert.Contains("group:", output); // 组标记
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowGroup_False_NoGroupInfo()
+    {
+        // show_group=false（默认）:不显示组
+        File.WriteAllText(Path.Combine(_dir, "group2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_group"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("group2.txt", output);
+        Assert.DoesNotContain("group:", output); // 无组信息
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowPermissions_True_DisplaysFilePermissions()
+    {
+        // show_permissions=true:文件名后附加权限信息
+        File.WriteAllText(Path.Combine(_dir, "perms.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_permissions"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("perms.txt", output); // 文件名
+        Assert.Contains("rw-", output); // 权限标记包含读写位
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowPermissions_False_NoPermissionsInfo()
+    {
+        // show_permissions=false（默认）:不显示权限
+        File.WriteAllText(Path.Combine(_dir, "perms2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_permissions"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("perms2.txt", output);
+        Assert.DoesNotContain("---------", output); // 无权限信息
+    }
+
 }

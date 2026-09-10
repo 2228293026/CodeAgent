@@ -669,6 +669,8 @@ public sealed class ListDirectoryTool : ITool
             ["show_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件类型（默认 false；设为 true 时在文件名后附加类型标记，如 file.txt <file> 或 dir/ <dir>）" },
             ["show_mime_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 MIME 类型（默认 false；设为 true 时在文件名后附加 MIME 类型，如 file.txt (text/plain)）" },
             ["show_owner"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件所有者（默认 false；设为 true 时在文件名后附加所有者信息，如 file.txt (owner:user)）" },
+            ["show_group"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件组（默认 false；设为 true 时在文件名后附加组信息，如 file.txt (group:users)）" },
+            ["show_permissions"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件权限（默认 false；设为 true 时在文件名后附加权限信息，如 file.txt (-rw-r--r--)）" },
         },
     };
 
@@ -695,6 +697,8 @@ public sealed class ListDirectoryTool : ITool
         var showType = ToolArgs.GetBool(args, "show_type", false);
         var showMimeType = ToolArgs.GetBool(args, "show_mime_type", false);
         var showOwner = ToolArgs.GetBool(args, "show_owner", false);
+        var showGroup = ToolArgs.GetBool(args, "show_group", false);
+        var showPermissions = ToolArgs.GetBool(args, "show_permissions", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -793,6 +797,47 @@ public sealed class ListDirectoryTool : ITool
                             catch
                             {
                                 parenParts.Add("owner:N/A");
+                            }
+                        }
+                        if (showGroup)
+                        {
+                            try
+                            {
+                                var info = new FileInfo(f);
+                                var group = info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount)).ToString();
+                                parenParts.Add($"group:{group}");
+                            }
+                            catch
+                            {
+                                parenParts.Add("group:N/A");
+                            }
+                        }
+                        if (showPermissions)
+                        {
+                            try
+                            {
+                                var attrs = File.GetAttributes(f);
+                                var isDir = (attrs & FileAttributes.Directory) != 0;
+                                var perms = new System.Text.StringBuilder();
+                                // Owner
+                                perms.Append(isDir ? 'd' : '-');
+                                // Read/Write/Execute for owner
+                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
+                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
+                                perms.Append(isDir ? 'x' : '-');
+                                // Group
+                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
+                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
+                                perms.Append(isDir ? 'x' : '-');
+                                // Others
+                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
+                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
+                                perms.Append(isDir ? 'x' : '-');
+                                parenParts.Add(perms.ToString());
+                            }
+                            catch
+                            {
+                                parenParts.Add("---------");
                             }
                         }
                         if (showEncoding)
