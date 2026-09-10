@@ -4116,6 +4116,7 @@ public class FileToolsTests : IDisposable
         Assert.Contains("行", output); // 包含行数
         Assert.Contains("字符", output); // 包含字符数
         Assert.Contains("字节", output); // 包含字节数
+        Assert.Contains("MIME: text/plain", output); // 包含 MIME 类型
     }
 
     [Fact]

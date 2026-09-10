@@ -29,7 +29,7 @@ public sealed class ReadFileTool : ITool
             ["no_header"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示头部范围提示（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
             ["hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "在输出末尾附加 SHA256 哈希（默认 false；可用于校验文件完整性）" },
-            ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件统计信息（默认 false；设为 true 时在输出中附加行数、单词数、字符数、字节数）" },
+            ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件统计信息（默认 false；设为 true 时在输出中附加行数、单词数、字符数、字节数、MIME 类型）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "强制指定编码：utf8、utf8-bom、gbk、gb18030、ascii（默认自动检测）" },
             ["strip_bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉 UTF-8 BOM 头（默认 false；输出内容不带 BOM，方便复制粘贴）" },
             ["byte_offset"] = new JsonObject { ["type"] = "integer", ["description"] = "字节偏移（0 起，默认 0；与 byte_limit 配合使用，按字节范围读取而非按行）" },
@@ -218,7 +218,8 @@ public sealed class ReadFileTool : ITool
             var lineCount = text.Split('\n').Length;
             var words = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
             var bytes = Encoding.UTF8.GetByteCount(text);
-            output += $"\n[stats] {lineCount} 行，{words} 词，{text.Length} 字符，{bytes:N0} 字节";
+            var mimeType = SkipDirs.GetMimeType(full);
+            output += $"\n[stats] {lineCount} 行，{words} 词，{text.Length} 字符，{bytes:N0} 字节，MIME: {mimeType}";
         }
         return output;
     }
