@@ -134,9 +134,9 @@ public class SearchToolsEdgeTests : IDisposable
         var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.Equal(4, lines.Length); // 3 个结果 + 1 行截断提示
         Assert.Contains("mr/f0.txt", result); // 排序后第一个
-        Assert.Contains("f1.txt", result);
-        Assert.Contains("f2.txt", result);
-        Assert.DoesNotContain("f3.txt", result); // 第 4 个被截断
+        Assert.Contains("mr/f1.txt", result);
+        Assert.Contains("mr/f2.txt", result);
+        Assert.DoesNotContain("mr/f3.txt", result); // 第 4 个被截断
     }
 
     // ===== grep =====
