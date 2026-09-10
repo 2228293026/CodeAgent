@@ -122,6 +122,7 @@ public sealed class GrepTool : ITool
             ["heading"] = new JsonObject { ["type"] = "boolean", ["description"] = "文件路径单独成行（默认 true；类似 rg --heading，每个文件的匹配前先输出文件路径，方便区分不同文件的匹配）" },
             ["max_matches_per_file"] = new JsonObject { ["type"] = "integer", ["description"] = "每个文件最多显示的匹配数（默认 0=不限制；设为正数可防止单个文件匹配过多撑爆输出）" },
             ["literal"] = new JsonObject { ["type"] = "boolean", ["description"] = "字面量搜索（默认 false；设为 true 时 pattern 被视为普通字符串而非正则表达式，自动转义特殊字符）" },
+            ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示搜索统计（默认 false；设为 true 时在输出末尾附加统计信息，如扫描文件数、匹配数、耗时）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -192,6 +193,9 @@ public sealed class GrepTool : ITool
         var hits = 0;
         int totalMatches = 0;
         var invert = ToolArgs.GetBool(args, "invert", false);
+        var showStats = ToolArgs.GetBool(args, "stats", false);
+        int filesScanned = 0;
+        int filesSkipped = 0;
         if (multiline && invert)
             throw new ToolException("invert 不支持 multiline 模式（跨行反转无意义），请关闭 multiline 或 invert。");
         // 匹配判定（invert 时取反，类似 rg -v）；集中一处，files_only/count_only/普通模式共用
@@ -207,20 +211,37 @@ public sealed class GrepTool : ITool
                 var rel = ctx.Workspace.ToRelative(path).Replace('\\', '/');
                 // include/exclude 对每个扫描到的文件生效（含单文件目标）
                 if (includeRes is not null && includeRes.Count > 0 && !includeRes.Any(r => r.IsMatch(rel)))
+                {
+                    filesScanned++;
+                    filesSkipped++;
                     return;
+                }
                 if (excludeRes is not null && excludeRes.Any(r => r.IsMatch(rel)))
+                {
+                    filesScanned++;
+                    filesSkipped++;
                     return;
+                }
 
                 var fi = new FileInfo(path);
                 if (fi.Length > 2_000_000)
+                {
+                    filesScanned++;
+                    filesSkipped++;
                     return;
+                }
                 var text = TextUtil.ReadTextSmart(path); // GBK/ANSI 兜底，避免中文文件乱码
                 if (SkipDirs.LooksBinary(text))
                 {
+                    filesScanned++;
                     if (skipBinary || binaryFiles == "without-match")
+                    {
+                        filesSkipped++;
                         return; // skip 或 without-match：二进制文件不处理
+                    }
                     // binary_files=text:当作文本继续搜索（可能产生乱码，但用户显式要求）
                 }
+                filesScanned++;
 
                 if (filesOnly)
                 {
@@ -385,9 +406,12 @@ public sealed class GrepTool : ITool
         var notice = hits >= max ? $"\n…(已达 max_results={max} 上限，可能还有更多匹配；可用 max_results 参数提高)" : "";
         if (countOnly && totalMatches > 0)
             sb.AppendLine($"---\n共 {totalMatches} 处匹配");
-        return filesOnly || countOnly
+        var result = filesOnly || countOnly
             ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd() + notice
             : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;
+        if (showStats)
+            result += $"\n[stats] 扫描 {filesScanned} 个文件，跳过 {filesSkipped} 个，匹配 {hits} 处";
+        return result;
     }
 
     /// <summary>统计 text[start,end) 内的换行数（跨行匹配的行号计算）。</summary>

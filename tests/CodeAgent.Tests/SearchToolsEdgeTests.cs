@@ -655,4 +655,28 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Contains("acb", result); // "." 匹配任意字符
     }
 
+    [Fact]
+    public async Task Grep_Stats_True_ShowsSearchStatistics()
+    {
+        // stats=true:输出末尾附加搜索统计信息
+        File.WriteAllText(PathOf("st.txt"), "alpha\nbeta\ngamma\n");
+        File.WriteAllText(PathOf("st2.txt"), "delta\nepsilon\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["stats"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("beta", result); // 匹配结果存在
+        Assert.Contains("[stats]", result); // 统计信息存在
+        Assert.Contains("扫描", result); // 包含扫描文件数
+    }
+
+    [Fact]
+    public async Task Grep_Stats_False_NoStatistics()
+    {
+        // stats=false（默认）:不显示搜索统计
+        File.WriteAllText(PathOf("st3.txt"), "alpha\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["stats"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("beta", result);
+        Assert.DoesNotContain("[stats]", result); // 无统计信息
+    }
+
 }
