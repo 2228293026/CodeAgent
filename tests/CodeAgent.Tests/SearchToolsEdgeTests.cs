@@ -1218,4 +1218,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("rw-", result); // 无权限信息
     }
 
+    [Fact]
+    public async Task Glob_ShowPermissions_True_DisplaysFilePermissions()
+    {
+        // show_permissions=true:路径后附加权限信息
+        File.WriteAllText(PathOf("gps.txt"), "hello\n");
+        var args = new JsonObject { ["pattern"] = "gps.txt", ["show_permissions"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gps.txt", result); // 文件名
+        Assert.Contains("rw-", result); // 权限标记包含读写位
+    }
+
+    [Fact]
+    public async Task Glob_ShowPermissions_False_NoPermissionsInfo()
+    {
+        // show_permissions=false（默认）:不显示权限
+        File.WriteAllText(PathOf("gps2.txt"), "hello\n");
+        var args = new JsonObject { ["pattern"] = "gps2.txt", ["show_permissions"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gps2.txt", result);
+        Assert.DoesNotContain("rw-", result); // 无权限信息
+    }
+
 }
