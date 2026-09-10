@@ -3903,4 +3903,20 @@ public class FileToolsTests : IDisposable
         Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", output); // 匹配时间格式
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowModified_True_DisplaysDirectoryModifiedTime()
+    {
+        // show_modified=true:目录名后也附加修改时间
+        Directory.CreateDirectory(Path.Combine(_dir, "subdir"));
+        File.WriteAllText(Path.Combine(_dir, "subdir", "file.txt"), "hello");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_modified"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("subdir/ (", output); // 目录带时间
+        Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", output); // 匹配时间格式
+    }
+
 }

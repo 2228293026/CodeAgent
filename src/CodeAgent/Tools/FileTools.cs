@@ -618,7 +618,15 @@ public sealed class ListDirectoryTool : ITool
                         continue;
                     if (!filesOnly)
                     {
-                        sb.AppendLine(indent + name + "/");
+                        if (showModified)
+                        {
+                            var dirModified = Directory.GetLastWriteTime(d).ToString("yyyy-MM-dd HH:mm");
+                            sb.AppendLine($"{indent}{name}/ ({dirModified})");
+                        }
+                        else
+                        {
+                            sb.AppendLine(indent + name + "/");
+                        }
                         emitted++;
                         dirCount++;
                     }
