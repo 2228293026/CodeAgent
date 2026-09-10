@@ -631,6 +631,7 @@ public sealed class ListDirectoryTool : ITool
             ["skip_empty_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空目录（默认 false；设为 true 时只列出包含文件的目录）" },
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在文件名后附加哈希值，如 file.txt (sha256:abc123...)）" },
             ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；设为 true 时在文件名后附加扩展名，如 file.txt [.txt]）" },
+            ["show_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件类型（默认 false；设为 true 时在文件名后附加类型标记，如 file.txt <file> 或 dir/ <dir>）" },
         },
     };
 
@@ -654,6 +655,7 @@ public sealed class ListDirectoryTool : ITool
         var skipEmptyDirs = ToolArgs.GetBool(args, "skip_empty_dirs", false);
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
         var showExtension = ToolArgs.GetBool(args, "show_extension", false);
+        var showType = ToolArgs.GetBool(args, "show_type", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -698,6 +700,8 @@ public sealed class ListDirectoryTool : ITool
                             var fileInDir = Directory.EnumerateFiles(d).Count();
                             suffix += $" ({fileInDir} 个文件)";
                         }
+                        if (showType)
+                            suffix += " <dir>";
                         sb.AppendLine($"{indent}{name}/{suffix}");
                         emitted++;
                         dirCount++;
@@ -754,6 +758,10 @@ public sealed class ListDirectoryTool : ITool
                         {
                             var ext = Path.GetExtension(fileName);
                             sb.AppendLine($"{indent}{fileName} [{ext}]");
+                        }
+                        else if (showType)
+                        {
+                            sb.AppendLine($"{indent}{fileName} <file>");
                         }
                         else
                         {

@@ -4378,4 +4378,35 @@ public class FileToolsTests : IDisposable
         Assert.StartsWith("d.txt", fileLines[1]);
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowType_True_DisplaysFileType()
+    {
+        // show_type=true:文件名后附加类型标记
+        File.WriteAllText(Path.Combine(_dir, "typefile.txt"), "hello\n");
+        Directory.CreateDirectory(Path.Combine(_dir, "typedir"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_type"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("typefile.txt <file>", output); // 文件类型
+        Assert.Contains("typedir/ <dir>", output); // 目录类型
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowType_False_NoTypeInfo()
+    {
+        // show_type=false（默认）:不显示类型标记
+        File.WriteAllText(Path.Combine(_dir, "typefile2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_type"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("typefile2.txt", output);
+        Assert.DoesNotContain("<file>", output); // 无类型标记
+    }
+
 }
