@@ -141,4 +141,50 @@ public class SessionSearchToolTests : IDisposable
         Assert.Contains("没有匹配", output);
         Assert.Contains("zzzz-not-found", output);
     }
+
+    [Fact]
+    public async Task SessionSearch_CaseSensitive_True_MatchesExactCase()
+    {
+        // case_sensitive=true:精确大小写匹配
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        File.WriteAllLines(Path.Combine(sessDir, "case.jsonl"),
+            ["""{"role":"user","content":"Hello World"}"""]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "Hello", ["case_sensitive"] = true }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("Hello World", output); // 精确匹配 "Hello"
+    }
+
+    [Fact]
+    public async Task SessionSearch_CaseSensitive_True_NoMatchDifferentCase()
+    {
+        // case_sensitive=true:大小写不同时不匹配
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        File.WriteAllLines(Path.Combine(sessDir, "case2.jsonl"),
+            ["""{"role":"user","content":"Hello World"}"""]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "hello", ["case_sensitive"] = true }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("没有匹配", output); // "hello" 不匹配 "Hello"
+    }
+
+    [Fact]
+    public async Task SessionSearch_CaseSensitive_False_IgnoresCase()
+    {
+        // case_sensitive=false（默认）:忽略大小写
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        File.WriteAllLines(Path.Combine(sessDir, "case3.jsonl"),
+            ["""{"role":"user","content":"Hello World"}"""]);
+
+        var tool = new SessionSearchTool();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["keyword"] = "hello", ["case_sensitive"] = false }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("Hello World", output); // "hello" 匹配 "Hello"（忽略大小写）
+    }
+
 }

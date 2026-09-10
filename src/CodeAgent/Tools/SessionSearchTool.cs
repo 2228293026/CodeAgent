@@ -17,7 +17,8 @@ public sealed class SessionSearchTool : ITool
         ["type"] = "object",
         ["properties"] = new JsonObject
         {
-            ["keyword"] = new JsonObject { ["type"] = "string", ["description"] = "搜索关键字（忽略大小写）" },
+            ["keyword"] = new JsonObject { ["type"] = "string", ["description"] = "搜索关键字（默认忽略大小写）" },
+            ["case_sensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "区分大小写（默认 false；设为 true 时进行精确大小写匹配）" },
             ["max_files"] = new JsonObject { ["type"] = "integer", ["description"] = "最多列出的命中会话数（默认 3，最大 10）" },
         },
         ["required"] = new JsonArray("keyword"),
@@ -28,6 +29,7 @@ public sealed class SessionSearchTool : ITool
         var keyword = ToolArgs.GetString(args, "keyword");
         if (string.IsNullOrWhiteSpace(keyword))
             throw new ToolException("缺少必填参数 keyword");
+        var caseSensitive = ToolArgs.GetBool(args, "case_sensitive", false);
         var maxFiles = Math.Clamp(ToolArgs.GetInt(args, "max_files", 3), 1, 10);
         var sessionDir = Path.Combine(Environment.CurrentDirectory, ctx.Config.SessionDir);
         if (!Directory.Exists(sessionDir))
@@ -54,7 +56,7 @@ public sealed class SessionSearchTool : ITool
                 break;
             var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
             Emit(Path.GetFileNameWithoutExtension(log) + $" · {age}",
-                "/resume 可恢复", AgentClass.SearchSessionLog(log, keyword));
+                "/resume 可恢复", AgentClass.SearchSessionLog(log, keyword, caseSensitive));
         }
         // 命名快照（/save 的 .json）
         foreach (var snap in Directory.GetFiles(sessionDir, "*.json")
@@ -63,7 +65,7 @@ public sealed class SessionSearchTool : ITool
             if (printed >= maxFiles)
                 break;
             var name = Path.GetFileNameWithoutExtension(snap);
-            Emit($"快照 {name}", $"/load {name} 可恢复", AgentClass.SearchSnapshot(snap, keyword));
+            Emit($"快照 {name}", $"/load {name} 可恢复", AgentClass.SearchSnapshot(snap, keyword, caseSensitive));
         }
 
         return Task.FromResult(printed == 0

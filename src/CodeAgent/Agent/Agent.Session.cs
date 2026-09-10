@@ -297,7 +297,7 @@ public sealed partial class Agent
 
     /// <summary>在会话日志里搜索关键字（忽略大小写）：返回最多 maxHits 条 (角色, 命中片段)。
     /// 片段取命中点前后窗口并折叠换行；损坏行/读取失败按无命中处理。/find 用。</summary>
-    internal static List<(string Role, string Snippet)> SearchSessionLog(string path, string keyword, int maxHits = 3)
+    internal static List<(string Role, string Snippet)> SearchSessionLog(string path, string keyword, bool caseSensitive = false, int maxHits = 3)
     {
         var hits = new List<(string, string)>();
         if (string.IsNullOrEmpty(keyword))
@@ -319,7 +319,7 @@ public sealed partial class Agent
                     var role = n["role"]?.GetValue<string>() ?? "?";
                     if (role == "user" && content.TrimStart().StartsWith('/'))
                         continue;
-                    hits.AddRange(MatchWindow(content, keyword, role));
+                    hits.AddRange(MatchWindow(content, keyword, role, caseSensitive));
                 }
                 catch
                 {
@@ -335,7 +335,7 @@ public sealed partial class Agent
     }
 
     /// <summary>在命名快照（/save 的 .json）里搜索关键字：返回最多 maxHits 条 (角色, 命中片段)。/find 用。</summary>
-    internal static List<(string Role, string Snippet)> SearchSnapshot(string path, string keyword, int maxHits = 3)
+    internal static List<(string Role, string Snippet)> SearchSnapshot(string path, string keyword, bool caseSensitive = false, int maxHits = 3)
     {
         var hits = new List<(string, string)>();
         if (string.IsNullOrEmpty(keyword))
@@ -355,7 +355,7 @@ public sealed partial class Agent
                 // 与日志搜索同口径：斜杠命令行不算命中
                 if (d.role == "user" && content.TrimStart().StartsWith('/'))
                     continue;
-                hits.AddRange(MatchWindow(content, keyword, d.role));
+                hits.AddRange(MatchWindow(content, keyword, d.role, caseSensitive));
             }
         }
         catch
@@ -366,9 +366,10 @@ public sealed partial class Agent
     }
 
     /// <summary>关键字的命中片段：前后窗口折叠换行，超出部分用省略号标记。日志与快照搜索共用。</summary>
-    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role)
+    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role, bool caseSensitive = false)
     {
-        var idx = content.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+        var cmp = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var idx = content.IndexOf(keyword, cmp);
         if (idx < 0)
             yield break;
         var start = Math.Max(0, idx - 40);
