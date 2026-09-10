@@ -728,4 +728,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("(", result); // 无时间括号
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowModified_True_DisplaysFileModifiedTime()
+    {
+        // show_modified=true + files_only=true:文件路径后附加修改时间
+        File.WriteAllText(PathOf("gm.txt"), "alpha\nbeta\ngamma\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["files_only"] = true, ["show_modified"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gm.txt (", result); // 时间格式：yyyy-MM-dd HH:mm
+        Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", result); // 匹配时间格式
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowModified_False_NoTimeInfo()
+    {
+        // show_modified=false（默认）:不显示修改时间
+        File.WriteAllText(PathOf("gm2.txt"), "alpha\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["files_only"] = true, ["show_modified"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gm2.txt", result);
+        Assert.DoesNotContain("(", result); // 无时间括号
+    }
+
 }

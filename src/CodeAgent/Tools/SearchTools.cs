@@ -134,6 +134,7 @@ public sealed class GrepTool : ITool
             ["max_matches_per_file"] = new JsonObject { ["type"] = "integer", ["description"] = "每个文件最多显示的匹配数（默认 0=不限制；设为正数可防止单个文件匹配过多撑爆输出）" },
             ["literal"] = new JsonObject { ["type"] = "boolean", ["description"] = "字面量搜索（默认 false；设为 true 时 pattern 被视为普通字符串而非正则表达式，自动转义特殊字符）" },
             ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示搜索统计（默认 false；设为 true 时在输出末尾附加统计信息，如扫描文件数、匹配数、耗时）" },
+            ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；files_only=true 时在文件路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -205,6 +206,7 @@ public sealed class GrepTool : ITool
         int totalMatches = 0;
         var invert = ToolArgs.GetBool(args, "invert", false);
         var showStats = ToolArgs.GetBool(args, "stats", false);
+        var showModified = ToolArgs.GetBool(args, "show_modified", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -265,7 +267,16 @@ public sealed class GrepTool : ITool
                     if (fileHits)
                     {
                         hits++;
-                        sb.AppendLine(rel);
+                        if (showModified)
+                        {
+                            var fullPath = Path.Combine(full, rel.Replace('/', Path.DirectorySeparatorChar));
+                            var modified = File.Exists(fullPath) ? File.GetLastWriteTime(fullPath).ToString("yyyy-MM-dd HH:mm") : "";
+                            sb.AppendLine(modified.Length > 0 ? $"{rel} ({modified})" : rel);
+                        }
+                        else
+                        {
+                            sb.AppendLine(rel);
+                        }
                     }
                     return;
                 }
