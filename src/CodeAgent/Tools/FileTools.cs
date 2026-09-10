@@ -28,6 +28,8 @@ public sealed class ReadFileTool : ITool
             ["hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "在输出末尾附加 SHA256 哈希（默认 false；可用于校验文件完整性）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "强制指定编码：utf8、utf8-bom、gbk、gb18030、ascii（默认自动检测）" },
             ["strip_bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉 UTF-8 BOM 头（默认 false；输出内容不带 BOM，方便复制粘贴）" },
+            ["byte_offset"] = new JsonObject { ["type"] = "integer", ["description"] = "字节偏移（0 起，默认 0；与 byte_limit 配合使用，按字节范围读取而非按行）" },
+            ["byte_limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取字节数（0=不限，默认 0，最大 2000000；与 byte_offset 配合使用）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -499,7 +501,8 @@ public sealed class ListDirectoryTool : ITool
         ["properties"] = new JsonObject
         {
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "目录路径，默认工作区根目录" },
-            ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度（默认 2，最大 5）" },
+            ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度（默认 2，最大 5；recursive=true 时自动设为 5）" },
+            ["recursive"] = new JsonObject { ["type"] = "boolean", ["description"] = "递归列出所有子目录（默认 false；设为 true 时 depth 自动设为最大值 5）" },
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "跳过这些目录名（大小写不敏感），如 [\"node_modules\", \"vendor\"]；在 SkipDirs 之外额外排除" },
             ["max_items"] = new JsonObject { ["type"] = "integer", ["description"] = "最多列出条目数（默认 800，最大 5000）" },
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出文件（跳过目录），默认 false" },
@@ -512,7 +515,8 @@ public sealed class ListDirectoryTool : ITool
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
         var path = ToolArgs.GetString(args, "path");
-        var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
+        var recursive = ToolArgs.GetBool(args, "recursive", false);
+        var depth = recursive ? 5 : Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
         var maxItems = Math.Clamp(ToolArgs.GetInt(args, "max_items", 800), 1, 5000);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
@@ -538,22 +542,24 @@ public sealed class ListDirectoryTool : ITool
             var indent = new string(' ', level * 2);
             try
             {
-                if (!filesOnly)
+                foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy))
                 {
-                    foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy))
+                    if (emitted >= maxItems)
+                        break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
+                    var name = Path.GetFileName(d);
+                    if (!showHidden && SkipDirs.IsHidden(d))
+                        continue; // 跳过隐藏目录
+                    if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
+                        continue;
+                    if (!filesOnly)
                     {
-                        if (emitted >= maxItems)
-                            break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
-                        var name = Path.GetFileName(d);
-                        if (!showHidden && SkipDirs.IsHidden(d))
-                            continue; // 跳过隐藏目录
-                        if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
-                            continue;
                         sb.AppendLine(indent + name + "/");
                         emitted++;
                         dirCount++;
-                        Walk(d, level + 1);
                     }
+                    // filesOnly=true 且 recursive=false（默认）:不递归子目录，只列出当前层文件
+                    if (!filesOnly || recursive)
+                        Walk(d, level + 1);
                 }
                 if (!dirsOnly)
                 {

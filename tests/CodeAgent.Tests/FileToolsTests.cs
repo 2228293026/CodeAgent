@@ -3583,4 +3583,35 @@ public class FileToolsTests : IDisposable
         Assert.Contains("\uFEFFhello", output); // BOM 保留
     }
 
+    [Fact]
+    public async Task ListDirectory_Recursive_True_GoesDeep()
+    {
+        // recursive=true:自动将 depth 设为最大值（5），列出深层嵌套目录
+        Directory.CreateDirectory(Path.Combine(_dir, "a", "b", "c"));
+        File.WriteAllText(Path.Combine(_dir, "a", "b", "c", "deep.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["recursive"] = true, ["files_only"] = true, ["depth"] = 5 }, ctx, CancellationToken.None);
+
+        Console.WriteLine("DEBUG output: " + output);
+        Assert.Contains("deep.txt", output); // 深层文件可见
+    }
+
+    [Fact]
+    public async Task ListDirectory_Recursive_False_UsesDefaultDepth()
+    {
+        // recursive=false（默认）:使用默认 depth=2，深层文件不可见
+        Directory.CreateDirectory(Path.Combine(_dir, "a", "b", "c"));
+        File.WriteAllText(Path.Combine(_dir, "a", "b", "c", "deep.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["recursive"] = false, ["files_only"] = true }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("deep.txt", output); // depth=2 限制，深层文件不可见
+    }
+
 }
