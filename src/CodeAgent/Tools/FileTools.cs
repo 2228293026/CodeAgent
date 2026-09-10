@@ -527,6 +527,7 @@ public sealed class ListDirectoryTool : ITool
             ["dirs_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出目录（跳过文件），默认 false" },
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按名称）、size（按文件大小降序）、modified（按修改时间降序）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
+            ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在文件名后附加大小，如 file.txt (1.2 KB)）" },
         },
     };
 
@@ -541,6 +542,7 @@ public sealed class ListDirectoryTool : ITool
         var ignoreSet = ToolArgs.GetStringSet(args, "ignore");
         var sortBy = ToolArgs.GetString(args, "sort_by");
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
+        var showSize = ToolArgs.GetBool(args, "show_size", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -587,7 +589,17 @@ public sealed class ListDirectoryTool : ITool
                             break;
                         if (!showHidden && SkipDirs.IsHidden(f))
                             continue; // 跳过隐藏文件
-                        sb.AppendLine(indent + Path.GetFileName(f));
+                        var fileName = Path.GetFileName(f);
+                        if (showSize)
+                        {
+                            var size = new FileInfo(f).Length;
+                            var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
+                            sb.AppendLine($"{indent}{fileName} ({sizeStr})");
+                        }
+                        else
+                        {
+                            sb.AppendLine(indent + fileName);
+                        }
                         emitted++;
                         fileCount++;
                     }

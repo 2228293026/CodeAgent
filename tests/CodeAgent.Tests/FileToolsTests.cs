@@ -3672,4 +3672,35 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("deep.txt", output); // depth=2 限制，深层文件不可见
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowSize_True_DisplaysFileSizes()
+    {
+        // show_size=true:文件名后附加大小信息
+        File.WriteAllText(Path.Combine(_dir, "small.txt"), new string('a', 10));
+        File.WriteAllText(Path.Combine(_dir, "large.txt"), new string('b', 5000));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_size"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("small.txt (10 B)", output); // 小文件显示字节
+        Assert.Contains("large.txt (4.9 KB)", output); // 中等文件显示 KB
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowSize_False_NoSizeInfo()
+    {
+        // show_size=false（默认）:不显示大小信息
+        File.WriteAllText(Path.Combine(_dir, "s.txt"), "hello");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_size"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("s.txt", output);
+        Assert.DoesNotContain("(", output); // 无大小括号
+    }
+
 }
