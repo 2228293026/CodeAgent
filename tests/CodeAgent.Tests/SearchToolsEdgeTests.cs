@@ -1106,4 +1106,27 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.StartsWith("n.txt", fileLines[1]);
     }
 
+    [Fact]
+    public async Task Glob_ShowType_True_DisplaysFileType()
+    {
+        // show_type=true:路径后附加类型标记
+        File.WriteAllText(PathOf("gt.txt"), "alpha\n");
+        Directory.CreateDirectory(PathOf("gtdir"));
+        var args = new JsonObject { ["pattern"] = "*", ["show_type"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gt.txt ([file])", result); // 文件类型（glob 用括号包裹附加信息）
+        // 注意：glob 默认只返回文件，不包含目录，所以不检查目录类型
+    }
+
+    [Fact]
+    public async Task Glob_ShowType_False_NoTypeInfo()
+    {
+        // show_type=false（默认）:不显示类型标记
+        File.WriteAllText(PathOf("gt2.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "gt2.txt", ["show_type"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gt2.txt", result);
+        Assert.DoesNotContain("[file]", result); // 无类型标记
+    }
+
 }

@@ -29,6 +29,7 @@ public sealed class GlobTool : ITool
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在路径后附加哈希值，如 file.txt (sha256:abc123...)）" },
             ["show_absolute_path"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示绝对路径（默认 false；设为 true 时显示完整绝对路径而非相对路径）" },
             ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；设为 true 时在路径后附加扩展名，如 file.txt [.txt]）" },
+            ["show_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件类型（默认 false；设为 true 时在路径后附加类型标记，如 file.txt [file] 或 dir/ [dir]）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -61,6 +62,7 @@ public sealed class GlobTool : ITool
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
         var showAbsolutePath = ToolArgs.GetBool(args, "show_absolute_path", false);
         var showExtension = ToolArgs.GetBool(args, "show_extension", false);
+        var showType = ToolArgs.GetBool(args, "show_type", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -104,7 +106,7 @@ public sealed class GlobTool : ITool
                 results.Reverse();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
-        var shown = showModified || showSize || showByteCount || showHash || showExtension || showAbsolutePath
+        var shown = showModified || showSize || showByteCount || showHash || showExtension || showAbsolutePath || showType
             ? string.Join('\n', results.Take(displayLimit).Select(r =>
             {
                 var full = Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar));
@@ -133,6 +135,11 @@ public sealed class GlobTool : ITool
                 if (showExtension && File.Exists(full))
                 {
                     parts.Add($"[{Path.GetExtension(full)}]");
+                }
+                if (showType)
+                {
+                    var isDir = Directory.Exists(full);
+                    parts.Add(isDir ? "[dir]" : "[file]");
                 }
                 return parts.Count > 0 ? $"{r} ({string.Join(", ", parts)})" : r;
             }))
