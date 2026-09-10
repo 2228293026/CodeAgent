@@ -118,6 +118,7 @@ public sealed class GrepTool : ITool
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["line_number"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示行号（默认 true；设为 false 时输出格式为 file: content，去掉行号前缀，方便模型直接提取匹配文本）" },
             ["output_mode"] = new JsonObject { ["type"] = "string", ["description"] = "输出模式：text（默认，file:line: content）、content（仅匹配文本，无文件路径和行号）、content_without_filename（行号: 内容，无文件路径）、content_without_line_number（文件: 内容，无行号）" },
+            ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -144,6 +145,7 @@ public sealed class GrepTool : ITool
         var binaryFiles = ToolArgs.GetString(args, "binary_files");
         var skipBinary = string.IsNullOrEmpty(binaryFiles) || binaryFiles == "skip";
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
+        var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
@@ -340,7 +342,7 @@ public sealed class GrepTool : ITool
         else if (Directory.Exists(full))
         {
             // 确定性输出：先收集再排序（枚举顺序跨平台不定），与 glob 保持一致
-            var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue).ToList();
+            var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue, includeIgnored).ToList();
             files.Sort(StringComparer.Ordinal);
             foreach (var file in files)
             {

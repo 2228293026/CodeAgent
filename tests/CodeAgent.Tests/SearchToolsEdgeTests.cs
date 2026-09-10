@@ -548,6 +548,31 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_IncludeIgnored_False_SkipsIgnoredDirs()
+    {
+        // include_ignored=false（默认）:跳过 .git 等被忽略目录
+        Directory.CreateDirectory(Path.Combine(_dir, ".git", "objects"));
+        File.WriteAllText(Path.Combine(_dir, ".git", "config"), "secret");
+        File.WriteAllText(PathOf("normal.txt"), "secret");
+        var args = new JsonObject { ["pattern"] = "secret", ["include_ignored"] = false };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("normal.txt", result);
+        Assert.DoesNotContain(".git/config", result); // 被忽略目录被跳过
+    }
+
+    [Fact]
+    public async Task Grep_IncludeIgnored_True_SearchesIgnoredDirs()
+    {
+        // include_ignored=true:搜索 .git 等被忽略目录内的文件
+        Directory.CreateDirectory(Path.Combine(_dir, ".git", "objects"));
+        File.WriteAllText(Path.Combine(_dir, ".git", "config"), "secret");
+        File.WriteAllText(PathOf("normal.txt"), "visible");
+        var args = new JsonObject { ["pattern"] = "secret", ["include_ignored"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains(".git/config", result); // 被忽略目录内的文件可见
+    }
+
+    [Fact]
     public async Task Grep_OutputMode_Content_ReturnsOnlyMatches()
     {
         // output_mode=content:匹配文本前无文件路径和行号前缀
