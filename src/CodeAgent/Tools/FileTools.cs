@@ -794,9 +794,16 @@ public sealed class ListDirectoryTool : ITool
                         {
                             try
                             {
-                                var info = new FileInfo(f);
-                                var owner = info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount)).ToString();
-                                parenParts.Add($"owner:{owner}");
+                                if (OperatingSystem.IsWindows())
+                                {
+                                    var info = new FileInfo(f);
+                                    var owner = info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount)).ToString();
+                                    parenParts.Add($"owner:{owner}");
+                                }
+                                else
+                                {
+                                    parenParts.Add($"owner:{Environment.UserName}");
+                                }
                             }
                             catch
                             {
@@ -807,9 +814,16 @@ public sealed class ListDirectoryTool : ITool
                         {
                             try
                             {
-                                var info = new FileInfo(f);
-                                var group = info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount)).ToString();
-                                parenParts.Add($"group:{group}");
+                                if (OperatingSystem.IsWindows())
+                                {
+                                    var info = new FileInfo(f);
+                                    var group = info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount)).ToString();
+                                    parenParts.Add($"group:{group}");
+                                }
+                                else
+                                {
+                                    parenParts.Add("group:N/A");
+                                }
                             }
                             catch
                             {
