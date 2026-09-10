@@ -83,8 +83,10 @@ public sealed class GlobTool : ITool
                 tuples.Sort((a, b) => File.GetLastWriteTimeUtc(fullPaths[b.i]).CompareTo(File.GetLastWriteTimeUtc(fullPaths[a.i])));
             results = tuples.Select(t => t.r).ToList();
         }
-        var shown = string.Join('\n', results.Take(300));
-        return shown + (results.Count > 300 ? $"\n…(共 {results.Count} 个，仅显示前 300{(capped ? "，已达上限，可能不完整" : "")})" : "");
+        var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
+        var shown = string.Join('\n', results.Take(displayLimit));
+        var truncated = results.Count > displayLimit || capped;
+        return shown + (truncated ? $"\n…(共 {results.Count} 个，仅显示前 {displayLimit}{(capped ? "，已达上限，可能不完整" : "")})" : "");
     }
 }
 

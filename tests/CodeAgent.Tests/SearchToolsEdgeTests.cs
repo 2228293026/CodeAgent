@@ -67,13 +67,13 @@ public class SearchToolsEdgeTests : IDisposable
     [Fact]
     public async Task Glob_ManyResults_TruncationNotice()
     {
-        // 超过 300 个结果时给出截断提示（用多目录规避枚举上限）
+        // 超过 500 个结果时给出截断提示（显示上限 500）
         Directory.CreateDirectory(PathOf("many"));
-        for (int i = 0; i < 320; i++)
+        for (int i = 0; i < 520; i++)
             File.WriteAllText(PathOf("many", $"f{i:0000}.txt"), "x");
         var args = new JsonObject { ["pattern"] = "many/*.txt" };
         var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
-        Assert.Contains("仅显示前 300", result);
+        Assert.Contains("仅显示前 500", result);
     }
 
     [Fact]
@@ -125,14 +125,17 @@ public class SearchToolsEdgeTests : IDisposable
     [Fact]
     public async Task Glob_MaxResults_RespectsCap()
     {
-        // max_results 控制返回上限（默认 500）；超限时提示可能不完整
+        // max_results 控制返回上限；达到上限时提示可能不完整
         Directory.CreateDirectory(PathOf("mr"));
         for (int i = 0; i < 10; i++)
             File.WriteAllText(PathOf("mr", $"f{i}.txt"), "x");
         var args = new JsonObject { ["pattern"] = "mr/*.txt", ["max_results"] = 3 };
         var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(3, lines.Length); // 恰好 max_results=3 个文件
+        Assert.Equal(4, lines.Length); // 3 个结果 + 1 行截断提示
+        Assert.Contains("f0.txt", result);
+        Assert.Contains("f1.txt", result);
+        Assert.Contains("f2.txt", result);
         Assert.DoesNotContain("f3.txt", result); // 第 4 个被截断
     }
 
@@ -677,6 +680,32 @@ public class SearchToolsEdgeTests : IDisposable
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("beta", result);
         Assert.DoesNotContain("[stats]", result); // 无统计信息
+    }
+
+    [Fact]
+    public async Task Glob_MaxResults_RespectsDisplayLimit()
+    {
+        // max_results=5:收集 5 个结果，显示 5 个结果 + 截断提示
+        for (int i = 0; i < 10; i++)
+            File.WriteAllText(PathOf($"g{i}.txt"), $"content{i}");
+        var args = new JsonObject { ["pattern"] = "*.txt", ["max_results"] = 5 };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        Assert.Equal(6, lines.Count); // 5 个结果 + 1 行截断提示
+        Assert.DoesNotContain("仅显示前 300", result); // 不再硬编码 300
+    }
+
+    [Fact]
+    public async Task Glob_MaxResults_OverDisplayCap_TruncatesTo500()
+    {
+        // max_results=1000:收集上限 1000，但显示被截断到 500
+        for (int i = 0; i < 10; i++)
+            File.WriteAllText(PathOf($"h{i}.txt"), $"content{i}");
+        var args = new JsonObject { ["pattern"] = "*.txt", ["max_results"] = 1000 };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
+        Assert.Equal(10, lines.Count); // 只有 10 个文件，全部显示
+        Assert.DoesNotContain("仅显示前 300", result); // 不再硬编码 300
     }
 
 }
