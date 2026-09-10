@@ -20,6 +20,7 @@ public sealed class GlobTool : ITool
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最多返回的匹配文件数（默认 500，最大 5000）" },
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅根目录，默认无限制）" },
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按路径字母序）、size（按文件大小降序）、modified（按修改时间降序）" },
+            ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -43,6 +44,7 @@ public sealed class GlobTool : ITool
         var maxResults = Math.Clamp(ToolArgs.GetInt(args, "max_results", 500), 1, 5000);
         var depth = ToolArgs.GetInt(args, "depth", -1);
         var sortBy = ToolArgs.GetString(args, "sort_by");
+        var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -55,6 +57,8 @@ public sealed class GlobTool : ITool
                 break;
             }
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
+            if (!showHidden && SkipDirs.IsHidden(file))
+                continue; // 跳过隐藏文件/目录
             // 命中 pattern 且未被 ignore 排除才保留
             if (regexes.Any(r => r.IsMatch(rel)) && (ignoreRes is null || !ignoreRes.Any(r => r.IsMatch(rel))))
                 results.Add(rel);
@@ -109,6 +113,7 @@ public sealed class GrepTool : ITool
             ["invert"] = new JsonObject { ["type"] = "boolean", ["description"] = "反转匹配（类似 rg -v）：输出不匹配 pattern 的行，默认 false；不支持 multiline 模式" },
             ["word"] = new JsonObject { ["type"] = "boolean", ["description"] = "整词匹配（类似 rg -w）：pattern 两侧加单词边界 \\b，避免命中更长单词的子串（如搜 cat 不命中 category），默认 false" },
             ["binary_files"] = new JsonObject { ["type"] = "string", ["description"] = "二进制文件处理：skip（默认，跳过）、text（当作文本搜索）、without-match（视为不匹配）" },
+            ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -134,6 +139,7 @@ public sealed class GrepTool : ITool
         var truncateLine = maxLineLength == 0 ? (Func<string, string>)(s => s) : s => TextUtil.TruncateLine(s, maxLineLength);
         var binaryFiles = ToolArgs.GetString(args, "binary_files");
         var skipBinary = string.IsNullOrEmpty(binaryFiles) || binaryFiles == "skip";
+        var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
@@ -294,6 +300,8 @@ public sealed class GrepTool : ITool
             {
                 if (hits >= max)
                     break;
+                if (!showHidden && SkipDirs.IsHidden(file))
+                    continue; // 跳过隐藏文件
                 ScanFile(file);
             }
         }

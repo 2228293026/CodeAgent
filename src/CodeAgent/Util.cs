@@ -463,6 +463,22 @@ public static class SkipDirs
 
     public static bool IsSkipped(string dirName) => Names.Contains(dirName);
 
+    /// <summary>判断路径是否为隐藏文件/目录（Unix 以 . 开头，Windows 带 Hidden/System 属性）。</summary>
+    public static bool IsHidden(string path)
+    {
+        var name = Path.GetFileName(path);
+        if (name.Length > 0 && name[0] == '.')
+            return true;
+        try
+        {
+            var attrs = File.GetAttributes(path);
+            if ((attrs & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                return true;
+        }
+        catch { }
+        return false;
+    }
+
     /// <summary>
     /// 递归枚举文件，但剪枝掉被跳过的目录（不进入其中遍历），避免 glob/grep
     /// 在 node_modules / bin / obj 等目录里做无用扫描。

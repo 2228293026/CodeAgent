@@ -95,7 +95,7 @@ public class SearchToolsEdgeTests : IDisposable
         // 以点开头的文件（如 .gitignore）也应被 glob 匹配
         File.WriteAllText(PathOf(".gitignore"), "x");
         File.WriteAllText(PathOf("normal.txt"), "x");
-        var args = new JsonObject { ["pattern"] = ".*" };
+        var args = new JsonObject { ["pattern"] = ".*", ["show_hidden"] = true };
         var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains(".gitignore", result);
         Assert.DoesNotContain("normal.txt", result);
