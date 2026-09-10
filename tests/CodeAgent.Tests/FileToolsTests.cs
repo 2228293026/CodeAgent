@@ -3996,4 +3996,39 @@ public class FileToolsTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_dir, "nobak.txt.bak"))); // 无备份文件
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowFileCount_True_DisplaysFileCountPerDirectory()
+    {
+        // show_file_count=true:目录名后附加该目录下的文件数
+        Directory.CreateDirectory(Path.Combine(_dir, "dir1"));
+        File.WriteAllText(Path.Combine(_dir, "dir1", "a.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "dir1", "b.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(_dir, "dir2"));
+        File.WriteAllText(Path.Combine(_dir, "dir2", "c.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_file_count"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("dir1/ (2 个文件)", output);
+        Assert.Contains("dir2/ (1 个文件)", output);
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowFileCount_False_NoFileCount()
+    {
+        // show_file_count=false（默认）:不显示文件数
+        Directory.CreateDirectory(Path.Combine(_dir, "dir3"));
+        File.WriteAllText(Path.Combine(_dir, "dir3", "d.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_file_count"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("dir3/", output);
+        Assert.DoesNotContain("dir3/ (", output); // 目录行后无括号
+    }
+
 }

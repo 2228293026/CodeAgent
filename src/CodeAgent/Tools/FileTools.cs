@@ -579,6 +579,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在文件名后附加大小，如 file.txt (1.2 KB)）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示修改时间（默认 false；设为 true 时在文件名后附加最后修改时间，如 file.txt (2025-01-15 10:30)）" },
+            ["show_file_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示每个目录的文件数（默认 false；设为 true 时在目录名后附加文件数，如 src/ (5 个文件)）" },
         },
     };
 
@@ -595,6 +596,7 @@ public sealed class ListDirectoryTool : ITool
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
+        var showFileCount = ToolArgs.GetBool(args, "show_file_count", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -625,15 +627,18 @@ public sealed class ListDirectoryTool : ITool
                         continue;
                     if (!filesOnly)
                     {
+                        var suffix = "";
                         if (showModified)
                         {
                             var dirModified = Directory.GetLastWriteTime(d).ToString("yyyy-MM-dd HH:mm");
-                            sb.AppendLine($"{indent}{name}/ ({dirModified})");
+                            suffix += $" ({dirModified})";
                         }
-                        else
+                        if (showFileCount)
                         {
-                            sb.AppendLine(indent + name + "/");
+                            var fileInDir = Directory.EnumerateFiles(d).Count();
+                            suffix += $" ({fileInDir} 个文件)";
                         }
+                        sb.AppendLine($"{indent}{name}/{suffix}");
                         emitted++;
                         dirCount++;
                     }
