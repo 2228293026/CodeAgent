@@ -471,4 +471,33 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("  1| a", result); // 前 1 行之外
         Assert.DoesNotContain("  5| e", result); // 后 1 行之外
     }
+
+    [Fact]
+    public async Task Glob_SortByName_IsAlphabetical()
+    {
+        // sort_by=name:结果按路径字母序排列
+        Directory.CreateDirectory(Path.Combine(_dir, "zeta"));
+        File.WriteAllText(PathOf("a.txt"), "x");
+        File.WriteAllText(PathOf("z.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, "zeta", "m.txt"), "x");
+        var args = new JsonObject { ["pattern"] = "**/*.txt", ["sort_by"] = "name" };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        Assert.Equal("a.txt", lines[0]);
+        Assert.Equal("z.txt", lines[1]);
+        Assert.Equal("zeta/m.txt", lines[2]);
+    }
+
+    [Fact]
+    public async Task Glob_SortBySize_LargestFirst()
+    {
+        // sort_by=size:结果按文件大小降序排列
+        File.WriteAllText(PathOf("small.txt"), "x");
+        File.WriteAllText(PathOf("large.txt"), new string('a', 1000));
+        var args = new JsonObject { ["pattern"] = "*.txt", ["sort_by"] = "size" };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+        Assert.Equal("large.txt", lines[0]);
+        Assert.Equal("small.txt", lines[1]);
+    }
 }

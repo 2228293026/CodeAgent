@@ -19,6 +19,7 @@ public sealed class GlobTool : ITool
             ["ignore"] = new JsonObject { ["type"] = "array", ["items"] = new JsonObject { ["type"] = "string" }, ["description"] = "排除匹配这些 glob 的结果（如 \"*.min.js\"、\"secret*\"），可用字符串或字符串数组" },
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最多返回的匹配文件数（默认 500，最大 5000）" },
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅根目录，默认无限制）" },
+            ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按路径字母序）、size（按文件大小降序）、modified（按修改时间降序）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -41,6 +42,7 @@ public sealed class GlobTool : ITool
         var ignoreRes = ignore?.Select(p => Glob.ToRegex(AsIgnorePattern(p))).ToList();
         var maxResults = Math.Clamp(ToolArgs.GetInt(args, "max_results", 500), 1, 5000);
         var depth = ToolArgs.GetInt(args, "depth", -1);
+        var sortBy = ToolArgs.GetString(args, "sort_by");
         var results = new List<string>();
         var scanned = 0;
 
@@ -63,7 +65,18 @@ public sealed class GlobTool : ITool
             return capped
                 ? $"(扫描超过 200,000 个文件后中止，未找到匹配 {string.Join(", ", patterns)} 的文件——工作区过大，请缩小 path 或用更精确的 pattern)"
                 : $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
-        results.Sort(StringComparer.Ordinal); // 确定性输出：枚举顺序跨平台不定
+        if (string.IsNullOrEmpty(sortBy) || sortBy == "name")
+            results.Sort(StringComparer.Ordinal); // 确定性输出：枚举顺序跨平台不定
+        else if (sortBy == "size" || sortBy == "modified")
+        {
+            var fullPaths = results.Select(r => Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar))).ToList();
+            var tuples = results.Select((r, i) => (r, i)).ToList();
+            if (sortBy == "size")
+                tuples.Sort((a, b) => new FileInfo(fullPaths[b.i]).Length.CompareTo(new FileInfo(fullPaths[a.i]).Length));
+            else
+                tuples.Sort((a, b) => File.GetLastWriteTimeUtc(fullPaths[b.i]).CompareTo(File.GetLastWriteTimeUtc(fullPaths[a.i])));
+            results = tuples.Select(t => t.r).ToList();
+        }
         var shown = string.Join('\n', results.Take(300));
         return shown + (results.Count > 300 ? $"\n…(共 {results.Count} 个，仅显示前 300{(capped ? "，已达上限，可能不完整" : "")})" : "");
     }
