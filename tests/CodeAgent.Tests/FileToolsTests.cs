@@ -2188,6 +2188,50 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Encoding_Utf8Bom_WritesBom()
+    {
+        // encoding=utf8-bom:显式指定写入 UTF-8 BOM
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "eb.txt", ["content"] = "hello", ["encoding"] = "utf8-bom" }, ctx, CancellationToken.None);
+
+        var bytes = File.ReadAllBytes(Path.Combine(_dir, "eb.txt"));
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]); // UTF-8 BOM
+        Assert.Equal("hello", System.Text.Encoding.UTF8.GetString(bytes[3..]));
+    }
+
+    [Fact]
+    public async Task WriteFile_Encoding_Gbk_WritesGbk()
+    {
+        // encoding=gbk:显式指定写入 GBK 编码
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "gbk.txt", ["content"] = "中文", ["encoding"] = "gbk" }, ctx, CancellationToken.None);
+
+        var bytes = File.ReadAllBytes(Path.Combine(_dir, "gbk.txt"));
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        Assert.Equal("中文", gbk.GetString(bytes));
+    }
+
+    [Fact]
+    public async Task WriteFile_Encoding_Unsupported_Throws()
+    {
+        // encoding=unsupported:报错
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(new JsonObject { ["path"] = "x.txt", ["content"] = "hi", ["encoding"] = "utf-16" }, ctx, CancellationToken.None));
+
+        Assert.Contains("不支持的编码", ex.Message);
+    }
+
+    [Fact]
     public async Task WriteFile_LineEnding_Lf_ForcesLf()
     {
         // line_ending=lf:强制 LF 换行

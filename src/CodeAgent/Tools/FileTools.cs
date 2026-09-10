@@ -201,6 +201,7 @@ public sealed class WriteFileTool : ITool
             ["line_ending"] = new JsonObject { ["type"] = "string", ["description"] = "换行符模式：preserve（默认，保留原文件风格；新建文件用 LF）、lf（强制 LF）、crlf（强制 CRLF）" },
             ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "覆盖已有文件前先创建 .bak 备份（默认 false）" },
             ["preserve_trailing_newline"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留末尾换行（默认 true；设为 false 时自动去掉 content 末尾的换行符）" },
+            ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "写入编码：utf8（默认，无 BOM）、utf8-bom（带 BOM）、gbk、gb18030、ascii；已有文件默认保留原编码，除非显式指定" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -310,7 +311,21 @@ public sealed class WriteFileTool : ITool
 
         try
         {
-            if (bom && !hadFile)
+            var encoding = ToolArgs.GetString(args, "encoding");
+            if (!string.IsNullOrEmpty(encoding))
+            {
+                // 显式指定编码：绕过原编码保留，直接按指定编码写入
+                var enc = encoding.ToLowerInvariant() switch
+                {
+                    "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
+                    "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
+                    "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
+                    "ascii" => System.Text.Encoding.ASCII,
+                    _ => throw new ToolException($"不支持的编码: {encoding}（支持: utf8, utf8-bom, gbk, gb18030, ascii）"),
+                };
+                await File.WriteAllTextAsync(full, finalContent, enc, ct);
+            }
+            else if (bom && !hadFile)
             {
                 // 新建文件 + bom=true:原子写 UTF-8 BOM（临时文件同目录确保同卷，rename 原子）
                 var dir = Path.GetDirectoryName(full);
