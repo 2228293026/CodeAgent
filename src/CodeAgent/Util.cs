@@ -529,6 +529,54 @@ public static class SkipDirs
         return span.Contains('\0');
     }
 
+    /// <summary>流式计算文件 SHA256（不整读进内存）：大文件（GB 级）不会因 show_hash 触发 OOM。
+    /// 返回大写十六进制串；读取失败返回 null。</summary>
+    public static string? ComputeFileSha256(string path)
+    {
+        try
+        {
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return Convert.ToHexString(sha.ComputeHash(fs));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>流式统计文本行数（不整读进内存）。按 \n 计；空文件为 0 行。读取失败返回 null。</summary>
+    public static long? CountFileLines(string path)
+    {
+        try
+        {
+            long lines = 0;
+            var buffer = new byte[64 * 1024];
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            int n;
+            while ((n = fs.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    if (buffer[i] == (byte)'\n')
+                        lines++;
+                }
+            }
+            // 末尾无换行时最后一行也算一行（与 File.ReadAllLines 语义一致）
+            if (fs.Length > 0)
+            {
+                fs.Position = fs.Length - 1;
+                if (fs.ReadByte() != '\n')
+                    lines++;
+            }
+            return lines;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>文件所有者：Windows 走 ACL（真实 owner）。非 Windows 返回 null——
     /// .NET 无跨平台 API，宁可不显示也不用当前进程用户名冒充（那是登录用户，不是文件属主）。</summary>
     public static string? GetFileOwner(string path)
@@ -538,7 +586,7 @@ public static class SkipDirs
         try
         {
             var info = new FileInfo(path);
-            return info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount)).ToString();
+            return info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount))?.ToString();
         }
         catch
         {
@@ -554,7 +602,7 @@ public static class SkipDirs
         try
         {
             var info = new FileInfo(path);
-            return info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount)).ToString();
+            return info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount))?.ToString();
         }
         catch
         {

@@ -132,9 +132,9 @@ public sealed class GlobTool : ITool
                 }
                 if (showHash && File.Exists(full))
                 {
-                    using var sha = System.Security.Cryptography.SHA256.Create();
-                    var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(full)));
-                    parts.Add($"sha256:{hash[..8]}..."); // 只显示前 8 位，避免输出过长
+                    var hash = SkipDirs.ComputeFileSha256(full); // 流式：不整读进内存
+                    if (hash is not null)
+                        parts.Add($"sha256:{hash[..8]}..."); // 只显示前 8 位，避免输出过长
                 }
                 if (showExtension && File.Exists(full))
                 {
@@ -383,14 +383,16 @@ public sealed class GrepTool : ITool
                         }
                         if (showHash)
                         {
-                            using var sha = System.Security.Cryptography.SHA256.Create();
-                            var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(path)));
-                            extra += $" (sha256:{hash[..8]}...)";
+                            var hash = SkipDirs.ComputeFileSha256(path); // 流式：不整读进内存
+                            if (hash is not null)
+                                extra += $" (sha256:{hash[..8]}...)";
                         }
                         if (showLineCount)
                         {
-                            var fileLines = File.ReadAllLines(path);
-                            extra += $" [{fileLines.Length} lines]";
+                            // 流式统计：File.ReadAllLines 会把整个文件读进内存（大文件 OOM）
+                            var lineCount = SkipDirs.CountFileLines(path);
+                            if (lineCount is long n)
+                                extra += $" [{n} lines]";
                         }
                         if (showFirstMatch)
                         {

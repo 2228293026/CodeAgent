@@ -209,9 +209,9 @@ public sealed class ReadFileTool : ITool
         var output = (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
         if (includeHash)
         {
-            using var sha = System.Security.Cryptography.SHA256.Create();
-            var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(full)));
-            output += $"\nsha256:{hash}";
+            var hash = SkipDirs.ComputeFileSha256(full); // 流式：不整读进内存
+            if (hash is not null)
+                output += $"\nsha256:{hash}";
         }
         if (showStats)
         {
@@ -782,9 +782,10 @@ public sealed class ListDirectoryTool : ITool
                         }
                         if (showHash)
                         {
-                            using var sha = System.Security.Cryptography.SHA256.Create();
-                            var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(f)));
-                            parenParts.Add($"sha256:{hash[..8]}...");
+                            // 流式计算：File.ReadAllBytes 会把大文件整个读进内存（GB 级直接 OOM）
+                            var hash = SkipDirs.ComputeFileSha256(f);
+                            if (hash is not null)
+                                parenParts.Add($"sha256:{hash[..8]}...");
                         }
                         if (showMimeType)
                         {
@@ -837,8 +838,10 @@ public sealed class ListDirectoryTool : ITool
                         }
                         if (showLineCount)
                         {
-                            var lines = File.ReadAllLines(f);
-                            bracketParts.Add($"{lines.Length} lines");
+                            // 流式统计：File.ReadAllLines 会把整个文件读进内存（大文件 OOM）
+                            var lineCount = SkipDirs.CountFileLines(f);
+                            if (lineCount is long n)
+                                bracketParts.Add($"{n} lines");
                         }
                         if (showExtension)
                         {

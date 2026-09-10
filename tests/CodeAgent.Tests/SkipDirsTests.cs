@@ -99,4 +99,54 @@ public class SkipDirsTests : IDisposable
         Assert.DoesNotContain(files, f => f.Contains("libs/") || f.Contains("third_party") ||
                                           f.Contains("TestResults") || f.Contains("artifacts") || f.Contains("coverage"));
     }
+
+    [Fact]
+    public void ComputeFileSha256_MatchesKnownVector()
+    {
+        // 流式哈希结果必须与标准向量一致（"abc" 的 SHA256）
+        var path = Path.Combine(_dir, "abc.txt");
+        File.WriteAllText(path, "abc");
+        Assert.Equal("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
+            SkipDirs.ComputeFileSha256(path));
+    }
+
+    [Fact]
+    public void ComputeFileSha256_MissingFile_ReturnsNull()
+    {
+        // 读取失败返回 null（调用方跳过显示），不抛异常
+        Assert.Null(SkipDirs.ComputeFileSha256(Path.Combine(_dir, "nope.txt")));
+    }
+
+    [Fact]
+    public void CountFileLines_CountsLikeReadAllLines()
+    {
+        // 流式行数须与 File.ReadAllLines 语义一致：末尾无换行也算一行
+        var withTrailing = Path.Combine(_dir, "trailing.txt");
+        File.WriteAllText(withTrailing, "a\nb\nc\n");
+        Assert.Equal(3, SkipDirs.CountFileLines(withTrailing));
+
+        var noTrailing = Path.Combine(_dir, "notrailing.txt");
+        File.WriteAllText(noTrailing, "a\nb\nc");
+        Assert.Equal(3, SkipDirs.CountFileLines(noTrailing));
+    }
+
+    [Fact]
+    public void CountFileLines_EmptyFile_ReturnsZero()
+    {
+        var empty = Path.Combine(_dir, "empty.txt");
+        File.WriteAllText(empty, "");
+        Assert.Equal(0, SkipDirs.CountFileLines(empty));
+    }
+
+    [Fact]
+    public void CountFileLines_LargeFile_StreamsCorrectly()
+    {
+        // 跨 64KB 缓冲区边界：确保分块读取不丢行、不重复计数
+        var big = Path.Combine(_dir, "big.txt");
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < 20000; i++)
+            sb.Append("line ").Append(i).Append('\n');
+        File.WriteAllText(big, sb.ToString());
+        Assert.Equal(20000, SkipDirs.CountFileLines(big));
+    }
 }
