@@ -619,6 +619,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_file_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示每个目录的文件数（默认 false；设为 true 时在目录名后附加文件数，如 src/ (5 个文件)）" },
             ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；设为 true 时在文件名后附加编码信息，如 file.txt [UTF-8]）" },
             ["show_line_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件行数（默认 false；设为 true 时在文件名后附加行数，如 file.txt [42 lines]）" },
+            ["skip_empty_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空目录（默认 false；设为 true 时只列出包含文件的目录）" },
         },
     };
 
@@ -638,6 +639,7 @@ public sealed class ListDirectoryTool : ITool
         var showFileCount = ToolArgs.GetBool(args, "show_file_count", false);
         var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
         var showLineCount = ToolArgs.GetBool(args, "show_line_count", false);
+        var skipEmptyDirs = ToolArgs.GetBool(args, "skip_empty_dirs", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -668,6 +670,9 @@ public sealed class ListDirectoryTool : ITool
                         continue;
                     if (!filesOnly)
                     {
+                        // skip_empty_dirs=true:跳过没有文件的目录（递归检查）
+                        if (skipEmptyDirs && !Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories).Any())
+                            continue;
                         var suffix = "";
                         if (showModified)
                         {

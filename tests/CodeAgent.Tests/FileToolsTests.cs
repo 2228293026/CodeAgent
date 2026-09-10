@@ -4217,4 +4217,39 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("lines", output); // 无行数信息
     }
 
+    [Fact]
+    public async Task ListDirectory_SkipEmptyDirs_True_SkipsEmptyDirectories()
+    {
+        // skip_empty_dirs=true:跳过没有文件的目录
+        var emptyDir = Path.Combine(_dir, "emptydir");
+        var nonEmptyDir = Path.Combine(_dir, "nonemptydir");
+        Directory.CreateDirectory(emptyDir);
+        Directory.CreateDirectory(nonEmptyDir);
+        File.WriteAllText(Path.Combine(nonEmptyDir, "file.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["skip_empty_dirs"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("nonemptydir/", output); // 非空目录保留
+        // emptydir/ 不应作为独立行出现（注意：nonemptydir/ 包含 emptydir/ 子串，所以不能用 Contains）
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        Assert.DoesNotContain("emptydir/", lines); // 空目录被跳过
+    }
+
+    [Fact]
+    public async Task ListDirectory_SkipEmptyDirs_False_IncludesEmptyDirectories()
+    {
+        // skip_empty_dirs=false（默认）:包含空目录
+        Directory.CreateDirectory(Path.Combine(_dir, "emptydir2"));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["skip_empty_dirs"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("emptydir2/", output); // 空目录保留
+    }
+
 }
