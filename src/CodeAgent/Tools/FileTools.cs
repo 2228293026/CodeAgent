@@ -246,6 +246,7 @@ public sealed class WriteFileTool : ITool
             ["if_exists"] = new JsonObject { ["type"] = "string", ["description"] = "文件已存在时的处理方式：overwrite（默认，覆盖）、skip（跳过，不修改）、error（报错拒绝写入）" },
             ["preserve_timestamp"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留原文件修改时间（默认 false；设为 true 时覆盖后保持最后修改时间不变，便于增量构建/缓存）" },
             ["atomic"] = new JsonObject { ["type"] = "boolean", ["description"] = "原子写入（默认 false；设为 true 时先写临时文件再 rename，避免写入过程中断导致文件损坏）" },
+            ["dry_run"] = new JsonObject { ["type"] = "boolean", ["description"] = "仅预览改动（返回将发生的变更摘要，不写盘），默认 false" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -323,6 +324,7 @@ public sealed class WriteFileTool : ITool
         var preserveTimestamp = ToolArgs.GetBool(args, "preserve_timestamp", false);
         var oldTimestamp = hadFile ? File.GetLastWriteTime(full) : default;
         var atomic = ToolArgs.GetBool(args, "atomic", false);
+        var dryRun = ToolArgs.GetBool(args, "dry_run", false);
 
         string finalContent;
         if (targetEnding is not null)
@@ -369,6 +371,12 @@ public sealed class WriteFileTool : ITool
 
         try
         {
+            if (dryRun)
+            {
+                var dryRunBytes = Encoding.UTF8.GetByteCount(finalContent);
+                var dryRunLineCount = finalContent.Length == 0 ? 0 : finalContent.Split('\n').Length;
+                return $"[dry_run] 将写入 {dryRunBytes:N0} 字节（{dryRunLineCount} 行）→ {path}（{(hadFile ? "覆盖已有文件" : "新建文件")}）。未写盘。";
+            }
             var encoding = ToolArgs.GetString(args, "encoding");
             if (!string.IsNullOrEmpty(encoding))
             {

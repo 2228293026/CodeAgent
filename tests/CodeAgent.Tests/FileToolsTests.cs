@@ -4282,4 +4282,33 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("sha256", output); // 无哈希信息
     }
 
+    [Fact]
+    public async Task WriteFile_DryRun_True_ReturnsPreviewWithoutWriting()
+    {
+        // dry_run=true:返回预览摘要，不写盘
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "dryrun.txt", ["content"] = "hello dry run\n", ["dry_run"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("[dry_run]", result); // 预览标记
+        Assert.Contains("未写盘", result); // 未写盘提示
+        Assert.False(File.Exists(Path.Combine(_dir, "dryrun.txt"))); // 文件未创建
+    }
+
+    [Fact]
+    public async Task WriteFile_DryRun_False_WritesFile()
+    {
+        // dry_run=false（默认）:实际写入文件
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "dryrun2.txt", ["content"] = "hello real\n", ["dry_run"] = false }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("[dry_run]", result); // 无预览标记
+        Assert.Contains("hello real", File.ReadAllText(Path.Combine(_dir, "dryrun2.txt"))); // 文件已创建
+    }
+
 }
