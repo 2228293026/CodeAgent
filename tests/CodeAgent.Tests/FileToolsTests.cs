@@ -4031,4 +4031,40 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("dir3/ (", output); // 目录行后无括号
     }
 
+    [Fact]
+    public async Task WriteFile_PreserveTimestamp_True_KeepsOriginalModificationTime()
+    {
+        // preserve_timestamp=true:覆盖后保持原修改时间
+        var path = Path.Combine(_dir, "pt.txt");
+        File.WriteAllText(path, "old content\n");
+        var oldTime = File.GetLastWriteTime(path);
+        await Task.Delay(1100); // 确保时间不同
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "pt.txt", ["content"] = "new content\n", ["preserve_timestamp"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("new content\n", File.ReadAllText(path));
+        Assert.Equal(oldTime, File.GetLastWriteTime(path)); // 修改时间不变
+    }
+
+    [Fact]
+    public async Task WriteFile_PreserveTimestamp_False_UpdatesModificationTime()
+    {
+        // preserve_timestamp=false（默认）:更新修改时间
+        var path = Path.Combine(_dir, "pt2.txt");
+        File.WriteAllText(path, "old content\n");
+        var oldTime = File.GetLastWriteTime(path);
+        await Task.Delay(1100); // 确保时间不同
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "pt2.txt", ["content"] = "new content\n", ["preserve_timestamp"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("new content\n", File.ReadAllText(path));
+        Assert.NotEqual(oldTime, File.GetLastWriteTime(path)); // 修改时间已更新
+    }
+
 }

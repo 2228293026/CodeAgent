@@ -29,6 +29,7 @@ public sealed class ReadFileTool : ITool
             ["no_header"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示头部范围提示（默认 false）" },
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
             ["hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "在输出末尾附加 SHA256 哈希（默认 false；可用于校验文件完整性）" },
+            ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件统计信息（默认 false；设为 true 时在输出中附加行数、单词数、字符数、字节数）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "强制指定编码：utf8、utf8-bom、gbk、gb18030、ascii（默认自动检测）" },
             ["strip_bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉 UTF-8 BOM 头（默认 false；输出内容不带 BOM，方便复制粘贴）" },
             ["byte_offset"] = new JsonObject { ["type"] = "integer", ["description"] = "字节偏移（0 起，默认 0；与 byte_limit 配合使用，按字节范围读取而非按行）" },
@@ -92,6 +93,7 @@ public sealed class ReadFileTool : ITool
         var noHeader = ToolArgs.GetBool(args, "no_header", false);
         var isRaw = ToolArgs.GetBool(args, "raw", false);
         var includeHash = ToolArgs.GetBool(args, "hash", false);
+        var showStats = ToolArgs.GetBool(args, "stats", false);
         var encoding = ToolArgs.GetString(args, "encoding");
         if (isRaw)
         {
@@ -235,6 +237,7 @@ public sealed class WriteFileTool : ITool
             ["preserve_trailing_newline"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留末尾换行（默认 true；设为 false 时自动去掉 content 末尾的换行符）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "写入编码：utf8（默认，无 BOM）、utf8-bom（带 BOM）、gbk、gb18030、ascii；已有文件默认保留原编码，除非显式指定" },
             ["if_exists"] = new JsonObject { ["type"] = "string", ["description"] = "文件已存在时的处理方式：overwrite（默认，覆盖）、skip（跳过，不修改）、error（报错拒绝写入）" },
+            ["preserve_timestamp"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留原文件修改时间（默认 false；设为 true 时覆盖后保持最后修改时间不变，便于增量构建/缓存）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -308,6 +311,9 @@ public sealed class WriteFileTool : ITool
             if (ifExists == "error")
                 throw new ToolException($"文件已存在，拒绝写入: {path}（如需覆盖请移除 if_exists=error 或设为 overwrite）");
         }
+
+        var preserveTimestamp = ToolArgs.GetBool(args, "preserve_timestamp", false);
+        var oldTimestamp = hadFile ? File.GetLastWriteTime(full) : default;
 
         string finalContent;
         if (targetEnding is not null)
@@ -386,6 +392,10 @@ public sealed class WriteFileTool : ITool
         catch (IOException ex)
         {
             throw new ToolException($"写入失败: {ex.Message}");
+        }
+        if (preserveTimestamp && hadFile && oldTimestamp != default)
+        {
+            File.SetLastWriteTime(full, oldTimestamp);
         }
         ctx.Undo.Push(new UndoEntry
         {
