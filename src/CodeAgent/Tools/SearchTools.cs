@@ -81,7 +81,9 @@ public sealed class GrepTool : ITool
         {
             ["pattern"] = new JsonObject { ["type"] = "string", ["description"] = "正则表达式" },
             ["path"] = new JsonObject { ["type"] = "string", ["description"] = "搜索的文件或目录，默认工作区根目录" },
-            ["context"] = new JsonObject { ["type"] = "integer", ["description"] = "上下文行数（默认 3，最大 10）" },
+            ["context"] = new JsonObject { ["type"] = "integer", ["description"] = "上下文行数（默认 3，最大 10；被 context_before/context_after 覆盖时忽略）" },
+            ["context_before"] = new JsonObject { ["type"] = "integer", ["description"] = "匹配行前的上下文行数（默认 0，最大 10；与 context 互斥）" },
+            ["context_after"] = new JsonObject { ["type"] = "integer", ["description"] = "匹配行后的上下文行数（默认 0，最大 10；与 context 互斥）" },
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最大结果数（默认 50，最大 500）" },
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅目标文件/目录本身，默认无限制）" },
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000；匹配内容过长时压缩输出）" },
@@ -105,8 +107,15 @@ public sealed class GrepTool : ITool
             throw new ToolException("缺少必填参数 pattern");
 
         var target = ToolArgs.GetString(args, "path");
+        var contextBefore = ToolArgs.GetInt(args, "context_before", -1);
+        if (contextBefore > 10) contextBefore = 10;
+        var contextAfter = ToolArgs.GetInt(args, "context_after", -1);
+        if (contextAfter > 10) contextAfter = 10;
         var context = Math.Clamp(ToolArgs.GetInt(args, "context", 3), 0, 10);
         var max = Math.Clamp(ToolArgs.GetInt(args, "max_results", 50), 1, 500);
+        var useAsymmetric = contextBefore >= 0 || contextAfter >= 0;
+        var before = useAsymmetric ? (contextBefore >= 0 ? contextBefore : context) : context;
+        var after = useAsymmetric ? (contextAfter >= 0 ? contextAfter : context) : context;
         var depth = ToolArgs.GetInt(args, "depth", -1);
         var maxLineLength = Math.Clamp(ToolArgs.GetInt(args, "max_line_length", 2000), 0, 50000);
         var truncateLine = maxLineLength == 0 ? (Func<string, string>)(s => s) : s => TextUtil.TruncateLine(s, maxLineLength);
@@ -244,13 +253,13 @@ public sealed class GrepTool : ITool
                         continue;
                     hits++;
                     sb.AppendLine($"{rel}:{i + 1}: {truncateLine(line)}");
-                    for (int c = Math.Max(0, i - context); c <= Math.Min(lines.Length - 1, i + context); c++)
+                    for (int c = Math.Max(0, i - before); c <= Math.Min(lines.Length - 1, i + after); c++)
                     {
                         // 跳过已作为上个匹配上下文输出过的行，避免重复
                         if (c != i && c > printedUntil)
                             sb.AppendLine($"  {c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}");
                     }
-                    printedUntil = Math.Max(printedUntil, Math.Min(lines.Length - 1, i + context));
+                    printedUntil = Math.Max(printedUntil, Math.Min(lines.Length - 1, i + after));
                     sb.AppendLine();
                 }
             }

@@ -444,4 +444,31 @@ public class SearchToolsEdgeTests : IDisposable
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("target", result); // 找到了文本内容
     }
+
+    [Fact]
+    public async Task Grep_ContextBeforeAfter_AsymmetricContext()
+    {
+        // context_before=1, context_after=2:非对称上下文
+        File.WriteAllText(PathOf("asym.txt"), "a\nb\nMATCH\nd\ne\n");
+        var args = new JsonObject { ["pattern"] = "MATCH", ["context_before"] = 1, ["context_after"] = 2 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("  2| b", result); // 前 1 行
+        Assert.Contains("3: MATCH", result); // 匹配行（格式:行号:内容）
+        Assert.Contains("  4| d", result); // 后 2 行
+        Assert.Contains("  5| e", result); // 后 2 行
+        Assert.DoesNotContain("  1| a", result); // 前 1 行之外的不显示
+    }
+
+    [Fact]
+    public async Task Grep_ContextBeforeAfter_FallbackToContext()
+    {
+        // 只给 context_before:context_after 回退到对称 context
+        File.WriteAllText(PathOf("asym2.txt"), "a\nb\nMATCH\nd\ne\n");
+        var args = new JsonObject { ["pattern"] = "MATCH", ["context"] = 1 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("  2| b", result); // 前 1 行
+        Assert.Contains("  4| d", result); // 后 1 行
+        Assert.DoesNotContain("  1| a", result); // 前 1 行之外
+        Assert.DoesNotContain("  5| e", result); // 后 1 行之外
+    }
 }
