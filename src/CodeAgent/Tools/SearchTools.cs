@@ -168,6 +168,7 @@ public sealed class GrepTool : ITool
             ["show_word_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示单词数（默认 false；files_only=true 时在文件路径后附加单词数，如 file.txt [42 words]）" },
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；files_only=true 时在文件路径后附加哈希值，如 file.txt (sha256:abc123...)）" },
             ["show_line_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示行数（默认 false；files_only=true 时在文件路径后附加行数，如 file.txt [42 lines]）" },
+            ["show_total_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示匹配文件总大小（默认 false；files_only=true 时在输出末尾附加所有匹配文件的总大小）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -237,6 +238,7 @@ public sealed class GrepTool : ITool
         var sb = new StringBuilder();
         var hits = 0;
         int totalMatches = 0;
+        long totalSize = 0;
         var invert = ToolArgs.GetBool(args, "invert", false);
         var showStats = ToolArgs.GetBool(args, "stats", false);
         var showTotalMatches = ToolArgs.GetBool(args, "show_total_matches", false);
@@ -246,6 +248,7 @@ public sealed class GrepTool : ITool
         var showWordCount = ToolArgs.GetBool(args, "show_word_count", false);
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
         var showLineCount = ToolArgs.GetBool(args, "show_line_count", false);
+        var showTotalSize = ToolArgs.GetBool(args, "show_total_size", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -306,6 +309,7 @@ public sealed class GrepTool : ITool
                     if (fileHits)
                     {
                         hits++;
+                        totalSize += new FileInfo(path).Length;
                         var extra = "";
                         if (showModified)
                         {
@@ -501,6 +505,11 @@ public sealed class GrepTool : ITool
             result += $"\n[stats] 扫描 {filesScanned} 个文件，跳过 {filesSkipped} 个，匹配 {hits} 处";
         if (showTotalMatches && totalMatches > 0)
             result += $"\n[total] 共 {totalMatches} 处匹配";
+        if (showTotalSize && totalSize > 0)
+        {
+            var sizeStr = totalSize < 1024 ? $"{totalSize} B" : totalSize < 1024 * 1024 ? $"{totalSize / 1024.0:F1} KB" : $"{totalSize / 1024.0 / 1024.0:F1} MB";
+            result += $"\n[size] 匹配文件总大小: {sizeStr}";
+        }
         return result;
     }
 

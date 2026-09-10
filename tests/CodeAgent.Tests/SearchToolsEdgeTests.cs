@@ -946,4 +946,27 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("lines", result); // 无行数信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowTotalSize_True_DisplaysTotalSize()
+    {
+        // show_total_size=true + files_only=true:输出末尾显示匹配文件总大小
+        File.WriteAllText(PathOf("gts1.txt"), new string('a', 1024));
+        File.WriteAllText(PathOf("gts2.txt"), new string('b', 2048));
+        var args = new JsonObject { ["pattern"] = "a", ["files_only"] = true, ["show_total_size"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("[size] 匹配文件总大小:", result); // 总大小标记
+        Assert.Contains("1.0 KB", result); // 1024 字节 = 1.0 KB
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowTotalSize_False_NoTotalSizeInfo()
+    {
+        // show_total_size=false（默认）:不显示总大小
+        File.WriteAllText(PathOf("gts3.txt"), new string('a', 100));
+        var args = new JsonObject { ["pattern"] = "a", ["files_only"] = true, ["show_total_size"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gts3.txt", result);
+        Assert.DoesNotContain("[size]", result); // 无总大小信息
+    }
+
 }
