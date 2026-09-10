@@ -115,6 +115,7 @@ public sealed class GrepTool : ITool
             ["binary_files"] = new JsonObject { ["type"] = "string", ["description"] = "二进制文件处理：skip（默认，跳过）、text（当作文本搜索）、without-match（视为不匹配）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["line_number"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示行号（默认 true；设为 false 时输出格式为 file: content，去掉行号前缀，方便模型直接提取匹配文本）" },
+            ["output_mode"] = new JsonObject { ["type"] = "string", ["description"] = "输出模式：text（默认，file:line: content）、content（仅匹配文本，无文件路径和行号）、content_without_filename（行号: 内容，无文件路径）、content_without_line_number（文件: 内容，无行号）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -159,6 +160,7 @@ public sealed class GrepTool : ITool
         // 跨行匹配：让 `.` 与 `.*` 能匹配换行符（否则 multiline 只改 ^/$ 语义，'.*' 仍被 \n 截断）
         var multiline = ToolArgs.GetBool(args, "multiline", false);
         var showLineNumber = ToolArgs.GetBool(args, "line_number", true);
+        var outputMode = ToolArgs.GetString(args, "output_mode") ?? "text";
         if (multiline)
             opts |= RegexOptions.Singleline;
         // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
@@ -255,9 +257,29 @@ public sealed class GrepTool : ITool
                         var startLine = 1 + CountNewlines(text, 0, m.Index);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
                         var spanLines = m.Value.Replace("\r", "").Split('\n');
-                        sb.AppendLine(showLineNumber ? $"{rel}:{startLine}: {truncateLine(spanLines[0])}" : $"{rel}: {truncateLine(spanLines[0])}");
+                        string firstLine;
+                        if (outputMode == "content")
+                            firstLine = truncateLine(spanLines[0]);
+                        else if (outputMode == "content_without_filename")
+                            firstLine = showLineNumber ? $"{startLine}: {truncateLine(spanLines[0])}" : truncateLine(spanLines[0]);
+                        else if (outputMode == "content_without_line_number")
+                            firstLine = $"{rel}: {truncateLine(spanLines[0])}";
+                        else
+                            firstLine = showLineNumber ? $"{rel}:{startLine}: {truncateLine(spanLines[0])}" : $"{rel}: {truncateLine(spanLines[0])}";
+                        sb.AppendLine(firstLine);
                         for (int li = 1; li < Math.Min(spanLines.Length, 4); li++)
-                            sb.AppendLine(showLineNumber ? $"  +{li}| {truncateLine(spanLines[li])}" : $"  {truncateLine(spanLines[li])}");
+                        {
+                            string contLine;
+                            if (outputMode == "content")
+                                contLine = truncateLine(spanLines[li]);
+                            else if (outputMode == "content_without_filename")
+                                contLine = showLineNumber ? $"+{li}| {truncateLine(spanLines[li])}" : truncateLine(spanLines[li]);
+                            else if (outputMode == "content_without_line_number")
+                                contLine = $"  {truncateLine(spanLines[li])}";
+                            else
+                                contLine = showLineNumber ? $"  +{li}| {truncateLine(spanLines[li])}" : $"  {truncateLine(spanLines[li])}";
+                            sb.AppendLine(contLine);
+                        }
                         if (spanLines.Length > 4)
                             sb.AppendLine($"  …(命中跨 {startLine}-{endLine} 共 {spanLines.Length} 行)");
                         sb.AppendLine();
@@ -273,12 +295,32 @@ public sealed class GrepTool : ITool
                     if (!Hit(line))
                         continue;
                     hits++;
-                    sb.AppendLine(showLineNumber ? $"{rel}:{i + 1}: {truncateLine(line)}" : $"{rel}: {truncateLine(line)}");
+                    string matchLine;
+                    if (outputMode == "content")
+                        matchLine = truncateLine(line);
+                    else if (outputMode == "content_without_filename")
+                        matchLine = showLineNumber ? $"{i + 1}: {truncateLine(line)}" : truncateLine(line);
+                    else if (outputMode == "content_without_line_number")
+                        matchLine = $"{rel}: {truncateLine(line)}";
+                    else
+                        matchLine = showLineNumber ? $"{rel}:{i + 1}: {truncateLine(line)}" : $"{rel}: {truncateLine(line)}";
+                    sb.AppendLine(matchLine);
                     for (int c = Math.Max(0, i - before); c <= Math.Min(lines.Length - 1, i + after); c++)
                     {
                         // 跳过已作为上个匹配上下文输出过的行，避免重复
                         if (c != i && c > printedUntil)
-                            sb.AppendLine(showLineNumber ? $"  {c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}" : $"  {truncateLine(lines[c].TrimEnd('\r'))}");
+                        {
+                            string ctxLine;
+                            if (outputMode == "content")
+                                ctxLine = truncateLine(lines[c].TrimEnd('\r'));
+                            else if (outputMode == "content_without_filename")
+                                ctxLine = showLineNumber ? $"{c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}" : truncateLine(lines[c].TrimEnd('\r'));
+                            else if (outputMode == "content_without_line_number")
+                                ctxLine = $"  {truncateLine(lines[c].TrimEnd('\r'))}";
+                            else
+                                ctxLine = showLineNumber ? $"  {c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}" : $"  {truncateLine(lines[c].TrimEnd('\r'))}";
+                            sb.AppendLine(ctxLine);
+                        }
                     }
                     printedUntil = Math.Max(printedUntil, Math.Min(lines.Length - 1, i + after));
                     sb.AppendLine();

@@ -521,4 +521,39 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.Equal("large.txt", lines[0]);
         Assert.Equal("small.txt", lines[1]);
     }
+
+    [Fact]
+    public async Task Grep_OutputMode_Content_ReturnsOnlyMatches()
+    {
+        // output_mode=content:匹配文本前无文件路径和行号前缀
+        File.WriteAllText(PathOf("om.txt"), "alpha\nbeta\ngamma\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["output_mode"] = "content", ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("beta", result); // 匹配文本存在
+        Assert.DoesNotContain("om.txt:", result); // 无文件路径前缀
+        Assert.DoesNotContain("2:", result); // 无行号前缀
+    }
+
+    [Fact]
+    public async Task Grep_OutputMode_ContentWithoutFilename_ReturnsLineAndContent()
+    {
+        // output_mode=content_without_filename:输出行号: 内容，无文件路径
+        File.WriteAllText(PathOf("om2.txt"), "alpha\nbeta\ngamma\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["output_mode"] = "content_without_filename" };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("2: beta", result);
+        Assert.DoesNotContain("om2.txt", result); // 无文件路径
+    }
+
+    [Fact]
+    public async Task Grep_OutputMode_ContentWithoutLineNumber_ReturnsFileAndContent()
+    {
+        // output_mode=content_without_line_number:输出文件: 内容，无行号
+        File.WriteAllText(PathOf("om3.txt"), "alpha\nbeta\ngamma\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["output_mode"] = "content_without_line_number" };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("om3.txt: beta", result);
+        Assert.DoesNotContain("om3.txt:2:", result); // 无行号
+    }
+
 }
