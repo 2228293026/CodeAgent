@@ -170,6 +170,7 @@ public sealed class GrepTool : ITool
             ["show_line_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示行数（默认 false；files_only=true 时在文件路径后附加行数，如 file.txt [42 lines]）" },
             ["show_total_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示匹配文件总大小（默认 false；files_only=true 时在输出末尾附加所有匹配文件的总大小）" },
             ["show_first_match"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示首个匹配行（默认 false；files_only=true 时在文件路径后附加第一个匹配行，便于快速预览）" },
+            ["show_absolute_path"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示绝对路径（默认 false；files_only=true 时显示完整绝对路径而非相对路径）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -251,6 +252,7 @@ public sealed class GrepTool : ITool
         var showLineCount = ToolArgs.GetBool(args, "show_line_count", false);
         var showTotalSize = ToolArgs.GetBool(args, "show_total_size", false);
         var showFirstMatch = ToolArgs.GetBool(args, "show_first_match", false);
+        var showAbsolutePath = ToolArgs.GetBool(args, "show_absolute_path", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -353,7 +355,7 @@ public sealed class GrepTool : ITool
                             if (firstMatch != null)
                                 extra += $" | {truncateLine(firstMatch)}";
                         }
-                        sb.AppendLine(rel + extra);
+                        sb.AppendLine((showAbsolutePath ? path.Replace('\\', '/') : rel) + extra);
                     }
                     return;
                 }

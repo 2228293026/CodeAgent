@@ -990,4 +990,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("|", result); // 无匹配行分隔符
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowAbsolutePath_True_DisplaysFullPath()
+    {
+        // show_absolute_path=true + files_only=true:显示完整绝对路径
+        File.WriteAllText(PathOf("gap.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_absolute_path"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains(_dir.Replace("\\", "/"), result); // 包含工作区绝对路径
+        Assert.Contains("gap.txt", result);
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowAbsolutePath_False_UsesRelativePath()
+    {
+        // show_absolute_path=false（默认）:使用相对路径
+        File.WriteAllText(PathOf("gap2.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_absolute_path"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gap2.txt", result);
+        Assert.DoesNotContain(_dir.Replace("\\", "/"), result); // 不包含绝对路径
+    }
+
 }
