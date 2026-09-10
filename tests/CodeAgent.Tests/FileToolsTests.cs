@@ -3564,6 +3564,28 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Undo_AfterEncodingChange_RestoresOriginalEncoding()
+    {
+        // 原文件 UTF-8，用 encoding=gbk 覆盖后撤销：必须按「原编码」恢复。
+        // 撤销条目若在写盘后才探测编码，记录的是新文件的 GBK → 旧文本被写成 GBK，字节与原文件不符。
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var path = Path.Combine(_dir, "enc-undo.txt");
+        File.WriteAllBytes(path, new System.Text.UTF8Encoding(false).GetBytes("原始内容"));
+
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "enc-undo.txt", ["content"] = "新内容", ["encoding"] = "gbk" },
+            ctx, CancellationToken.None);
+        Assert.Equal("新内容", System.Text.Encoding.GetEncoding("GB18030").GetString(File.ReadAllBytes(path))); // 确已写成 GBK
+
+        Assert.NotNull(ctx.Undo.TryUndo());
+
+        // 撤销后必须与原始字节一致（UTF-8 无 BOM），而不是被写成 GBK
+        Assert.Equal(new System.Text.UTF8Encoding(false).GetBytes("原始内容"), File.ReadAllBytes(path));
+    }
+
+    [Fact]
     public async Task ReadFile_PlainUtf8_NoEncodingNote()
     {
         // 纯 UTF-8 文件不应被附编码提示（避免噪声，也不破坏现有逐字断言）

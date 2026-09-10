@@ -283,6 +283,9 @@ public sealed class WriteFileTool : ITool
         // 记录撤销信息（大文件不记录，避免内存占用）；先写入成功再入栈，失败不污染撤销历史
         var hadFile = File.Exists(full);
         string? old = null;
+        // 编码必须在写盘「之前」探测：写盘后再探测拿到的是新文件的编码。
+        // encoding=gbk 覆盖 UTF-8 文件时，撤销会把旧文本按 GBK 写回，字节与原文件不符。
+        var originalEncoding = hadFile ? TextUtil.DetectFileEncoding(full) : null;
         if (hadFile)
         {
             var info = new FileInfo(full);
@@ -453,7 +456,7 @@ public sealed class WriteFileTool : ITool
             Path = full,
             OldText = old,
             HadFile = hadFile,
-            EncodingName = hadFile ? TextUtil.DetectFileEncoding(full) : null, // 撤销按原编码写回
+            EncodingName = originalEncoding, // 写盘前探测的原编码（不是写盘后的新编码）
         });
 
         var bytes = Encoding.UTF8.GetByteCount(finalContent);
@@ -591,6 +594,9 @@ public sealed class EditFileTool : ITool
         // 记录撤销信息：小文件记录完整原文（撤销可精确恢复），大文件退化为 old/new 对；
         // 先写入成功再入栈，失败不污染撤销历史
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
+        // 编码必须在写盘「之前」探测：写盘后再探测拿到的是新文件的编码，
+        // 撤销会把旧文本按新编码写回（GBK 文件被 UTF-8 化后撤销回来就成了乱码）
+        var originalEncoding = TextUtil.DetectFileEncoding(full);
 
         // 生成 unified diff（show_diff 时附加到返回结果）
         string? diff = null;
@@ -647,7 +653,7 @@ public sealed class EditFileTool : ITool
             Kind = "edit",
             Path = full,
             OldText = fullOld ?? oldString, // 完整原文（小文件）或修改前的原文片段（大文件）
-            EncodingName = TextUtil.DetectFileEncoding(full), // 撤销按原编码写回
+            EncodingName = originalEncoding, // 写盘前探测的原编码
             NewText = fullOld is null ? newString : null, // 仅大文件退化时使用
         });
 

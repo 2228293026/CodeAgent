@@ -189,7 +189,9 @@ public sealed class ApplyPatchTool : ITool
                 Kind = "write",
                 Path = full,
                 HadFile = false,
-                EncodingName = TextUtil.DetectFileEncoding(full),
+                // 新建文件没有「原编码」：撤销即删除该文件，此字段不参与恢复。
+                // 写盘后探测只会拿到新文件的编码（误导性数据），故显式留空。
+                EncodingName = null,
             });
             return $"已创建 {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk)";
         }
@@ -217,6 +219,9 @@ public sealed class ApplyPatchTool : ITool
             newText = newText.Replace("\n", "\r\n");
 
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
+        // 编码必须在写盘「之前」探测：写盘后再探测拿到的是新文件的编码，
+        // 撤销会把旧文本按新编码写回（GBK 文件被 UTF-8 化后撤销回来就成了乱码）
+        var originalEncoding = TextUtil.DetectFileEncoding(full);
         if (backup)
         {
             var bak = full + ".bak";
@@ -230,7 +235,7 @@ public sealed class ApplyPatchTool : ITool
             Path = full,
             OldText = fullOld ?? text,
             NewText = fullOld is null ? text : null,
-            EncodingName = TextUtil.DetectFileEncoding(full),
+            EncodingName = originalEncoding, // 写盘前探测的原编码
         });
 
         return $"已应用 {file.Hunks.Count} 个 hunk → {file.Path}(-{stat.removed} +{stat.added})";
