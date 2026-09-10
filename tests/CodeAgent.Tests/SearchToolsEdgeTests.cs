@@ -1055,4 +1055,25 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[.txt]", result); // 无扩展名信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowExtension_True_DisplaysFileExtension()
+    {
+        // show_extension=true + files_only=true:文件路径后附加扩展名
+        File.WriteAllText(PathOf("ge3.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_extension"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ge3.txt [.txt]", result); // 扩展名格式
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowExtension_False_NoExtensionInfo()
+    {
+        // show_extension=false（默认）:不显示扩展名
+        File.WriteAllText(PathOf("ge4.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_extension"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ge4.txt", result);
+        Assert.DoesNotContain("[.txt]", result); // 无扩展名信息
+    }
+
 }
