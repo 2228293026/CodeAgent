@@ -4133,4 +4133,33 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("[stats]", output); // 无统计信息
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowEncoding_True_DisplaysEncodingInfo()
+    {
+        // show_encoding=true:文件名后附加编码信息
+        File.WriteAllText(Path.Combine(_dir, "enc.txt"), "hello world", new System.Text.UTF8Encoding(true));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_encoding"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("enc.txt [UTF-8 BOM]", output); // 显示 UTF-8 BOM 编码
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowEncoding_False_NoEncodingInfo()
+    {
+        // show_encoding=false（默认）:不显示编码信息
+        File.WriteAllText(Path.Combine(_dir, "enc2.txt"), "hello world");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_encoding"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("enc2.txt", output);
+        Assert.DoesNotContain("[", output); // 无编码括号
+    }
+
 }

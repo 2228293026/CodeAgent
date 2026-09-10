@@ -605,6 +605,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在文件名后附加大小，如 file.txt (1.2 KB)）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示修改时间（默认 false；设为 true 时在文件名后附加最后修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_file_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示每个目录的文件数（默认 false；设为 true 时在目录名后附加文件数，如 src/ (5 个文件)）" },
+            ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；设为 true 时在文件名后附加编码信息，如 file.txt [UTF-8]）" },
         },
     };
 
@@ -622,6 +623,7 @@ public sealed class ListDirectoryTool : ITool
         var showSize = ToolArgs.GetBool(args, "show_size", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showFileCount = ToolArgs.GetBool(args, "show_file_count", false);
+        var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -697,6 +699,12 @@ public sealed class ListDirectoryTool : ITool
                         {
                             var modified = File.GetLastWriteTime(f).ToString("yyyy-MM-dd HH:mm");
                             sb.AppendLine($"{indent}{fileName} ({modified})");
+                        }
+                        else if (showEncoding)
+                        {
+                            var enc = TextUtil.DetectFileEncoding(f) ?? "UTF-8";
+                            var encLabel = enc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => enc };
+                            sb.AppendLine($"{indent}{fileName} [{encLabel}]");
                         }
                         else
                         {
