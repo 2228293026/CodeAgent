@@ -1196,4 +1196,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("text/plain", result); // 无 MIME 类型信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowPermissions_True_DisplaysFilePermissions()
+    {
+        // show_permissions=true + files_only=true:文件路径后附加权限信息
+        File.WriteAllText(PathOf("gfps.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_permissions"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gfps.txt", result); // 文件名
+        Assert.Contains("rw-", result); // 权限标记包含读写位
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowPermissions_False_NoPermissionsInfo()
+    {
+        // show_permissions=false（默认）:不显示权限
+        File.WriteAllText(PathOf("gfps2.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_permissions"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gfps2.txt", result);
+        Assert.DoesNotContain("rw-", result); // 无权限信息
+    }
+
 }
