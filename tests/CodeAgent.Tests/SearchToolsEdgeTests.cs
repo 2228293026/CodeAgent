@@ -880,4 +880,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("words", result); // 无单词数信息
     }
 
+    [Fact]
+    public async Task Glob_ShowHash_True_DisplaysShortHash()
+    {
+        // show_hash=true:文件路径后附加 SHA256 哈希（前 8 位）
+        File.WriteAllText(PathOf("gh.txt"), "hello hash\n");
+        var args = new JsonObject { ["pattern"] = "gh.txt", ["show_hash"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gh.txt (sha256:", result); // 哈希格式
+        Assert.Matches(@"sha256:[0-9a-fA-F]{8}\.\.\.", result); // 匹配前 8 位十六进制 + ...
+    }
+
+    [Fact]
+    public async Task Glob_ShowHash_False_NoHashInfo()
+    {
+        // show_hash=false（默认）:不显示哈希
+        File.WriteAllText(PathOf("gh2.txt"), "hello hash\n");
+        var args = new JsonObject { ["pattern"] = "gh2.txt", ["show_hash"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gh2.txt", result);
+        Assert.DoesNotContain("sha256", result); // 无哈希信息
+    }
+
 }

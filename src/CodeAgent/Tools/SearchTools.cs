@@ -25,6 +25,7 @@ public sealed class GlobTool : ITool
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；设为 true 时在路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在路径后附加文件大小，如 file.txt (1.5 KB)）" },
             ["show_byte_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示字节数（默认 false；设为 true 时在路径后附加精确字节数，如 file.txt (1536 bytes)）" },
+            ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在路径后附加哈希值，如 file.txt (sha256:abc123...)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -53,6 +54,7 @@ public sealed class GlobTool : ITool
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);
         var showByteCount = ToolArgs.GetBool(args, "show_byte_count", false);
+        var showHash = ToolArgs.GetBool(args, "show_hash", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -90,7 +92,7 @@ public sealed class GlobTool : ITool
             results = tuples.Select(t => t.r).ToList();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
-        var shown = showModified || showSize || showByteCount
+        var shown = showModified || showSize || showByteCount || showHash
             ? string.Join('\n', results.Take(displayLimit).Select(r =>
             {
                 var full = Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar));
@@ -109,6 +111,12 @@ public sealed class GlobTool : ITool
                 {
                     var modified = File.GetLastWriteTime(full).ToString("yyyy-MM-dd HH:mm");
                     parts.Add(modified);
+                }
+                if (showHash && File.Exists(full))
+                {
+                    using var sha = System.Security.Cryptography.SHA256.Create();
+                    var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(full)));
+                    parts.Add($"sha256:{hash[..8]}..."); // 只显示前 8 位，避免输出过长
                 }
                 return parts.Count > 0 ? $"{r} ({string.Join(", ", parts)})" : r;
             }))
