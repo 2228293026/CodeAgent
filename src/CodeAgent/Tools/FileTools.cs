@@ -618,6 +618,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示修改时间（默认 false；设为 true 时在文件名后附加最后修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_file_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示每个目录的文件数（默认 false；设为 true 时在目录名后附加文件数，如 src/ (5 个文件)）" },
             ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；设为 true 时在文件名后附加编码信息，如 file.txt [UTF-8]）" },
+            ["show_line_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件行数（默认 false；设为 true 时在文件名后附加行数，如 file.txt [42 lines]）" },
         },
     };
 
@@ -636,6 +637,7 @@ public sealed class ListDirectoryTool : ITool
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showFileCount = ToolArgs.GetBool(args, "show_file_count", false);
         var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
+        var showLineCount = ToolArgs.GetBool(args, "show_line_count", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -717,6 +719,11 @@ public sealed class ListDirectoryTool : ITool
                             var enc = TextUtil.DetectFileEncoding(f) ?? "UTF-8";
                             var encLabel = enc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => enc };
                             sb.AppendLine($"{indent}{fileName} [{encLabel}]");
+                        }
+                        else if (showLineCount)
+                        {
+                            var lines = File.ReadAllLines(f);
+                            sb.AppendLine($"{indent}{fileName} [{lines.Length} lines]");
                         }
                         else
                         {

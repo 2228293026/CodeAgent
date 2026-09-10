@@ -4188,4 +4188,33 @@ public class FileToolsTests : IDisposable
         Assert.Equal("direct content\n", File.ReadAllText(Path.Combine(_dir, "direct.txt")));
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowLineCount_True_DisplaysLineCount()
+    {
+        // show_line_count=true:文件名后附加行数
+        File.WriteAllText(Path.Combine(_dir, "lc.txt"), "line1\nline2\nline3\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_line_count"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("lc.txt [3 lines]", output); // 3 行
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowLineCount_False_NoLineCountInfo()
+    {
+        // show_line_count=false（默认）:不显示行数
+        File.WriteAllText(Path.Combine(_dir, "lc2.txt"), "line1\nline2\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_line_count"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("lc2.txt", output);
+        Assert.DoesNotContain("lines", output); // 无行数信息
+    }
+
 }
