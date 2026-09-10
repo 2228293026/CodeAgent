@@ -4252,4 +4252,34 @@ public class FileToolsTests : IDisposable
         Assert.Contains("emptydir2/", output); // 空目录保留
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowHash_True_DisplaysShortHash()
+    {
+        // show_hash=true:文件名后附加 SHA256 哈希（前 8 位）
+        File.WriteAllText(Path.Combine(_dir, "lh.txt"), "hello hash\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_hash"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("lh.txt (sha256:", output); // 哈希格式
+        Assert.Matches(@"sha256:[0-9a-fA-F]{8}\.\.\.", output); // 匹配前 8 位十六进制 + ...
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowHash_False_NoHashInfo()
+    {
+        // show_hash=false（默认）:不显示哈希
+        File.WriteAllText(Path.Combine(_dir, "lh2.txt"), "hello hash\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_hash"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("lh2.txt", output);
+        Assert.DoesNotContain("sha256", output); // 无哈希信息
+    }
+
 }
