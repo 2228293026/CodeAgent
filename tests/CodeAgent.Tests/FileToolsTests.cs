@@ -3703,4 +3703,33 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("(", output); // 无大小括号
     }
 
+    [Fact]
+    public async Task ReadFile_ByteOffset_ReadsFromOffset()
+    {
+        // byte_offset=5:从第 5 个字节开始读取
+        File.WriteAllText(Path.Combine(_dir, "bo.txt"), "Hello World!");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bo.txt", ["byte_offset"] = 6, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("World!", output); // 从第 6 字节开始（0 基）
+        Assert.DoesNotContain("Hello", output); // 前面的内容被跳过
+    }
+
+    [Fact]
+    public async Task ReadFile_ByteLimit_RestrictsBytesRead()
+    {
+        // byte_limit=5:最多读取 5 个字节
+        File.WriteAllText(Path.Combine(_dir, "bl.txt"), "Hello World!");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bl.txt", ["byte_limit"] = 5, ["no_header"] = true, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("Hello", output.Trim()); // 只读前 5 字节
+    }
+
 }

@@ -80,6 +80,8 @@ public sealed class ReadFileTool : ITool
         }
 
         var stripBom = ToolArgs.GetBool(args, "strip_bom", false);
+        var byteOffset = Math.Clamp(ToolArgs.GetInt(args, "byte_offset", 0), 0, int.MaxValue);
+        var byteLimit = Math.Clamp(ToolArgs.GetInt(args, "byte_limit", 0), 0, 2_000_000);
         string text;
         // 先检测文件是否带 UTF-8 BOM（ReadTextSmart 内部已去掉，这里只探测头部）
         bool hadBom = false;
@@ -116,6 +118,16 @@ public sealed class ReadFileTool : ITool
         // strip_bom=true:ReadTextSmart 已默认去掉 BOM，无需额外处理
         if (SkipDirs.LooksBinary(text))
             throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
+
+        // byte_offset/byte_limit:按字节范围读取（用于二进制文件或大文件分段）
+        if (byteOffset > 0 || byteLimit > 0)
+        {
+            var bytes = await File.ReadAllBytesAsync(full, ct);
+            var byteStart = Math.Min(byteOffset, bytes.Length);
+            var byteEnd = byteLimit > 0 ? Math.Min(byteStart + byteLimit, bytes.Length) : bytes.Length;
+            var slice = bytes[byteStart..byteEnd];
+            text = System.Text.Encoding.UTF8.GetString(slice);
+        }
 
         var lines = text.Split('\n');
         // 去掉末尾换行产生的空段（与 ReadAllLinesAsync 语义一致），避免幽灵空行
