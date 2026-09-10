@@ -135,6 +135,7 @@ public sealed class GrepTool : ITool
             ["literal"] = new JsonObject { ["type"] = "boolean", ["description"] = "字面量搜索（默认 false；设为 true 时 pattern 被视为普通字符串而非正则表达式，自动转义特殊字符）" },
             ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示搜索统计（默认 false；设为 true 时在输出末尾附加统计信息，如扫描文件数、匹配数、耗时）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；files_only=true 时在文件路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
+            ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；files_only=true 时在文件路径后附加编码信息，如 file.txt (UTF-8 BOM)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -207,6 +208,7 @@ public sealed class GrepTool : ITool
         var invert = ToolArgs.GetBool(args, "invert", false);
         var showStats = ToolArgs.GetBool(args, "stats", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
+        var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -267,16 +269,21 @@ public sealed class GrepTool : ITool
                     if (fileHits)
                     {
                         hits++;
+                        var extra = "";
                         if (showModified)
                         {
                             var fullPath = Path.Combine(full, rel.Replace('/', Path.DirectorySeparatorChar));
                             var modified = File.Exists(fullPath) ? File.GetLastWriteTime(fullPath).ToString("yyyy-MM-dd HH:mm") : "";
-                            sb.AppendLine(modified.Length > 0 ? $"{rel} ({modified})" : rel);
+                            if (modified.Length > 0)
+                                extra += $" ({modified})";
                         }
-                        else
+                        if (showEncoding)
                         {
-                            sb.AppendLine(rel);
+                            var enc = TextUtil.DetectFileEncoding(full) ?? "UTF-8";
+                            var encLabel = enc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => enc };
+                            extra += $" [{encLabel}]";
                         }
+                        sb.AppendLine(rel + extra);
                     }
                     return;
                 }

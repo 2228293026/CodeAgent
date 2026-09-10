@@ -750,4 +750,25 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("(", result); // 无时间括号
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowEncoding_True_DisplaysEncodingInfo()
+    {
+        // show_encoding=true + files_only=true:文件路径后附加编码信息
+        File.WriteAllText(PathOf("ge.txt"), "alpha\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["files_only"] = true, ["show_encoding"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ge.txt [UTF-8]", result); // 显示 UTF-8 编码
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowEncoding_False_NoEncodingInfo()
+    {
+        // show_encoding=false（默认）:不显示编码信息
+        File.WriteAllText(PathOf("ge2.txt"), "alpha\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["files_only"] = true, ["show_encoding"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ge2.txt", result);
+        Assert.DoesNotContain("[", result); // 无编码括号
+    }
+
 }
