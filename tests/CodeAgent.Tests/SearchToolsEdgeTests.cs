@@ -1150,4 +1150,27 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[file]", result); // 无类型标记
     }
 
+    [Fact]
+    public async Task Glob_ShowMimeType_True_DisplaysMimeType()
+    {
+        // show_mime_type=true:路径后附加 MIME 类型
+        File.WriteAllText(PathOf("gmt.txt"), "hello\n");
+        File.WriteAllText(PathOf("gmt.json"), "{}");
+        var args = new JsonObject { ["pattern"] = "*", ["show_mime_type"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gmt.txt (text/plain)", result); // 文本文件 MIME 类型
+        Assert.Contains("gmt.json (application/json)", result); // JSON 文件 MIME 类型
+    }
+
+    [Fact]
+    public async Task Glob_ShowMimeType_False_NoMimeTypeInfo()
+    {
+        // show_mime_type=false（默认）:不显示 MIME 类型
+        File.WriteAllText(PathOf("gmt2.txt"), "hello\n");
+        var args = new JsonObject { ["pattern"] = "gmt2.txt", ["show_mime_type"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gmt2.txt", result);
+        Assert.DoesNotContain("text/plain", result); // 无 MIME 类型信息
+    }
+
 }
