@@ -23,6 +23,7 @@ public sealed class GlobTool : ITool
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；设为 true 时在路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
+            ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在路径后附加文件大小，如 file.txt (1.5 KB)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -49,6 +50,7 @@ public sealed class GlobTool : ITool
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
+        var showSize = ToolArgs.GetBool(args, "show_size", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -86,12 +88,22 @@ public sealed class GlobTool : ITool
             results = tuples.Select(t => t.r).ToList();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
-        var shown = showModified
+        var shown = showModified || showSize
             ? string.Join('\n', results.Take(displayLimit).Select(r =>
             {
                 var full = Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar));
-                var modified = File.Exists(full) ? File.GetLastWriteTime(full).ToString("yyyy-MM-dd HH:mm") : "";
-                return modified.Length > 0 ? $"{r} ({modified})" : r;
+                var parts = new List<string>();
+                if (showSize && File.Exists(full))
+                {
+                    var length = new FileInfo(full).Length;
+                    parts.Add(length < 1024 ? $"{length} B" : length < 1024 * 1024 ? $"{length / 1024.0:F1} KB" : $"{length / 1024.0 / 1024.0:F1} MB");
+                }
+                if (showModified && File.Exists(full))
+                {
+                    var modified = File.GetLastWriteTime(full).ToString("yyyy-MM-dd HH:mm");
+                    parts.Add(modified);
+                }
+                return parts.Count > 0 ? $"{r} ({string.Join(", ", parts)})" : r;
             }))
             : string.Join('\n', results.Take(displayLimit));
         var truncated = results.Count > displayLimit || capped;

@@ -771,4 +771,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[", result); // 无编码括号
     }
 
+    [Fact]
+    public async Task Glob_ShowSize_True_DisplaysFileSize()
+    {
+        // show_size=true:文件路径后附加文件大小
+        File.WriteAllText(PathOf("gs.txt"), new string('a', 2048));
+        var args = new JsonObject { ["pattern"] = "gs.txt", ["show_size"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gs.txt (", result); // 大小格式：xxx B/KB/MB
+        Assert.Contains("2.0 KB", result); // 2048 字节 = 2.0 KB
+    }
+
+    [Fact]
+    public async Task Glob_ShowSize_False_NoSizeInfo()
+    {
+        // show_size=false（默认）:不显示文件大小
+        File.WriteAllText(PathOf("gs2.txt"), new string('a', 100));
+        var args = new JsonObject { ["pattern"] = "gs2.txt", ["show_size"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gs2.txt", result);
+        Assert.DoesNotContain("(", result); // 无大小括号
+    }
+
 }
