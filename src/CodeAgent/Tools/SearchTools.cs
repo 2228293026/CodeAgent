@@ -121,6 +121,7 @@ public sealed class GrepTool : ITool
             ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
             ["heading"] = new JsonObject { ["type"] = "boolean", ["description"] = "文件路径单独成行（默认 true；类似 rg --heading，每个文件的匹配前先输出文件路径，方便区分不同文件的匹配）" },
             ["max_matches_per_file"] = new JsonObject { ["type"] = "integer", ["description"] = "每个文件最多显示的匹配数（默认 0=不限制；设为正数可防止单个文件匹配过多撑爆输出）" },
+            ["literal"] = new JsonObject { ["type"] = "boolean", ["description"] = "字面量搜索（默认 false；设为 true 时 pattern 被视为普通字符串而非正则表达式，自动转义特殊字符）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -173,7 +174,8 @@ public sealed class GrepTool : ITool
             opts |= RegexOptions.Singleline;
         // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
         var word = ToolArgs.GetBool(args, "word", false);
-        var effectivePattern = word ? $"\\b(?:{pattern})\\b" : pattern;
+        var literal = ToolArgs.GetBool(args, "literal", false);
+        var effectivePattern = literal ? System.Text.RegularExpressions.Regex.Escape(pattern) : (word ? $"\\b(?:{pattern})\\b" : pattern);
 
         Regex re;
         try

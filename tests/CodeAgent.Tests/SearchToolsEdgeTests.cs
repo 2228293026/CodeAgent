@@ -631,4 +631,28 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("om3.txt:2:", result); // 无行号
     }
 
+    [Fact]
+    public async Task Grep_Literal_True_TreatsPatternAsLiteralString()
+    {
+        // literal=true:pattern 中的正则特殊字符被转义，当作普通字符串搜索
+        File.WriteAllText(PathOf("lit.txt"), "a.b\naab\nacb\n");
+        var args = new JsonObject { ["pattern"] = "a.b", ["literal"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("a.b", result); // 字面量匹配 "a.b"
+        Assert.DoesNotContain("aab", result); // 不匹配 "aab"（正则 "." 会匹配任意字符）
+        Assert.DoesNotContain("acb", result); // 不匹配 "acb"
+    }
+
+    [Fact]
+    public async Task Grep_Literal_False_RegexPatternMatches()
+    {
+        // literal=false（默认）:"a.b" 作为正则匹配 a 任意 b（如 aab、acb、a.b）
+        File.WriteAllText(PathOf("lit2.txt"), "a.b\naab\nacb\n");
+        var args = new JsonObject { ["pattern"] = "a.b", ["literal"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("a.b", result); // 正则匹配
+        Assert.Contains("aab", result); // "." 匹配任意字符
+        Assert.Contains("acb", result); // "." 匹配任意字符
+    }
+
 }
