@@ -1173,4 +1173,27 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("text/plain", result); // 无 MIME 类型信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowMimeType_True_DisplaysMimeType()
+    {
+        // show_mime_type=true + files_only=true:文件路径后附加 MIME 类型
+        File.WriteAllText(PathOf("gfmt.txt"), "alpha beta\n");
+        File.WriteAllText(PathOf("gfmt.json"), "alpha");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_mime_type"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gfmt.txt (text/plain)", result); // 文本文件 MIME 类型
+        Assert.Contains("gfmt.json (application/json)", result); // JSON 文件 MIME 类型
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowMimeType_False_NoMimeTypeInfo()
+    {
+        // show_mime_type=false（默认）:不显示 MIME 类型
+        File.WriteAllText(PathOf("gfmt2.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_mime_type"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gfmt2.txt", result);
+        Assert.DoesNotContain("text/plain", result); // 无 MIME 类型信息
+    }
+
 }
