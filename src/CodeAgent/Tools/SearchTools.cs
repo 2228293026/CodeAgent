@@ -24,6 +24,7 @@ public sealed class GlobTool : ITool
             ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；设为 true 时在路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在路径后附加文件大小，如 file.txt (1.5 KB)）" },
+            ["show_byte_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示字节数（默认 false；设为 true 时在路径后附加精确字节数，如 file.txt (1536 bytes)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -51,6 +52,7 @@ public sealed class GlobTool : ITool
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);
+        var showByteCount = ToolArgs.GetBool(args, "show_byte_count", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -88,7 +90,7 @@ public sealed class GlobTool : ITool
             results = tuples.Select(t => t.r).ToList();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
-        var shown = showModified || showSize
+        var shown = showModified || showSize || showByteCount
             ? string.Join('\n', results.Take(displayLimit).Select(r =>
             {
                 var full = Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar));
@@ -97,6 +99,11 @@ public sealed class GlobTool : ITool
                 {
                     var length = new FileInfo(full).Length;
                     parts.Add(length < 1024 ? $"{length} B" : length < 1024 * 1024 ? $"{length / 1024.0:F1} KB" : $"{length / 1024.0 / 1024.0:F1} MB");
+                }
+                if (showByteCount && File.Exists(full))
+                {
+                    var length = new FileInfo(full).Length;
+                    parts.Add($"{length:N0} bytes");
                 }
                 if (showModified && File.Exists(full))
                 {

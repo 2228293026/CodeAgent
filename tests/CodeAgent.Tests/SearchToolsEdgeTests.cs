@@ -836,4 +836,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("(", result); // 无大小括号
     }
 
+    [Fact]
+    public async Task Glob_ShowByteCount_True_DisplaysByteCount()
+    {
+        // show_byte_count=true:文件路径后附加精确字节数
+        File.WriteAllText(PathOf("gbc.txt"), new string('a', 1536));
+        var args = new JsonObject { ["pattern"] = "gbc.txt", ["show_byte_count"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gbc.txt (", result); // 字节数格式
+        Assert.Contains("1,536 bytes", result); // 1536 字节
+    }
+
+    [Fact]
+    public async Task Glob_ShowByteCount_False_NoByteCountInfo()
+    {
+        // show_byte_count=false（默认）:不显示字节数
+        File.WriteAllText(PathOf("gbc2.txt"), new string('a', 100));
+        var args = new JsonObject { ["pattern"] = "gbc2.txt", ["show_byte_count"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gbc2.txt", result);
+        Assert.DoesNotContain("bytes", result); // 无字节数信息
+    }
+
 }
