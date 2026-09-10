@@ -902,4 +902,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("sha256", result); // 无哈希信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowHash_True_DisplaysShortHash()
+    {
+        // show_hash=true + files_only=true:文件路径后附加 SHA256 哈希（前 8 位）
+        File.WriteAllText(PathOf("gh.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_hash"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gh.txt (sha256:", result); // 哈希格式
+        Assert.Matches(@"sha256:[0-9a-fA-F]{8}\.\.\.", result); // 匹配前 8 位十六进制 + ...
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowHash_False_NoHashInfo()
+    {
+        // show_hash=false（默认）:不显示哈希
+        File.WriteAllText(PathOf("gh2.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_hash"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gh2.txt", result);
+        Assert.DoesNotContain("sha256", result); // 无哈希信息
+    }
+
 }
