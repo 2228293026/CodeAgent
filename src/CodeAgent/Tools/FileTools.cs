@@ -629,6 +629,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_line_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件行数（默认 false；设为 true 时在文件名后附加行数，如 file.txt [42 lines]）" },
             ["skip_empty_dirs"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空目录（默认 false；设为 true 时只列出包含文件的目录）" },
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在文件名后附加哈希值，如 file.txt (sha256:abc123...)）" },
+            ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；设为 true 时在文件名后附加扩展名，如 file.txt [.txt]）" },
         },
     };
 
@@ -650,6 +651,7 @@ public sealed class ListDirectoryTool : ITool
         var showLineCount = ToolArgs.GetBool(args, "show_line_count", false);
         var skipEmptyDirs = ToolArgs.GetBool(args, "skip_empty_dirs", false);
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
+        var showExtension = ToolArgs.GetBool(args, "show_extension", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -745,6 +747,11 @@ public sealed class ListDirectoryTool : ITool
                             using var sha = System.Security.Cryptography.SHA256.Create();
                             var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(f)));
                             sb.AppendLine($"{indent}{fileName} (sha256:{hash[..8]}...)");
+                        }
+                        else if (showExtension)
+                        {
+                            var ext = Path.GetExtension(fileName);
+                            sb.AppendLine($"{indent}{fileName} [{ext}]");
                         }
                         else
                         {

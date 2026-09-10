@@ -4311,4 +4311,33 @@ public class FileToolsTests : IDisposable
         Assert.Contains("hello real", File.ReadAllText(Path.Combine(_dir, "dryrun2.txt"))); // 文件已创建
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowExtension_True_DisplaysFileExtension()
+    {
+        // show_extension=true:文件名后附加扩展名
+        File.WriteAllText(Path.Combine(_dir, "file.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_extension"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("file.txt [.txt]", output); // 扩展名格式
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowExtension_False_NoExtensionInfo()
+    {
+        // show_extension=false（默认）:不显示扩展名
+        File.WriteAllText(Path.Combine(_dir, "file2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_extension"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("file2.txt", output);
+        Assert.DoesNotContain("[.txt]", output); // 无扩展名信息
+    }
+
 }
