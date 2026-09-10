@@ -151,27 +151,7 @@ public sealed class GlobTool : ITool
                 }
                 if (showPermissions && File.Exists(full))
                 {
-                    try
-                    {
-                        var attrs = File.GetAttributes(full);
-                        var isDir = (attrs & FileAttributes.Directory) != 0;
-                        var perms = new System.Text.StringBuilder();
-                        perms.Append(isDir ? 'd' : '-');
-                        perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                        perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                        perms.Append(isDir ? 'x' : '-');
-                        perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                        perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                        perms.Append(isDir ? 'x' : '-');
-                        perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                        perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                        perms.Append(isDir ? 'x' : '-');
-                        parts.Add(perms.ToString());
-                    }
-                    catch
-                    {
-                        parts.Add("---------");
-                    }
+                    parts.Add(SkipDirs.GetPermissions(full));
                 }
                 return parts.Count > 0 ? $"{r} ({string.Join(", ", parts)})" : r;
             }))
@@ -432,27 +412,7 @@ public sealed class GrepTool : ITool
                         }
                         if (showPermissions)
                         {
-                            try
-                            {
-                                var attrs = File.GetAttributes(path);
-                                var isDir = (attrs & FileAttributes.Directory) != 0;
-                                var perms = new System.Text.StringBuilder();
-                                perms.Append(isDir ? 'd' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                                perms.Append(isDir ? 'x' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                                perms.Append(isDir ? 'x' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                                perms.Append(isDir ? 'x' : '-');
-                                extra += $" ({perms})";
-                            }
-                            catch
-                            {
-                                extra += " (---------)";
-                            }
+                            extra += $" ({SkipDirs.GetPermissions(path)})";
                         }
                         sb.AppendLine((showAbsolutePath ? path.Replace('\\', '/') : rel) + extra);
                     }

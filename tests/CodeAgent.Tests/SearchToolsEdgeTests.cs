@@ -1204,7 +1204,7 @@ public class SearchToolsEdgeTests : IDisposable
         var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_permissions"] = true, ["context"] = 0 };
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("gfps.txt", result); // 文件名
-        Assert.Contains("rw-", result); // 权限标记包含读写位
+        Assert.Contains(SkipDirs.GetPermissions(PathOf("gfps.txt")), result); // 与真实权限一致
     }
 
     [Fact]
@@ -1215,7 +1215,7 @@ public class SearchToolsEdgeTests : IDisposable
         var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_permissions"] = false, ["context"] = 0 };
         var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("gfps2.txt", result);
-        Assert.DoesNotContain("rw-", result); // 无权限信息
+        Assert.DoesNotContain(SkipDirs.GetPermissions(PathOf("gfps2.txt")), result); // 无权限信息
     }
 
     [Fact]
@@ -1226,7 +1226,7 @@ public class SearchToolsEdgeTests : IDisposable
         var args = new JsonObject { ["pattern"] = "gps.txt", ["show_permissions"] = true };
         var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("gps.txt", result); // 文件名
-        Assert.Contains("rw-", result); // 权限标记包含读写位
+        Assert.Contains(SkipDirs.GetPermissions(PathOf("gps.txt")), result); // 与真实权限一致
     }
 
     [Fact]
@@ -1237,7 +1237,7 @@ public class SearchToolsEdgeTests : IDisposable
         var args = new JsonObject { ["pattern"] = "gps2.txt", ["show_permissions"] = false };
         var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
         Assert.Contains("gps2.txt", result);
-        Assert.DoesNotContain("rw-", result); // 无权限信息
+        Assert.DoesNotContain(SkipDirs.GetPermissions(PathOf("gps2.txt")), result); // 无权限信息
     }
 
 }

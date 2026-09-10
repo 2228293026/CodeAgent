@@ -4554,6 +4554,7 @@ public class FileToolsTests : IDisposable
     public async Task ListDirectory_ShowPermissions_True_DisplaysFilePermissions()
     {
         // show_permissions=true:文件名后附加权限信息
+        // Unix 为真实权限位；Windows 为真实文件属性（无属性时 normal）
         File.WriteAllText(Path.Combine(_dir, "perms.txt"), "hello\n");
         var tool = new ListDirectoryTool();
         var ctx = MakeContext(_dir);
@@ -4562,7 +4563,7 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["show_permissions"] = true }, ctx, CancellationToken.None);
 
         Assert.Contains("perms.txt", output); // 文件名
-        Assert.Contains("rw-", output); // 权限标记包含读写位
+        Assert.Contains(SkipDirs.GetPermissions(Path.Combine(_dir, "perms.txt")), output); // 与真实权限一致
     }
 
     [Fact]
@@ -4577,7 +4578,7 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["show_permissions"] = false }, ctx, CancellationToken.None);
 
         Assert.Contains("perms2.txt", output);
-        Assert.DoesNotContain("---------", output); // 无权限信息
+        Assert.DoesNotContain(SkipDirs.GetPermissions(Path.Combine(_dir, "perms2.txt")), output); // 无权限信息
     }
 
     [Fact]

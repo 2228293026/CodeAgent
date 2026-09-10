@@ -529,6 +529,44 @@ public static class SkipDirs
         return span.Contains('\0');
     }
 
+    /// <summary>权限字符串。Unix：真实权限位（如 -rw-r--r--，目录首字符为 d）；
+    /// Windows：真实的文件属性（readonly/hidden/system/archive，无属性时 normal）。
+    /// 此前用 ReadOnly 一个属性伪造三组 Unix 位，在 Windows 上输出的是假权限。</summary>
+    public static string GetPermissions(string path)
+    {
+        try
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                var mode = File.GetUnixFileMode(path);
+                var sb = new StringBuilder(10);
+                sb.Append(Directory.Exists(path) ? 'd' : '-');
+                AppendPermBits(sb, mode, UnixFileMode.UserRead, UnixFileMode.UserWrite, UnixFileMode.UserExecute);
+                AppendPermBits(sb, mode, UnixFileMode.GroupRead, UnixFileMode.GroupWrite, UnixFileMode.GroupExecute);
+                AppendPermBits(sb, mode, UnixFileMode.OtherRead, UnixFileMode.OtherWrite, UnixFileMode.OtherExecute);
+                return sb.ToString();
+            }
+            var attrs = File.GetAttributes(path);
+            var parts = new List<string>();
+            if ((attrs & FileAttributes.ReadOnly) != 0) parts.Add("readonly");
+            if ((attrs & FileAttributes.Hidden) != 0) parts.Add("hidden");
+            if ((attrs & FileAttributes.System) != 0) parts.Add("system");
+            if ((attrs & FileAttributes.Archive) != 0) parts.Add("archive");
+            return parts.Count > 0 ? string.Join("|", parts) : "normal";
+        }
+        catch
+        {
+            return "unknown"; // 无权限/竞态删除：明确未知，不猜
+        }
+    }
+
+    private static void AppendPermBits(StringBuilder sb, UnixFileMode mode, UnixFileMode read, UnixFileMode write, UnixFileMode execute)
+    {
+        sb.Append(mode.HasFlag(read) ? 'r' : '-');
+        sb.Append(mode.HasFlag(write) ? 'w' : '-');
+        sb.Append(mode.HasFlag(execute) ? 'x' : '-');
+    }
+
     /// <summary>硬链接数：Windows 走 GetFileInformationByHandle 的 nNumberOfLinks；
     /// 非 Windows 返回 null——.NET 无跨平台 API，宁可不显示也不报错误数字。
     ///（曾用 FileInfo.LinkTarget 判断：那是符号链接的目标路径，与硬链接数无关。）</summary>

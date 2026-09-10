@@ -832,31 +832,7 @@ public sealed class ListDirectoryTool : ITool
                         }
                         if (showPermissions)
                         {
-                            try
-                            {
-                                var attrs = File.GetAttributes(f);
-                                var isDir = (attrs & FileAttributes.Directory) != 0;
-                                var perms = new System.Text.StringBuilder();
-                                // Owner
-                                perms.Append(isDir ? 'd' : '-');
-                                // Read/Write/Execute for owner
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                                perms.Append(isDir ? 'x' : '-');
-                                // Group
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                                perms.Append(isDir ? 'x' : '-');
-                                // Others
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'r' : '-');
-                                perms.Append((attrs & FileAttributes.ReadOnly) == 0 ? 'w' : '-');
-                                perms.Append(isDir ? 'x' : '-');
-                                parenParts.Add(perms.ToString());
-                            }
-                            catch
-                            {
-                                parenParts.Add("---------");
-                            }
+                            parenParts.Add(SkipDirs.GetPermissions(f));
                         }
                         if (showSymlink)
                         {
