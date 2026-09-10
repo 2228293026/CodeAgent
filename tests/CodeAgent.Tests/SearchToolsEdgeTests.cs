@@ -587,6 +587,17 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_MaxMatchesPerFile_LimitsOutputPerFile()
+    {
+        // max_matches_per_file=1:每个文件最多显示 1 处匹配
+        File.WriteAllText(PathOf("mp.txt"), "a\nbeta\nc\nbeta\ne\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["max_matches_per_file"] = 1, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var betaCount = result.Split('\n').Count(l => l.Contains("beta"));
+        Assert.Equal(1, betaCount); // 仅显示 1 处匹配
+    }
+
+    [Fact]
     public async Task Grep_OutputMode_Content_ReturnsOnlyMatches()
     {
         // output_mode=content:匹配文本前无文件路径和行号前缀

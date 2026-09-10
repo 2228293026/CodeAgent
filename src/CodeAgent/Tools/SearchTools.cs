@@ -120,6 +120,7 @@ public sealed class GrepTool : ITool
             ["output_mode"] = new JsonObject { ["type"] = "string", ["description"] = "输出模式：text（默认，file:line: content）、content（仅匹配文本，无文件路径和行号）、content_without_filename（行号: 内容，无文件路径）、content_without_line_number（文件: 内容，无行号）" },
             ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
             ["heading"] = new JsonObject { ["type"] = "boolean", ["description"] = "文件路径单独成行（默认 true；类似 rg --heading，每个文件的匹配前先输出文件路径，方便区分不同文件的匹配）" },
+            ["max_matches_per_file"] = new JsonObject { ["type"] = "integer", ["description"] = "每个文件最多显示的匹配数（默认 0=不限制；设为正数可防止单个文件匹配过多撑爆输出）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -148,6 +149,7 @@ public sealed class GrepTool : ITool
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
         var heading = ToolArgs.GetBool(args, "heading", false);
+        var maxMatchesPerFile = Math.Clamp(ToolArgs.GetInt(args, "max_matches_per_file", 0), 0, 10000);
         var filesOnly = ToolArgs.GetBool(args, "files_only", false);
         var countOnly = ToolArgs.GetBool(args, "count_only", false);
         var include = ToolArgs.GetStringList(args, "include");
@@ -193,10 +195,11 @@ public sealed class GrepTool : ITool
         // 匹配判定（invert 时取反，类似 rg -v）；集中一处，files_only/count_only/普通模式共用
         bool Hit(string s) => invert ? !re.IsMatch(s) : re.IsMatch(s);
 
-        void ScanFile(string path)
+        void ScanFile(string path, int fileMaxMatches = 0)
         {
             if (hits >= max)
                 return;
+            var fileMatchCount = 0;
             try
             {
                 var rel = ctx.Workspace.ToRelative(path).Replace('\\', '/');
@@ -257,8 +260,11 @@ public sealed class GrepTool : ITool
                     {
                         if (hits >= max)
                             break;
+                        if (fileMaxMatches > 0 && fileMatchCount >= fileMaxMatches)
+                            break; // 达到单文件匹配上限
                         if (m.Length == 0)
                             continue; // 零宽命中不展示（只产生噪音）
+                        fileMatchCount++;
                         hits++;
                         var startLine = 1 + CountNewlines(text, 0, m.Index);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
@@ -297,9 +303,12 @@ public sealed class GrepTool : ITool
                 var printedUntil = -1; // 已打印过的上下文行（避免邻近匹配的共享行重复输出）
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {
+                    if (fileMaxMatches > 0 && fileMatchCount >= fileMaxMatches)
+                        break; // 达到单文件匹配上限
                     var line = lines[i].TrimEnd('\r');
                     if (!Hit(line))
                         continue;
+                    fileMatchCount++;
                     hits++;
                     string matchLine;
                     if (outputMode == "content")
@@ -339,7 +348,7 @@ public sealed class GrepTool : ITool
         await Task.Yield();
         if (File.Exists(full))
         {
-            ScanFile(full);
+            ScanFile(full, maxMatchesPerFile);
         }
         else if (Directory.Exists(full))
         {
@@ -361,7 +370,7 @@ public sealed class GrepTool : ITool
                     sb.AppendLine(rel); // 文件路径单独成行
                     lastRel = rel;
                 }
-                ScanFile(file);
+                ScanFile(file, maxMatchesPerFile);
             }
         }
         else
