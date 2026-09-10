@@ -671,6 +671,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_owner"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件所有者（默认 false；设为 true 时在文件名后附加所有者信息，如 file.txt (owner:user)）" },
             ["show_group"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件组（默认 false；设为 true 时在文件名后附加组信息，如 file.txt (group:users)）" },
             ["show_permissions"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件权限（默认 false；设为 true 时在文件名后附加权限信息，如 file.txt (-rw-r--r--)）" },
+            ["show_symlink"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示符号链接（默认 false；设为 true 时在文件名后附加链接信息，如 link.txt -> target.txt）" },
         },
     };
 
@@ -699,6 +700,7 @@ public sealed class ListDirectoryTool : ITool
         var showOwner = ToolArgs.GetBool(args, "show_owner", false);
         var showGroup = ToolArgs.GetBool(args, "show_group", false);
         var showPermissions = ToolArgs.GetBool(args, "show_permissions", false);
+        var showSymlink = ToolArgs.GetBool(args, "show_symlink", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -838,6 +840,21 @@ public sealed class ListDirectoryTool : ITool
                             catch
                             {
                                 parenParts.Add("---------");
+                            }
+                        }
+                        if (showSymlink)
+                        {
+                            try
+                            {
+                                if (File.Exists(f) && (File.GetAttributes(f) & FileAttributes.ReparsePoint) != 0)
+                                {
+                                    var target = File.ReadAllText(f);
+                                    parenParts.Add($"-> {target}");
+                                }
+                            }
+                            catch
+                            {
+                                // 符号链接读取失败，忽略
                             }
                         }
                         if (showEncoding)

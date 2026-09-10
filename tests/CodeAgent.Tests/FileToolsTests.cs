@@ -4580,4 +4580,55 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("---------", output); // 无权限信息
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowSymlink_True_DisplaysSymlinkTarget()
+    {
+        // show_symlink=true:符号链接后附加目标路径
+        var targetPath = Path.Combine(_dir, "target.txt");
+        var linkPath = Path.Combine(_dir, "link.txt");
+        File.WriteAllText(targetPath, "hello\n");
+        // 创建符号链接（仅 Windows 支持，Linux 也支持）
+        if (OperatingSystem.IsWindows())
+        {
+            File.CreateSymbolicLink(linkPath, targetPath);
+        }
+        else
+        {
+            File.CreateSymbolicLink(linkPath, targetPath);
+        }
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_symlink"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("link.txt", output); // 链接文件名
+        Assert.Contains("->", output); // 链接符号
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowSymlink_False_NoSymlinkInfo()
+    {
+        // show_symlink=false（默认）:不显示链接信息
+        var targetPath = Path.Combine(_dir, "target2.txt");
+        var linkPath = Path.Combine(_dir, "link2.txt");
+        File.WriteAllText(targetPath, "hello\n");
+        if (OperatingSystem.IsWindows())
+        {
+            File.CreateSymbolicLink(linkPath, targetPath);
+        }
+        else
+        {
+            File.CreateSymbolicLink(linkPath, targetPath);
+        }
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_symlink"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("link2.txt", output);
+        Assert.DoesNotContain("->", output); // 无链接信息
+    }
+
 }
