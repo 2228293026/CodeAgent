@@ -924,4 +924,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("sha256", result); // 无哈希信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowLineCount_True_DisplaysLineCount()
+    {
+        // show_line_count=true + files_only=true:文件路径后附加行数
+        File.WriteAllText(PathOf("glc.txt"), "line1\nline2\nline3\n");
+        var args = new JsonObject { ["pattern"] = "line", ["files_only"] = true, ["show_line_count"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("glc.txt [", result); // 行数格式
+        Assert.Contains("lines]", result); // 包含 lines 标记
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowLineCount_False_NoLineCountInfo()
+    {
+        // show_line_count=false（默认）:不显示行数
+        File.WriteAllText(PathOf("glc2.txt"), "line1\nline2\n");
+        var args = new JsonObject { ["pattern"] = "line", ["files_only"] = true, ["show_line_count"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("glc2.txt", result);
+        Assert.DoesNotContain("lines", result); // 无行数信息
+    }
+
 }

@@ -167,6 +167,7 @@ public sealed class GrepTool : ITool
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；files_only=true 时在文件路径后附加大小，如 file.txt (1.2 KB)）" },
             ["show_word_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示单词数（默认 false；files_only=true 时在文件路径后附加单词数，如 file.txt [42 words]）" },
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；files_only=true 时在文件路径后附加哈希值，如 file.txt (sha256:abc123...)）" },
+            ["show_line_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示行数（默认 false；files_only=true 时在文件路径后附加行数，如 file.txt [42 lines]）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -244,6 +245,7 @@ public sealed class GrepTool : ITool
         var showSize = ToolArgs.GetBool(args, "show_size", false);
         var showWordCount = ToolArgs.GetBool(args, "show_word_count", false);
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
+        var showLineCount = ToolArgs.GetBool(args, "show_line_count", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -333,6 +335,11 @@ public sealed class GrepTool : ITool
                             using var sha = System.Security.Cryptography.SHA256.Create();
                             var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(path)));
                             extra += $" (sha256:{hash[..8]}...)";
+                        }
+                        if (showLineCount)
+                        {
+                            var fileLines = File.ReadAllLines(path);
+                            extra += $" [{fileLines.Length} lines]";
                         }
                         sb.AppendLine(rel + extra);
                     }
