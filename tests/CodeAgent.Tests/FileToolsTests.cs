@@ -3858,4 +3858,49 @@ public class FileToolsTests : IDisposable
         Assert.Equal("3", output.Trim());
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowModified_True_DisplaysFileModifiedTime()
+    {
+        // show_modified=true:文件名后附加修改时间
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+        File.WriteAllText(Path.Combine(_dir, "mod.txt"), "hello");
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_modified"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("mod.txt (", output); // 时间格式：yyyy-MM-dd HH:mm
+        Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", output); // 匹配时间格式
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowModified_False_NoTimeInfo()
+    {
+        // show_modified=false（默认）:不显示修改时间
+        File.WriteAllText(Path.Combine(_dir, "nomod.txt"), "hello");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_modified"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("nomod.txt", output);
+        Assert.DoesNotContain("(", output); // 无时间括号
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowSizeAndModified_DisplaysBoth()
+    {
+        // show_size=true + show_modified=true:同时显示大小和修改时间
+        File.WriteAllText(Path.Combine(_dir, "both.txt"), new string('a', 100));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_size"] = true, ["show_modified"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("both.txt (100 B,", output); // 大小和时间都存在
+        Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", output); // 匹配时间格式
+    }
+
 }

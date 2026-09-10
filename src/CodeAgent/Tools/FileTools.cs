@@ -571,6 +571,7 @@ public sealed class ListDirectoryTool : ITool
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按名称）、size（按文件大小降序）、modified（按修改时间降序）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在文件名后附加大小，如 file.txt (1.2 KB)）" },
+            ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示修改时间（默认 false；设为 true 时在文件名后附加最后修改时间，如 file.txt (2025-01-15 10:30)）" },
         },
     };
 
@@ -586,6 +587,7 @@ public sealed class ListDirectoryTool : ITool
         var sortBy = ToolArgs.GetString(args, "sort_by");
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);
+        var showModified = ToolArgs.GetBool(args, "show_modified", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -633,11 +635,23 @@ public sealed class ListDirectoryTool : ITool
                         if (!showHidden && SkipDirs.IsHidden(f))
                             continue; // 跳过隐藏文件
                         var fileName = Path.GetFileName(f);
-                        if (showSize)
+                        if (showSize && showModified)
+                        {
+                            var size = new FileInfo(f).Length;
+                            var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
+                            var modified = File.GetLastWriteTime(f).ToString("yyyy-MM-dd HH:mm");
+                            sb.AppendLine($"{indent}{fileName} ({sizeStr}, {modified})");
+                        }
+                        else if (showSize)
                         {
                             var size = new FileInfo(f).Length;
                             var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
                             sb.AppendLine($"{indent}{fileName} ({sizeStr})");
+                        }
+                        else if (showModified)
+                        {
+                            var modified = File.GetLastWriteTime(f).ToString("yyyy-MM-dd HH:mm");
+                            sb.AppendLine($"{indent}{fileName} ({modified})");
                         }
                         else
                         {
