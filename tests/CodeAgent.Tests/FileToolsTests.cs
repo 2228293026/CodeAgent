@@ -4340,4 +4340,42 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("[.txt]", output); // 无扩展名信息
     }
 
+    [Fact]
+    public async Task ListDirectory_Reverse_True_SortsInReverseOrder()
+    {
+        // reverse=true:反向排序（按名称时 z→a）
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "hello\n");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "world\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["sort_by"] = "name", ["reverse"] = true }, ctx, CancellationToken.None);
+
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        var fileLines = lines.Where(l => l.EndsWith(".txt")).ToList();
+        Assert.Equal(2, fileLines.Count);
+        Assert.StartsWith("b.txt", fileLines[0]); // 反向排序：b 在 a 前面
+        Assert.StartsWith("a.txt", fileLines[1]);
+    }
+
+    [Fact]
+    public async Task ListDirectory_Reverse_False_SortsInNormalOrder()
+    {
+        // reverse=false（默认）:正向排序（按名称时 a→z）
+        File.WriteAllText(Path.Combine(_dir, "c.txt"), "hello\n");
+        File.WriteAllText(Path.Combine(_dir, "d.txt"), "world\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["sort_by"] = "name", ["reverse"] = false }, ctx, CancellationToken.None);
+
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        var fileLines = lines.Where(l => l.EndsWith(".txt")).ToList();
+        Assert.Equal(2, fileLines.Count);
+        Assert.StartsWith("c.txt", fileLines[0]); // 正向排序：c 在 d 前面
+        Assert.StartsWith("d.txt", fileLines[1]);
+    }
+
 }

@@ -621,6 +621,7 @@ public sealed class ListDirectoryTool : ITool
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出文件（跳过目录），默认 false" },
             ["dirs_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出目录（跳过文件），默认 false" },
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按名称）、size（按文件大小降序）、modified（按修改时间降序）" },
+            ["reverse"] = new JsonObject { ["type"] = "boolean", ["description"] = "反向排序（默认 false；设为 true 时反转排序结果）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在文件名后附加大小，如 file.txt (1.2 KB)）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示修改时间（默认 false；设为 true 时在文件名后附加最后修改时间，如 file.txt (2025-01-15 10:30)）" },
@@ -643,6 +644,7 @@ public sealed class ListDirectoryTool : ITool
         var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
         var ignoreSet = ToolArgs.GetStringSet(args, "ignore");
         var sortBy = ToolArgs.GetString(args, "sort_by");
+        var reverse = ToolArgs.GetBool(args, "reverse", false);
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
@@ -671,7 +673,7 @@ public sealed class ListDirectoryTool : ITool
             var indent = new string(' ', level * 2);
             try
             {
-                foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy))
+                foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy, reverse))
                 {
                     if (emitted >= maxItems)
                         break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
@@ -706,7 +708,7 @@ public sealed class ListDirectoryTool : ITool
                 }
                 if (!dirsOnly)
                 {
-                    foreach (var f in OrderEntries(Directory.EnumerateFiles(dir), sortBy))
+                    foreach (var f in OrderEntries(Directory.EnumerateFiles(dir), sortBy, reverse))
                     {
                         if (emitted >= maxItems)
                             break;
@@ -778,14 +780,14 @@ public sealed class ListDirectoryTool : ITool
     }
 
     /// <summary>对目录/文件列表做排序（按名称、大小或修改时间）。</summary>
-    private static IEnumerable<string> OrderEntries(IEnumerable<string> entries, string? sortBy)
+    private static IEnumerable<string> OrderEntries(IEnumerable<string> entries, string? sortBy, bool reverse = false)
     {
-        if (string.IsNullOrEmpty(sortBy) || sortBy == "name")
-            return entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase);
-        if (sortBy == "size")
-            return entries.OrderByDescending(x => new FileInfo(x).Length);
-        if (sortBy == "modified")
-            return entries.OrderByDescending(x => File.GetLastWriteTimeUtc(x));
-        return entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase);
+        IEnumerable<string> ordered = sortBy switch
+        {
+            "size" => entries.OrderByDescending(x => new FileInfo(x).Length),
+            "modified" => entries.OrderByDescending(x => File.GetLastWriteTimeUtc(x)),
+            _ => entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
+        };
+        return reverse ? ordered.Reverse() : ordered;
     }
 }
