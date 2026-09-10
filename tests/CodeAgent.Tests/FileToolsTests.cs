@@ -1589,6 +1589,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_AllowMultiple_True_EditsFirstOccurrence()
+    {
+        // allow_multiple=true:old_string 出现多次时仍允许编辑（默认只替换第一个）
+        File.WriteAllText(Path.Combine(_dir, "am.txt"), "x y x");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "am.txt", ["old_string"] = "x", ["new_string"] = "z", ["allow_multiple"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("z y x", File.ReadAllText(Path.Combine(_dir, "am.txt"))); // 只替换第一个
+    }
+
+    [Fact]
     public async Task EditFile_ReplaceAll_NoMatch_Throws()
     {
         // 回归：replace_all 未命中时曾静默写回原文件并报「已替换 0 处」，

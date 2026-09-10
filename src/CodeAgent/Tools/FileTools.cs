@@ -404,6 +404,7 @@ public sealed class EditFileTool : ITool
         var replaceAll = ToolArgs.GetBool(args, "replace_all", false);
         var caseInsensitive = ToolArgs.GetBool(args, "case_insensitive", false);
         var dryRun = ToolArgs.GetBool(args, "dry_run", false);
+        var allowMultiple = ToolArgs.GetBool(args, "allow_multiple", false);
         var cmp = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         // 精确匹配优先；未命中时做换行风格容错：old_string 用 LF、文件是 CRLF（或反过来）时
@@ -439,6 +440,8 @@ public sealed class EditFileTool : ITool
                 $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---{hint}");
         }
         int count = TextUtil.CountOccurrences(workText, workOld, cmp);
+        if (count > 1 && !replaceAll && !allowMultiple)
+            throw new ToolException($"old_string 出现 {count} 次（非唯一匹配）。如需替换全部请设置 replace_all=true；如需允许多处匹配请设置 allow_multiple=true。");
 
         string result;
         if (replaceAll)
@@ -463,9 +466,9 @@ public sealed class EditFileTool : ITool
         }
         else
         {
-            if (count > 1)
+            if (count > 1 && !allowMultiple)
                 throw new ToolException(
-                    $"old_string 在文件中出现 {count} 次，请扩大上下文使其唯一，或设置 replace_all=true。");
+                    $"old_string 在文件中出现 {count} 次，请扩大上下文使其唯一，或设置 replace_all=true / allow_multiple=true。");
             result = workText.Remove(firstIdx, workOld.Length).Insert(firstIdx, workNew);
         }
         if (normalized && text.Contains("\r\n"))
