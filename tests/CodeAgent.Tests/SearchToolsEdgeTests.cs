@@ -814,4 +814,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[total]", result); // 无总匹配数
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowSize_True_DisplaysFileSize()
+    {
+        // show_size=true + files_only=true:文件路径后附加文件大小
+        File.WriteAllText(PathOf("gs.txt"), new string('a', 2048));
+        var args = new JsonObject { ["pattern"] = "a", ["files_only"] = true, ["show_size"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gs.txt (", result); // 大小格式：xxx B/KB/MB
+        Assert.Contains("2.0 KB", result); // 2048 字节 = 2.0 KB
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowSize_False_NoSizeInfo()
+    {
+        // show_size=false（默认）:不显示文件大小
+        File.WriteAllText(PathOf("gs2.txt"), new string('a', 100));
+        var args = new JsonObject { ["pattern"] = "a", ["files_only"] = true, ["show_size"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gs2.txt", result);
+        Assert.DoesNotContain("(", result); // 无大小括号
+    }
+
 }

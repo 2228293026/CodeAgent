@@ -149,6 +149,7 @@ public sealed class GrepTool : ITool
             ["show_total_matches"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示总匹配数（默认 false；设为 true 时在输出末尾附加总匹配数，而非仅显示匹配行数）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；files_only=true 时在文件路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；files_only=true 时在文件路径后附加编码信息，如 file.txt (UTF-8 BOM)）" },
+            ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；files_only=true 时在文件路径后附加大小，如 file.txt (1.2 KB)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -223,6 +224,7 @@ public sealed class GrepTool : ITool
         var showTotalMatches = ToolArgs.GetBool(args, "show_total_matches", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
+        var showSize = ToolArgs.GetBool(args, "show_size", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -286,16 +288,20 @@ public sealed class GrepTool : ITool
                         var extra = "";
                         if (showModified)
                         {
-                            var fullPath = Path.Combine(full, rel.Replace('/', Path.DirectorySeparatorChar));
-                            var modified = File.Exists(fullPath) ? File.GetLastWriteTime(fullPath).ToString("yyyy-MM-dd HH:mm") : "";
-                            if (modified.Length > 0)
-                                extra += $" ({modified})";
+                            var modified = File.GetLastWriteTime(path).ToString("yyyy-MM-dd HH:mm");
+                            extra += $" ({modified})";
                         }
                         if (showEncoding)
                         {
-                            var enc = TextUtil.DetectFileEncoding(full) ?? "UTF-8";
+                            var enc = TextUtil.DetectFileEncoding(path) ?? "UTF-8";
                             var encLabel = enc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => enc };
                             extra += $" [{encLabel}]";
+                        }
+                        if (showSize)
+                        {
+                            var size = new FileInfo(path).Length;
+                            var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
+                            extra += $" ({sizeStr})";
                         }
                         sb.AppendLine(rel + extra);
                     }
