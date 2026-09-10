@@ -969,4 +969,25 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[size]", result); // 无总大小信息
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowFirstMatch_True_DisplaysFirstMatchingLine()
+    {
+        // show_first_match=true + files_only=true:文件路径后附加首个匹配行
+        File.WriteAllText(PathOf("gfm.txt"), "first line\nsecond match\nthird line\n");
+        var args = new JsonObject { ["pattern"] = "match", ["files_only"] = true, ["show_first_match"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gfm.txt | second match", result); // 首个匹配行
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowFirstMatch_False_NoFirstMatch()
+    {
+        // show_first_match=false（默认）:不显示首个匹配行
+        File.WriteAllText(PathOf("gfm2.txt"), "first line\nsecond match\n");
+        var args = new JsonObject { ["pattern"] = "match", ["files_only"] = true, ["show_first_match"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gfm2.txt", result);
+        Assert.DoesNotContain("|", result); // 无匹配行分隔符
+    }
+
 }
