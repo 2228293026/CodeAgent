@@ -528,7 +528,7 @@ public static class SkipDirs
 
     /// <summary>目标文件的同目录临时文件路径（写盘原子替换用：同卷 rename 才原子）。
     /// GetDirectoryName 对驱动器根（D:\）与 UNC 共享根返回 null，此时用 "." 兜底——
-    /// 否则 Path.Combine(null, …) 抛 ArgumentNullException，且调用方通常只 catch IOException 会直接崩。
+    /// 否则 Path.Combine(null, …) 抛 ArgumentNullException（防御性：调用方可能只 catch IOException）。
     /// 此处是唯一实现：FileTools 与 WriteTextPreserveEncodingAsync 曾各写一份，两份漏了 null 兜底。</summary>
     public static string TempPathFor(string path) =>
         Path.Combine(Path.GetDirectoryName(path) is { Length: > 0 } dir ? dir : ".",
