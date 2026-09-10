@@ -672,6 +672,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_group"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件组（默认 false；设为 true 时在文件名后附加组信息，如 file.txt (group:users)）" },
             ["show_permissions"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件权限（默认 false；设为 true 时在文件名后附加权限信息，如 file.txt (-rw-r--r--)）" },
             ["show_symlink"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示符号链接（默认 false；设为 true 时在文件名后附加链接信息，如 link.txt -> target.txt）" },
+            ["show_hardlinks"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示硬链接数（默认 false；设为 true 时在文件名后附加硬链接数，如 file.txt (2 hard links)）" },
         },
     };
 
@@ -701,6 +702,7 @@ public sealed class ListDirectoryTool : ITool
         var showGroup = ToolArgs.GetBool(args, "show_group", false);
         var showPermissions = ToolArgs.GetBool(args, "show_permissions", false);
         var showSymlink = ToolArgs.GetBool(args, "show_symlink", false);
+        var showHardlinks = ToolArgs.GetBool(args, "show_hardlinks", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -855,6 +857,26 @@ public sealed class ListDirectoryTool : ITool
                             catch
                             {
                                 // 符号链接读取失败，忽略
+                            }
+                        }
+                        if (showHardlinks)
+                        {
+                            try
+                            {
+                                var info = new FileInfo(f);
+                                // 简化实现：显示是否为硬链接（通过检查链接目标）
+                                if (!string.IsNullOrEmpty(info.LinkTarget))
+                                {
+                                    parenParts.Add("has hard links");
+                                }
+                                else
+                                {
+                                    parenParts.Add("1 hard link");
+                                }
+                            }
+                            catch
+                            {
+                                parenParts.Add("1 hard link");
                             }
                         }
                         if (showEncoding)

@@ -4631,4 +4631,34 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("->", output); // 无链接信息
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowHardlinks_True_DisplaysHardlinkInfo()
+    {
+        // show_hardlinks=true:文件名后附加硬链接信息
+        File.WriteAllText(Path.Combine(_dir, "hard.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_hardlinks"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hard.txt", output); // 文件名
+        Assert.Contains("hard link", output); // 硬链接标记
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowHardlinks_False_NoHardlinkInfo()
+    {
+        // show_hardlinks=false（默认）:不显示硬链接信息
+        File.WriteAllText(Path.Combine(_dir, "hard2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_hardlinks"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("hard2.txt", output);
+        Assert.DoesNotContain("hard link", output); // 无硬链接信息
+    }
+
 }
