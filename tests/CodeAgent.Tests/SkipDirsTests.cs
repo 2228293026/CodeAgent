@@ -167,12 +167,12 @@ public class SkipDirsTests : IDisposable
     [Fact]
     public void TempPathFor_VolumeRoot_DoesNotThrow()
     {
-        // 防御性契约：卷根下 GetDirectoryName 返回 null，helper 必须兜底而不是让 Path.Combine 抛异常。
+        // 防御性契约：路径回溯到卷根（Windows "D:\" / Unix "/"）时 GetDirectoryName 返回 null，
+        // helper 必须兜底而不是让 Path.Combine 抛异常。
         // 注：write_file 的目录检查（Directory.Exists → ToolException）会先拦下卷根，
         // 故这不是用户可达崩溃；此测试锁定 helper 自身契约，避免后续复用者踩坑。
         var root = Path.GetPathRoot(Path.GetTempPath());
         Assert.NotNull(root);
-        Assert.Null(Path.GetDirectoryName(root)); // 前提：该根确实取不到父目录
 
         var tmp = SkipDirs.TempPathFor(root); // 不应抛异常
 

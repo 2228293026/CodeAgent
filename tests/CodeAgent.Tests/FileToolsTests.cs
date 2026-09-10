@@ -3586,6 +3586,94 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_IfExistsError_WithBackup_DoesNotLeaveBackupFile()
+    {
+        // if_exists=error 拒绝写入：不得留下 .bak（备份必须发生在确认真的要写之后）
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "exists.txt");
+        File.WriteAllText(target, "original\n");
+
+        await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "exists.txt",
+                ["content"] = "new\n",
+                ["if_exists"] = "error",
+                ["backup"] = true,
+            }, ctx, CancellationToken.None));
+
+        Assert.False(File.Exists(target + ".bak")); // 被拒绝的写入不该产生 .bak
+        Assert.Equal("original\n", File.ReadAllText(target)); // 原文件未被改动
+    }
+
+    [Fact]
+    public async Task WriteFile_IfExistsSkip_WithBackup_DoesNotLeaveBackupFile()
+    {
+        // if_exists=skip 同样在写盘前就返回，不应产生 .bak
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "exists2.txt");
+        File.WriteAllText(target, "original\n");
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "exists2.txt",
+                ["content"] = "new\n",
+                ["if_exists"] = "skip",
+                ["backup"] = true,
+            }, ctx, CancellationToken.None);
+
+        Assert.Contains("已跳过", result);
+        Assert.False(File.Exists(target + ".bak"));
+    }
+
+    [Fact]
+    public async Task WriteFile_DryRun_WithBackup_DoesNotLeaveBackupFile()
+    {
+        // dry_run 未写盘，也不应产生 .bak
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "exists3.txt");
+        File.WriteAllText(target, "original\n");
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "exists3.txt",
+                ["content"] = "new\n",
+                ["dry_run"] = true,
+                ["backup"] = true,
+            }, ctx, CancellationToken.None);
+
+        Assert.Contains("dry_run", result);
+        Assert.False(File.Exists(target + ".bak"));
+    }
+
+    [Fact]
+    public async Task WriteFile_BackupFails_ReportsBackupFailureAndLeavesFileIntact()
+    {
+        // 备份失败（.bak 路径被目录占用）时必须：明确说是备份失败、且不覆盖原文件
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "bk.txt");
+        File.WriteAllText(target, "original\n");
+        Directory.CreateDirectory(target + ".bak"); // 占用 .bak 路径 → File.Copy 失败
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+            new JsonObject
+            {
+                ["path"] = "bk.txt",
+                ["content"] = "new\n",
+                ["backup"] = true,
+            }, ctx, CancellationToken.None));
+
+        Assert.Contains("备份失败", ex.Message); // 不是笼统的「写入失败」
+        Assert.Equal("original\n", File.ReadAllText(target)); // 原文件未被覆盖
+    }
+
+    [Fact]
     public async Task ReadFile_PlainUtf8_NoEncodingNote()
     {
         // 纯 UTF-8 文件不应被附编码提示（避免噪声，也不破坏现有逐字断言）
@@ -4201,7 +4289,10 @@ public class FileToolsTests : IDisposable
     [Fact]
     public async Task WriteFile_Atomic_TargetLocked_CleansUpTempFile()
     {
-        // 目标被占用：允许读（撤销记录要读原文件），但拒绝写/删 → File.Move 失败。
+        // Windows 专属语义：目标被占用（允许读、拒绝写/删）时 File.Move 抛共享冲突。
+        // Linux 无此语义（可覆盖已打开文件），build.yml 在 ubuntu 上跑会因此失败
+        if (!OperatingSystem.IsWindows())
+            return;
         // 不得把 .xxx.<guid>.tmp 垃圾留在用户目录
         var tool = new WriteFileTool();
         var ctx = MakeContext(_dir);
@@ -4222,7 +4313,9 @@ public class FileToolsTests : IDisposable
     [Fact]
     public async Task WriteFile_Bom_TargetLocked_CleansUpTempFile()
     {
-        // bom 分支同样先写临时文件再 rename：失败路径也必须清理
+        // bom 分支同样先写临时文件再 rename：失败路径也必须清理（同上，Windows 专属语义）
+        if (!OperatingSystem.IsWindows())
+            return;
         var tool = new WriteFileTool();
         var ctx = MakeContext(_dir);
         var target = Path.Combine(_dir, "lockedbom.txt");

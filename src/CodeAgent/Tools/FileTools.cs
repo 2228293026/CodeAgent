@@ -293,13 +293,6 @@ public sealed class WriteFileTool : ITool
                 old = await TextUtil.ReadTextSmartAsync(full, ct);
         }
 
-        // backup=true:覆盖前创建 .bak 副本
-        if (hadFile && ToolArgs.GetBool(args, "backup", false))
-        {
-            var bak = full + ".bak";
-            File.Copy(full, bak, overwrite: true);
-        }
-
         var lineEnding = ToolArgs.GetString(args, "line_ending");
         string? targetEnding = null;
         if (!string.IsNullOrEmpty(lineEnding))
@@ -381,6 +374,25 @@ public sealed class WriteFileTool : ITool
                 var dryRunLineCount = finalContent.Length == 0 ? 0 : finalContent.Split('\n').Length;
                 return $"[dry_run] 将写入 {dryRunBytes:N0} 字节（{dryRunLineCount} 行）→ {path}（{(hadFile ? "覆盖已有文件" : "新建文件")}）。未写盘。";
             }
+
+            // backup=true:确认真的要写盘后才创建 .bak。
+            // 此前放在 if_exists/dry_run 检查之前：if_exists=error 被拒绝、或 dry_run 未写盘时，
+            // 也会在用户目录留下一个内容相同的 .bak 垃圾文件。
+            if (hadFile && ToolArgs.GetBool(args, "backup", false))
+            {
+                var bak = full + ".bak";
+                try
+                {
+                    File.Copy(full, bak, overwrite: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // 备份失败时写入还没发生：报「写入失败」会让模型以为内容已改，
+                    // 这里给出准确原因，且不继续写盘（用户要的备份没拿到就不该覆盖）
+                    throw new ToolException($"备份失败，已中止写入（未修改原文件）: {ex.Message}");
+                }
+            }
+
             var encoding = ToolArgs.GetString(args, "encoding");
             if (!string.IsNullOrEmpty(encoding))
             {
