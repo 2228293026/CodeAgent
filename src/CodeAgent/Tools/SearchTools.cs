@@ -195,6 +195,7 @@ public sealed class GrepTool : ITool
             ["show_first_match"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示首个匹配行（默认 false；files_only=true 时在文件路径后附加第一个匹配行，便于快速预览）" },
             ["show_absolute_path"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示绝对路径（默认 false；files_only=true 时显示完整绝对路径而非相对路径）" },
             ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；files_only=true 时在文件路径后附加扩展名，如 file.txt [.txt]）" },
+            ["show_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件类型（默认 false；files_only=true 时在文件路径后附加类型标记，如 file.txt [file]）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -278,6 +279,7 @@ public sealed class GrepTool : ITool
         var showFirstMatch = ToolArgs.GetBool(args, "show_first_match", false);
         var showAbsolutePath = ToolArgs.GetBool(args, "show_absolute_path", false);
         var showExtension = ToolArgs.GetBool(args, "show_extension", false);
+        var showType = ToolArgs.GetBool(args, "show_type", false);
         int filesScanned = 0;
         int filesSkipped = 0;
         if (multiline && invert)
@@ -383,6 +385,10 @@ public sealed class GrepTool : ITool
                         if (showExtension)
                         {
                             extra += $" [{Path.GetExtension(path)}]";
+                        }
+                        if (showType)
+                        {
+                            extra += " [file]";
                         }
                         sb.AppendLine((showAbsolutePath ? path.Replace('\\', '/') : rel) + extra);
                     }

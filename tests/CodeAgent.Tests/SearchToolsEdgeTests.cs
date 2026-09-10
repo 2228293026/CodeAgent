@@ -1129,4 +1129,25 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[file]", result); // 无类型标记
     }
 
+    [Fact]
+    public async Task Grep_FilesOnly_ShowType_True_DisplaysFileType()
+    {
+        // show_type=true + files_only=true:文件路径后附加类型标记
+        File.WriteAllText(PathOf("gft.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_type"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gft.txt [file]", result); // 文件类型
+    }
+
+    [Fact]
+    public async Task Grep_FilesOnly_ShowType_False_NoTypeInfo()
+    {
+        // show_type=false（默认）:不显示类型标记
+        File.WriteAllText(PathOf("gft2.txt"), "alpha beta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_type"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gft2.txt", result);
+        Assert.DoesNotContain("[file]", result); // 无类型标记
+    }
+
 }
