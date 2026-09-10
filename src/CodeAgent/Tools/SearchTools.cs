@@ -26,6 +26,7 @@ public sealed class GlobTool : ITool
             ["show_size"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件大小（默认 false；设为 true 时在路径后附加文件大小，如 file.txt (1.5 KB)）" },
             ["show_byte_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示字节数（默认 false；设为 true 时在路径后附加精确字节数，如 file.txt (1536 bytes)）" },
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在路径后附加哈希值，如 file.txt (sha256:abc123...)）" },
+            ["show_absolute_path"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示绝对路径（默认 false；设为 true 时显示完整绝对路径而非相对路径）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -55,6 +56,7 @@ public sealed class GlobTool : ITool
         var showSize = ToolArgs.GetBool(args, "show_size", false);
         var showByteCount = ToolArgs.GetBool(args, "show_byte_count", false);
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
+        var showAbsolutePath = ToolArgs.GetBool(args, "show_absolute_path", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -71,7 +73,7 @@ public sealed class GlobTool : ITool
                 continue; // 跳过隐藏文件/目录
             // 命中 pattern 且未被 ignore 排除才保留
             if (regexes.Any(r => r.IsMatch(rel)) && (ignoreRes is null || !ignoreRes.Any(r => r.IsMatch(rel))))
-                results.Add(rel);
+                results.Add(showAbsolutePath ? file.Replace('\\', '/') : rel);
         }
 
         await Task.Yield();

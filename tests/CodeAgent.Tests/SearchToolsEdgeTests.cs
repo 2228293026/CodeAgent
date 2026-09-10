@@ -1012,4 +1012,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain(_dir.Replace("\\", "/"), result); // 不包含绝对路径
     }
 
+    [Fact]
+    public async Task Glob_ShowAbsolutePath_True_DisplaysFullPath()
+    {
+        // show_absolute_path=true:显示完整绝对路径
+        File.WriteAllText(PathOf("gap3.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "gap3.txt", ["show_absolute_path"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains(_dir.Replace("\\", "/"), result); // 包含工作区绝对路径
+        Assert.Contains("gap3.txt", result);
+    }
+
+    [Fact]
+    public async Task Glob_ShowAbsolutePath_False_UsesRelativePath()
+    {
+        // show_absolute_path=false（默认）:使用相对路径
+        File.WriteAllText(PathOf("gap4.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "gap4.txt", ["show_absolute_path"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("gap4.txt", result);
+        Assert.DoesNotContain(_dir.Replace("\\", "/"), result); // 不包含绝对路径
+    }
+
 }
