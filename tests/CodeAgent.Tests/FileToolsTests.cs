@@ -3936,4 +3936,34 @@ public class FileToolsTests : IDisposable
         Assert.Contains("dir1/ (", output); // 目录：只有时间（目录大小不显示）
     }
 
+    [Fact]
+    public async Task ReadFile_ShowEncoding_True_DisplaysEncodingInfo()
+    {
+        // show_encoding=true:强制显示文件编码信息
+        File.WriteAllText(Path.Combine(_dir, "enc.txt"), "hello world", new System.Text.UTF8Encoding(false));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "enc.txt", ["show_encoding"] = true, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello world", output);
+        Assert.Contains("UTF-8", output); // 显示编码信息
+    }
+
+    [Fact]
+    public async Task ReadFile_ShowEncoding_False_NoEncodingInfo()
+    {
+        // show_encoding=false（默认）:不显示编码信息（除非是非 UTF-8 编码）
+        File.WriteAllText(Path.Combine(_dir, "enc2.txt"), "hello world", new System.Text.UTF8Encoding(false));
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "enc2.txt", ["show_encoding"] = false, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello world", output);
+        Assert.DoesNotContain("UTF-8", output); // 纯 UTF-8 不显示编码信息
+    }
+
 }

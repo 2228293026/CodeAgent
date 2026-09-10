@@ -23,6 +23,7 @@ public sealed class ReadFileTool : ITool
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
+            ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "强制显示编码信息（默认 false；设为 true 时在输出中显式标注文件编码，便于排查乱码问题）" },
             ["skip_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "跳过空行（默认 false）" },
             ["trim"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉每行首尾空白（默认 false）" },
             ["no_header"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示头部范围提示（默认 false）" },
@@ -85,6 +86,7 @@ public sealed class ReadFileTool : ITool
         if (maxLineLength < 0) maxLineLength = 2000; // 负值回退默认值，避免误伤
         if (maxLineLength > 50000) maxLineLength = 50000;
         var noEncodingNote = ToolArgs.GetBool(args, "no_encoding_note", false);
+        var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
         var skipEmpty = ToolArgs.GetBool(args, "skip_empty", false);
         var trim = ToolArgs.GetBool(args, "trim", false);
         var noHeader = ToolArgs.GetBool(args, "no_header", false);
@@ -198,12 +200,10 @@ public sealed class ReadFileTool : ITool
         var head = noHeader ? "" : $"（{path} 共 {lines.Length} 行{range}）\n";
 
         // 编码提示：非纯 UTF-8（带 BOM 或 GBK/ANSI 旧编码）时显式标注，避免模型误判文件为 UTF-8 去改写
-        var encNote = noEncodingNote ? "" : (TextUtil.DetectFileEncoding(full) switch
-        {
-            "utf8-bom" => "（编码: UTF-8 BOM）",
-            "gb18030" => "（编码: GBK/GB18030）",
-            _ => "",
-        });
+        var detectedEnc = TextUtil.DetectFileEncoding(full);
+        var encNote = noEncodingNote ? "" : showEncoding || detectedEnc is "utf8-bom" or "gb18030"
+            ? $"（编码: {detectedEnc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => detectedEnc ?? "UTF-8" }})"
+            : "";
         var output = (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
         if (includeHash)
         {
