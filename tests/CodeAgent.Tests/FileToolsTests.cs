@@ -3552,4 +3552,35 @@ public class FileToolsTests : IDisposable
         Assert.Contains("不支持的编码", ex.Message);
     }
 
+    [Fact]
+    public async Task ReadFile_StripBom_True_RemovesBomFromOutput()
+    {
+        // strip_bom=true（默认）:输出内容不带 UTF-8 BOM
+        var path = Path.Combine(_dir, "bom.txt");
+        File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("hello")]);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bom.txt", ["strip_bom"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello", output);
+        Assert.Equal(-1, output.IndexOf('\uFEFF')); // BOM 被去掉
+    }
+
+    [Fact]
+    public async Task ReadFile_StripBom_False_PreservesBomInOutput()
+    {
+        // strip_bom=false:输出内容保留 UTF-8 BOM（方便模型看到原始文件特征）
+        var path = Path.Combine(_dir, "bom2.txt");
+        File.WriteAllBytes(path, [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("hello")]);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bom2.txt", ["strip_bom"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("\uFEFFhello", output); // BOM 保留
+    }
+
 }

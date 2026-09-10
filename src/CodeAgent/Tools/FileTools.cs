@@ -27,6 +27,7 @@ public sealed class ReadFileTool : ITool
             ["raw"] = new JsonObject { ["type"] = "boolean", ["description"] = "原始输出：不带行号、不截断、不显示编码提示（默认 false）" },
             ["hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "在输出末尾附加 SHA256 哈希（默认 false；可用于校验文件完整性）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "强制指定编码：utf8、utf8-bom、gbk、gb18030、ascii（默认自动检测）" },
+            ["strip_bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉 UTF-8 BOM 头（默认 false；输出内容不带 BOM，方便复制粘贴）" },
         },
         ["required"] = new JsonArray("path"),
     };
@@ -76,7 +77,10 @@ public sealed class ReadFileTool : ITool
             noHeader = true;
         }
 
+        var stripBom = ToolArgs.GetBool(args, "strip_bom", false);
         string text;
+        // 先检测文件是否带 UTF-8 BOM（ReadTextSmart 内部已去掉，这里只探测头部）
+        bool hadBom = false;
         if (!string.IsNullOrEmpty(encoding))
         {
             // 显式指定编码：绕过自动检测，直接按指定编码读取
@@ -92,8 +96,22 @@ public sealed class ReadFileTool : ITool
         }
         else
         {
+            // 探测文件头部是否有 UTF-8 BOM（仅探测前 3 字节）
+            try
+            {
+                await using var fs = File.OpenRead(full);
+                var bomHead = new byte[3];
+                var n = await fs.ReadAsync(bomHead.AsMemory(0, 3), ct);
+                hadBom = n == 3 && bomHead[0] == 0xEF && bomHead[1] == 0xBB && bomHead[2] == 0xBF;
+            }
+            catch { }
             text = await TextUtil.ReadTextSmartAsync(full, ct);
         }
+
+        // strip_bom=false:若文件原带 UTF-8 BOM，在输出内容前补回 BOM 字符
+        if (!stripBom && hadBom && text.Length > 0 && text[0] != '\uFEFF')
+            text = '\uFEFF' + text;
+        // strip_bom=true:ReadTextSmart 已默认去掉 BOM，无需额外处理
         if (SkipDirs.LooksBinary(text))
             throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
 
@@ -527,7 +545,7 @@ public sealed class ListDirectoryTool : ITool
                         if (emitted >= maxItems)
                             break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
                         var name = Path.GetFileName(d);
-                        if (!showHidden && IsHidden(d))
+                        if (!showHidden && SkipDirs.IsHidden(d))
                             continue; // 跳过隐藏目录
                         if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
                             continue;
@@ -543,7 +561,7 @@ public sealed class ListDirectoryTool : ITool
                     {
                         if (emitted >= maxItems)
                             break;
-                        if (!showHidden && IsHidden(f))
+                        if (!showHidden && SkipDirs.IsHidden(f))
                             continue; // 跳过隐藏文件
                         sb.AppendLine(indent + Path.GetFileName(f));
                         emitted++;
@@ -576,21 +594,5 @@ public sealed class ListDirectoryTool : ITool
         if (sortBy == "modified")
             return entries.OrderByDescending(x => File.GetLastWriteTimeUtc(x));
         return entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase);
-    }
-
-    /// <summary>判断路径是否为隐藏文件/目录（Unix 以 . 开头，Windows 带 Hidden/System 属性）。</summary>
-    private static bool IsHidden(string path)
-    {
-        var name = Path.GetFileName(path);
-        if (name.Length > 0 && name[0] == '.')
-            return true;
-        try
-        {
-            var attrs = File.GetAttributes(path);
-            if ((attrs & (FileAttributes.Hidden | FileAttributes.System)) != 0)
-                return true;
-        }
-        catch { }
-        return false;
     }
 }
