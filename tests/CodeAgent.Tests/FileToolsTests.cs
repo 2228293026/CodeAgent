@@ -3919,4 +3919,21 @@ public class FileToolsTests : IDisposable
         Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", output); // 匹配时间格式
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowSizeAndModified_DisplaysBothForFilesAndDirs()
+    {
+        // show_size=true + show_modified=true:文件和目录都显示大小/时间
+        Directory.CreateDirectory(Path.Combine(_dir, "dir1"));
+        File.WriteAllText(Path.Combine(_dir, "dir1", "f.txt"), new string('a', 200));
+        File.WriteAllText(Path.Combine(_dir, "root.txt"), new string('b', 50));
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_size"] = true, ["show_modified"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("root.txt (50 B,", output); // 文件：大小 + 时间
+        Assert.Contains("dir1/ (", output); // 目录：只有时间（目录大小不显示）
+    }
+
 }
