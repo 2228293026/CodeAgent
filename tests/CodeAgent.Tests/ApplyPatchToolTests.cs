@@ -18,7 +18,7 @@ public class ApplyPatchToolTests : IDisposable
 
     private AgentContext MakeContext() => new() { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
 
-    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false)
+    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false, bool dryRun = false)
     {
         var tool = new ApplyPatchTool();
         var ctx = MakeContext();
@@ -28,6 +28,7 @@ public class ApplyPatchToolTests : IDisposable
         if (allowNewFile) args["allow_new_file"] = true;
         if (allowEmpty) args["allow_empty"] = true;
         if (generous) args["generous"] = true;
+        if (dryRun) args["dry_run"] = true;
         return await tool.ExecuteAsync(args, ctx, CancellationToken.None);
     }
 
@@ -318,5 +319,35 @@ public class ApplyPatchToolTests : IDisposable
         var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "gs.txt", generous: false));
 
         Assert.Contains("上下文不匹配", ex.Message);
+    }
+
+    [Fact]
+    public async Task Apply_DryRun_DoesNotModifyFile()
+    {
+        // dry_run=true:预览改动但不写盘
+        File.WriteAllText(Path.Combine(_dir, "dry.txt"), "line1\nline2\nline3\n");
+        var patch = @"@@ -1,2 +1,2 @@
+ line1
+-line2
++new2";
+
+        var result = await Apply(patch, "dry.txt", dryRun: true);
+
+        Assert.Contains("[dry_run]", result);
+        Assert.Equal("line1\nline2\nline3\n", File.ReadAllText(Path.Combine(_dir, "dry.txt"))); // 文件未变
+    }
+
+    [Fact]
+    public async Task Apply_DryRun_NewFile_PreventsCreation()
+    {
+        // dry_run=true + allow_new_file:预览新建文件但不实际创建
+        var patch = @"@@ -0,0 +1,2 @@
++new line1
++new line2";
+
+        var result = await Apply(patch, "new.txt", allowNewFile: true, dryRun: true);
+
+        Assert.Contains("[dry_run]", result);
+        Assert.False(File.Exists(Path.Combine(_dir, "new.txt"))); // 文件未创建
     }
 }

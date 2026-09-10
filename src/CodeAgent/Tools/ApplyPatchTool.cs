@@ -27,6 +27,7 @@ public sealed class ApplyPatchTool : ITool
             ["allow_new_file"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许补丁创建目标文件(默认 false；设为 true 时目标不存在会新建文件)" },
             ["allow_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许空补丁（无可用文件块时返回提示而非报错，默认 false）" },
             ["generous"] = new JsonObject { ["type"] = "boolean", ["description"] = "放宽上下文匹配：多 hunk 补丁也允许行号漂移容错（默认 false；单 hunk 默认已放宽）" },
+            ["dry_run"] = new JsonObject { ["type"] = "boolean", ["description"] = "仅预览改动（返回将发生的变更摘要，不写盘、不污染撤销栈），默认 false" },
         },
         ["required"] = new JsonArray("patch"),
     };
@@ -42,6 +43,7 @@ public sealed class ApplyPatchTool : ITool
         var allowNewFile = ToolArgs.GetBool(args, "allow_new_file", false);
         var allowEmpty = ToolArgs.GetBool(args, "allow_empty", false);
         var generous = ToolArgs.GetBool(args, "generous", false);
+        var dryRun = ToolArgs.GetBool(args, "dry_run", false);
 
         var files = ParsePatch(patch, fallbackPath);
         if (files.Count == 0)
@@ -55,7 +57,7 @@ public sealed class ApplyPatchTool : ITool
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
-            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, generous, ct));
+            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, generous, dryRun, ct));
         }
         return "已应用补丁:\n" + sb.ToString().TrimEnd();
     }
@@ -160,7 +162,7 @@ public sealed class ApplyPatchTool : ITool
         return path;
     }
 
-    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, bool generous, CancellationToken ct)
+    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, bool generous, bool dryRun, CancellationToken ct)
     {
         var full = ctx.Workspace.Resolve(file.Path); // 写工具:白名单只读目录也拒绝
         if (Directory.Exists(full))
@@ -173,6 +175,8 @@ public sealed class ApplyPatchTool : ITool
             var createStat = StatHunks(file.Hunks);
             if (validateOnly)
                 return $"验证通过(新建): {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
+            if (dryRun)
+                return $"[dry_run] 将创建: {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
             var createText = string.Join('\n', ApplyHunks(file.Hunks, [], file.Path, true));
             var dir = Path.GetDirectoryName(full);
             if (!string.IsNullOrEmpty(dir))
@@ -200,6 +204,8 @@ public sealed class ApplyPatchTool : ITool
         var stat = StatHunks(file.Hunks);
         if (validateOnly)
             return $"验证通过: {file.Path}(-{stat.removed} +{stat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
+        if (dryRun)
+            return $"[dry_run] 将应用: {file.Path}(-{stat.removed} +{stat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
 
         var newText = string.Join('\n', applied);
         // 保留目标文件原有的结尾换行风格(先补末尾换行,再统一转 CRLF,避免混入 \r\r\n)
