@@ -793,4 +793,25 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("(", result); // 无大小括号
     }
 
+    [Fact]
+    public async Task Grep_ShowTotalMatches_True_DisplaysTotalMatchCount()
+    {
+        // show_total_matches=true:输出末尾显示总匹配数
+        File.WriteAllText(PathOf("tm.txt"), "alpha beta\ngamma delta\nalpha gamma\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["show_total_matches"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("[total] 共 2 处匹配", result); // 2 行包含 alpha
+    }
+
+    [Fact]
+    public async Task Grep_ShowTotalMatches_False_NoTotalMatchCount()
+    {
+        // show_total_matches=false（默认）:不显示总匹配数
+        File.WriteAllText(PathOf("tm2.txt"), "alpha beta\ngamma delta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["show_total_matches"] = false, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("alpha", result);
+        Assert.DoesNotContain("[total]", result); // 无总匹配数
+    }
+
 }

@@ -146,6 +146,7 @@ public sealed class GrepTool : ITool
             ["max_matches_per_file"] = new JsonObject { ["type"] = "integer", ["description"] = "每个文件最多显示的匹配数（默认 0=不限制；设为正数可防止单个文件匹配过多撑爆输出）" },
             ["literal"] = new JsonObject { ["type"] = "boolean", ["description"] = "字面量搜索（默认 false；设为 true 时 pattern 被视为普通字符串而非正则表达式，自动转义特殊字符）" },
             ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示搜索统计（默认 false；设为 true 时在输出末尾附加统计信息，如扫描文件数、匹配数、耗时）" },
+            ["show_total_matches"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示总匹配数（默认 false；设为 true 时在输出末尾附加总匹配数，而非仅显示匹配行数）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；files_only=true 时在文件路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
             ["show_encoding"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件编码（默认 false；files_only=true 时在文件路径后附加编码信息，如 file.txt (UTF-8 BOM)）" },
         },
@@ -219,6 +220,7 @@ public sealed class GrepTool : ITool
         int totalMatches = 0;
         var invert = ToolArgs.GetBool(args, "invert", false);
         var showStats = ToolArgs.GetBool(args, "stats", false);
+        var showTotalMatches = ToolArgs.GetBool(args, "show_total_matches", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var showEncoding = ToolArgs.GetBool(args, "show_encoding", false);
         int filesScanned = 0;
@@ -374,6 +376,7 @@ public sealed class GrepTool : ITool
                         continue;
                     fileMatchCount++;
                     hits++;
+                    totalMatches++;
                     string matchLine;
                     if (outputMode == "content")
                         matchLine = truncateLine(line);
@@ -452,6 +455,8 @@ public sealed class GrepTool : ITool
             : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;
         if (showStats)
             result += $"\n[stats] 扫描 {filesScanned} 个文件，跳过 {filesSkipped} 个，匹配 {hits} 处";
+        if (showTotalMatches && totalMatches > 0)
+            result += $"\n[total] 共 {totalMatches} 处匹配";
         return result;
     }
 
