@@ -4621,7 +4621,8 @@ public class FileToolsTests : IDisposable
     [Fact]
     public async Task ListDirectory_ShowHardlinks_True_DisplaysHardlinkInfo()
     {
-        // show_hardlinks=true:文件名后附加硬链接信息
+        // show_hardlinks=true:Windows 显示真实链接数（普通文件为 1）；
+        // 非 Windows 无跨平台 API，不显示（宁可不显示也不报错误数字）
         File.WriteAllText(Path.Combine(_dir, "hard.txt"), "hello\n");
         var tool = new ListDirectoryTool();
         var ctx = MakeContext(_dir);
@@ -4630,7 +4631,10 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["show_hardlinks"] = true }, ctx, CancellationToken.None);
 
         Assert.Contains("hard.txt", output); // 文件名
-        Assert.Contains("hard link", output); // 硬链接标记
+        if (OperatingSystem.IsWindows())
+            Assert.Contains("1 hard link", output); // 普通文件链接数为 1
+        else
+            Assert.DoesNotContain("hard link", output); // 无 API：不显示
     }
 
     [Fact]
@@ -4646,6 +4650,29 @@ public class FileToolsTests : IDisposable
 
         Assert.Contains("hard2.txt", output);
         Assert.DoesNotContain("hard link", output); // 无硬链接信息
+    }
+
+    [Fact]
+    public void ListDirectory_ShowHardlinks_ReportsRealLinkCountForHardLink()
+    {
+        // 真实硬链接：同一文件两个名字，链接数应为 2（仅 Windows 有 API，其余平台跳过）
+        if (!OperatingSystem.IsWindows())
+            return;
+        var original = Path.Combine(_dir, "orig.txt");
+        var alias = Path.Combine(_dir, "alias.txt");
+        File.WriteAllText(original, "hello\n");
+        CreateHardLink(alias, original);
+
+        Assert.Equal(2, SkipDirs.GetHardLinkCount(original)); // 两个名字 → 链接数 2
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+
+    private static void CreateHardLink(string linkPath, string targetPath)
+    {
+        if (!CreateHardLinkW(linkPath, targetPath, IntPtr.Zero))
+            throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
     }
 
 }

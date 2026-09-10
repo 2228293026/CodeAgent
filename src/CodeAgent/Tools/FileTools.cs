@@ -875,23 +875,10 @@ public sealed class ListDirectoryTool : ITool
                         }
                         if (showHardlinks)
                         {
-                            try
-                            {
-                                var info = new FileInfo(f);
-                                // 简化实现：显示是否为硬链接（通过检查链接目标）
-                                if (!string.IsNullOrEmpty(info.LinkTarget))
-                                {
-                                    parenParts.Add("has hard links");
-                                }
-                                else
-                                {
-                                    parenParts.Add("1 hard link");
-                                }
-                            }
-                            catch
-                            {
-                                parenParts.Add("1 hard link");
-                            }
+                            var links = SkipDirs.GetHardLinkCount(f);
+                            if (links is int n)
+                                parenParts.Add(n == 1 ? "1 hard link" : $"{n} hard links");
+                            // 非 Windows 无跨平台 API：不显示，避免给出错误数字
                         }
                         if (showEncoding)
                         {

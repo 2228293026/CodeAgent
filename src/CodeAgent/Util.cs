@@ -529,6 +529,47 @@ public static class SkipDirs
         return span.Contains('\0');
     }
 
+    /// <summary>硬链接数：Windows 走 GetFileInformationByHandle 的 nNumberOfLinks；
+    /// 非 Windows 返回 null——.NET 无跨平台 API，宁可不显示也不报错误数字。
+    ///（曾用 FileInfo.LinkTarget 判断：那是符号链接的目标路径，与硬链接数无关。）</summary>
+    public static int? GetHardLinkCount(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+            return null;
+        try
+        {
+            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            if (!GetFileInformationByHandle(handle, out var info))
+                return null;
+            return (int)info.NumberOfLinks;
+        }
+        catch
+        {
+            return null; // 打不开/竞态删除：按未知处理
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandle(
+        Microsoft.Win32.SafeHandles.SafeFileHandle hFile, out ByHandleFileInformation fileInformation);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct ByHandleFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
     /// <summary>根据文件扩展名获取 MIME 类型（默认 application/octet-stream）。</summary>
     public static string GetMimeType(string path)
     {
