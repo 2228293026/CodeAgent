@@ -245,6 +245,7 @@ public sealed class WriteFileTool : ITool
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "写入编码：utf8（默认，无 BOM）、utf8-bom（带 BOM）、gbk、gb18030、ascii；已有文件默认保留原编码，除非显式指定" },
             ["if_exists"] = new JsonObject { ["type"] = "string", ["description"] = "文件已存在时的处理方式：overwrite（默认，覆盖）、skip（跳过，不修改）、error（报错拒绝写入）" },
             ["preserve_timestamp"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留原文件修改时间（默认 false；设为 true 时覆盖后保持最后修改时间不变，便于增量构建/缓存）" },
+            ["atomic"] = new JsonObject { ["type"] = "boolean", ["description"] = "原子写入（默认 false；设为 true 时先写临时文件再 rename，避免写入过程中断导致文件损坏）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -321,6 +322,7 @@ public sealed class WriteFileTool : ITool
 
         var preserveTimestamp = ToolArgs.GetBool(args, "preserve_timestamp", false);
         var oldTimestamp = hadFile ? File.GetLastWriteTime(full) : default;
+        var atomic = ToolArgs.GetBool(args, "atomic", false);
 
         string finalContent;
         if (targetEnding is not null)
@@ -389,6 +391,16 @@ public sealed class WriteFileTool : ITool
                     Directory.CreateDirectory(dir);
                 var tmp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
                 await File.WriteAllTextAsync(tmp, finalContent, new System.Text.UTF8Encoding(true), ct);
+                File.Move(tmp, full, overwrite: true);
+            }
+            else if (atomic)
+            {
+                // atomic=true:写临时文件再 rename，避免写入过程中断导致文件损坏
+                var dir = Path.GetDirectoryName(full);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+                var tmp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
+                await TextUtil.WriteTextPreserveEncodingAsync(tmp, finalContent, ct);
                 File.Move(tmp, full, overwrite: true);
             }
             else

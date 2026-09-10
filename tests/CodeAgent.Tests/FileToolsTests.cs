@@ -4162,4 +4162,30 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("[", output); // 无编码括号
     }
 
+    [Fact]
+    public async Task WriteFile_Atomic_True_UsesAtomicWrite()
+    {
+        // atomic=true:原子写入（写临时文件再 rename）
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "atomic.txt", ["content"] = "atomic content\n", ["atomic"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("atomic content\n", File.ReadAllText(Path.Combine(_dir, "atomic.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_Atomic_False_UsesDirectWrite()
+    {
+        // atomic=false（默认）:直接写入
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "direct.txt", ["content"] = "direct content\n", ["atomic"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("direct content\n", File.ReadAllText(Path.Combine(_dir, "direct.txt")));
+    }
+
 }
