@@ -19,6 +19,7 @@ public sealed class ReadFileTool : ITool
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
             ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（0=不使用, 1-5000；limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
             ["skip"] = new JsonObject { ["type"] = "integer", ["description"] = "跳过前 N 行（0=不跳过，默认 0；与 offset 互斥，skip 优先）" },
+            ["range"] = new JsonObject { ["type"] = "string", ["description"] = "行号范围（如 \"10-20\" 或 \"10:20\"，与 offset/limit 互斥，range 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
@@ -64,6 +65,21 @@ public sealed class ReadFileTool : ITool
         var skip = Math.Clamp(ToolArgs.GetInt(args, "skip", 0), 0, 5000);
         if (skip > 0)
             offset = skip + 1; // skip 优先于 offset：跳过前 N 行后从第 N+1 行开始
+        var rangeArg = ToolArgs.GetString(args, "range");
+        if (!string.IsNullOrWhiteSpace(rangeArg))
+        {
+            // range 格式："10-20" 或 "10:20"，与 offset/limit 互斥，range 优先
+            var parts = rangeArg.Split('-', ':');
+            if (parts.Length == 2 && int.TryParse(parts[0], out var lineStart) && int.TryParse(parts[1], out var lineEnd) && lineStart > 0 && lineEnd >= lineStart)
+            {
+                offset = lineStart;
+                limit = lineEnd - lineStart + 1;
+            }
+            else
+            {
+                throw new ToolException($"range 格式无效: {rangeArg}（应为 \"start-end\" 或 \"start:end\"，如 \"10-20\"）");
+            }
+        }
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
         var maxLineLength = ToolArgs.GetInt(args, "max_line_length", 2000);
         if (maxLineLength < 0) maxLineLength = 2000; // 负值回退默认值，避免误伤

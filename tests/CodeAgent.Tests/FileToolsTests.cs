@@ -3763,4 +3763,54 @@ public class FileToolsTests : IDisposable
         Assert.Equal("3\tc", output.Trim()); // 只显示第 3 行
     }
 
+    [Fact]
+    public async Task ReadFile_Range_ReadsLinesInRange()
+    {
+        // range="2-4":读取第 2 到第 4 行
+        File.WriteAllText(Path.Combine(_dir, "range.txt"), "line1\nline2\nline3\nline4\nline5\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "range.txt", ["range"] = "2-4", ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("line2", output);
+        Assert.Contains("line3", output);
+        Assert.Contains("line4", output);
+        Assert.DoesNotContain("line1", output); // 第 1 行不在范围内
+        Assert.DoesNotContain("line5", output); // 第 5 行不在范围内
+    }
+
+    [Fact]
+    public async Task ReadFile_Range_ColonFormat_ReadsLinesInRange()
+    {
+        // range="2:4"（冒号格式）:读取第 2 到第 4 行
+        File.WriteAllText(Path.Combine(_dir, "range2.txt"), "a\nb\nc\nd\ne\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "range2.txt", ["range"] = "2:4", ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("b", output);
+        Assert.Contains("c", output);
+        Assert.Contains("d", output);
+        Assert.DoesNotContain("a", output);
+        Assert.DoesNotContain("e", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_Range_SingleLine_ReadsOneLine()
+    {
+        // range="3-3":只读取第 3 行
+        File.WriteAllText(Path.Combine(_dir, "range3.txt"), "1\n2\n3\n4\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "range3.txt", ["range"] = "3-3", ["no_header"] = true, ["no_line_numbers"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("3", output.Trim());
+    }
+
 }
