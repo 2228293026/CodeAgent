@@ -3997,6 +3997,40 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_PreserveTimestamp_True_KeepsOriginalModificationTime()
+    {
+        // preserve_timestamp=true:编辑后保持原修改时间
+        File.WriteAllText(Path.Combine(_dir, "ept.txt"), "hello world\n");
+        var oldTime = File.GetLastWriteTime(Path.Combine(_dir, "ept.txt"));
+        await Task.Delay(1100); // 确保时间不同
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ept.txt", ["old_string"] = "hello world", ["new_string"] = "hello preserved", ["preserve_timestamp"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello preserved\n", File.ReadAllText(Path.Combine(_dir, "ept.txt")));
+        Assert.Equal(oldTime, File.GetLastWriteTime(Path.Combine(_dir, "ept.txt"))); // 修改时间不变
+    }
+
+    [Fact]
+    public async Task EditFile_PreserveTimestamp_False_UpdatesModificationTime()
+    {
+        // preserve_timestamp=false（默认）:更新修改时间
+        File.WriteAllText(Path.Combine(_dir, "ept2.txt"), "hello world\n");
+        var oldTime = File.GetLastWriteTime(Path.Combine(_dir, "ept2.txt"));
+        await Task.Delay(1100); // 确保时间不同
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ept2.txt", ["old_string"] = "hello world", ["new_string"] = "hello updated", ["preserve_timestamp"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello updated\n", File.ReadAllText(Path.Combine(_dir, "ept2.txt")));
+        Assert.NotEqual(oldTime, File.GetLastWriteTime(Path.Combine(_dir, "ept2.txt"))); // 修改时间已更新
+    }
+
+    [Fact]
     public async Task ListDirectory_ShowFileCount_True_DisplaysFileCountPerDirectory()
     {
         // show_file_count=true:目录名后附加该目录下的文件数
