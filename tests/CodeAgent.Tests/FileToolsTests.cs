@@ -4177,6 +4177,47 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Atomic_TargetLocked_CleansUpTempFile()
+    {
+        // 目标被占用：允许读（撤销记录要读原文件），但拒绝写/删 → File.Move 失败。
+        // 不得把 .xxx.<guid>.tmp 垃圾留在用户目录
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "locked.txt");
+        File.WriteAllText(target, "original\n");
+
+        using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+                new JsonObject { ["path"] = "locked.txt", ["content"] = "new\n", ["atomic"] = true },
+                ctx, CancellationToken.None));
+        }
+
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp")); // 无残留临时文件
+        Assert.Equal("original\n", File.ReadAllText(target)); // 原文件未被破坏
+    }
+
+    [Fact]
+    public async Task WriteFile_Bom_TargetLocked_CleansUpTempFile()
+    {
+        // bom 分支同样先写临时文件再 rename：失败路径也必须清理
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "lockedbom.txt");
+        File.WriteAllText(target, "original\n");
+
+        using (new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+                new JsonObject { ["path"] = "lockedbom.txt", ["content"] = "new\n", ["bom"] = true },
+                ctx, CancellationToken.None));
+        }
+
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+        Assert.Equal("original\n", File.ReadAllText(target));
+    }
+
+    [Fact]
     public async Task WriteFile_Atomic_False_UsesDirectWrite()
     {
         // atomic=false（默认）:直接写入

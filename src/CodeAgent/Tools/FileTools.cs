@@ -398,8 +398,17 @@ public sealed class WriteFileTool : ITool
                 // 驱动器根/UNC 根下 GetDirectoryName 返回 null，统一走 TempPathFor 兜底
                 Directory.CreateDirectory(Path.GetDirectoryName(full) ?? ".");
                 var tmp = SkipDirs.TempPathFor(full);
-                await File.WriteAllTextAsync(tmp, finalContent, new System.Text.UTF8Encoding(true), ct);
-                File.Move(tmp, full, overwrite: true);
+                try
+                {
+                    await File.WriteAllTextAsync(tmp, finalContent, new System.Text.UTF8Encoding(true), ct);
+                    File.Move(tmp, full, overwrite: true);
+                }
+                catch
+                {
+                    // Move 失败（目标被占用/只读/无权限）不得把临时文件留在用户目录
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    throw;
+                }
             }
             else if (atomic)
             {
@@ -407,8 +416,17 @@ public sealed class WriteFileTool : ITool
                 // 同 bom 分支：统一走 TempPathFor（内含 null 兜底）
                 Directory.CreateDirectory(Path.GetDirectoryName(full) ?? ".");
                 var tmp = SkipDirs.TempPathFor(full);
-                await TextUtil.WriteTextPreserveEncodingAsync(tmp, finalContent, ct);
-                File.Move(tmp, full, overwrite: true);
+                try
+                {
+                    await TextUtil.WriteTextPreserveEncodingAsync(tmp, finalContent, ct);
+                    File.Move(tmp, full, overwrite: true);
+                }
+                catch
+                {
+                    // 同上：失败路径清理临时文件
+                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                    throw;
+                }
             }
             else
             {
@@ -418,6 +436,12 @@ public sealed class WriteFileTool : ITool
         catch (IOException ex)
         {
             throw new ToolException($"写入失败: {ex.Message}");
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // UnauthorizedAccessException 不是 IOException：目标只读/被占用/无权限时
+            // 此前会漏出裸异常给模型，而不是可读的工具错误
+            throw new ToolException($"写入失败（无权限或文件被占用）: {ex.Message}");
         }
         if (preserveTimestamp && hadFile && oldTimestamp != default)
         {
