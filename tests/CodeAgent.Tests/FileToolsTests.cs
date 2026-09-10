@@ -4409,4 +4409,36 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("<file>", output); // 无类型标记
     }
 
+    [Fact]
+    public async Task EditFile_ShowDiff_True_ReturnsUnifiedDiff()
+    {
+        // show_diff=true:返回结果中附加 unified diff
+        File.WriteAllText(Path.Combine(_dir, "diff.txt"), "hello world\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "diff.txt", ["old_string"] = "hello world", ["new_string"] = "hello universe", ["show_diff"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 1 处", result); // 成功消息
+        Assert.Contains("--- a/diff.txt", result); // diff 头部
+        Assert.Contains("+ hello universe", result); // 新增行
+        Assert.Contains("- hello world", result); // 删除行
+    }
+
+    [Fact]
+    public async Task EditFile_ShowDiff_False_NoDiff()
+    {
+        // show_diff=false（默认）:不显示 diff
+        File.WriteAllText(Path.Combine(_dir, "diff2.txt"), "hello world\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "diff2.txt", ["old_string"] = "hello world", ["new_string"] = "hello universe", ["show_diff"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 1 处", result); // 成功消息
+        Assert.DoesNotContain("--- a/", result); // 无 diff 头部
+    }
+
 }

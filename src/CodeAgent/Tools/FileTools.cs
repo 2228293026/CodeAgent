@@ -459,6 +459,7 @@ public sealed class EditFileTool : ITool
             ["dry_run"] = new JsonObject { ["type"] = "boolean", ["description"] = "仅预览改动（返回将发生的变更摘要，不写盘、不污染撤销栈），默认 false" },
             ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "覆盖已有文件前先创建 .bak 备份（默认 false）" },
             ["preserve_timestamp"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留原文件修改时间（默认 false；设为 true 时编辑后保持最后修改时间不变）" },
+            ["show_diff"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示差异（默认 false；设为 true 时在返回结果中附加 unified diff，便于确认改动内容）" },
         },
         ["required"] = new JsonArray("path", "old_string", "new_string"),
     };
@@ -489,6 +490,7 @@ public sealed class EditFileTool : ITool
         var allowMultiple = ToolArgs.GetBool(args, "allow_multiple", false);
         var backup = ToolArgs.GetBool(args, "backup", false);
         var preserveTimestamp = ToolArgs.GetBool(args, "preserve_timestamp", false);
+        var showDiff = ToolArgs.GetBool(args, "show_diff", false);
         var oldTimestamp = preserveTimestamp && File.Exists(full) ? File.GetLastWriteTime(full) : default;
         var cmp = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
@@ -567,11 +569,42 @@ public sealed class EditFileTool : ITool
         // 先写入成功再入栈，失败不污染撤销历史
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
 
+        // 生成 unified diff（show_diff 时附加到返回结果）
+        string? diff = null;
+        if (showDiff)
+        {
+            var oldLines = workOld.Split('\n');
+            var newLines = workNew.Split('\n');
+            var sb = new StringBuilder();
+            sb.AppendLine("--- a/" + Path.GetFileName(full));
+            sb.AppendLine("+++ b/" + Path.GetFileName(full));
+            int maxLines = Math.Max(oldLines.Length, newLines.Length);
+            for (int i = 0; i < maxLines; i++)
+            {
+                var oldLine = i < oldLines.Length ? oldLines[i] : null;
+                var newLine = i < newLines.Length ? newLines[i] : null;
+                if (oldLine == newLine)
+                {
+                    if (oldLine != null)
+                        sb.AppendLine("  " + oldLine);
+                }
+                else
+                {
+                    if (oldLine != null)
+                        sb.AppendLine("- " + oldLine);
+                    if (newLine != null)
+                        sb.AppendLine("+ " + newLine);
+                }
+            }
+            diff = sb.ToString();
+        }
+
         if (dryRun)
         {
             var dryStartLine = workText.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
             var dryCrlfNote = normalized && text.Contains("\r\n") ? "，保留原 CRLF 换行" : "";
-            return $"[dry_run] 将替换 {count} 处 → {path}（修改起始行 {dryStartLine}{dryCrlfNote}）。未写盘。";
+            var dryRunMsg = $"[dry_run] 将替换 {count} 处 → {path}（修改起始行 {dryStartLine}{dryCrlfNote}）。未写盘。";
+            return showDiff && diff != null ? dryRunMsg + "\n\n" + diff : dryRunMsg;
         }
 
         if (backup)
@@ -599,7 +632,8 @@ public sealed class EditFileTool : ITool
         var startLine = workText.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
         // 归一化命中且原文件是 CRLF：提示换行风格被保留（避免模型以为改成了 LF）
         var crlfNote = normalized && text.Contains("\r\n") ? "，保留原 CRLF 换行" : "";
-        return $"已替换 {count} 处 → {path}（修改起始行 {startLine}{crlfNote}）";
+        var msg = $"已替换 {count} 处 → {path}（修改起始行 {startLine}{crlfNote}）";
+        return showDiff && diff != null ? msg + "\n\n" + diff : msg;
     }
 }
 
