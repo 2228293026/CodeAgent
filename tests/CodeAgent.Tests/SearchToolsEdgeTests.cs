@@ -1034,4 +1034,25 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain(_dir.Replace("\\", "/"), result); // 不包含绝对路径
     }
 
+    [Fact]
+    public async Task Glob_ShowExtension_True_DisplaysFileExtension()
+    {
+        // show_extension=true:路径后附加扩展名
+        File.WriteAllText(PathOf("ge.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "ge.txt", ["show_extension"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ge.txt ([.txt])", result); // 扩展名格式（glob 用括号包裹附加信息）
+    }
+
+    [Fact]
+    public async Task Glob_ShowExtension_False_NoExtensionInfo()
+    {
+        // show_extension=false（默认）:不显示扩展名
+        File.WriteAllText(PathOf("ge2.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "ge2.txt", ["show_extension"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ge2.txt", result);
+        Assert.DoesNotContain("[.txt]", result); // 无扩展名信息
+    }
+
 }

@@ -27,6 +27,7 @@ public sealed class GlobTool : ITool
             ["show_byte_count"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示字节数（默认 false；设为 true 时在路径后附加精确字节数，如 file.txt (1536 bytes)）" },
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在路径后附加哈希值，如 file.txt (sha256:abc123...)）" },
             ["show_absolute_path"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示绝对路径（默认 false；设为 true 时显示完整绝对路径而非相对路径）" },
+            ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；设为 true 时在路径后附加扩展名，如 file.txt [.txt]）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -57,6 +58,7 @@ public sealed class GlobTool : ITool
         var showByteCount = ToolArgs.GetBool(args, "show_byte_count", false);
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
         var showAbsolutePath = ToolArgs.GetBool(args, "show_absolute_path", false);
+        var showExtension = ToolArgs.GetBool(args, "show_extension", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -94,7 +96,7 @@ public sealed class GlobTool : ITool
             results = tuples.Select(t => t.r).ToList();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
-        var shown = showModified || showSize || showByteCount || showHash
+        var shown = showModified || showSize || showByteCount || showHash || showExtension || showAbsolutePath
             ? string.Join('\n', results.Take(displayLimit).Select(r =>
             {
                 var full = Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar));
@@ -119,6 +121,10 @@ public sealed class GlobTool : ITool
                     using var sha = System.Security.Cryptography.SHA256.Create();
                     var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(full)));
                     parts.Add($"sha256:{hash[..8]}..."); // 只显示前 8 位，避免输出过长
+                }
+                if (showExtension && File.Exists(full))
+                {
+                    parts.Add($"[{Path.GetExtension(full)}]");
                 }
                 return parts.Count > 0 ? $"{r} ({string.Join(", ", parts)})" : r;
             }))
