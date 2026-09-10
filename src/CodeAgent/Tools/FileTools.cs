@@ -792,43 +792,16 @@ public sealed class ListDirectoryTool : ITool
                         }
                         if (showOwner)
                         {
-                            try
-                            {
-                                if (OperatingSystem.IsWindows())
-                                {
-                                    var info = new FileInfo(f);
-                                    var owner = info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount)).ToString();
-                                    parenParts.Add($"owner:{owner}");
-                                }
-                                else
-                                {
-                                    parenParts.Add($"owner:{Environment.UserName}");
-                                }
-                            }
-                            catch
-                            {
-                                parenParts.Add("owner:N/A");
-                            }
+                            // 非 Windows 无跨平台 API：不显示，而不是拿当前登录用户冒充文件属主
+                            var owner = SkipDirs.GetFileOwner(f);
+                            if (owner is not null)
+                                parenParts.Add($"owner:{owner}");
                         }
                         if (showGroup)
                         {
-                            try
-                            {
-                                if (OperatingSystem.IsWindows())
-                                {
-                                    var info = new FileInfo(f);
-                                    var group = info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount)).ToString();
-                                    parenParts.Add($"group:{group}");
-                                }
-                                else
-                                {
-                                    parenParts.Add("group:N/A");
-                                }
-                            }
-                            catch
-                            {
-                                parenParts.Add("group:N/A");
-                            }
+                            var group = SkipDirs.GetFileGroup(f);
+                            if (group is not null)
+                                parenParts.Add($"group:{group}");
                         }
                         if (showPermissions)
                         {

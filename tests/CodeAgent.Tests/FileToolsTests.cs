@@ -4493,7 +4493,8 @@ public class FileToolsTests : IDisposable
     [Fact]
     public async Task ListDirectory_ShowOwner_True_DisplaysFileOwner()
     {
-        // show_owner=true:文件名后附加文件所有者
+        // show_owner=true:Windows 显示真实属主；非 Windows 无跨平台 API 不显示
+        //（曾拿当前登录用户冒充文件属主）
         File.WriteAllText(Path.Combine(_dir, "owner.txt"), "hello\n");
         var tool = new ListDirectoryTool();
         var ctx = MakeContext(_dir);
@@ -4502,7 +4503,10 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["show_owner"] = true }, ctx, CancellationToken.None);
 
         Assert.Contains("owner.txt", output); // 文件名
-        Assert.Contains("owner:", output); // 所有者标记
+        if (OperatingSystem.IsWindows())
+            Assert.Contains("owner:", output); // 真实属主
+        else
+            Assert.DoesNotContain("owner:", output); // 无 API：不显示，不冒充
     }
 
     [Fact]
@@ -4523,7 +4527,7 @@ public class FileToolsTests : IDisposable
     [Fact]
     public async Task ListDirectory_ShowGroup_True_DisplaysFileGroup()
     {
-        // show_group=true:文件名后附加文件组
+        // show_group=true:Windows 显示真实组；非 Windows 无跨平台 API 不显示
         File.WriteAllText(Path.Combine(_dir, "group.txt"), "hello\n");
         var tool = new ListDirectoryTool();
         var ctx = MakeContext(_dir);
@@ -4532,7 +4536,10 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["show_group"] = true }, ctx, CancellationToken.None);
 
         Assert.Contains("group.txt", output); // 文件名
-        Assert.Contains("group:", output); // 组标记
+        if (OperatingSystem.IsWindows())
+            Assert.Contains("group:", output); // 真实组
+        else
+            Assert.DoesNotContain("group:", output); // 无 API：不显示
     }
 
     [Fact]

@@ -529,6 +529,39 @@ public static class SkipDirs
         return span.Contains('\0');
     }
 
+    /// <summary>文件所有者：Windows 走 ACL（真实 owner）。非 Windows 返回 null——
+    /// .NET 无跨平台 API，宁可不显示也不用当前进程用户名冒充（那是登录用户，不是文件属主）。</summary>
+    public static string? GetFileOwner(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+            return null;
+        try
+        {
+            var info = new FileInfo(path);
+            return info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount)).ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>文件组：Windows 走 ACL（真实 group）。非 Windows 返回 null（同上，不猜）。</summary>
+    public static string? GetFileGroup(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+            return null;
+        try
+        {
+            var info = new FileInfo(path);
+            return info.GetAccessControl().GetGroup(typeof(System.Security.Principal.NTAccount)).ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>权限字符串。Unix：真实权限位（如 -rw-r--r--，目录首字符为 d）；
     /// Windows：真实的文件属性（readonly/hidden/system/archive，无属性时 normal）。
     /// 此前用 ReadOnly 一个属性伪造三组 Unix 位，在 Windows 上输出的是假权限。</summary>
