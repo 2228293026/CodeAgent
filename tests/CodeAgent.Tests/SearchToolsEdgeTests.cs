@@ -473,6 +473,27 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_LineNumber_False_OmitsLineNumbers()
+    {
+        // line_number=false:输出格式为 file: content，去掉行号前缀
+        File.WriteAllText(PathOf("ln.txt"), "alpha\nbeta\ngamma\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["line_number"] = false };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ln.txt: beta", result); // 无行号
+        Assert.DoesNotContain("ln.txt:2:", result); // 不显示行号
+    }
+
+    [Fact]
+    public async Task Grep_LineNumber_True_IncludesLineNumbers()
+    {
+        // line_number=true（默认）:输出格式为 file:line: content
+        File.WriteAllText(PathOf("ln2.txt"), "alpha\nbeta\ngamma\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["line_number"] = true };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("ln2.txt:2: beta", result); // 显示行号
+    }
+
+    [Fact]
     public async Task Glob_SortByName_IsAlphabetical()
     {
         // sort_by=name:结果按路径字母序排列

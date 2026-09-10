@@ -114,6 +114,7 @@ public sealed class GrepTool : ITool
             ["word"] = new JsonObject { ["type"] = "boolean", ["description"] = "整词匹配（类似 rg -w）：pattern 两侧加单词边界 \\b，避免命中更长单词的子串（如搜 cat 不命中 category），默认 false" },
             ["binary_files"] = new JsonObject { ["type"] = "string", ["description"] = "二进制文件处理：skip（默认，跳过）、text（当作文本搜索）、without-match（视为不匹配）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
+            ["line_number"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示行号（默认 true；设为 false 时输出格式为 file: content，去掉行号前缀，方便模型直接提取匹配文本）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -157,6 +158,7 @@ public sealed class GrepTool : ITool
             opts |= RegexOptions.IgnoreCase;
         // 跨行匹配：让 `.` 与 `.*` 能匹配换行符（否则 multiline 只改 ^/$ 语义，'.*' 仍被 \n 截断）
         var multiline = ToolArgs.GetBool(args, "multiline", false);
+        var showLineNumber = ToolArgs.GetBool(args, "line_number", true);
         if (multiline)
             opts |= RegexOptions.Singleline;
         // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
@@ -253,9 +255,9 @@ public sealed class GrepTool : ITool
                         var startLine = 1 + CountNewlines(text, 0, m.Index);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
                         var spanLines = m.Value.Replace("\r", "").Split('\n');
-                        sb.AppendLine($"{rel}:{startLine}: {truncateLine(spanLines[0])}");
+                        sb.AppendLine(showLineNumber ? $"{rel}:{startLine}: {truncateLine(spanLines[0])}" : $"{rel}: {truncateLine(spanLines[0])}");
                         for (int li = 1; li < Math.Min(spanLines.Length, 4); li++)
-                            sb.AppendLine($"  +{li}| {truncateLine(spanLines[li])}");
+                            sb.AppendLine(showLineNumber ? $"  +{li}| {truncateLine(spanLines[li])}" : $"  {truncateLine(spanLines[li])}");
                         if (spanLines.Length > 4)
                             sb.AppendLine($"  …(命中跨 {startLine}-{endLine} 共 {spanLines.Length} 行)");
                         sb.AppendLine();
@@ -271,12 +273,12 @@ public sealed class GrepTool : ITool
                     if (!Hit(line))
                         continue;
                     hits++;
-                    sb.AppendLine($"{rel}:{i + 1}: {truncateLine(line)}");
+                    sb.AppendLine(showLineNumber ? $"{rel}:{i + 1}: {truncateLine(line)}" : $"{rel}: {truncateLine(line)}");
                     for (int c = Math.Max(0, i - before); c <= Math.Min(lines.Length - 1, i + after); c++)
                     {
                         // 跳过已作为上个匹配上下文输出过的行，避免重复
                         if (c != i && c > printedUntil)
-                            sb.AppendLine($"  {c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}");
+                            sb.AppendLine(showLineNumber ? $"  {c + 1}| {truncateLine(lines[c].TrimEnd('\r'))}" : $"  {truncateLine(lines[c].TrimEnd('\r'))}");
                     }
                     printedUntil = Math.Max(printedUntil, Math.Min(lines.Length - 1, i + after));
                     sb.AppendLine();
