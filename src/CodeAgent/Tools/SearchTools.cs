@@ -21,6 +21,7 @@ public sealed class GlobTool : ITool
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅根目录，默认无限制）" },
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按路径字母序）、size（按文件大小降序）、modified（按修改时间降序）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
+            ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -45,11 +46,12 @@ public sealed class GlobTool : ITool
         var depth = ToolArgs.GetInt(args, "depth", -1);
         var sortBy = ToolArgs.GetString(args, "sort_by");
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
+        var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
         var results = new List<string>();
         var scanned = 0;
 
         var capped = false;
-        foreach (var file in SkipDirs.EnumerateFilesPruned(start, depth >= 0 ? depth : int.MaxValue))
+        foreach (var file in SkipDirs.EnumerateFilesPruned(start, depth >= 0 ? depth : int.MaxValue, includeIgnored))
         {
             if (scanned++ > 200_000 || results.Count >= maxResults)
             {
