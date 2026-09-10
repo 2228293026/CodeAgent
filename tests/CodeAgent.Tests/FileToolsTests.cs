@@ -3732,4 +3732,35 @@ public class FileToolsTests : IDisposable
         Assert.Equal("Hello", output.Trim()); // 只读前 5 字节
     }
 
+    [Fact]
+    public async Task ReadFile_Skip_SkipsFirstLines()
+    {
+        // skip=2:跳过前 2 行，从第 3 行开始读取
+        File.WriteAllText(Path.Combine(_dir, "skip.txt"), "line1\nline2\nline3\nline4\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "skip.txt", ["skip"] = 2 }, ctx, CancellationToken.None);
+
+        Assert.Contains("line3", output); // 第 3 行可见
+        Assert.Contains("line4", output); // 第 4 行可见
+        Assert.DoesNotContain("line1", output); // 第 1 行被跳过
+        Assert.DoesNotContain("line2", output); // 第 2 行被跳过
+    }
+
+    [Fact]
+    public async Task ReadFile_Skip_WithLimit_CombinesCorrectly()
+    {
+        // skip=2 + limit=1:跳过前 2 行，再读 1 行
+        File.WriteAllText(Path.Combine(_dir, "skipl.txt"), "a\nb\nc\nd\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "skipl.txt", ["skip"] = 2, ["limit"] = 1, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("3\tc", output.Trim()); // 只显示第 3 行
+    }
+
 }

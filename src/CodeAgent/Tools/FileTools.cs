@@ -18,6 +18,7 @@ public sealed class ReadFileTool : ITool
             ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取行数（0=不使用, 默认 300，最大 5000）" },
             ["tail"] = new JsonObject { ["type"] = "integer", ["description"] = "读取末尾 N 行（1-5000；与 offset 同时给出时优先）" },
             ["head"] = new JsonObject { ["type"] = "integer", ["description"] = "读取开头 N 行（0=不使用, 1-5000；limit 的便捷写法：等价于 offset=1&limit=N，tail 优先）" },
+            ["skip"] = new JsonObject { ["type"] = "integer", ["description"] = "跳过前 N 行（0=不跳过，默认 0；与 offset 互斥，skip 优先）" },
             ["no_line_numbers"] = new JsonObject { ["type"] = "boolean", ["description"] = "不带行号输出原文（默认 false）" },
             ["max_line_length"] = new JsonObject { ["type"] = "integer", ["description"] = "单行截断阈值（0=不截断，默认 2000，最大 50000）" },
             ["no_encoding_note"] = new JsonObject { ["type"] = "boolean", ["description"] = "不显示编码提示（默认 false；已知编码时可减少输出噪音）" },
@@ -60,6 +61,9 @@ public sealed class ReadFileTool : ITool
             offset = 1;
             limit = headCount;
         }
+        var skip = Math.Clamp(ToolArgs.GetInt(args, "skip", 0), 0, 5000);
+        if (skip > 0)
+            offset = skip + 1; // skip 优先于 offset：跳过前 N 行后从第 N+1 行开始
         var noLineNumbers = ToolArgs.GetBool(args, "no_line_numbers", false);
         var maxLineLength = ToolArgs.GetInt(args, "max_line_length", 2000);
         if (maxLineLength < 0) maxLineLength = 2000; // 负值回退默认值，避免误伤
