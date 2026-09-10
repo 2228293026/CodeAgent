@@ -573,6 +573,20 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Heading_True_GroupsMatchesByFile()
+    {
+        // heading=true:每个文件的匹配前先输出文件路径
+        File.WriteAllText(PathOf("h1.txt"), "alpha\nbeta\ngamma\n");
+        File.WriteAllText(PathOf("h2.txt"), "delta\nepsilon\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["heading"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("h1.txt", result); // 文件路径作为标题出现
+        Assert.Contains("h2.txt", result); // 第二个文件路径也出现
+        Assert.Contains("h1.txt:2: beta", result); // 匹配行仍含文件路径
+        Assert.Contains("h2.txt:3: beta", result);
+    }
+
+    [Fact]
     public async Task Grep_OutputMode_Content_ReturnsOnlyMatches()
     {
         // output_mode=content:匹配文本前无文件路径和行号前缀
