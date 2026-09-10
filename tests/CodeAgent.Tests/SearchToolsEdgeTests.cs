@@ -1076,4 +1076,34 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("[.txt]", result); // 无扩展名信息
     }
 
+    [Fact]
+    public async Task Glob_Reverse_True_SortsInReverseOrder()
+    {
+        // reverse=true:反向排序（按名称时 z→a）
+        File.WriteAllText(PathOf("z.txt"), "alpha\n");
+        File.WriteAllText(PathOf("a.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "*.txt", ["sort_by"] = "name", ["reverse"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        var fileLines = lines.Where(l => l.EndsWith(".txt") || l.Contains(".txt")).ToList();
+        Assert.Equal(2, fileLines.Count);
+        Assert.StartsWith("z.txt", fileLines[0]); // 反向排序：z 在 a 前面
+        Assert.StartsWith("a.txt", fileLines[1]);
+    }
+
+    [Fact]
+    public async Task Glob_Reverse_False_SortsInNormalOrder()
+    {
+        // reverse=false（默认）:正向排序（按名称时 a→z）
+        File.WriteAllText(PathOf("m.txt"), "alpha\n");
+        File.WriteAllText(PathOf("n.txt"), "alpha\n");
+        var args = new JsonObject { ["pattern"] = "*.txt", ["sort_by"] = "name", ["reverse"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        var lines = result.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        var fileLines = lines.Where(l => l.EndsWith(".txt") || l.Contains(".txt")).ToList();
+        Assert.Equal(2, fileLines.Count);
+        Assert.StartsWith("m.txt", fileLines[0]); // 正向排序：m 在 n 前面
+        Assert.StartsWith("n.txt", fileLines[1]);
+    }
+
 }

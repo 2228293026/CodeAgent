@@ -20,6 +20,7 @@ public sealed class GlobTool : ITool
             ["max_results"] = new JsonObject { ["type"] = "integer", ["description"] = "最多返回的匹配文件数（默认 500，最大 5000）" },
             ["depth"] = new JsonObject { ["type"] = "integer", ["description"] = "递归深度限制（0=仅根目录，默认无限制）" },
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按路径字母序）、size（按文件大小降序）、modified（按修改时间降序）" },
+            ["reverse"] = new JsonObject { ["type"] = "boolean", ["description"] = "反向排序（默认 false；设为 true 时反转排序结果）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
             ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；设为 true 时在路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
@@ -51,6 +52,7 @@ public sealed class GlobTool : ITool
         var maxResults = Math.Clamp(ToolArgs.GetInt(args, "max_results", 500), 1, 5000);
         var depth = ToolArgs.GetInt(args, "depth", -1);
         var sortBy = ToolArgs.GetString(args, "sort_by");
+        var reverse = ToolArgs.GetBool(args, "reverse", false);
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
         var showModified = ToolArgs.GetBool(args, "show_modified", false);
@@ -84,7 +86,11 @@ public sealed class GlobTool : ITool
                 ? $"(扫描超过 200,000 个文件后中止，未找到匹配 {string.Join(", ", patterns)} 的文件——工作区过大，请缩小 path 或用更精确的 pattern)"
                 : $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
         if (string.IsNullOrEmpty(sortBy) || sortBy == "name")
-            results.Sort(StringComparer.Ordinal); // 确定性输出：枚举顺序跨平台不定
+        {
+            results.Sort(StringComparer.Ordinal);
+            if (reverse)
+                results.Reverse();
+        }
         else if (sortBy == "size" || sortBy == "modified")
         {
             var fullPaths = results.Select(r => Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar))).ToList();
@@ -94,6 +100,8 @@ public sealed class GlobTool : ITool
             else
                 tuples.Sort((a, b) => File.GetLastWriteTimeUtc(fullPaths[b.i]).CompareTo(File.GetLastWriteTimeUtc(fullPaths[a.i])));
             results = tuples.Select(t => t.r).ToList();
+            if (reverse)
+                results.Reverse();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
         var shown = showModified || showSize || showByteCount || showHash || showExtension || showAbsolutePath
