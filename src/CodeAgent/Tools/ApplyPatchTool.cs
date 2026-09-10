@@ -28,6 +28,7 @@ public sealed class ApplyPatchTool : ITool
             ["allow_empty"] = new JsonObject { ["type"] = "boolean", ["description"] = "允许空补丁（无可用文件块时返回提示而非报错，默认 false）" },
             ["generous"] = new JsonObject { ["type"] = "boolean", ["description"] = "放宽上下文匹配：多 hunk 补丁也允许行号漂移容错（默认 false；单 hunk 默认已放宽）" },
             ["dry_run"] = new JsonObject { ["type"] = "boolean", ["description"] = "仅预览改动（返回将发生的变更摘要，不写盘、不污染撤销栈），默认 false" },
+            ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "应用前创建 .bak 备份（默认 false；设为 true 时目标文件被覆盖前先复制为 .bak）" },
         },
         ["required"] = new JsonArray("patch"),
     };
@@ -44,6 +45,7 @@ public sealed class ApplyPatchTool : ITool
         var allowEmpty = ToolArgs.GetBool(args, "allow_empty", false);
         var generous = ToolArgs.GetBool(args, "generous", false);
         var dryRun = ToolArgs.GetBool(args, "dry_run", false);
+        var backup = ToolArgs.GetBool(args, "backup", false);
 
         var files = ParsePatch(patch, fallbackPath);
         if (files.Count == 0)
@@ -57,7 +59,7 @@ public sealed class ApplyPatchTool : ITool
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
-            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, generous, dryRun, ct));
+            sb.AppendLine(await ApplyFileAsync(file, ctx, validateOnly, allowNewFile, generous, dryRun, backup, ct));
         }
         return "已应用补丁:\n" + sb.ToString().TrimEnd();
     }
@@ -162,7 +164,7 @@ public sealed class ApplyPatchTool : ITool
         return path;
     }
 
-    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, bool generous, bool dryRun, CancellationToken ct)
+    private async Task<string> ApplyFileAsync(PatchFile file, AgentContext ctx, bool validateOnly, bool allowNewFile, bool generous, bool dryRun, bool backup, CancellationToken ct)
     {
         var full = ctx.Workspace.Resolve(file.Path); // 写工具:白名单只读目录也拒绝
         if (Directory.Exists(full))
@@ -215,6 +217,11 @@ public sealed class ApplyPatchTool : ITool
             newText = newText.Replace("\n", "\r\n");
 
         string? fullOld = text.Length <= 4 * 1024 * 1024 ? text : null;
+        if (backup)
+        {
+            var bak = full + ".bak";
+            File.Copy(full, bak, overwrite: true);
+        }
         await TextUtil.WriteTextPreserveEncodingAsync(full, newText, ct);
 
         ctx.Undo.Push(new UndoEntry

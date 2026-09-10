@@ -18,7 +18,7 @@ public class ApplyPatchToolTests : IDisposable
 
     private AgentContext MakeContext() => new() { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
 
-    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false, bool dryRun = false)
+    private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false, bool dryRun = false, bool backup = false)
     {
         var tool = new ApplyPatchTool();
         var ctx = MakeContext();
@@ -29,6 +29,7 @@ public class ApplyPatchToolTests : IDisposable
         if (allowEmpty) args["allow_empty"] = true;
         if (generous) args["generous"] = true;
         if (dryRun) args["dry_run"] = true;
+        if (backup) args["backup"] = true;
         return await tool.ExecuteAsync(args, ctx, CancellationToken.None);
     }
 
@@ -350,4 +351,39 @@ public class ApplyPatchToolTests : IDisposable
         Assert.Contains("[dry_run]", result);
         Assert.False(File.Exists(Path.Combine(_dir, "new.txt"))); // 文件未创建
     }
+
+    [Fact]
+    public async Task Apply_Backup_True_CreatesBakFile()
+    {
+        // backup=true:应用补丁前创建 .bak 备份
+        File.WriteAllText(Path.Combine(_dir, "bak.txt"), "line1\nline2\nline3\n");
+        var patch = @"@@ -1,2 +1,2 @@
+ line1
+-line2
++new2";
+
+        var result = await Apply(patch, "bak.txt", backup: true);
+
+        Assert.Contains("已应用", result);
+        Assert.Equal("line1\nnew2\nline3\n", File.ReadAllText(Path.Combine(_dir, "bak.txt"))); // 文件已修改
+        Assert.Equal("line1\nline2\nline3\n", File.ReadAllText(Path.Combine(_dir, "bak.txt.bak"))); // 备份保留原内容
+    }
+
+    [Fact]
+    public async Task Apply_Backup_False_NoBakFile()
+    {
+        // backup=false（默认）:不创建 .bak 备份
+        File.WriteAllText(Path.Combine(_dir, "nobak.txt"), "line1\nline2\n");
+        var patch = @"@@ -1,2 +1,2 @@
+ line1
+-line2
++new2";
+
+        var result = await Apply(patch, "nobak.txt", backup: false);
+
+        Assert.Contains("已应用", result);
+        Assert.Equal("line1\nnew2\n", File.ReadAllText(Path.Combine(_dir, "nobak.txt")));
+        Assert.False(File.Exists(Path.Combine(_dir, "nobak.txt.bak"))); // 无备份文件
+    }
+
 }
