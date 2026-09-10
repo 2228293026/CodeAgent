@@ -213,6 +213,13 @@ public sealed class ReadFileTool : ITool
             var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(full)));
             output += $"\nsha256:{hash}";
         }
+        if (showStats)
+        {
+            var lineCount = text.Split('\n').Length;
+            var words = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            var bytes = Encoding.UTF8.GetByteCount(text);
+            output += $"\n[stats] {lineCount} 行，{words} 词，{text.Length} 字符，{bytes:N0} 字节";
+        }
         return output;
     }
 }

@@ -4101,4 +4101,36 @@ public class FileToolsTests : IDisposable
         Assert.NotEqual(oldTime, File.GetLastWriteTime(path)); // 修改时间已更新
     }
 
+    [Fact]
+    public async Task ReadFile_Stats_True_DisplaysFileStatistics()
+    {
+        // stats=true:输出末尾附加文件统计信息
+        File.WriteAllText(Path.Combine(_dir, "stats.txt"), "hello world\nthis is a test\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "stats.txt", ["stats"] = true, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("[stats]", output); // 统计信息标记
+        Assert.Contains("行", output); // 包含行数
+        Assert.Contains("字符", output); // 包含字符数
+        Assert.Contains("字节", output); // 包含字节数
+    }
+
+    [Fact]
+    public async Task ReadFile_Stats_False_NoStatistics()
+    {
+        // stats=false（默认）:不显示统计信息
+        File.WriteAllText(Path.Combine(_dir, "stats2.txt"), "hello world\n");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "stats2.txt", ["stats"] = false, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("hello world", output);
+        Assert.DoesNotContain("[stats]", output); // 无统计信息
+    }
+
 }
