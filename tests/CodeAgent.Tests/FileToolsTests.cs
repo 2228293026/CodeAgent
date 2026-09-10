@@ -1390,6 +1390,38 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_ShowHidden_False_SkipsDotfiles()
+    {
+        // show_hidden=false（默认）:跳过以 . 开头的隐藏文件
+        File.WriteAllText(Path.Combine(_dir, "visible.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, ".hidden.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_hidden"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("visible.txt", output);
+        Assert.DoesNotContain(".hidden.txt", output); // 隐藏文件被跳过
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowHidden_True_IncludesDotfiles()
+    {
+        // show_hidden=true:显示以 . 开头的隐藏文件
+        File.WriteAllText(Path.Combine(_dir, "visible.txt"), "x");
+        File.WriteAllText(Path.Combine(_dir, ".hidden.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["files_only"] = true, ["show_hidden"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("visible.txt", output);
+        Assert.Contains(".hidden.txt", output); // 隐藏文件可见
+    }
+
+    [Fact]
     public async Task WriteFile_NumericContent_IsCoercedToString()
     {
         // 回归：模型偶尔把字符串参数序列化为数字，GetString 应容错转换而非抛 InvalidOperationException

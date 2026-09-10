@@ -487,6 +487,7 @@ public sealed class ListDirectoryTool : ITool
             ["files_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出文件（跳过目录），默认 false" },
             ["dirs_only"] = new JsonObject { ["type"] = "boolean", ["description"] = "只列出目录（跳过文件），默认 false" },
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按名称）、size（按文件大小降序）、modified（按修改时间降序）" },
+            ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
         },
     };
 
@@ -499,6 +500,7 @@ public sealed class ListDirectoryTool : ITool
         var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
         var ignoreSet = ToolArgs.GetStringSet(args, "ignore");
         var sortBy = ToolArgs.GetString(args, "sort_by");
+        var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -525,6 +527,8 @@ public sealed class ListDirectoryTool : ITool
                         if (emitted >= maxItems)
                             break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
                         var name = Path.GetFileName(d);
+                        if (!showHidden && IsHidden(d))
+                            continue; // 跳过隐藏目录
                         if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
                             continue;
                         sb.AppendLine(indent + name + "/");
@@ -539,6 +543,8 @@ public sealed class ListDirectoryTool : ITool
                     {
                         if (emitted >= maxItems)
                             break;
+                        if (!showHidden && IsHidden(f))
+                            continue; // 跳过隐藏文件
                         sb.AppendLine(indent + Path.GetFileName(f));
                         emitted++;
                         fileCount++;
@@ -570,5 +576,21 @@ public sealed class ListDirectoryTool : ITool
         if (sortBy == "modified")
             return entries.OrderByDescending(x => File.GetLastWriteTimeUtc(x));
         return entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>判断路径是否为隐藏文件/目录（Unix 以 . 开头，Windows 带 Hidden/System 属性）。</summary>
+    private static bool IsHidden(string path)
+    {
+        var name = Path.GetFileName(path);
+        if (name.Length > 0 && name[0] == '.')
+            return true;
+        try
+        {
+            var attrs = File.GetAttributes(path);
+            if ((attrs & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                return true;
+        }
+        catch { }
+        return false;
     }
 }
