@@ -4490,4 +4490,34 @@ public class FileToolsTests : IDisposable
         Assert.Contains("B", output); // 大小（包含 B/KB/MB 等单位）
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowOwner_True_DisplaysFileOwner()
+    {
+        // show_owner=true:文件名后附加文件所有者
+        File.WriteAllText(Path.Combine(_dir, "owner.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_owner"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("owner.txt", output); // 文件名
+        Assert.Contains("owner:", output); // 所有者标记
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowOwner_False_NoOwnerInfo()
+    {
+        // show_owner=false（默认）:不显示所有者
+        File.WriteAllText(Path.Combine(_dir, "owner2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_owner"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("owner2.txt", output);
+        Assert.DoesNotContain("owner:", output); // 无所有者信息
+    }
+
 }

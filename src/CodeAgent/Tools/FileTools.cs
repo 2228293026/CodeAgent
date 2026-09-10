@@ -668,6 +668,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；设为 true 时在文件名后附加扩展名，如 file.txt [.txt]）" },
             ["show_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件类型（默认 false；设为 true 时在文件名后附加类型标记，如 file.txt <file> 或 dir/ <dir>）" },
             ["show_mime_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 MIME 类型（默认 false；设为 true 时在文件名后附加 MIME 类型，如 file.txt (text/plain)）" },
+            ["show_owner"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件所有者（默认 false；设为 true 时在文件名后附加所有者信息，如 file.txt (owner:user)）" },
         },
     };
 
@@ -693,6 +694,7 @@ public sealed class ListDirectoryTool : ITool
         var showExtension = ToolArgs.GetBool(args, "show_extension", false);
         var showType = ToolArgs.GetBool(args, "show_type", false);
         var showMimeType = ToolArgs.GetBool(args, "show_mime_type", false);
+        var showOwner = ToolArgs.GetBool(args, "show_owner", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -779,6 +781,19 @@ public sealed class ListDirectoryTool : ITool
                         if (showMimeType)
                         {
                             parenParts.Add(SkipDirs.GetMimeType(f));
+                        }
+                        if (showOwner)
+                        {
+                            try
+                            {
+                                var info = new FileInfo(f);
+                                var owner = info.GetAccessControl().GetOwner(typeof(System.Security.Principal.NTAccount)).ToString();
+                                parenParts.Add($"owner:{owner}");
+                            }
+                            catch
+                            {
+                                parenParts.Add("owner:N/A");
+                            }
                         }
                         if (showEncoding)
                         {
