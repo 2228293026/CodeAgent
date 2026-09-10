@@ -234,6 +234,7 @@ public sealed class WriteFileTool : ITool
             ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "覆盖已有文件前先创建 .bak 备份（默认 false）" },
             ["preserve_trailing_newline"] = new JsonObject { ["type"] = "boolean", ["description"] = "保留末尾换行（默认 true；设为 false 时自动去掉 content 末尾的换行符）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "写入编码：utf8（默认，无 BOM）、utf8-bom（带 BOM）、gbk、gb18030、ascii；已有文件默认保留原编码，除非显式指定" },
+            ["if_exists"] = new JsonObject { ["type"] = "string", ["description"] = "文件已存在时的处理方式：overwrite（默认，覆盖）、skip（跳过，不修改）、error（报错拒绝写入）" },
         },
         ["required"] = new JsonArray("path", "content"),
     };
@@ -296,6 +297,16 @@ public sealed class WriteFileTool : ITool
             {
                 targetEnding = lineEnding;
             }
+        }
+
+        // if_exists 检查：文件已存在时的处理方式
+        var ifExists = ToolArgs.GetString(args, "if_exists");
+        if (!string.IsNullOrEmpty(ifExists) && File.Exists(full))
+        {
+            if (ifExists == "skip")
+                return $"文件已存在，已跳过写入: {path}（如需覆盖请移除 if_exists=skip 或设为 overwrite）";
+            if (ifExists == "error")
+                throw new ToolException($"文件已存在，拒绝写入: {path}（如需覆盖请移除 if_exists=error 或设为 overwrite）");
         }
 
         string finalContent;

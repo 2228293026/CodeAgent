@@ -2354,6 +2354,51 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_IfExists_Skip_DoesNotOverwrite()
+    {
+        // if_exists=skip:文件已存在时跳过写入，不修改原文件
+        File.WriteAllText(Path.Combine(_dir, "skip_exist.txt"), "original");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "skip_exist.txt", ["content"] = "new content", ["if_exists"] = "skip" }, ctx, CancellationToken.None);
+
+        Assert.Contains("已跳过", output);
+        Assert.Equal("original", File.ReadAllText(Path.Combine(_dir, "skip_exist.txt"))); // 文件未被修改
+    }
+
+    [Fact]
+    public async Task WriteFile_IfExists_Error_Throws()
+    {
+        // if_exists=error:文件已存在时报错拒绝写入
+        File.WriteAllText(Path.Combine(_dir, "err_exist.txt"), "original");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            tool.ExecuteAsync(
+                new JsonObject { ["path"] = "err_exist.txt", ["content"] = "new content", ["if_exists"] = "error" }, ctx, CancellationToken.None));
+
+        Assert.Contains("拒绝写入", ex.Message);
+        Assert.Equal("original", File.ReadAllText(Path.Combine(_dir, "err_exist.txt"))); // 文件未被修改
+    }
+
+    [Fact]
+    public async Task WriteFile_IfExists_Overwrite_Default_Overwrites()
+    {
+        // if_exists=overwrite（默认）:覆盖已有文件
+        File.WriteAllText(Path.Combine(_dir, "over.txt"), "original");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "over.txt", ["content"] = "new content", ["if_exists"] = "overwrite" }, ctx, CancellationToken.None);
+
+        Assert.Equal("new content", File.ReadAllText(Path.Combine(_dir, "over.txt"))); // 文件已被覆盖
+    }
+
+    [Fact]
     public async Task EditFile_DryRun_DoesNotModifyFileOrUndoStack()
     {
         // dry_run=true:预览改动但不写盘，不污染撤销栈
