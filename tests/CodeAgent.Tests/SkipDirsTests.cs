@@ -149,4 +149,44 @@ public class SkipDirsTests : IDisposable
         File.WriteAllText(big, sb.ToString());
         Assert.Equal(20000, SkipDirs.CountFileLines(big));
     }
+
+    [Fact]
+    public void TempPathFor_NormalPath_KeepsTempFileInSameDirectory()
+    {
+        // 临时文件必须与目标同目录（同卷 rename 才原子）
+        var target = Path.Combine(_dir, "sub", "out.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var tmp = SkipDirs.TempPathFor(target);
+
+        Assert.Equal(Path.GetDirectoryName(target), Path.GetDirectoryName(tmp));
+        Assert.NotEqual(target, tmp); // 不能就是目标本身
+        Assert.StartsWith(".", Path.GetFileName(tmp));
+        Assert.EndsWith(".tmp", tmp);
+    }
+
+    [Fact]
+    public void TempPathFor_VolumeRoot_DoesNotThrow()
+    {
+        // 真实可达 bug：路径回溯到卷根时 GetDirectoryName 返回 null，
+        // 旧代码 Path.Combine(null, …) 抛 ArgumentNullException（且调用方只 catch IOException → 直接崩）
+        var root = Path.GetPathRoot(Path.GetTempPath());
+        Assert.NotNull(root);
+        Assert.Null(Path.GetDirectoryName(root)); // 前提：该根确实取不到父目录
+
+        var tmp = SkipDirs.TempPathFor(root); // 不应抛异常
+
+        Assert.False(string.IsNullOrWhiteSpace(tmp));
+        Assert.EndsWith(".tmp", tmp);
+    }
+
+    [Fact]
+    public void TempPathFor_RepeatedCalls_ProduceUniquePaths()
+    {
+        // 并发写同一目标时临时文件不能互相覆盖
+        var target = Path.Combine(_dir, "same.txt");
+        var a = SkipDirs.TempPathFor(target);
+        var b = SkipDirs.TempPathFor(target);
+
+        Assert.NotEqual(a, b);
+    }
 }

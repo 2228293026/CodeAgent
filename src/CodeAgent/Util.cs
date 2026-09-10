@@ -155,10 +155,7 @@ public static class TextUtil
         }
         // 原子写：先写到同目录临时文件再 rename 覆盖，避免进程在写入中途崩溃/断电时把目标文件留在半截（损坏）。
         // File.Move(overwrite: true) 在同一卷上是原子操作；临时文件写在目标同目录确保在同一卷、不会被并行 GC 偷走。
-        var dir = Path.GetDirectoryName(path);
-        if (string.IsNullOrEmpty(dir))
-            dir = ".";
-        var tmp = Path.Combine(dir, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        var tmp = SkipDirs.TempPathFor(path); // 同目录临时文件（null 兜底在 helper 内统一处理）
         try
         {
             await File.WriteAllTextAsync(tmp, content, enc, ct);
@@ -528,6 +525,14 @@ public static class SkipDirs
         var span = text.AsSpan(0, Math.Min(text.Length, 8192));
         return span.Contains('\0');
     }
+
+    /// <summary>目标文件的同目录临时文件路径（写盘原子替换用：同卷 rename 才原子）。
+    /// GetDirectoryName 对驱动器根（D:\）与 UNC 共享根返回 null，此时用 "." 兜底——
+    /// 否则 Path.Combine(null, …) 抛 ArgumentNullException，且调用方通常只 catch IOException 会直接崩。
+    /// 此处是唯一实现：FileTools 与 WriteTextPreserveEncodingAsync 曾各写一份，两份漏了 null 兜底。</summary>
+    public static string TempPathFor(string path) =>
+        Path.Combine(Path.GetDirectoryName(path) is { Length: > 0 } dir ? dir : ".",
+            $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
 
     /// <summary>流式计算文件 SHA256（不整读进内存）：大文件（GB 级）不会因 show_hash 触发 OOM。
     /// 返回大写十六进制串；读取失败返回 null。</summary>

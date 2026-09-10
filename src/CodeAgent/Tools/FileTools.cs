@@ -395,20 +395,18 @@ public sealed class WriteFileTool : ITool
             else if (bom && !hadFile)
             {
                 // 新建文件 + bom=true:原子写 UTF-8 BOM（临时文件同目录确保同卷，rename 原子）
-                var dir = Path.GetDirectoryName(full);
-                if (!string.IsNullOrEmpty(dir))
-                    Directory.CreateDirectory(dir);
-                var tmp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
+                // 驱动器根/UNC 根下 GetDirectoryName 返回 null，统一走 TempPathFor 兜底
+                Directory.CreateDirectory(Path.GetDirectoryName(full) ?? ".");
+                var tmp = SkipDirs.TempPathFor(full);
                 await File.WriteAllTextAsync(tmp, finalContent, new System.Text.UTF8Encoding(true), ct);
                 File.Move(tmp, full, overwrite: true);
             }
             else if (atomic)
             {
                 // atomic=true:写临时文件再 rename，避免写入过程中断导致文件损坏
-                var dir = Path.GetDirectoryName(full);
-                if (!string.IsNullOrEmpty(dir))
-                    Directory.CreateDirectory(dir);
-                var tmp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
+                // 同 bom 分支：统一走 TempPathFor（内含 null 兜底）
+                Directory.CreateDirectory(Path.GetDirectoryName(full) ?? ".");
+                var tmp = SkipDirs.TempPathFor(full);
                 await TextUtil.WriteTextPreserveEncodingAsync(tmp, finalContent, ct);
                 File.Move(tmp, full, overwrite: true);
             }
