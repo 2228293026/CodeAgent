@@ -706,4 +706,26 @@ public class SearchToolsEdgeTests : IDisposable
         Assert.DoesNotContain("仅显示前 300", result); // 不再硬编码 300
     }
 
+    [Fact]
+    public async Task Glob_ShowModified_True_DisplaysFileModifiedTime()
+    {
+        // show_modified=true:文件路径后附加修改时间
+        File.WriteAllText(PathOf("sm.txt"), "hello");
+        var args = new JsonObject { ["pattern"] = "sm.txt", ["show_modified"] = true };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("sm.txt (", result); // 时间格式：yyyy-MM-dd HH:mm
+        Assert.Matches(@"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", result); // 匹配时间格式
+    }
+
+    [Fact]
+    public async Task Glob_ShowModified_False_NoTimeInfo()
+    {
+        // show_modified=false（默认）:不显示修改时间
+        File.WriteAllText(PathOf("sm2.txt"), "hello");
+        var args = new JsonObject { ["pattern"] = "sm2.txt", ["show_modified"] = false };
+        var result = await new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("sm2.txt", result);
+        Assert.DoesNotContain("(", result); // 无时间括号
+    }
+
 }

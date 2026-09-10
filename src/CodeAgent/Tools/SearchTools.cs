@@ -22,6 +22,7 @@ public sealed class GlobTool : ITool
             ["sort_by"] = new JsonObject { ["type"] = "string", ["description"] = "排序方式：name（默认，按路径字母序）、size（按文件大小降序）、modified（按修改时间降序）" },
             ["show_hidden"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示隐藏文件/目录（默认 false；Unix 以 . 开头，Windows 带 Hidden/System 属性）" },
             ["include_ignored"] = new JsonObject { ["type"] = "boolean", ["description"] = "搜索被跳过目录内的文件（如 .git、node_modules、bin、obj 等，默认 false；需要时设为 true 可搜索这些目录）" },
+            ["show_modified"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件修改时间（默认 false；设为 true 时在路径后附加修改时间，如 file.txt (2025-01-15 10:30)）" },
         },
         ["required"] = new JsonArray("pattern"),
     };
@@ -47,6 +48,7 @@ public sealed class GlobTool : ITool
         var sortBy = ToolArgs.GetString(args, "sort_by");
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
+        var showModified = ToolArgs.GetBool(args, "show_modified", false);
         var results = new List<string>();
         var scanned = 0;
 
@@ -84,7 +86,14 @@ public sealed class GlobTool : ITool
             results = tuples.Select(t => t.r).ToList();
         }
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
-        var shown = string.Join('\n', results.Take(displayLimit));
+        var shown = showModified
+            ? string.Join('\n', results.Take(displayLimit).Select(r =>
+            {
+                var full = Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar));
+                var modified = File.Exists(full) ? File.GetLastWriteTime(full).ToString("yyyy-MM-dd HH:mm") : "";
+                return modified.Length > 0 ? $"{r} ({modified})" : r;
+            }))
+            : string.Join('\n', results.Take(displayLimit));
         var truncated = results.Count > displayLimit || capped;
         return shown + (truncated ? $"\n…(共 {results.Count} 个，仅显示前 {displayLimit}{(capped ? "，已达上限，可能不完整" : "")})" : "");
     }
