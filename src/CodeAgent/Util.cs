@@ -74,7 +74,7 @@ public static class TextUtil
 
     /// <summary>读文本文件：BOM 优先；无 BOM 时严格校验 UTF-8，非法则按 GB18030 兜底。
     /// 老 Windows 工具保存的 ANSI（GBK）中文文件若按 UTF-8 读会出现乱码，
-    /// grep 搜不到中文、read_file 显示 &#65533; 替换符。</summary>
+    /// grep 搜不到中文、read_file 显示 � 替换符。</summary>
     public static string ReadTextSmart(string path) => DecodeSmart(File.ReadAllBytes(path));
 
     /// <summary>ReadTextSmart 的异步版本。</summary>
@@ -395,7 +395,7 @@ public static class TextUtil
         return i == 0 ? $"{bytes} B" : $"{v:F1} {units[i]}";
     }
 
-    /// <summary>模型短名：取 '/' 后的末段；末段过短（&lt;5 字符）不具辨识度时保留完整名。</summary>
+    /// <summary>模型短名：取 '/' 后的末段；末段过短（<5 字符）不具辨识度时保留完整名。</summary>
     public static string ShortModelName(string model)
     {
         var slash = model.LastIndexOf('/');
@@ -418,7 +418,7 @@ public static class TextUtil
         if (pricePerMillionInput <= 0 || pricePerMillionOutput <= 0)
             return null;
         return inputTokens * pricePerMillionInput / 1_000_000.0
-             + outputTokens * pricePerMillionOutput / 1_000_000.0;
+         + outputTokens * pricePerMillionOutput / 1_000_000.0;
     }
 
     /// <summary>费用文本（回合摘要与 /stats 共用口径）：≥ $0.01 保留两位小数，
@@ -527,6 +527,120 @@ public static class SkipDirs
         if (text.Length == 0) return false;
         var span = text.AsSpan(0, Math.Min(text.Length, 8192));
         return span.Contains('\0');
+    }
+
+    /// <summary>根据文件扩展名获取 MIME 类型（默认 application/octet-stream）。</summary>
+    public static string GetMimeType(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext switch
+        {
+            ".txt" => "text/plain",
+            ".cs" => "text/x-csharp",
+            ".csproj" => "text/xml",
+            ".json" => "application/json",
+            ".xml" => "application/xml",
+            ".html" => "text/html",
+            ".css" => "text/css",
+            ".js" => "text/javascript",
+            ".ts" => "text/typescript",
+            ".md" => "text/markdown",
+            ".png" => "image/png",
+            ".jpg" => "image/jpeg",
+            ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".svg" => "image/svg+xml",
+            ".pdf" => "application/pdf",
+            ".zip" => "application/zip",
+            ".tar" => "application/x-tar",
+            ".gz" => "application/gzip",
+            ".mp3" => "audio/mpeg",
+            ".mp4" => "video/mp4",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".ppt" => "application/vnd.ms-powerpoint",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".exe" => "application/octet-stream",
+            ".dll" => "application/octet-stream",
+            ".so" => "application/octet-stream",
+            ".dylib" => "application/octet-stream",
+            ".bin" => "application/octet-stream",
+            ".dat" => "application/octet-stream",
+            ".db" => "application/octet-stream",
+            ".sqlite" => "application/x-sqlite3",
+            ".log" => "text/plain",
+            ".yml" => "text/yaml",
+            ".yaml" => "text/yaml",
+            ".toml" => "text/toml",
+            ".ini" => "text/plain",
+            ".cfg" => "text/plain",
+            ".conf" => "text/plain",
+            ".sh" => "application/x-sh",
+            ".bash" => "application/x-sh",
+            ".zsh" => "application/x-sh",
+            ".py" => "text/x-python",
+            ".java" => "text/x-java",
+            ".c" => "text/x-c",
+            ".cpp" => "text/x-c++",
+            ".h" => "text/x-c",
+            ".hpp" => "text/x-c++",
+            ".rb" => "text/x-ruby",
+            ".php" => "text/x-php",
+            ".go" => "text/x-go",
+            ".rs" => "text/x-rust",
+            ".swift" => "text/x-swift",
+            ".kt" => "text/x-kotlin",
+            ".scala" => "text/x-scala",
+            ".r" => "text/x-r",
+            ".m" => "text/x-matlab",
+            ".sql" => "text/x-sql",
+            ".dockerfile" => "text/x-dockerfile",
+            ".gitignore" => "text/plain",
+            ".gitattributes" => "text/plain",
+            ".editorconfig" => "text/plain",
+            ".env" => "text/plain",
+            ".lock" => "text/plain",
+            ".sum" => "text/plain",
+            ".mod" => "text/plain",
+            ".wasm" => "application/wasm",
+            ".webp" => "image/webp",
+            ".ico" => "image/x-icon",
+            ".ttf" => "font/ttf",
+            ".otf" => "font/otf",
+            ".woff" => "font/woff",
+            ".woff2" => "font/woff2",
+            ".eot" => "application/vnd.ms-fontobject",
+            ".svgz" => "image/svg+xml",
+            ".bmp" => "image/bmp",
+            ".tiff" => "image/tiff",
+            ".tif" => "image/tiff",
+            ".webm" => "video/webm",
+            ".ogg" => "audio/ogg",
+            ".wav" => "audio/wav",
+            ".flac" => "audio/flac",
+            ".aac" => "audio/aac",
+            ".m4a" => "audio/mp4",
+            ".opus" => "audio/opus",
+            ".avi" => "video/x-msvideo",
+            ".mov" => "video/quicktime",
+            ".wmv" => "video/x-ms-wmv",
+            ".flv" => "video/x-flv",
+            ".mkv" => "video/x-matroska",
+            ".3gp" => "video/3gpp",
+            ".iso" => "application/x-iso9660-image",
+            ".dmg" => "application/x-apple-diskimage",
+            ".msi" => "application/x-msi",
+            ".deb" => "application/x-debian-package",
+            ".rpm" => "application/x-rpm",
+            ".jar" => "application/java-archive",
+            ".war" => "application/java-archive",
+            ".ear" => "application/java-archive",
+            ".apk" => "application/vnd.android.package-archive",
+            ".ipa" => "application/x-ios-app",
+            _ => "application/octet-stream",
+        };
     }
 }
 

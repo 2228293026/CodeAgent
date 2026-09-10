@@ -4441,4 +4441,52 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("--- a/", result); // 无 diff 头部
     }
 
+    [Fact]
+    public async Task ListDirectory_ShowMimeType_True_DisplaysMimeType()
+    {
+        // show_mime_type=true:文件名后附加 MIME 类型
+        File.WriteAllText(Path.Combine(_dir, "mime.txt"), "hello\n");
+        File.WriteAllText(Path.Combine(_dir, "mime.json"), "{}");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_mime_type"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("mime.txt (text/plain)", output); // 文本文件 MIME 类型
+        Assert.Contains("mime.json (application/json)", output); // JSON 文件 MIME 类型
+    }
+
+    [Fact]
+    public async Task ListDirectory_ShowMimeType_False_NoMimeTypeInfo()
+    {
+        // show_mime_type=false（默认）:不显示 MIME 类型
+        File.WriteAllText(Path.Combine(_dir, "mime2.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_mime_type"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("mime2.txt", output);
+        Assert.DoesNotContain("text/plain", output); // 无 MIME 类型信息
+    }
+
+    [Fact]
+    public async Task ListDirectory_CombinedShowParameters_DisplaysMultipleSuffixes()
+    {
+        // 组合多个 show_* 参数：同时显示大小、修改时间、扩展名、MIME 类型
+        File.WriteAllText(Path.Combine(_dir, "combined.txt"), "hello\n");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_size"] = true, ["show_extension"] = true, ["show_mime_type"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("combined.txt", output); // 文件名
+        Assert.Contains(".txt", output); // 扩展名
+        Assert.Contains("text/plain", output); // MIME 类型
+        Assert.Contains("B", output); // 大小（包含 B/KB/MB 等单位）
+    }
+
 }

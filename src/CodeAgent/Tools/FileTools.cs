@@ -666,6 +666,7 @@ public sealed class ListDirectoryTool : ITool
             ["show_hash"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 SHA256 哈希（默认 false；设为 true 时在文件名后附加哈希值，如 file.txt (sha256:abc123...)）" },
             ["show_extension"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件扩展名（默认 false；设为 true 时在文件名后附加扩展名，如 file.txt [.txt]）" },
             ["show_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件类型（默认 false；设为 true 时在文件名后附加类型标记，如 file.txt <file> 或 dir/ <dir>）" },
+            ["show_mime_type"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示 MIME 类型（默认 false；设为 true 时在文件名后附加 MIME 类型，如 file.txt (text/plain)）" },
         },
     };
 
@@ -690,6 +691,7 @@ public sealed class ListDirectoryTool : ITool
         var showHash = ToolArgs.GetBool(args, "show_hash", false);
         var showExtension = ToolArgs.GetBool(args, "show_extension", false);
         var showType = ToolArgs.GetBool(args, "show_type", false);
+        var showMimeType = ToolArgs.GetBool(args, "show_mime_type", false);
 
         var root = ctx.Workspace.ResolveRead(string.IsNullOrWhiteSpace(path) ? null : path);
         if (File.Exists(root))
@@ -753,45 +755,52 @@ public sealed class ListDirectoryTool : ITool
                         if (!showHidden && SkipDirs.IsHidden(f))
                             continue; // 跳过隐藏文件
                         var fileName = Path.GetFileName(f);
-                        if (showSize && showModified)
+                        var suffix = new List<string>();
+                        var parenParts = new List<string>();
+                        var bracketParts = new List<string>();
+                        if (showSize)
                         {
                             var size = new FileInfo(f).Length;
                             var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
-                            var modified = File.GetLastWriteTime(f).ToString("yyyy-MM-dd HH:mm");
-                            sb.AppendLine($"{indent}{fileName} ({sizeStr}, {modified})");
+                            parenParts.Add(sizeStr);
                         }
-                        else if (showSize)
-                        {
-                            var size = new FileInfo(f).Length;
-                            var sizeStr = size < 1024 ? $"{size} B" : size < 1024 * 1024 ? $"{size / 1024.0:F1} KB" : $"{size / 1024.0 / 1024.0:F1} MB";
-                            sb.AppendLine($"{indent}{fileName} ({sizeStr})");
-                        }
-                        else if (showModified)
+                        if (showModified)
                         {
                             var modified = File.GetLastWriteTime(f).ToString("yyyy-MM-dd HH:mm");
-                            sb.AppendLine($"{indent}{fileName} ({modified})");
+                            parenParts.Add(modified);
                         }
-                        else if (showEncoding)
-                        {
-                            var enc = TextUtil.DetectFileEncoding(f) ?? "UTF-8";
-                            var encLabel = enc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => enc };
-                            sb.AppendLine($"{indent}{fileName} [{encLabel}]");
-                        }
-                        else if (showLineCount)
-                        {
-                            var lines = File.ReadAllLines(f);
-                            sb.AppendLine($"{indent}{fileName} [{lines.Length} lines]");
-                        }
-                        else if (showHash)
+                        if (showHash)
                         {
                             using var sha = System.Security.Cryptography.SHA256.Create();
                             var hash = Convert.ToHexString(sha.ComputeHash(File.ReadAllBytes(f)));
-                            sb.AppendLine($"{indent}{fileName} (sha256:{hash[..8]}...)");
+                            parenParts.Add($"sha256:{hash[..8]}...");
                         }
-                        else if (showExtension)
+                        if (showMimeType)
                         {
-                            var ext = Path.GetExtension(fileName);
-                            sb.AppendLine($"{indent}{fileName} [{ext}]");
+                            parenParts.Add(SkipDirs.GetMimeType(f));
+                        }
+                        if (showEncoding)
+                        {
+                            var enc = TextUtil.DetectFileEncoding(f) ?? "UTF-8";
+                            var encLabel = enc switch { "utf8-bom" => "UTF-8 BOM", "gb18030" => "GBK/GB18030", _ => enc };
+                            bracketParts.Add(encLabel);
+                        }
+                        if (showLineCount)
+                        {
+                            var lines = File.ReadAllLines(f);
+                            bracketParts.Add($"{lines.Length} lines");
+                        }
+                        if (showExtension)
+                        {
+                            bracketParts.Add(Path.GetExtension(fileName));
+                        }
+                        var typeSuffix = showType ? " <file>" : "";
+                        if (parenParts.Count > 0 || bracketParts.Count > 0)
+                        {
+                            var parts = new List<string>();
+                            if (parenParts.Count > 0) parts.Add($"({string.Join(", ", parenParts)})");
+                            if (bracketParts.Count > 0) parts.Add($"[{string.Join(", ", bracketParts)}]");
+                            sb.AppendLine($"{indent}{fileName} {string.Join(" ", parts)}{typeSuffix}");
                         }
                         else if (showType)
                         {
