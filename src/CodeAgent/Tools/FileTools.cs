@@ -420,6 +420,7 @@ public sealed class EditFileTool : ITool
             ["replace_all"] = new JsonObject { ["type"] = "boolean", ["description"] = "出现多次时是否全部替换（默认 false，重复会报错）" },
             ["case_insensitive"] = new JsonObject { ["type"] = "boolean", ["description"] = "忽略大小写匹配（默认 false；匹配后仍按 new_string 原样写入）" },
             ["dry_run"] = new JsonObject { ["type"] = "boolean", ["description"] = "仅预览改动（返回将发生的变更摘要，不写盘、不污染撤销栈），默认 false" },
+            ["backup"] = new JsonObject { ["type"] = "boolean", ["description"] = "覆盖已有文件前先创建 .bak 备份（默认 false）" },
         },
         ["required"] = new JsonArray("path", "old_string", "new_string"),
     };
@@ -448,6 +449,7 @@ public sealed class EditFileTool : ITool
         var caseInsensitive = ToolArgs.GetBool(args, "case_insensitive", false);
         var dryRun = ToolArgs.GetBool(args, "dry_run", false);
         var allowMultiple = ToolArgs.GetBool(args, "allow_multiple", false);
+        var backup = ToolArgs.GetBool(args, "backup", false);
         var cmp = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
         // 精确匹配优先；未命中时做换行风格容错：old_string 用 LF、文件是 CRLF（或反过来）时
@@ -532,6 +534,11 @@ public sealed class EditFileTool : ITool
             return $"[dry_run] 将替换 {count} 处 → {path}（修改起始行 {dryStartLine}{dryCrlfNote}）。未写盘。";
         }
 
+        if (backup)
+        {
+            var bak = full + ".bak";
+            File.Copy(full, bak, overwrite: true);
+        }
         await TextUtil.WriteTextPreserveEncodingAsync(full, result, ct);
 
         ctx.Undo.Push(new UndoEntry

@@ -3966,4 +3966,34 @@ public class FileToolsTests : IDisposable
         Assert.DoesNotContain("UTF-8", output); // 纯 UTF-8 不显示编码信息
     }
 
+    [Fact]
+    public async Task EditFile_Backup_True_CreatesBakFile()
+    {
+        // backup=true:编辑前创建 .bak 备份
+        File.WriteAllText(Path.Combine(_dir, "bak.txt"), "hello world\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bak.txt", ["old_string"] = "hello world", ["new_string"] = "hello backup", ["backup"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello backup\n", File.ReadAllText(Path.Combine(_dir, "bak.txt"))); // 文件已修改
+        Assert.Equal("hello world\n", File.ReadAllText(Path.Combine(_dir, "bak.txt.bak"))); // 备份保留原内容
+    }
+
+    [Fact]
+    public async Task EditFile_Backup_False_NoBakFile()
+    {
+        // backup=false（默认）:不创建 .bak 备份
+        File.WriteAllText(Path.Combine(_dir, "nobak.txt"), "hello world\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "nobak.txt", ["old_string"] = "hello world", ["new_string"] = "hello no-bak", ["backup"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello no-bak\n", File.ReadAllText(Path.Combine(_dir, "nobak.txt")));
+        Assert.False(File.Exists(Path.Combine(_dir, "nobak.txt.bak"))); // 无备份文件
+    }
+
 }
