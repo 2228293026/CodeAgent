@@ -2004,8 +2004,8 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["path"] = "app.txt", ["content"] = "line2", ["append"] = true }, ctx, CancellationToken.None);
 
         Assert.Equal("line1\nline2", File.ReadAllText(Path.Combine(_dir, "app.txt")));
-        Assert.Contains("追加", result);
-        Assert.Contains("2 行", result);
+        Assert.Contains("追加 5 字节", result); // 只报本次追加的 "line2"
+        Assert.Contains("1 行", result);
     }
 
     [Fact]
@@ -2151,7 +2151,7 @@ public class FileToolsTests : IDisposable
         var result = await tool.ExecuteAsync(
             new JsonObject { ["path"] = "large.txt", ["content"] = largeContent, ["append"] = true }, ctx, CancellationToken.None);
 
-        Assert.Contains("100,006", result); // 大内容被正确追加（含原有内容）
+        Assert.Contains("100,000", result); // 只报本次追加的 100000 字节（不含原有 "start\n"）
         var text = File.ReadAllText(Path.Combine(_dir, "large.txt"));
         Assert.StartsWith("start\n", text);
         Assert.EndsWith(new string('X', 100_000), text);
@@ -4244,6 +4244,22 @@ public class FileToolsTests : IDisposable
             ctx, CancellationToken.None);
 
         Assert.Contains("AB", output); // 读到 offset=4 起的 "AB"
+    }
+
+    [Fact]
+    public async Task WriteFile_AppendMode_ReportsAppendedBytesNotWholeFile()
+    {
+        // append=true 时返回「追加 N 字节」应是本次追加的量。
+        // 改成 FileInfo.Length 后报的是整个文件大小：文件越大，谎报越离谱
+        var ctx = MakeContext(_dir);
+        var target = Path.Combine(_dir, "app.txt");
+        File.WriteAllText(target, new string('x', 1000) + "\n"); // 已有 1001 字节
+
+        var result = await new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "app.txt", ["content"] = "abc", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("追加 3 字节", result); // 只追加了 "abc"（原有内容以 \n 结尾）
+        Assert.DoesNotContain("1,004", result);
     }
 
     [Fact]

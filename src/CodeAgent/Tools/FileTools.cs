@@ -310,6 +310,8 @@ public sealed class WriteFileTool : ITool
 
         // 记录撤销信息（大文件不记录，避免内存占用）；先写入成功再入栈，失败不污染撤销历史
         var hadFile = File.Exists(full);
+        // 追加模式报「追加了多少」需要写入前的原始大小（写盘后拿不到）
+        var oldSizeBytes = hadFile ? new FileInfo(full).Length : 0;
         string? old = null;
         // 编码必须在写盘「之前」探测：写盘后再探测拿到的是新文件的编码。
         // encoding=gbk 覆盖 UTF-8 文件时，撤销会把旧文本按 GBK 写回，字节与原文件不符。
@@ -501,9 +503,12 @@ public sealed class WriteFileTool : ITool
             EncodingName = originalEncoding, // 写盘前探测的原编码（不是写盘后的新编码）
         });
 
-        var bytes = new FileInfo(full).Length; // 真实大小：encoding=gbk 时 UTF-8 的 GetByteCount 会多算</｜｜DSML｜｜ parameter>
-        // 行数（按 \n 计；纯空白/空内容记为 0）：让模型快速知道写了多少，便于与预期对照
-        var lineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
+        // 追加模式报「本次追加了多少」：FileInfo.Length 是整个文件大小，
+        // 已有 1MB 时追加 3 字节会报成 1,000,004 字节，与「追加」二字完全不符
+        var newSize = new FileInfo(full).Length;
+        var bytes = append && hadFile ? newSize - oldSizeBytes : newSize;
+        // 行数同样只算本次写入的内容（append 时 finalContent 含原有内容，直接算会报成整个文件的行数）
+        var lineCount = append && hadFile ? SkipDirs.CountLines(content) : SkipDirs.CountLines(finalContent);
         var action = append ? "追加" : "写入";
         return $"{action} {bytes:N0} 字节（{lineCount} 行）→ {path}";
     }
