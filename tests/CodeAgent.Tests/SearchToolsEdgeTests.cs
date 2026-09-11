@@ -613,6 +613,20 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Heading_DoesNotPrintFilesWithNoMatches()
+    {
+        // heading=true 时标题在 ScanFile 之前输出：未命中的文件也会被打印成一个孤零零的文件名，
+        // 模型会以为该文件含有匹配内容（实际一行都没匹配）
+        File.WriteAllText(PathOf("has.txt"), "alpha\nbeta\n");
+        File.WriteAllText(PathOf("nomatch.txt"), "zzz\nqqq\n");
+        var args = new JsonObject { ["pattern"] = "beta", ["heading"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+
+        Assert.Contains("has.txt", result);          // 命中的文件照常显示
+        Assert.DoesNotContain("nomatch.txt", result); // 未命中的文件不能出现标题
+    }
+
+    [Fact]
     public async Task Grep_MaxMatchesPerFile_LimitsOutputPerFile()
     {
         // max_matches_per_file=1:每个文件最多显示 1 处匹配

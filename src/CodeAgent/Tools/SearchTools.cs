@@ -578,14 +578,25 @@ public sealed class GrepTool : ITool
                 if (!showHidden && SkipDirs.IsHidden(file))
                     continue; // 跳过隐藏文件
                 var rel = Path.GetRelativePath(full, file).Replace('\\', '/');
-                if (heading && rel != lastRel)
+                if (heading)
                 {
-                    if (lastRel != null)
-                        sb.AppendLine(); // 文件之间空行分隔
-                    sb.AppendLine(rel); // 文件路径单独成行
-                    lastRel = rel;
+                    // 标题必须在扫描之后才补：此前先输出文件名再扫描，未命中的文件也会留下
+                    // 一个孤零零的文件名，模型会误以为该文件含匹配内容（实际一行都没匹配）。
+                    // 记下扫描前的位置，只有真的产出了匹配才把标题插到该文件内容之前。
+                    var mark = sb.Length;
+                    ScanFile(file, maxMatchesPerFile);
+                    if (sb.Length > mark)
+                    {
+                        if (lastRel != null)
+                            sb.Insert(mark, Environment.NewLine); // 文件之间空行分隔
+                        sb.Insert(mark, rel + Environment.NewLine); // 文件路径单独成行
+                        lastRel = rel;
+                    }
                 }
-                ScanFile(file, maxMatchesPerFile);
+                else
+                {
+                    ScanFile(file, maxMatchesPerFile);
+                }
             }
         }
         else
