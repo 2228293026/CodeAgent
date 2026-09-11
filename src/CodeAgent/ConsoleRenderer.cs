@@ -11,6 +11,7 @@ public sealed class ConsoleRenderer
     private readonly List<string> _tableBuf = new(); // Markdown 表格行缓冲（表格结束统一按列对齐输出）
     private bool _inCode;
     private int _tickRun; // 当前连续反引号数
+    private bool _inInlineCode; // 是否在行内代码 `` `...` `` 内
     private bool _skipCodeIntro; // 围栏起始行的语言标注（如 ```cs 的 cs）应丢弃
 
     public ConsoleRenderer(bool enabled) => _enabled = enabled;
@@ -37,6 +38,7 @@ public sealed class ConsoleRenderer
     {
         if (!_enabled)
             return;
+        _inInlineCode = false; // 流结束时丢弃未闭合的行内代码状态
         if (_inCode)
         {
             EmitCode(_code.ToString());
@@ -93,10 +95,27 @@ public sealed class ConsoleRenderer
                 _skipCodeIntro = true; // 丢弃本行剩余的语言标注（```cs）
                 return;
             }
+            if (_tickRun == 2 && !_inInlineCode)
+            {
+                // 两个反引号进入行内代码：不删 _line 内容（避免影响后续围栏前缀计算），
+                // 仅切换状态，让 EmitLine/ParseInline 负责剥掉反引号对。
+                _inInlineCode = true;
+            }
+            else if (_tickRun == 2 && _inInlineCode)
+            {
+                // 行内代码闭合：两个连续 ` 作为闭合标记，恢复状态以便后续字符正常处理
+                _inInlineCode = false;
+                _tickRun = 0;
+            }
             _line.Append(ch);
             return;
         }
         _tickRun = 0;
+        if (_inInlineCode && ch == '\n')
+        {
+            // 未闭合的行内代码到行尾：原样输出（含开头的 `），恢复状态继续
+            _inInlineCode = false;
+        }
         if (ch == '\n')
         {
             _line.Append(ch);

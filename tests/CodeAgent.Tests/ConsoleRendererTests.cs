@@ -446,6 +446,18 @@ public class ConsoleRendererTests : IDisposable
     }
 
     [Fact]
+    public void Append_InlineCode_StripsBackticks()
+    {
+        // 流式渲染（Append/HandleTextChar）不支持行内代码：
+        // `code` 被原样输出带反引号，与 ParseInline/EmitLine 行为不一致。
+        var output = Render("use `code` here");
+        Assert.Contains("use ", output);
+        Assert.Contains("code", output);
+        Assert.Contains(" here", output);
+        Assert.DoesNotContain("`code`", output); // 反引号应被剥掉
+    }
+
+    [Fact]
     public void Table_EscapedPipe_StaysInsideCell()
     {
         // 回归：\| 是表格内转义竖线，曾被当作单元格分隔劈开成多余列，且内容残留反斜杠
