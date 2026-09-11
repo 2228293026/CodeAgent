@@ -236,4 +236,32 @@ public class ShellRunnerTests
         sw.Stop();
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"取消应快速传播，实际 {sw.Elapsed}");
     }
+    [Fact]
+    public async Task ExecuteCommandTool_UserCancel_StillRecordsSideEffectsForUndo()
+    {
+        // 命令被取消(ESC)时 RecordCommandSideEffects 被异常跳过：
+        // 进程被杀之前已经写入的文件不会进撤销栈，/undo 无法回滚这些改动
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-shellundo-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var ctx = new AgentContext
+            {
+                Config = new AgentConfig { AllowCommands = true },
+                Workspace = new Workspace(dir),
+            };
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                ShellRunner.ExecuteCommandToolAsync("bash",
+                    new JsonObject { ["command"] = "echo hello > made.txt && sleep 30" },
+                    ctx, cts.Token));
+
+            Assert.True(File.Exists(Path.Combine(dir, "made.txt")), "前置条件：取消前命令已写出文件");
+            Assert.Contains(ctx.Undo.AllPaths(), p => p.EndsWith("made.txt", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
 }

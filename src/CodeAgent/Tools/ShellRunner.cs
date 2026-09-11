@@ -124,11 +124,21 @@ public static class ShellRunner
         if (ctx.Config.ConfirmCommands && !await ConfirmAsync(command))
             return "用户已取消命令执行。";
 
-        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚命令对文件的改动）
+        // 命令副作用撤销：执行前快照，执行后差异入栈（/undo 可回滚命令对文件的改动）。
+        // 必须放在 finally 里：用户取消（ESC）会抛 OperationCanceledException 直接跳过后续语句，
+        // 而进程被杀之前往往已经写过文件——这些改动不进撤销栈就再也回滚不了。
         var snapshot = UndoManager.SnapshotDir(cwd);
-        var (_, output) = await RunAsync(shell, command, cwd, timeout, ct, env);
-        UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo);
-        return output;
+        try
+        {
+            var (_, output) = await RunAsync(shell, command, cwd, timeout, ct, env);
+            return output;
+        }
+        finally
+        {
+            // 快照/差异计算自身失败不能掩盖原始异常（尤其是取消）：取消必须照常向上传播
+            try { UndoManager.RecordCommandSideEffects(cwd, snapshot, ctx.Undo); }
+            catch { /* 撤销记录尽力而为 */ }
+        }
     }
 
     /// <summary>命令确认询问，返回是否放行。</summary>
