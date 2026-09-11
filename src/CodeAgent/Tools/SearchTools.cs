@@ -377,9 +377,10 @@ public sealed class GrepTool : ITool
                         }
                         if (showWordCount)
                         {
-                            var fileText = File.ReadAllText(path);
-                            var words = fileText.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
-                            extra += $" [{words} words]";
+                            // 流式统计：File.ReadAllText 会把整个文件读进内存（大文件 OOM）
+                            var words = SkipDirs.CountFileWords(path);
+                            if (words is long w)
+                                extra += $" [{w} words]";
                         }
                         if (showHash)
                         {

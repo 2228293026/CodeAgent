@@ -131,6 +131,25 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void CountFileWords_MatchesReadAllTextSplit()
+    {
+        // 流式实现必须与旧的 File.ReadAllText(...).Split(空白) 结果完全一致
+        foreach (var content in new[] { "hello world\nthis is a test\n", "one", "", "   ", "a\tb\rc\nd", "中文 内容 测试", "a  b   c" })
+        {
+            var path = Path.Combine(_dir, "cw-" + Guid.NewGuid().ToString("N") + ".txt");
+            File.WriteAllText(path, content);
+            var expected = content.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            Assert.Equal(expected, SkipDirs.CountFileWords(path));
+        }
+    }
+
+    [Fact]
+    public void CountFileWords_MissingFile_ReturnsNull()
+    {
+        Assert.Null(SkipDirs.CountFileWords(Path.Combine(_dir, "nope-" + Guid.NewGuid().ToString("N") + ".txt")));
+    }
+
+    [Fact]
     public void CountLines_MatchesCountFileLines()
     {
         // 内存版与文件版必须同语义：末尾换行不算额外空行，末尾无换行也计最后一行
