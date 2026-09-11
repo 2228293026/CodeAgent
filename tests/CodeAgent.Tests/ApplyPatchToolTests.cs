@@ -89,6 +89,26 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_LargeFile_DoesNotClaimUndoItCannotPerform()
+    {
+        // >4MB 的文件不记录完整原文。此前 apply_patch 把 OldText 与 NewText 都设成整份原文，
+        // 撤销时的 Replace(NewText, OldText) 等于 Replace(原文, 原文)——静默无操作，
+        // 却仍报告「已撤销 edit_file」，用户以为改动已回滚，实际文件没变
+        var big = "TARGET\n" + new string('x', 4 * 1024 * 1024) + "\n";
+        File.WriteAllText(Path.Combine(_dir, "big.txt"), big);
+
+        var tool = new ApplyPatchTool();
+        var ctx = MakeContext();
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["patch"] = "@@ -1,1 +1,1 @@\n-TARGET\n+CHANGED\n", ["path"] = "big.txt" },
+            ctx, CancellationToken.None);
+
+        Assert.StartsWith("CHANGED\n", File.ReadAllText(Path.Combine(_dir, "big.txt")));
+        Assert.Contains("未记录撤销", result);   // 如实告知无法撤销
+        Assert.Equal(0, ctx.Undo.Count);         // 不入栈，避免谎报「已撤销」
+    }
+
+    [Fact]
     public async Task Apply_MultipleHunks_SingleFile()
     {
         File.WriteAllText(Path.Combine(_dir, "f.txt"), "l1\nl2\nl3\nl4\nl5\n");

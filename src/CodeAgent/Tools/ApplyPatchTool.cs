@@ -241,12 +241,20 @@ public sealed class ApplyPatchTool : ITool
         }
         await TextUtil.WriteTextPreserveEncodingAsync(full, newText, ct);
 
+        if (fullOld is null)
+        {
+            // >4MB 不记录完整原文：此前把 OldText 与 NewText 都设成整份原文，撤销时的
+            // Replace(NewText, OldText) 等于 Replace(原文, 原文)——静默无操作却报「已撤销」，
+            // 用户以为改动已回滚。宁可不入栈并如实说明，也不谎报撤销成功。
+            return $"已应用 {file.Hunks.Count} 个 hunk → {file.Path}(-{stat.removed} +{stat.added}；" +
+                   $"文件过大未记录撤销（仅 ≤4MB 的文件可撤销），本次改动无法用 /undo 回滚)";
+        }
+
         ctx.Undo.Push(new UndoEntry
         {
             Kind = "edit",
             Path = full,
-            OldText = fullOld ?? text,
-            NewText = fullOld is null ? text : null,
+            OldText = fullOld,
             EncodingName = originalEncoding, // 写盘前探测的原编码
         });
 
