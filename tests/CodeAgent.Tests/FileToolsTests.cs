@@ -3528,6 +3528,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_CaseInsensitive_ReplaceAll_NewContainsOld_DoesNotLoop()
+    {
+        // 回归：replace_all=true + case_insensitive=true + new_string 包含 old_string 时，
+        // start = idx 导致同一位置反复命中（新文本开头又是 old_string），应推进到插入文本之后。
+        File.WriteAllText(Path.Combine(_dir, "loop.txt"), "a");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "loop.txt", ["old_string"] = "a", ["new_string"] = "aa", ["case_insensitive"] = true, ["replace_all"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("aa", File.ReadAllText(Path.Combine(_dir, "loop.txt"))); // 仅替换一次，不无限扩张
+        Assert.Contains("1 处", result);
+    }
+
+    [Fact]
     public async Task EditFile_CaseInsensitive_PreservesOriginalCaseInResult()
     {
         // case_insensitive=true:匹配时忽略大小写，但替换后文件内容按 new_string 写入

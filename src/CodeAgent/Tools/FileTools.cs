@@ -660,7 +660,7 @@ public sealed class EditFileTool : ITool
                     var idx = result.IndexOf(workOld, start, cmp);
                     if (idx < 0) break;
                     result = result.Remove(idx, workOld.Length).Insert(idx, workNew);
-                    start = idx; // 从替换插入点继续搜索；+0 死循环，+workOld.Length 会跳过因删除而前移的后续匹配
+                    start = idx + workNew.Length; // 跳到插入文本之后：避免新文本开头又是 old_string 导致死循环
                 }
             }
             else
