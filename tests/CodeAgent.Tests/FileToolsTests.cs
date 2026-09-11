@@ -4381,6 +4381,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_DryRun_InvalidEncoding_ReportsError()
+    {
+        // dry_run 也必须校验 encoding：否则拼错的编码在预览时按 UTF-8 报「将写入 N 字节」，
+        // 去掉 dry_run 后同一次调用却抛「不支持的编码」——同一个参数两种结论，
+        // 模型会以为拼写有效、只是还没落盘
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var ctx = MakeContext(_dir);
+        var ex = await Assert.ThrowsAsync<ToolException>(() => new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "badenc.txt", ["content"] = "中文", ["encoding"] = "utf-8bom", ["dry_run"] = true },
+            ctx, CancellationToken.None));
+
+        Assert.Contains("不支持的编码", ex.Message);
+        Assert.False(File.Exists(Path.Combine(_dir, "badenc.txt"))); // 未写盘
+    }
+
+    [Fact]
     public async Task ReadFile_ByteRange_OffsetOnly_ReadsToEnd()
     {
         // 只给 byte_offset（byte_limit=0）时应读到文件末尾

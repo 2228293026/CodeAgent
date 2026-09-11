@@ -3,6 +3,27 @@ using System.Text.Json.Nodes;
 
 namespace CodeAgent.Tools;
 
+/// <summary>文件工具共用的编码解析：读取、写入、dry_run 预览走同一份实现，
+/// 避免「预览说合法、落盘说不支持」这类同参数两种结论。</summary>
+internal static class FileEncoding
+{
+    /// <summary>解析显式指定的 encoding 参数：空/未给返回 null（走自动检测或保留原编码），
+    /// 拼错则明确报错而不是静默按 UTF-8 处理。</summary>
+    public static System.Text.Encoding? Parse(string? encoding)
+    {
+        if (string.IsNullOrEmpty(encoding))
+            return null;
+        return encoding.ToLowerInvariant() switch
+        {
+            "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
+            "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
+            "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
+            "ascii" => System.Text.Encoding.ASCII,
+            _ => throw new ToolException($"不支持的编码: {encoding}（支持: utf8, utf8-bom, gbk, gb18030, ascii）"),
+        };
+    }
+}
+
 /// <summary>读取文件内容（带行号，支持 offset/limit）。</summary>
 public sealed class ReadFileTool : ITool
 {
@@ -146,15 +167,7 @@ public sealed class ReadFileTool : ITool
         else if (!string.IsNullOrEmpty(encoding))
         {
             // 显式指定编码：绕过自动检测，直接按指定编码读取
-            var enc = encoding.ToLowerInvariant() switch
-            {
-                "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
-                "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
-                "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
-                "ascii" => System.Text.Encoding.ASCII,
-                _ => throw new ToolException($"不支持的编码: {encoding}（支持: utf8, utf8-bom, gbk, gb18030, ascii）"),
-            };
-            text = await File.ReadAllTextAsync(full, enc, ct);
+            text = await File.ReadAllTextAsync(full, FileEncoding.Parse(encoding)!, ct);
         }
         else
         {
@@ -296,6 +309,10 @@ public sealed class WriteFileTool : ITool
         var content = ToolArgs.GetString(args, "content");
         var append = ToolArgs.GetBool(args, "append", false);
         var bom = ToolArgs.GetBool(args, "bom", false);
+        // encoding 在任何副作用（建目录/备份/写盘）之前解析并校验：
+        // 拼错的编码此前只在真正写盘时才发现，dry_run 预览却按 UTF-8 报「将写入 N 字节」，
+        // 同一个参数两种结论，模型会以为拼写有效、只是还没落盘
+        var explicitEncoding = FileEncoding.Parse(ToolArgs.GetString(args, "encoding"));
         var full = ctx.Workspace.Resolve(path);
         if (Directory.Exists(full))
             throw new ToolException($"'{path}' 是目录，不能作为文件写入（目标应为文件路径）。");
@@ -413,7 +430,7 @@ public sealed class WriteFileTool : ITool
             {
                 // 按目标编码计算：encoding=gbk 时 UTF-8 的 GetByteCount 会多算
                 // （"中文" GBK 4 字节 vs UTF-8 6 字节），dry_run 报的数也要与将要写出的文件一致
-                var dryRunBytes = EstimateWrittenBytes(finalContent, ToolArgs.GetString(args, "encoding"), hadFile, originalEncoding, bom);
+                var dryRunBytes = EstimateWrittenBytes(finalContent, explicitEncoding, hadFile, originalEncoding, bom);
                 var dryRunLineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
                 return $"[dry_run] 将写入 {dryRunBytes:N0} 字节（{dryRunLineCount} 行）→ {path}（{(hadFile ? "覆盖已有文件" : "新建文件")}）。未写盘。";
             }
@@ -436,19 +453,10 @@ public sealed class WriteFileTool : ITool
                 }
             }
 
-            var encoding = ToolArgs.GetString(args, "encoding");
-            if (!string.IsNullOrEmpty(encoding))
+            if (explicitEncoding is not null)
             {
                 // 显式指定编码：绕过原编码保留，直接按指定编码写入
-                var enc = encoding.ToLowerInvariant() switch
-                {
-                    "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
-                    "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
-                    "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
-                    "ascii" => System.Text.Encoding.ASCII,
-                    _ => throw new ToolException($"不支持的编码: {encoding}（支持: utf8, utf8-bom, gbk, gb18030, ascii）"),
-                };
-                await File.WriteAllTextAsync(full, finalContent, enc, ct);
+                await File.WriteAllTextAsync(full, finalContent, explicitEncoding, ct);
             }
             else if (bom && !hadFile)
             {
@@ -527,22 +535,15 @@ public sealed class WriteFileTool : ITool
     /// <summary>dry_run 时预估将要写出的字节数（不写盘）：
     /// encoding=gbk 等内容按目标编码计算，UTF-8 的 GetByteCount 会多算中文；
     /// 同时计入 BOM 头的 3 字节，使预估与真正写出的文件大小一致。</summary>
-    private static long EstimateWrittenBytes(string content, string? encoding, bool hadFile, string? originalEncoding, bool bom)
+    private static long EstimateWrittenBytes(string content, System.Text.Encoding? explicitEnc, bool hadFile, string? originalEncoding, bool bom)
     {
         System.Text.Encoding enc;
         bool withBom;
-        var explicitEnc = encoding?.ToLowerInvariant() switch
-        {
-            "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
-            "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
-            "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
-            "ascii" => System.Text.Encoding.ASCII,
-            _ => null,
-        };
         if (explicitEnc is not null)
         {
             enc = explicitEnc;
-            withBom = encoding!.ToLowerInvariant() is "utf8-bom" or "utf-8-bom";
+            // GetPreamble() 是方法而非属性：只能用方法调用判断是否带 BOM
+            withBom = explicitEnc.GetPreamble().Length > 0;
         }
         else if (hadFile)
         {
