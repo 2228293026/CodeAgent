@@ -4230,6 +4230,87 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_ByteRange_WorksOnBinaryFile()
+    {
+        // 按字节分段读取是 byte_offset/byte_limit 的既定用途（二进制文件分段），
+        // 但二进制检查在分段逻辑之前执行 → 含 NUL 的文件必然抛「疑似二进制」，参数形同虚设
+        var path = Path.Combine(_dir, "bin.dat");
+        File.WriteAllBytes(path, new byte[] { 0x00, 0x01, 0x02, 0xFF, (byte)'A', (byte)'B' });
+
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bin.dat", ["byte_offset"] = 4, ["byte_limit"] = 2, ["no_header"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("AB", output); // 读到 offset=4 起的 "AB"
+    }
+
+    [Fact]
+    public async Task ReadFile_ByteRange_OffsetOnly_ReadsToEnd()
+    {
+        // 只给 byte_offset（byte_limit=0）时应读到文件末尾
+        File.WriteAllText(Path.Combine(_dir, "ro.txt"), "0123456789");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ro.txt", ["byte_offset"] = 7, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("789", output);
+        Assert.DoesNotContain("0123456", output);
+    }
+
+    [Fact]
+    public async Task ReadFile_ByteRange_OffsetBeyondEof_ReturnsEmptyNotThrow()
+    {
+        // 偏移超过文件长度：返回空内容而不是崩溃
+        File.WriteAllText(Path.Combine(_dir, "re.txt"), "abc");
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "re.txt", ["byte_offset"] = 999, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.DoesNotContain("abc", output); // 越界偏移不应读回文件内容
+    }
+
+    [Fact]
+    public async Task ReadFile_ByteRange_DoesNotFullReadLargeFile()
+    {
+        // 分段读取的意义在于不整读文件：写一个 8MB 文件，只取 1 字节，
+        // 应迅速返回（旧实现会先 ReadAllText 再 ReadAllBytes，整读两遍）
+        var big = Path.Combine(_dir, "big.bin");
+        var buf = new byte[8 * 1024 * 1024];
+        Array.Fill(buf, (byte)'x');
+        buf[5] = (byte)'Q';
+        File.WriteAllBytes(big, buf);
+
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "big.bin", ["byte_offset"] = 5, ["byte_limit"] = 1, ["no_header"] = true },
+            ctx, CancellationToken.None);
+        sw.Stop();
+
+        Assert.Contains("Q", output);
+        Assert.True(sw.ElapsedMilliseconds < 2000, $"分段读取耗时 {sw.ElapsedMilliseconds}ms，疑似整读文件");
+    }
+
+    [Fact]
+    public async Task ReadFile_BinaryFile_StillRejectedWithoutByteRange()
+    {
+        // 不带字节范围时，二进制文件仍应被拒绝（原行为不能被这次改动放宽）
+        File.WriteAllBytes(Path.Combine(_dir, "b2.dat"), new byte[] { 0x00, 0x01, 0x02 });
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => tool.ExecuteAsync(
+            new JsonObject { ["path"] = "b2.dat" }, ctx, CancellationToken.None));
+
+        Assert.Contains("二进制", ex.Message);
+    }
+
+    [Fact]
     public async Task ReadFile_Stats_ByteCount_IsRealFileSize_ForNonUtf8()
     {
         // GBK 文件：字节数必须是真实文件大小。

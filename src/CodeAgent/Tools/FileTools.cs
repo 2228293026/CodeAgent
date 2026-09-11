@@ -32,7 +32,7 @@ public sealed class ReadFileTool : ITool
             ["stats"] = new JsonObject { ["type"] = "boolean", ["description"] = "显示文件统计信息（默认 false；设为 true 时在输出中附加行数、单词数、字符数、字节数、MIME 类型）" },
             ["encoding"] = new JsonObject { ["type"] = "string", ["description"] = "强制指定编码：utf8、utf8-bom、gbk、gb18030、ascii（默认自动检测）" },
             ["strip_bom"] = new JsonObject { ["type"] = "boolean", ["description"] = "去掉 UTF-8 BOM 头（默认 false；输出内容不带 BOM，方便复制粘贴）" },
-            ["byte_offset"] = new JsonObject { ["type"] = "integer", ["description"] = "字节偏移（0 起，默认 0；与 byte_limit 配合使用，按字节范围读取而非按行）" },
+            ["byte_offset"] = new JsonObject { ["type"] = "integer", ["description"] = "字节偏移（0 起，默认 0；与 byte_limit 配合使用，按字节范围读取而非按行）。指定后按字节流式读取，可读二进制文件且跳过二进制拦截" },
             ["byte_limit"] = new JsonObject { ["type"] = "integer", ["description"] = "最多读取字节数（0=不限，默认 0，最大 2000000；与 byte_offset 配合使用）" },
         },
         ["required"] = new JsonArray("path"),
@@ -109,7 +109,36 @@ public sealed class ReadFileTool : ITool
         string text;
         // 先检测文件是否带 UTF-8 BOM（ReadTextSmart 内部已去掉，这里只探测头部）
         bool hadBom = false;
-        if (!string.IsNullOrEmpty(encoding))
+
+        // byte_offset/byte_limit:按字节范围读取（二进制文件或大文件分段）。
+        // 必须在文本读取与二进制检查之前：
+        //  1) 旧顺序把二进制检查放在前面，含 NUL 的文件（正是分段读取的目标）必然抛「疑似二进制」，参数形同虚设；
+        //  2) 旧实现先 ReadAllTextAsync 再 ReadAllBytesAsync，同一个大文件被整读两遍，与分段读取的初衷相反。
+        // 这里只 seek 到偏移、按需读取所需字节，不整读文件。
+        if (byteOffset > 0 || byteLimit > 0)
+        {
+            await using var rangeFs = File.OpenRead(full);
+            var fileLen = rangeFs.Length;
+            var byteStart = Math.Min((long)byteOffset, fileLen);
+            var available = fileLen - byteStart;
+            var want = byteLimit > 0 ? Math.Min((long)byteLimit, available) : available;
+            if (want > int.MaxValue)
+                want = int.MaxValue; // 数组长度上限保护
+            var slice = new byte[want];
+            rangeFs.Seek(byteStart, SeekOrigin.Begin);
+            var read = 0;
+            while (read < slice.Length)
+            {
+                var n = await rangeFs.ReadAsync(slice.AsMemory(read, slice.Length - read), ct);
+                if (n == 0)
+                    break;
+                read += n;
+            }
+            if (read < slice.Length)
+                slice = slice[..read];
+            text = System.Text.Encoding.UTF8.GetString(slice);
+        }
+        else if (!string.IsNullOrEmpty(encoding))
         {
             // 显式指定编码：绕过自动检测，直接按指定编码读取
             var enc = encoding.ToLowerInvariant() switch
@@ -140,18 +169,10 @@ public sealed class ReadFileTool : ITool
         if (!stripBom && hadBom && text.Length > 0 && text[0] != '\uFEFF')
             text = '\uFEFF' + text;
         // strip_bom=true:ReadTextSmart 已默认去掉 BOM，无需额外处理
-        if (SkipDirs.LooksBinary(text))
+        // 二进制检查：分段读取模式下跳过——用户已明确指定字节范围，
+        // 读到的片段可能就是二进制内容，拦下反而使该参数无法用于二进制文件
+        if (byteOffset == 0 && byteLimit == 0 && SkipDirs.LooksBinary(text))
             throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
-
-        // byte_offset/byte_limit:按字节范围读取（用于二进制文件或大文件分段）
-        if (byteOffset > 0 || byteLimit > 0)
-        {
-            var bytes = await File.ReadAllBytesAsync(full, ct);
-            var byteStart = Math.Min(byteOffset, bytes.Length);
-            var byteEnd = byteLimit > 0 ? Math.Min(byteStart + byteLimit, bytes.Length) : bytes.Length;
-            var slice = bytes[byteStart..byteEnd];
-            text = System.Text.Encoding.UTF8.GetString(slice);
-        }
 
         var lines = text.Split('\n');
         // 去掉末尾换行产生的空段（与 ReadAllLinesAsync 语义一致），避免幽灵空行
