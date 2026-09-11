@@ -854,6 +854,18 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_FilesOnly_ShowTotalMatches_DisplaysTotalMatchCount()
+    {
+        // 回归：files_only=true 时 ScanFile 只累加 hits（文件数），不累加 totalMatches，
+        // 导致 show_total_matches 被静默忽略——用户明明开了「显示总匹配数」，结果里却看不到。
+        File.WriteAllText(PathOf("ftm.txt"), "alpha beta\ngamma delta\nalpha gamma\nalpha zeta\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["show_total_matches"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("匹配 1 个文件:", result); // 仅 ftm.txt 命中
+        Assert.Contains("[total] 共 3 处匹配", result); // 3 行包含 alpha
+    }
+
+    [Fact]
     public async Task Grep_FilesOnly_ShowSize_True_DisplaysFileSize()
     {
         // show_size=true + files_only=true:文件路径后附加文件大小

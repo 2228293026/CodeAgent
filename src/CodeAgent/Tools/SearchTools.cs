@@ -371,6 +371,12 @@ public sealed class GrepTool : ITool
                     {
                         hits++;
                         totalSize += new FileInfo(path).Length;
+                        // files_only 只展示文件路径，但 show_total_matches 需要知道总命中行数：
+                        // 此前漏了这里，files_only=true 时 totalMatches 始终为 0，show_total_matches 被静默忽略。
+                        if (multiline)
+                            totalMatches += re.Matches(text).Count(m => m.Length > 0);
+                        else
+                            totalMatches += text.Split('\n').Count(l => Hit(l.TrimEnd('\r')));
                         var extra = "";
                         if (showModified)
                         {
