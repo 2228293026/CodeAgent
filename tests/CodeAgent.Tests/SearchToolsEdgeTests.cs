@@ -866,6 +866,18 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_FilesOnly_ShowStats_ReportsFilesNotMatches()
+    {
+        // 回归：show_stats 在 files_only 模式下说「匹配 N 处」（把文件数当匹配数），
+        // 实际 hits 在 files_only 里是文件数，应说「匹配 N 个文件」。
+        File.WriteAllText(PathOf("fs.txt"), "alpha\nalpha\nalpha\n");
+        var args = new JsonObject { ["pattern"] = "alpha", ["files_only"] = true, ["stats"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.Contains("匹配 1 个文件", result);
+        Assert.DoesNotContain("匹配 1 处", result);
+    }
+
+    [Fact]
     public async Task Grep_FilesOnly_ShowSize_True_DisplaysFileSize()
     {
         // show_size=true + files_only=true:文件路径后附加文件大小

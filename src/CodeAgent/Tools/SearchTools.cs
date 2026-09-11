@@ -619,7 +619,7 @@ public sealed class GrepTool : ITool
             ? $"匹配 {hits} 个文件:\n" + sb.ToString().TrimEnd() + notice
             : $"匹配 {hits} 处:\n" + sb.ToString().TrimEnd() + notice;
         if (showStats)
-            result += $"\n[stats] 扫描 {filesScanned} 个文件，跳过 {filesSkipped} 个，匹配 {hits} 处";
+            result += $"\n[stats] 扫描 {filesScanned} 个文件，跳过 {filesSkipped} 个，{(filesOnly || countOnly ? $"匹配 {hits} 个文件" : $"匹配 {hits} 处")}";
         if (showTotalMatches && totalMatches > 0)
             result += $"\n[total] 共 {totalMatches} 处匹配";
         if (showTotalSize && totalSize > 0)
