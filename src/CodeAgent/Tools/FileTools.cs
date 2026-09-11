@@ -215,9 +215,16 @@ public sealed class ReadFileTool : ITool
         }
         if (showStats)
         {
-            var lineCount = text.Split('\n').Length;
+            // 行数用与 list_directory/grep 相同的实现（CountFileLines）：
+            // text.Split('\n').Length 会把末尾换行后的空段也算一行，
+            // 同一个文件在这里报 4 行、在 list_directory 报 3 行，自相矛盾
+            var lineCount = SkipDirs.CountFileLines(full) ?? text.Split('\n').Length;
             var words = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
-            var bytes = Encoding.UTF8.GetByteCount(text);
+            // 真实文件大小：Encoding.UTF8.GetByteCount(text) 会把 GBK 等旧编码的文本
+            // 按 UTF-8 重算（中文 2 字节被算成 3 字节），报出的数字与磁盘上的文件不符
+            long bytes;
+            try { bytes = new FileInfo(full).Length; }
+            catch { bytes = Encoding.UTF8.GetByteCount(text); } // 拿不到大小才退化为估算
             var mimeType = SkipDirs.GetMimeType(full);
             output += $"\n[stats] {lineCount} 行，{words} 词，{text.Length} 字符，{bytes:N0} 字节，MIME: {mimeType}";
         }

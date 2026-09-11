@@ -4230,6 +4230,45 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Stats_ByteCount_IsRealFileSize_ForNonUtf8()
+    {
+        // GBK 文件：字节数必须是真实文件大小。
+        // 此前用 Encoding.UTF8.GetByteCount(text)：把解码后的文本按 UTF-8 重算，
+        // GBK 中文每字 2 字节被算成 3 字节 → 报出的字节数比文件实际大小大。
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var path = Path.Combine(_dir, "gbkstats.txt");
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllBytes(path, gbk.GetBytes("中文内容\n"));
+        var realSize = new FileInfo(path).Length;
+
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "gbkstats.txt", ["stats"] = true, ["no_header"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains($"{realSize:N0} 字节", output); // 与真实文件大小一致
+    }
+
+    [Fact]
+    public async Task ReadFile_Stats_LineCount_AgreesWithListDirectory()
+    {
+        // 同一文件的行数在 read_file stats 与 list_directory 之间必须一致。
+        // text.Split('\n').Length 会把末尾换行后的空段算成一行（4），
+        // 而 list_directory 用 CountFileLines（3）→ 两个工具互相矛盾。
+        File.WriteAllText(Path.Combine(_dir, "consist.txt"), "a\nb\nc\n");
+        var ctx = MakeContext(_dir);
+
+        var readOut = await new ReadFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "consist.txt", ["stats"] = true, ["no_header"] = true }, ctx, CancellationToken.None);
+        var listOut = await new ListDirectoryTool().ExecuteAsync(
+            new JsonObject { ["show_line_count"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("3 行", readOut); // 末尾换行不算额外一行
+        Assert.Contains("3 lines", listOut);
+        Assert.DoesNotContain("4 行", readOut);
+    }
+
+    [Fact]
     public async Task ReadFile_Stats_False_NoStatistics()
     {
         // stats=false（默认）:不显示统计信息
