@@ -393,8 +393,12 @@ public sealed class WriteFileTool : ITool
             var normalized = NormalizeLineEndings(content, targetEnding);
             if (append && hadFile && old is not null)
             {
+                // 旧文件末尾的 \r\n 在 LF 模式下也被 End("\n") 命中，不加分隔符会导致
+                // 旧行尾 \r\n + 新行首 \n = \r\n\n（多余空行 + 混排换行）；先把旧文本
+                // 统一到目标换行再判断是否需要插入分隔符。
+                var oldNorm = NormalizeLineEndings(old, targetEnding);
                 var sep = targetEnding == "crlf" ? "\r\n" : "\n";
-                finalContent = (old.EndsWith("\n") || old.EndsWith("\r\n")) ? old + normalized : old + sep + normalized;
+                finalContent = oldNorm.EndsWith("\n") ? oldNorm + normalized : oldNorm + sep + normalized;
             }
             else
             {

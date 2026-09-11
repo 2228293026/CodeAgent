@@ -4267,6 +4267,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_LineEndingLf_OldFileCrlf_ConvertsToLf()
+    {
+        // 回归：append=true + line_ending=lf + 旧文件带 CRLF 时，旧内容的 \r\n 应被转为 \n，
+        // 而不是保留 \r 导致新旧部分混排换行。
+        File.WriteAllText(Path.Combine(_dir, "append.txt"), "line1\r\n");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "append.txt", ["append"] = true, ["line_ending"] = "lf", ["content"] = "line2\n" }, ctx, CancellationToken.None);
+
+        var result = File.ReadAllText(Path.Combine(_dir, "append.txt"));
+        Assert.Equal("line1\nline2\n", result);          // 全量 LF，无 \r 残留
+        Assert.DoesNotContain("\r\n", result);           // 旧 CRLF 已被转换
+    }
+
+    [Fact]
     public async Task WriteFile_PreserveTimestamp_True_KeepsOriginalModificationTime()
     {
         // preserve_timestamp=true:覆盖后保持原修改时间
