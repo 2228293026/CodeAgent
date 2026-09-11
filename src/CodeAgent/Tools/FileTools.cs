@@ -806,6 +806,10 @@ public sealed class ListDirectoryTool : ITool
         var dirsOnly = ToolArgs.GetBool(args, "dirs_only", false);
         var ignoreSet = ToolArgs.GetStringSet(args, "ignore");
         var sortBy = ToolArgs.GetString(args, "sort_by");
+        // 与 glob/grep 同口径：拼错时 OrderEntries 会静默回落到按名称排序，
+        // 模型以为已按大小/时间排好，实际拿到字母序——明确报错而不是猜。
+        if (!string.IsNullOrEmpty(sortBy) && sortBy is not ("name" or "size" or "modified"))
+            throw new ToolException($"无效 sort_by: {sortBy}（可选 name / size / modified）");
         var reverse = ToolArgs.GetBool(args, "reverse", false);
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var showSize = ToolArgs.GetBool(args, "show_size", false);

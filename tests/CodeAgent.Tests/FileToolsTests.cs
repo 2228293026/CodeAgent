@@ -1337,6 +1337,18 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_InvalidSortBy_ThrowsInsteadOfSilentlyIgnoring()
+    {
+        // 与 glob/grep 同口径：拼错 sort_by 时 OrderEntries 静默回落按名称排序，
+        // 模型以为已按大小排好，实际拿到字母序
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "x");
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            new ListDirectoryTool().ExecuteAsync(
+                new JsonObject { ["sort_by"] = "szie" }, MakeContext(_dir), CancellationToken.None));
+        Assert.Contains("sort_by", ex.Message);
+    }
+
+    [Fact]
     public async Task ListDirectory_SortByName_IsAlphabetical()
     {
         // sort_by=name:目录和文件均按名称字母序排列
