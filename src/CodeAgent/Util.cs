@@ -550,6 +550,24 @@ public static class SkipDirs
         }
     }
 
+    /// <summary>统计内存中文本的行数，语义与 CountFileLines 一致（末尾换行不算额外空行）。
+    /// 供 write_file 等尚未落盘的场景复用，避免各工具各写一份 Split('\n').Length 而互相矛盾。</summary>
+    public static int CountLines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+        var lines = 0;
+        foreach (var c in text)
+        {
+            if (c == '\n')
+                lines++;
+        }
+        // 末尾无换行时最后一行也算一行（与 CountFileLines / ReadAllLines 语义一致）
+        if (text[^1] != '\n')
+            lines++;
+        return lines;
+    }
+
     /// <summary>流式统计文本行数（不整读进内存）。按 \n 计；空文件为 0 行。读取失败返回 null。</summary>
     public static long? CountFileLines(string path)
     {

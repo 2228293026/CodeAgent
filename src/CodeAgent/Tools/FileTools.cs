@@ -378,7 +378,7 @@ public sealed class WriteFileTool : ITool
             if (dryRun)
             {
                 var dryRunBytes = Encoding.UTF8.GetByteCount(finalContent);
-                var dryRunLineCount = finalContent.Length == 0 ? 0 : finalContent.Split('\n').Length;
+                var dryRunLineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
                 return $"[dry_run] 将写入 {dryRunBytes:N0} 字节（{dryRunLineCount} 行）→ {path}（{(hadFile ? "覆盖已有文件" : "新建文件")}）。未写盘。";
             }
 
@@ -480,7 +480,7 @@ public sealed class WriteFileTool : ITool
 
         var bytes = Encoding.UTF8.GetByteCount(finalContent);
         // 行数（按 \n 计；纯空白/空内容记为 0）：让模型快速知道写了多少，便于与预期对照
-        var lineCount = finalContent.Length == 0 ? 0 : finalContent.Split('\n').Length;
+        var lineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
         var action = append ? "追加" : "写入";
         return $"{action} {bytes:N0} 字节（{lineCount} 行）→ {path}";
     }

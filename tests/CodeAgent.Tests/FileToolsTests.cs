@@ -4269,6 +4269,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_ReportsLineCount_ConsistentWithReadFile()
+    {
+        // write_file 返回的「N 行」必须与实际行数一致：
+        // content.Split('\n').Length 对 "a\nb\nc\n" 给出 4，而文件只有 3 行
+        var ctx = MakeContext(_dir);
+        var result = await new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "wc.txt", ["content"] = "a\nb\nc\n" }, ctx, CancellationToken.None);
+
+        Assert.Contains("3 行", result);
+
+        // 与 read_file 读回的行数一致
+        var readOut = await new ReadFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "wc.txt", ["stats"] = true, ["no_header"] = true }, ctx, CancellationToken.None);
+        Assert.Contains("3 行", readOut);
+    }
+
+    [Fact]
     public async Task ReadFile_Stats_False_NoStatistics()
     {
         // stats=false（默认）:不显示统计信息

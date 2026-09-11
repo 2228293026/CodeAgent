@@ -131,6 +131,30 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void CountLines_MatchesCountFileLines()
+    {
+        // 内存版与文件版必须同语义：末尾换行不算额外空行，末尾无换行也计最后一行
+        Assert.Equal(3, SkipDirs.CountLines("a\nb\nc\n"));
+        Assert.Equal(3, SkipDirs.CountLines("a\nb\nc"));
+        Assert.Equal(1, SkipDirs.CountLines("a"));
+        Assert.Equal(0, SkipDirs.CountLines(""));
+        Assert.Equal(0, SkipDirs.CountLines(null));
+        Assert.Equal(1, SkipDirs.CountLines("\n")); // 仅一个换行 = 一个空行
+    }
+
+    [Fact]
+    public void CountLines_AgreesWithCountFileLines_OnDisk()
+    {
+        // 同一内容：内存版与磁盘版结果必须一致（否则工具间报数互相矛盾）
+        foreach (var content in new[] { "a\nb\nc\n", "a\nb\nc", "", "\n", "x" })
+        {
+            var path = Path.Combine(_dir, "cl-" + Guid.NewGuid().ToString("N") + ".txt");
+            File.WriteAllText(path, content);
+            Assert.Equal(SkipDirs.CountFileLines(path), (long)SkipDirs.CountLines(content));
+        }
+    }
+
+    [Fact]
     public void CountFileLines_EmptyFile_ReturnsZero()
     {
         var empty = Path.Combine(_dir, "empty.txt");
