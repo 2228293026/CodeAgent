@@ -55,6 +55,18 @@ public sealed class ApplyPatchTool : ITool
             throw new ToolException("补丁中没有可用的文件块:需要至少一个 '@@ -N,M +... @@' hunk(以及 +++ 文件头,或提供 path 参数)。");
         }
 
+        // 多文件补丁先整体校验再写盘：逐个文件边验证边写时，第 2 个文件失败会
+        // 把第 1 个文件留在已修改状态，而报错文案却是「未做任何修改」。
+        // validateOnly 走的是同一套 ApplyHunks 校验（不写盘），可安全复用。
+        if (!validateOnly && !dryRun && files.Count > 1)
+        {
+            foreach (var file in files)
+            {
+                ct.ThrowIfCancellationRequested();
+                await ApplyFileAsync(file, ctx, true, allowNewFile, generous, false, false, ct);
+            }
+        }
+
         var sb = new StringBuilder();
         foreach (var file in files)
         {

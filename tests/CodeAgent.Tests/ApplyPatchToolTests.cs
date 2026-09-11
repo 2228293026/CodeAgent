@@ -34,6 +34,22 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_MultiFile_SecondFileFails_LeavesFirstFileUnmodified()
+    {
+        // 多文件补丁按顺序逐个写盘：第 2 个文件失败时第 1 个文件已经改完，
+        // 而报错文案是「未做任何修改」——工作区被留在半应用状态，与承诺不符
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "alpha\nbeta\n");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "one\ntwo\n");
+        var patch =
+            "--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,2 @@\n alpha\n-beta\n+BETA\n" +
+            "--- a/b.txt\n+++ b/b.txt\n@@ -1,2 +1,2 @@\n one\n-NOPE\n+X\n";
+
+        await Assert.ThrowsAsync<ToolException>(() => Apply(patch));
+
+        Assert.Equal("alpha\nbeta\n", File.ReadAllText(Path.Combine(_dir, "a.txt")));
+    }
+
+    [Fact]
     public async Task Apply_SimpleLineReplacement_UpdatesFile()
     {
         File.WriteAllText(Path.Combine(_dir, "f.txt"), "alpha\nbeta\ngamma\n");
