@@ -398,7 +398,9 @@ public sealed class WriteFileTool : ITool
         {
             if (dryRun)
             {
-                var dryRunBytes = Encoding.UTF8.GetByteCount(finalContent);
+                // 按目标编码计算：encoding=gbk 时 UTF-8 的 GetByteCount 会多算
+                // （"中文" GBK 4 字节 vs UTF-8 6 字节），dry_run 报的数也要与将要写出的文件一致
+                var dryRunBytes = EstimateWrittenBytes(finalContent, ToolArgs.GetString(args, "encoding"), hadFile, originalEncoding, bom);
                 var dryRunLineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
                 return $"[dry_run] 将写入 {dryRunBytes:N0} 字节（{dryRunLineCount} 行）→ {path}（{(hadFile ? "覆盖已有文件" : "新建文件")}）。未写盘。";
             }
@@ -499,11 +501,47 @@ public sealed class WriteFileTool : ITool
             EncodingName = originalEncoding, // 写盘前探测的原编码（不是写盘后的新编码）
         });
 
-        var bytes = Encoding.UTF8.GetByteCount(finalContent);
+        var bytes = new FileInfo(full).Length; // 真实大小：encoding=gbk 时 UTF-8 的 GetByteCount 会多算</｜｜DSML｜｜ parameter>
         // 行数（按 \n 计；纯空白/空内容记为 0）：让模型快速知道写了多少，便于与预期对照
         var lineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
         var action = append ? "追加" : "写入";
         return $"{action} {bytes:N0} 字节（{lineCount} 行）→ {path}";
+    }
+
+    /// <summary>dry_run 时预估将要写出的字节数（不写盘）：
+    /// encoding=gbk 等内容按目标编码计算，UTF-8 的 GetByteCount 会多算中文；
+    /// 同时计入 BOM 头的 3 字节，使预估与真正写出的文件大小一致。</summary>
+    private static long EstimateWrittenBytes(string content, string? encoding, bool hadFile, string? originalEncoding, bool bom)
+    {
+        System.Text.Encoding enc;
+        bool withBom;
+        var explicitEnc = encoding?.ToLowerInvariant() switch
+        {
+            "utf8-bom" or "utf-8-bom" => new System.Text.UTF8Encoding(true),
+            "utf8" or "utf-8" => new System.Text.UTF8Encoding(false),
+            "gbk" or "gb18030" => System.Text.Encoding.GetEncoding("GB18030"),
+            "ascii" => System.Text.Encoding.ASCII,
+            _ => null,
+        };
+        if (explicitEnc is not null)
+        {
+            enc = explicitEnc;
+            withBom = encoding!.ToLowerInvariant() is "utf8-bom" or "utf-8-bom";
+        }
+        else if (hadFile)
+        {
+            // 未指定编码：沿用原文件编码（WriteTextPreserveEncodingAsync 的语义）
+            withBom = originalEncoding is "utf8-bom";
+            enc = originalEncoding is "gb18030"
+                ? System.Text.Encoding.GetEncoding("GB18030")
+                : new System.Text.UTF8Encoding(false);
+        }
+        else
+        {
+            withBom = bom; // 新建文件：bom=true 才带 BOM
+            enc = new System.Text.UTF8Encoding(false);
+        }
+        return enc.GetByteCount(content) + (withBom ? 3 : 0);
     }
 }
 

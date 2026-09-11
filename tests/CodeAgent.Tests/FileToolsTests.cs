@@ -4247,6 +4247,36 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_WithGbkEncoding_ReportsRealFileSize()
+    {
+        // encoding=gbk 时写入的是 GBK 字节，但返回值用 Encoding.UTF8.GetByteCount 计算：
+        // "中文" GBK 是 4 字节，UTF-8 是 6 字节 → 报出的字节数与磁盘上的文件不符
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var ctx = MakeContext(_dir);
+        var result = await new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "gbk.txt", ["content"] = "中文", ["encoding"] = "gbk" }, ctx, CancellationToken.None);
+
+        var realSize = new FileInfo(Path.Combine(_dir, "gbk.txt")).Length;
+        Assert.Equal(4, realSize); // GBK 每字 2 字节
+        Assert.Contains($"{realSize} 字节", result); // 报出的必须是真实大小
+    }
+
+    [Fact]
+    public async Task WriteFile_DryRun_WithGbkEncoding_EstimatesRealSize()
+    {
+        // dry_run 的预估字节数也要按目标编码算：UTF-8 的 GetByteCount 会把 GBK 中文多算，
+        // 预估与实际写出的大小不一致会误导模型
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var ctx = MakeContext(_dir);
+        var result = await new WriteFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "gbk2.txt", ["content"] = "中文", ["encoding"] = "gbk", ["dry_run"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("4 字节", result); // GBK：2 字 × 2 字节
+        Assert.False(File.Exists(Path.Combine(_dir, "gbk2.txt"))); // 未写盘
+    }
+
+    [Fact]
     public async Task ReadFile_ByteRange_OffsetOnly_ReadsToEnd()
     {
         // 只给 byte_offset（byte_limit=0）时应读到文件末尾
