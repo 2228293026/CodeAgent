@@ -397,7 +397,20 @@ public sealed class GrepTool : ITool
                         }
                         if (showFirstMatch)
                         {
-                            var firstMatch = text.Split('\n').FirstOrDefault(l => Hit(l.TrimEnd('\r')));
+                            // multiline 时匹配可跨行，任何单行都不匹配 pattern：
+                            // 逐行 Hit() 会全部落空 → 文件明明命中却一行预览都不给。
+                            // 改为直接用正则命中内容（跨行时压成一行展示）。
+                            string? firstMatch = null;
+                            if (multiline)
+                            {
+                                var m = re.Match(text);
+                                if (m.Success && m.Length > 0)
+                                    firstMatch = m.Value.Replace("\r", "").Replace("\n", " / ");
+                            }
+                            else
+                            {
+                                firstMatch = text.Split('\n').FirstOrDefault(l => Hit(l.TrimEnd('\r')));
+                            }
                             if (firstMatch != null)
                                 extra += $" | {truncateLine(firstMatch)}";
                         }

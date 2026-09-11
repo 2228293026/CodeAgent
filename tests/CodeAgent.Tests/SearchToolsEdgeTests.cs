@@ -970,6 +970,27 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_FilesOnly_ShowFirstMatch_WithMultiline_ShowsMatchedContent()
+    {
+        // multiline=true 时匹配可跨行，任何「单行」都不匹配 pattern。
+        // showFirstMatch 逐行调用 Hit() → 全部 false → firstMatch 为 null → 不显示任何预览，
+        // 而文件明明命中了（files_only 已把它列出来）。参数形同虚设。
+        File.WriteAllText(PathOf("ml.txt"), "begin\nmiddle\nend\n");
+        var args = new JsonObject
+        {
+            ["pattern"] = "begin\\nmiddle",
+            ["files_only"] = true,
+            ["multiline"] = true,
+            ["show_first_match"] = true,
+            ["context"] = 0,
+        };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+
+        Assert.Contains("ml.txt", result); // 文件命中
+        Assert.Contains("|", result); // 应附加匹配内容预览，而不是只给路径
+    }
+
+    [Fact]
     public async Task Grep_FilesOnly_ShowFirstMatch_True_DisplaysFirstMatchingLine()
     {
         // show_first_match=true + files_only=true:文件路径后附加首个匹配行
