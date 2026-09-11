@@ -163,6 +163,15 @@ public class InputLineCommandsTests
     }
 
     [Theory]
+    [InlineData("ab中", 4, "ab中")]   // 1+1+2=4=maxWidth，不加省略号
+    [InlineData("a中b", 4, "a中b")]   // 1+2+1=4=maxWidth，不加省略号
+    [InlineData("abc中", 4, "abc…")] // 1+1+1=3≤4-1，c 能塞进；中(2) 3+2+1=6>4 被拒
+    [InlineData("😀a", 4, "😀a")]    // 2+1=3 < 4，不加省略号
+    [InlineData("😀ab", 3, "😀…")]   // 2+1+1=4>3，放不下 a，截断
+    public void FitToWidth_DoesNotExceedMaxWidth(string s, int width, string expected) =>
+        Assert.Equal(expected, InputLine.FitToWidth(s, width));
+
+    [Theory]
     [InlineData("中文ab", 0, 6)]   // 2*2+2
     [InlineData("中文ab", 2, 2)]   // 移过「中」占 2 列
     [InlineData("abc", 1, 2)]

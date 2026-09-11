@@ -125,8 +125,8 @@ public static class InputLine
             if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
             {
                 cw = 2;
-                if (w + cw > maxWidth - 1)
-                    break; // 预留省略号的一列
+                if (w + cw + 1 > maxWidth)  // +1 预留省略号一列；若 CJK(2) 塞不下则放弃该字符
+                    break;
                 sb.Append(c);
                 sb.Append(s[i + 1]);
                 i++;
@@ -134,8 +134,8 @@ public static class InputLine
             else
             {
                 cw = !char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1; // 孤立代理按 1 列（与 DisplayWidth 口径一致）
-                if (w + cw > maxWidth - 1)
-                    break; // 预留省略号的一列
+                if (w + cw + 1 > maxWidth)  // +1 预留省略号一列
+                    break;
                 sb.Append(c);
             }
             w += cw;
