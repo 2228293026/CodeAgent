@@ -1129,7 +1129,7 @@ internal static class Program
 
             case "/access":
                 // 文件访问权限模式：Shift+Tab 触发 /access next 循环切换，或 /access <strict|whitelist|full> 直接指定
-                if (rest.Equals("next", StringComparison.OrdinalIgnoreCase))
+                if (rest.Trim().Equals("next", StringComparison.OrdinalIgnoreCase))
                 {
                     var next = config.FileAccess.ToLowerInvariant() switch
                     {
@@ -1356,12 +1356,12 @@ internal static class Program
                     // 注意：此处不自动附 diff——TryUndo 弹出条目后 DiffAt(1) 指向下一条旧记录，
                     // 与刚撤销的改动无关；需要看内容用 /diff（对比撤销快照与当前文件）
                 }
-                else if (rest.Equals("list", StringComparison.OrdinalIgnoreCase))
+                else if (rest.Trim().Equals("list", StringComparison.OrdinalIgnoreCase))
                 {
                     var list = agent.Context.Undo.ListEntries();
                     Console.WriteLine(list.Length == 0 ? "没有可撤销的操作。" : $"可撤销操作（编号 1 = 最近）:\n{list}");
                 }
-                else if (rest.Equals("clear", StringComparison.OrdinalIgnoreCase))
+                else if (rest.Trim().Equals("clear", StringComparison.OrdinalIgnoreCase))
                 {
                     // 清空撤销历史：已落盘的文件修改无法回滚，仅丢弃可撤销记录
                     if (agent.Context.Undo.Count == 0)
@@ -1712,7 +1712,7 @@ internal static class Program
                     Console.WriteLine(ModeListText(config, agent.CurrentMode.Name));
                     Console.WriteLine("（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）");
                 }
-                else if (rest.Equals("next", StringComparison.OrdinalIgnoreCase))
+                else if (rest.Trim().Equals("next", StringComparison.OrdinalIgnoreCase))
                 {
                     // /mode next：循环切换到下一个模式（Shift+Tab 快捷键映射到这里）。
                     // 只打一行灰色确认并跳过状态栏：Tab 连续切换时曾产出
@@ -1957,7 +1957,7 @@ internal static class Program
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
     /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
     internal static bool IsSwitchCommand(string cmd, string rest) =>
-        rest.Equals("next", StringComparison.OrdinalIgnoreCase) && cmd is "/mode" or "/access"
+        rest.Trim().Equals("next", StringComparison.OrdinalIgnoreCase) && cmd is "/mode" or "/access"
         || cmd == "/mode" && !string.IsNullOrWhiteSpace(rest)
         || cmd == "/access" && rest.Trim().ToLowerInvariant() is "strict" or "whitelist" or "full";
 

@@ -183,6 +183,9 @@ public class MegaEdgeTests
     [InlineData("/access", "", false)]
     [InlineData("/model", "next", false)]     // 其他命令即使带 next 也不是切换
     [InlineData("/help", "", false)]
+    [InlineData("/mode", "next ", true)]      // 尾随空格应被忽略
+    [InlineData("/access", " next", true)]    // 前导空格应被忽略
+    [InlineData("/mode", " NEXT ", true)]     // 前后空格 + 大小写都应被忽略
     public void IsSwitchCommand_Classifies(string cmd, string rest, bool expected) =>
         Assert.Equal(expected, IsSwitchCommand(cmd, rest));
 
