@@ -465,6 +465,7 @@ public sealed class GrepTool : ITool
                             continue; // 零宽命中不展示（只产生噪音）
                         fileMatchCount++;
                         hits++;
+                        totalMatches++; // 与普通模式/count_only 一致：show_total_matches 依赖它
                         var startLine = 1 + CountNewlines(text, 0, m.Index);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
                         var spanLines = m.Value.Replace("\r", "").Split('\n');

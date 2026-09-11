@@ -970,6 +970,23 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Multiline_ShowTotalMatches_ReportsTotal()
+    {
+        // multiline 分支只 hits++ 不 totalMatches++，导致 show_total_matches=true 时
+        // 明明显示了匹配却完全不输出 [total] 行（普通模式与 count_only 都会累加）
+        File.WriteAllText(PathOf("mltot.txt"), "A\nB\nx\nA\nB\n");
+        var args = new JsonObject
+        {
+            ["pattern"] = "A\\nB",
+            ["multiline"] = true,
+            ["show_total_matches"] = true,
+        };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+
+        Assert.Contains("[total] 共 2 处匹配", result);
+    }
+
+    [Fact]
     public async Task Grep_FilesOnly_ShowFirstMatch_WithMultiline_ShowsMatchedContent()
     {
         // multiline=true 时匹配可跨行，任何「单行」都不匹配 pattern。
