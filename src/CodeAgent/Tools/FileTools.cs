@@ -640,6 +640,9 @@ public sealed class EditFileTool : ITool
             throw new ToolException($"old_string 出现 {count} 次（非唯一匹配）。如需替换全部请设置 replace_all=true；如需允许多处匹配请设置 allow_multiple=true。");
 
         string result;
+        // 实际替换处数：replace_all 是全部 count 处；allow_multiple 只替换第一处
+        // （count 只是「出现了几次」，不是「改了几处」）
+        var replacedCount = count;
         if (replaceAll)
         {
             // replace_all + case_insensitive:需要自定义不区分大小写的替换
@@ -666,6 +669,7 @@ public sealed class EditFileTool : ITool
                 throw new ToolException(
                     $"old_string 在文件中出现 {count} 次，请扩大上下文使其唯一，或设置 replace_all=true / allow_multiple=true。");
             result = workText.Remove(firstIdx, workOld.Length).Insert(firstIdx, workNew);
+            replacedCount = 1; // allow_multiple 只替换第一处
         }
         if (normalized && text.Contains("\r\n"))
         {
@@ -744,7 +748,7 @@ public sealed class EditFileTool : ITool
         var startLine = workText.AsSpan(0, Math.Max(0, firstIdx)).Count('\n') + 1;
         // 归一化命中且原文件是 CRLF：提示换行风格被保留（避免模型以为改成了 LF）
         var crlfNote = normalized && text.Contains("\r\n") ? "，保留原 CRLF 换行" : "";
-        var msg = $"已替换 {count} 处 → {path}（修改起始行 {startLine}{crlfNote}）";
+        var msg = $"已替换 {replacedCount} 处 → {path}（修改起始行 {startLine}{crlfNote}）";
         return showDiff && diff != null ? msg + "\n\n" + diff : msg;
     }
 }

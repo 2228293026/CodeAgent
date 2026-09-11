@@ -4230,6 +4230,37 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_AllowMultiple_ReportsOneReplacementNotTotalOccurrences()
+    {
+        // allow_multiple=true 只替换第一处，但消息用 CountOccurrences 报总数：
+        // 文件里 3 处匹配、只改了 1 处，却告诉模型「已替换 3 处」——模型会以为改完了
+        File.WriteAllText(Path.Combine(_dir, "multi.txt"), "foo\nfoo\nfoo\n");
+        var ctx = MakeContext(_dir);
+
+        var result = await new EditFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "multi.txt", ["old_string"] = "foo", ["new_string"] = "bar", ["allow_multiple"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 1 处", result); // 实际只改了第一处
+        Assert.Equal("bar\nfoo\nfoo\n", File.ReadAllText(Path.Combine(_dir, "multi.txt")));
+    }
+
+    [Fact]
+    public async Task EditFile_ReplaceAll_ReportsAllReplacements()
+    {
+        // replace_all 才是真的全替换，报数应为 3
+        File.WriteAllText(Path.Combine(_dir, "all.txt"), "foo\nfoo\nfoo\n");
+        var ctx = MakeContext(_dir);
+
+        var result = await new EditFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "all.txt", ["old_string"] = "foo", ["new_string"] = "bar", ["replace_all"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("已替换 3 处", result);
+        Assert.Equal("bar\nbar\nbar\n", File.ReadAllText(Path.Combine(_dir, "all.txt")));
+    }
+
+    [Fact]
     public async Task ReadFile_ByteRange_WorksOnBinaryFile()
     {
         // 按字节分段读取是 byte_offset/byte_limit 的既定用途（二进制文件分段），

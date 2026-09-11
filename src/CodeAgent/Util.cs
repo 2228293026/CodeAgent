@@ -550,8 +550,7 @@ public static class SkipDirs
         }
     }
 
-    /// <summary>统计内存中文本的行数，语义与 CountFileLines 一致（末尾换行不算额外空行）。
-    /// 供 write_file 等尚未落盘的场景复用，避免各工具各写一份 Split('\n').Length 而互相矛盾。</summary>
+    /// <summary>流式统计词数（不整读进内存）：按空白分隔，与 ReadAllText(...).Split(空白) 一致。失败返回 null。</summary>
     public static long? CountFileWords(string path)
     {
         try
@@ -586,6 +585,8 @@ public static class SkipDirs
         }
     }
 
+    /// <summary>统计内存中文本的行数，语义与 CountFileLines 一致（末尾换行不算额外空行）。
+    /// 供 write_file 等尚未落盘的场景复用，避免各工具各写一份 Split('\n').Length 而互相矛盾。</summary>
     public static int CountLines(string? text)
     {
         if (string.IsNullOrEmpty(text))
