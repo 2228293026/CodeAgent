@@ -667,7 +667,7 @@ public sealed class EditFileTool : ITool
                     var idx = result.IndexOf(workOld, start, cmp);
                     if (idx < 0) break;
                     result = result.Remove(idx, workOld.Length).Insert(idx, workNew);
-                    start = idx + workNew.Length;
+                    start = idx; // 从替换插入点继续搜索；+0 死循环，+workOld.Length 会跳过因删除而前移的后续匹配
                 }
             }
             else

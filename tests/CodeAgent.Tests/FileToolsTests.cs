@@ -3512,6 +3512,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_CaseInsensitive_ReplaceAll_EmptyNewString_RemovesAll()
+    {
+        // 回归：replace_all=true + case_insensitive=true + new_string="" 时，
+        // 循环内 start = idx + workNew.Length = idx + 0，同一匹配反复命中导致死循环（或 CPU 飙升）。
+        File.WriteAllText(Path.Combine(_dir, "ciempty.txt"), "Cat\ncat\nCAT\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "ciempty.txt", ["old_string"] = "cat", ["new_string"] = "", ["case_insensitive"] = true, ["replace_all"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("\n\n\n", File.ReadAllText(Path.Combine(_dir, "ciempty.txt"))); // 3 行各删掉 cat
+        Assert.Contains("3 处", result);
+    }
+
+    [Fact]
     public async Task EditFile_CaseInsensitive_PreservesOriginalCaseInResult()
     {
         // case_insensitive=true:匹配时忽略大小写，但替换后文件内容按 new_string 写入
