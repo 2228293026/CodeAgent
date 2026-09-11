@@ -275,6 +275,11 @@ internal sealed class SseDataAssembler
     {
         if (s.Length == 0)
             return false;
+        // [DONE] 哨兵以 '[' 开头，会误入下面的 JSON 分支：解析失败 → 判为「不完整」→ 被缓冲，
+        // 调用方的 doneSentinel 永远为 false（流结束信号失效，[DONE] 之后的数据还会被继续处理）。
+        // 哨兵是固定字面量，显式放行。
+        if (s == "[DONE]")
+            return true;
         if (s[0] is not ('{' or '['))
             return true;
         try

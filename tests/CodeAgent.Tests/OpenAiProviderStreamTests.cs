@@ -298,6 +298,35 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public void SseDataAssembler_DoneSentinel_PassesThroughImmediately()
+    {
+        // 文档承诺「其他负载（如 [DONE] 哨兵）原样放行」，但 [DONE] 以 '[' 开头，
+        // 会走 JSON 解析分支、解析失败被判为「不完整」而缓冲 —— 调用方永远收不到流结束信号
+        var asm = new SseDataAssembler();
+        Assert.Equal("[DONE]", asm.Feed("data: [DONE]"));
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_DataAfterDoneSentinel_IsNotProcessed()
+    {
+        // [DONE] 之后的数据不应再被处理：哨兵失效时 doneSentinel 永远为 false，
+        // 尾随内容会被当成合法增量追加进回复
+        var handler = new SseHandler
+        {
+            Body = "data: {\"choices\":[{\"delta\":{\"content\":\"A\"}}]}\n\n"
+                 + "data: [DONE]\n\n"
+                 + "data: {\"choices\":[{\"delta\":{\"content\":\"B\"}}]}\n\n",
+        };
+        var provider = MakeProvider(handler);
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("A", resp.Text);
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_SendsStreamFlagsInRequest()
     {
         var handler = new SseHandler { Body = "data: [DONE]\n" };
