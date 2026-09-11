@@ -4643,6 +4643,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Atomic_PreservesGbkEncoding()
+    {
+        // 回归：atomic=true 时此前把 tmp 传给 WriteTextPreserveEncodingAsync，
+        // 临时文件不存在导致编码检测回退 UTF-8，GBK 文件被静默转码。
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        File.WriteAllText(Path.Combine(_dir, "gbk.txt"), "中文\r\n", gbk);
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "gbk.txt", ["content"] = "追加\r\n", ["append"] = true, ["atomic"] = true }, ctx, CancellationToken.None);
+
+        var result = File.ReadAllText(Path.Combine(_dir, "gbk.txt"), gbk);
+        Assert.Equal("中文\r\n追加\r\n", result);
+    }
+
+    [Fact]
     public async Task WriteFile_Atomic_TargetLocked_CleansUpTempFile()
     {
         // Windows 专属语义：目标被占用（允许读、拒绝写/删）时 File.Move 抛共享冲突。

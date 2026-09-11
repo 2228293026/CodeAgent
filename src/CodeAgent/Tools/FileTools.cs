@@ -482,21 +482,10 @@ public sealed class WriteFileTool : ITool
             }
             else if (atomic)
             {
-                // atomic=true:写临时文件再 rename，避免写入过程中断导致文件损坏
-                // 同 bom 分支：统一走 TempPathFor（内含 null 兜底）
-                Directory.CreateDirectory(Path.GetDirectoryName(full) ?? ".");
-                var tmp = SkipDirs.TempPathFor(full);
-                try
-                {
-                    await TextUtil.WriteTextPreserveEncodingAsync(tmp, finalContent, ct);
-                    File.Move(tmp, full, overwrite: true);
-                }
-                catch
-                {
-                    // 同上：失败路径清理临时文件
-                    try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                    throw;
-                }
+                // atomic=true:由 WriteTextPreserveEncodingAsync 内部处理原子写入（临时文件+rename），
+                // 此处只需传目标路径 full，才能正确探测原文件编码；此前传 tmp 导致 GBK/BOM 文件
+                // 在 atomic 模式下被静默降级为 UTF-8 无 BOM。
+                await TextUtil.WriteTextPreserveEncodingAsync(full, finalContent, ct);
             }
             else
             {
