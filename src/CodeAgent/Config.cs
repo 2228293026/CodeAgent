@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using CodeAgent.Tools;
 
 namespace CodeAgent;
 
@@ -229,12 +230,10 @@ public sealed class AgentConfig
             if (cfg.Providers.Count > 0 && !string.IsNullOrWhiteSpace(cfg.Provider)
                 && !cfg.Providers.ContainsKey(cfg.Provider))
                 cfg.Warnings.Add($"provider='{cfg.Provider}' 在 Providers 中不存在（已配置：{string.Join("/", cfg.Providers.Keys)}）——将因找不到连接配置而报错，请检查拼写或补上该 Provider。");
-            // Shell 必须是受支持的执行器（空 = 自动）；非法值会被静默当 cmd 用，给出警告
+            // Shell 必须是受支持的执行器（空 = auto）；非法值会被静默当 cmd 用，给出警告
             if (!string.IsNullOrWhiteSpace(cfg.Shell)
-                && !cfg.Shell.Equals("cmd", StringComparison.OrdinalIgnoreCase)
-                && !cfg.Shell.Equals("powershell", StringComparison.OrdinalIgnoreCase)
-                && !cfg.Shell.Equals("bash", StringComparison.OrdinalIgnoreCase))
-                cfg.Warnings.Add($"shell='{cfg.Shell}' 不是支持的命令解释器（cmd/powershell/bash，留空=自动）——将按默认处理，请检查拼写。");
+                && !ShellRunner.SupportedShells.Any(s => s.Equals(cfg.Shell.Trim(), StringComparison.OrdinalIgnoreCase)))
+                cfg.Warnings.Add($"shell='{cfg.Shell}' 不是支持的命令解释器（{string.Join("/", ShellRunner.SupportedShells)}，留空=auto）——将按默认处理，请检查拼写。");
             // Provider.type 必须是受支持的实现（openai 兼容协议 / anthropic）；非法值运行时连接会直接报错
             foreach (var (name, p) in cfg.Providers)
             {

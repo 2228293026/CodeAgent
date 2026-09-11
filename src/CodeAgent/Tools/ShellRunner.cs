@@ -11,6 +11,12 @@ public static class ShellRunner
     /// 回合期间的 ESC 监视线程会吞掉所有按键，不置闩用户输入的 y/n 会被抢走。</summary>
     internal static volatile bool ConsoleInputBusy;
 
+    /// <summary>
+    /// 受支持的 shell 名（唯一事实来源）。配置校验、/shell 命令、工具 schema、BuildShellCommand
+    /// 四处共用此列表，防止再出现「/shell pwsh 能设、重启却警告不支持」的漂移。
+    /// </summary>
+    internal static readonly string[] SupportedShells = ["cmd", "powershell", "pwsh", "bash", "sh"];
+
     /// <summary>执行命令，返回 (退出码, 格式化输出)。env 为附加环境变量（叠加到当前环境）。</summary>
     public static async Task<(int ExitCode, string Output)> RunAsync(
         string shell, string command, string cwd, int timeoutSeconds, CancellationToken ct,

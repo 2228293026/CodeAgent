@@ -593,6 +593,38 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Load_ShellSupportedByRuntime_NoWarning()
+    {
+        // 回归：/shell 命令与工具 schema 都允许 pwsh/sh，ShellRunner 也真的实现了它们，
+        // 但配置校验只认 cmd/powershell/bash —— `/shell pwsh` 保存成功，重启后却报
+        // 「shell='pwsh' 不是支持的命令解释器」，明明能跑却被提示配错了。
+        foreach (var shell in new[] { "pwsh", "sh", "PWSh", "SH", " pwsh " })
+        {
+            var path = Path.Combine(_dir, $"shell-runtime-{shell.Trim()}-{shell.Length}.json");
+            File.WriteAllText(path, $"{{ \"shell\": \"{shell}\" }}");
+            var cfg = AgentConfig.Load(path);
+            Assert.False(cfg.Warnings.Any(w => w.Contains("shell='")),
+                $"shell={shell} 是运行时可执行的 shell，不应警告，实际警告: {string.Join("; ", cfg.Warnings)}");
+        }
+    }
+
+    [Fact]
+    public void ShellValidation_AgreesWithRuntimeSupport()
+    {
+        // 防漂移：配置校验、/shell 命令、工具 schema、ShellRunner 四处各维护一份列表，
+        // 一旦不一致就会出现「能设置却报错」或「设置了不生效」。这里锁死配置校验
+        // 必须接受 ShellRunner 实际支持的全部 shell。
+        foreach (var shell in CodeAgent.Tools.ShellRunner.SupportedShells)
+        {
+            var path = Path.Combine(_dir, $"shell-agree-{shell}.json");
+            File.WriteAllText(path, $"{{ \"shell\": \"{shell}\" }}");
+            var cfg = AgentConfig.Load(path);
+            Assert.False(cfg.Warnings.Any(w => w.Contains("shell='")),
+                $"ShellRunner 支持 '{shell}'，配置校验却报警告: {string.Join("; ", cfg.Warnings)}");
+        }
+    }
+
+    [Fact]
     public void Load_ProviderTypeInvalid_Warns()
     {
         // type 拼错（如 gemini）：连接时会直接报错——提前警告
