@@ -495,6 +495,18 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Glob_InvalidSortBy_ThrowsInsteadOfSilentlyIgnoring()
+    {
+        // sort_by 拼错时静默回落成「不排序」（等价于 name），模型以为按大小排好了，
+        // 实际拿到的是字母序——与 invalid shell 明确报错的处理方式不一致
+        File.WriteAllText(PathOf("a.txt"), "x");
+        var args = new JsonObject { ["pattern"] = "*.txt", ["sort_by"] = "szie" }; // 故意拼错
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            new GlobTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None));
+        Assert.Contains("sort_by", ex.Message);
+    }
+
+    [Fact]
     public async Task Glob_SortByName_IsAlphabetical()
     {
         // sort_by=name:结果按路径字母序排列

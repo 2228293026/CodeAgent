@@ -55,6 +55,10 @@ public sealed class GlobTool : ITool
         var maxResults = Math.Clamp(ToolArgs.GetInt(args, "max_results", 500), 1, 5000);
         var depth = ToolArgs.GetInt(args, "depth", -1);
         var sortBy = ToolArgs.GetString(args, "sort_by");
+        // 拼错时静默回落成「不排序」会骗过模型（以为按大小排好了，拿到的是字母序）。
+        // 与 shell 参数同一口径：非法取值明确报错，不猜。
+        if (!string.IsNullOrEmpty(sortBy) && sortBy is not ("name" or "size" or "modified"))
+            throw new ToolException($"无效 sort_by: {sortBy}（可选 name / size / modified）");
         var reverse = ToolArgs.GetBool(args, "reverse", false);
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);
@@ -257,7 +261,13 @@ public sealed class GrepTool : ITool
         // 跨行匹配：让 `.` 与 `.*` 能匹配换行符（否则 multiline 只改 ^/$ 语义，'.*' 仍被 \n 截断）
         var multiline = ToolArgs.GetBool(args, "multiline", false);
         var showLineNumber = ToolArgs.GetBool(args, "line_number", true);
-        var outputMode = ToolArgs.GetString(args, "output_mode") ?? "text";
+        // 未给参数时 GetString 返回 ""（不是 null），等价于默认 text；
+        // 只有「给了但拼错」才报错，避免静默按 text 输出骗过模型
+        var outputMode = ToolArgs.GetString(args, "output_mode");
+        if (string.IsNullOrEmpty(outputMode))
+            outputMode = "text";
+        else if (outputMode is not ("text" or "content" or "content_without_filename" or "content_without_line_number"))
+            throw new ToolException($"无效 output_mode: {outputMode}（可选 text / content / content_without_filename / content_without_line_number）");
         if (multiline)
             opts |= RegexOptions.Singleline;
         // 整词匹配（rg -w）：两侧加单词边界，避免命中更长单词的子串
