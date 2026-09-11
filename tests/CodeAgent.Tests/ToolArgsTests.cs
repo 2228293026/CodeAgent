@@ -194,6 +194,19 @@ public class ToolArgsTests
         Assert.Equal(expected, ToolArgs.GetBool(args, "flag", false));
     }
 
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("0", false)]
+    [InlineData("1.0", true)]   // 模型常把布尔发成浮点字面量 1.0
+    [InlineData("0.0", false)]
+    [InlineData("2.0", true)]
+    public void GetBool_NumericForms(string rawJson, bool expected)
+    {
+        // 用原始 JSON 文本，确保 1.0 走 double 分支（JsonSerializer.Serialize(1.0) 会输出 "1"，测不到）
+        var args = new JsonObject { ["flag"] = JsonNode.Parse(rawJson)! };
+        Assert.Equal(expected, ToolArgs.GetBool(args, "flag", !expected));
+    }
+
     [Fact]
     public void GetStringDict_NonObjectValue_ReturnsNull()
     {

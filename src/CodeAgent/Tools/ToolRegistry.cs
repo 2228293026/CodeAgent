@@ -271,6 +271,10 @@ internal static class ToolArgs
         // 数字兜底：1/非0 视为 true，0 视为 false（JSON 里布尔误写成整数时也能正确解析）
         if (v.TryGetValue<int>(out var n))
             return n != 0;
+        // 浮点兜底：模型常把布尔发成 1.0/0.0。只认整数值（与 GetInt 同一口径），
+        // 0.5 这类非整数值按非法处理回退默认，避免把 0.5 猜成 true
+        if (v.TryGetValue<double>(out var d))
+            return double.IsFinite(d) && d == Math.Truncate(d) && d != 0;
         return def;
     }
 
