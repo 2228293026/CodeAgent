@@ -4261,6 +4261,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_Range_BeyondMaxLines_IsCappedLikeLimit()
+    {
+        // range 在 limit 的 clamp 之后覆写 limit，绕过了 5000 行上限：
+        // range="1-100000" 会把整个大文件灌进上下文（limit 的 5000 上限形同虚设）
+        var lines = Enumerable.Range(1, 6000).Select(i => $"line{i}").ToArray();
+        File.WriteAllText(Path.Combine(_dir, "big6000.txt"), string.Join("\n", lines) + "\n");
+        var ctx = MakeContext(_dir);
+
+        var output = await new ReadFileTool().ExecuteAsync(
+            new JsonObject { ["path"] = "big6000.txt", ["range"] = "1-100000", ["no_header"] = true },
+            ctx, CancellationToken.None);
+
+        var emitted = output.Split('\n').Length;
+        Assert.True(emitted <= 5000, $"range 输出 {emitted} 行，超过 5000 行上限");
+    }
+
+    [Fact]
     public async Task ReadFile_ByteRange_WorksOnBinaryFile()
     {
         // 按字节分段读取是 byte_offset/byte_limit 的既定用途（二进制文件分段），

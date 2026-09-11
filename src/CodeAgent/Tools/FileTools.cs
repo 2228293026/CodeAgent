@@ -75,7 +75,9 @@ public sealed class ReadFileTool : ITool
             if (parts.Length == 2 && int.TryParse(parts[0], out var lineStart) && int.TryParse(parts[1], out var lineEnd) && lineStart > 0 && lineEnd >= lineStart)
             {
                 offset = lineStart;
-                limit = lineEnd - lineStart + 1;
+                // range 的跨度过大时同样受 5000 行上限约束：此处直接赋值会绕过上面
+                // Math.Clamp(limit, 1, 5000)，range="1-100000" 能把整个大文件灌进上下文
+                limit = Math.Min(lineEnd - lineStart + 1, 5000);
             }
             else
             {
