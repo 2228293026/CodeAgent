@@ -55,7 +55,10 @@ public sealed class ReadFileTool : ITool
             throw new ToolException($"文件过大（{info.Length / 1024 / 1024} MB），请用 offset/limit 分段读取。");
 
         var offset = Math.Max(1, ToolArgs.GetInt(args, "offset", 1));
-        var limit = Math.Clamp(ToolArgs.GetInt(args, "limit", 300), 1, 5000);
+        // schema 写明「0=不使用, 默认 300」：0 必须回退默认值，
+        // 直接 Clamp 会把 0 变成 1（模型按文档发 0 时只拿到 1 行）
+        var limitArg = ToolArgs.GetInt(args, "limit", 300);
+        var limit = Math.Clamp(limitArg <= 0 ? 300 : limitArg, 1, 5000);
         var tail = Math.Clamp(ToolArgs.GetInt(args, "tail", 0), 0, 5000);
         var headCount = Math.Clamp(ToolArgs.GetInt(args, "head", 0), 0, 5000);
         // head 是 limit 的便捷写法（读开头 N 行）：未给 tail 时优先于 limit 生效

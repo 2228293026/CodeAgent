@@ -1677,9 +1677,10 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task ReadFile_LimitZero_ReadsOneLine()
+    public async Task ReadFile_LimitZero_UsesDefaultLimit()
     {
-        // limit=0 被 clamp 到 1：返回第 1 行而非空结果
+        // schema 写明「0=不使用, 默认 300」：0 应回退默认值。
+        // 此前 Math.Clamp(0,1,5000)=1，模型按文档发 0 时只拿到 1 行（静默截断）
         File.WriteAllText(Path.Combine(_dir, "lz.txt"), "alpha\nbeta\ngamma\n");
         var tool = new ReadFileTool();
         var ctx = MakeContext(_dir);
@@ -1688,7 +1689,7 @@ public class FileToolsTests : IDisposable
             new JsonObject { ["path"] = "lz.txt", ["limit"] = 0 }, ctx, CancellationToken.None);
 
         Assert.Contains("1\talpha", output);
-        Assert.DoesNotContain("beta", output);
+        Assert.Contains("gamma", output); // 默认 300 行：整个文件都该读到
     }
 
     [Fact]
@@ -4259,6 +4260,7 @@ public class FileToolsTests : IDisposable
         Assert.Contains("已替换 3 处", result);
         Assert.Equal("bar\nbar\nbar\n", File.ReadAllText(Path.Combine(_dir, "all.txt")));
     }
+
 
     [Fact]
     public async Task ReadFile_Range_BeyondMaxLines_IsCappedLikeLimit()
