@@ -74,6 +74,21 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_SingleHunk_LineDrift_KeepsSkippedLines()
+    {
+        // 单 hunk 的行号漂移容错会从 pos 往后找首个匹配行并把 pos 推过去，
+        // 但中间被跳过的行既没写进 result 也没被消费 → 这些行从文件里静默消失
+        File.WriteAllText(Path.Combine(_dir, "drift.txt"), "A\nB\nC\nD\nE\n");
+        // oldStart 声称在第 1 行，实际目标 'D' 在第 4 行：触发漂移容错
+        var patch = "@@ -1,1 +1,1 @@\n-D\n+X\n";
+
+        await Apply(patch, "drift.txt");
+
+        // 被跳过的 A/B/C 必须原样保留，只把 D 换成 X
+        Assert.Equal("A\nB\nC\nX\nE\n", File.ReadAllText(Path.Combine(_dir, "drift.txt")));
+    }
+
+    [Fact]
     public async Task Apply_MultipleHunks_SingleFile()
     {
         File.WriteAllText(Path.Combine(_dir, "f.txt"), "l1\nl2\nl3\nl4\nl5\n");

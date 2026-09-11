@@ -285,11 +285,15 @@ public sealed class ApplyPatchTool : ITool
                 if (pos >= original.Length || original[pos] != l.Text)
                 {
                     // 上下文不匹配:单 hunk 且允许搜索时,尝试从 pos 往后找首数据行(行号漂移容错)
-                    var effective = TryLocateAfterFuzz(generousLocate || hunks.Count == 1, original, ref pos, l, hunk);
-                    if (!effective)
+                    var located = TryLocateAfterFuzz(generousLocate || hunks.Count == 1, original, pos, l);
+                    if (located < 0)
                         throw new ToolException(
                             $"补丁上下文不匹配: 文件 {displayPath} 第 {pos + 1} 行应为 '{Short(l.Text)}' 但实际是 '{Short(pos < original.Length ? original[pos] : "<文件已到结尾>")}'。未做任何修改。请基于 read_file 的最新内容重新生成补丁。");
-                    // TryLocateAfterFuzz 保证命中时 original[pos] == l.Text，此处无需二次校验
+                    // 漂移跳过的行必须原样保留:此前只把 pos 推过去而没把中间的行写进 result,
+                    // 这些行会从文件里静默消失（oldStart 偏小 + 单 hunk 时尤其容易触发）
+                    for (int i = pos; i < located; i++)
+                        result.Add(original[i]);
+                    pos = located;
                 }
                 pos++; // 消费该行
                 if (l.Op == ' ')
@@ -304,19 +308,16 @@ public sealed class ApplyPatchTool : ITool
 
     /// <summary>单 hunk 行号漂移容错:在 pos 之后(含)找第一个「内容等于 l.Text 且该行在 hunk 中为
     /// 首个非新增行对应文本」的位置。为免误吞,只在找到后才把 pos 推进;找不到返回 false。</summary>
-    private static bool TryLocateAfterFuzz(bool enabled, string[] original, ref int pos, HunkLine l, PatchHunk hunk)
+    private static int TryLocateAfterFuzz(bool enabled, string[] original, int pos, HunkLine l)
     {
         if (!enabled || l.Op == '+')
-            return false;
+            return -1;
         for (int i = pos; i < original.Length; i++)
         {
             if (original[i] == l.Text)
-            {
-                pos = i;
-                return true;
-            }
+                return i;
         }
-        return false;
+        return -1;
     }
 
     private static (int added, int removed) StatHunks(List<PatchHunk> hunks)
