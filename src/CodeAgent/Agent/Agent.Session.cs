@@ -319,7 +319,12 @@ public sealed partial class Agent
                     var role = n["role"]?.GetValue<string>() ?? "?";
                     if (role == "user" && content.TrimStart().StartsWith('/'))
                         continue;
-                    hits.AddRange(MatchWindow(content, keyword, role, caseSensitive));
+                    foreach (var h in MatchWindow(content, keyword, role, caseSensitive, maxPerMsg: maxHits - hits.Count))
+                    {
+                        hits.Add(h);
+                        if (hits.Count >= maxHits)
+                            break;
+                    }
                 }
                 catch
                 {
@@ -355,7 +360,12 @@ public sealed partial class Agent
                 // 与日志搜索同口径：斜杠命令行不算命中
                 if (d.role == "user" && content.TrimStart().StartsWith('/'))
                     continue;
-                hits.AddRange(MatchWindow(content, keyword, d.role, caseSensitive));
+                foreach (var h in MatchWindow(content, keyword, d.role, caseSensitive, maxPerMsg: maxHits - hits.Count))
+                {
+                    hits.Add(h);
+                    if (hits.Count >= maxHits)
+                        break;
+                }
             }
         }
         catch
@@ -366,16 +376,22 @@ public sealed partial class Agent
     }
 
     /// <summary>关键字的命中片段：前后窗口折叠换行，超出部分用省略号标记。日志与快照搜索共用。</summary>
-    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role, bool caseSensitive = false)
+    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role, bool caseSensitive = false, int maxPerMsg = 3)
     {
         var cmp = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        var idx = content.IndexOf(keyword, cmp);
-        if (idx < 0)
-            yield break;
-        var start = Math.Max(0, idx - 40);
-        var len = Math.Min(content.Length - start, keyword.Length + 80);
-        var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", " ⏎ ");
-        yield return (role, (start > 0 ? "…" : "") + snippet + (start + len < content.Length ? "…" : ""));
+        int searchFrom = 0, found = 0;
+        while (found < maxPerMsg)
+        {
+            var idx = content.IndexOf(keyword, searchFrom, cmp);
+            if (idx < 0)
+                yield break;
+            var start = Math.Max(0, idx - 40);
+            var len = Math.Min(content.Length - start, keyword.Length + 80);
+            var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", " ⏎ ");
+            yield return (role, (start > 0 ? "…" : "") + snippet + (start + len < content.Length ? "…" : ""));
+            searchFrom = idx + keyword.Length;
+            found++;
+        }
     }
 
     /// <summary>切换到新的会话日志文件（/clear 与恢复会话后用，使日志与新历史一一对应）。</summary>

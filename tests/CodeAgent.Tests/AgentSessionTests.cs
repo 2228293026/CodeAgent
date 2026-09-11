@@ -104,6 +104,23 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void SearchSessionLog_MultipleMatchesInOneMessage_ReturnsAllSnippets()
+    {
+        // 回归：MatchWindow 用 IndexOf 只取首个命中，单条消息含多处分叉时后续匹配被静默丢弃。
+        var path = Path.Combine(_sessionDir, "search_multi.jsonl");
+        File.WriteAllLines(path,
+        [
+            """{"role":"user","content":"第一次提到 fix，然后中间内容，第二次提到 fix"}""",
+        ]);
+
+        var hits = AgentClass.SearchSessionLog(path, "fix", maxHits: 3);
+
+        Assert.Equal(2, hits.Count); // 同一条消息里的两处 fix 都应被命中
+        Assert.Contains("第一次提到 fix", hits[0].Snippet);
+        Assert.Contains("第二次提到 fix", hits[1].Snippet);
+    }
+
+    [Fact]
     public async Task ThinkingFields_SurviveSessionLog_Roundtrip()
     {
         // 回归：Anthropic thinking（文本+签名）必须随会话日志落盘并恢复，
