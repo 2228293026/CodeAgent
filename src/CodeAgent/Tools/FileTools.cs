@@ -329,6 +329,9 @@ public sealed class WriteFileTool : ITool
         }
 
         var lineEnding = ToolArgs.GetString(args, "line_ending");
+        // 拼错时静默忽略会骗过模型（以为已强制 CRLF，实际仍是原风格）
+        if (!string.IsNullOrEmpty(lineEnding) && lineEnding is not ("preserve" or "lf" or "crlf"))
+            throw new ToolException($"无效 line_ending: {lineEnding}（可选 preserve / lf / crlf）");
         string? targetEnding = null;
         if (!string.IsNullOrEmpty(lineEnding))
         {
@@ -345,6 +348,9 @@ public sealed class WriteFileTool : ITool
 
         // if_exists 检查：文件已存在时的处理方式
         var ifExists = ToolArgs.GetString(args, "if_exists");
+        // 拼错时两个分支都不命中 → 静默走覆盖分支，把用户想保护的文件直接覆盖掉（数据丢失）
+        if (!string.IsNullOrEmpty(ifExists) && ifExists is not ("overwrite" or "skip" or "error"))
+            throw new ToolException($"无效 if_exists: {ifExists}（可选 overwrite / skip / error）");
         if (!string.IsNullOrEmpty(ifExists) && File.Exists(full))
         {
             if (ifExists == "skip")

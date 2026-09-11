@@ -238,6 +238,10 @@ public sealed class GrepTool : ITool
         var maxLineLength = Math.Clamp(ToolArgs.GetInt(args, "max_line_length", 2000), 0, 50000);
         var truncateLine = maxLineLength == 0 ? (Func<string, string>)(s => s) : s => TextUtil.TruncateLine(s, maxLineLength);
         var binaryFiles = ToolArgs.GetString(args, "binary_files");
+        // 拼错时不能静默落到「当作文本搜索」分支：那是最不安全的一种模式，
+        // 且与文档默认(skip)相反。与 sort_by/output_mode 同口径，明确报错。
+        if (!string.IsNullOrEmpty(binaryFiles) && binaryFiles is not ("skip" or "text" or "without-match"))
+            throw new ToolException($"无效 binary_files: {binaryFiles}（可选 skip / text / without-match）");
         var skipBinary = string.IsNullOrEmpty(binaryFiles) || binaryFiles == "skip";
         var showHidden = ToolArgs.GetBool(args, "show_hidden", false);
         var includeIgnored = ToolArgs.GetBool(args, "include_ignored", false);

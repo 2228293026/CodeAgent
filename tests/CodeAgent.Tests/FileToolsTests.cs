@@ -1337,6 +1337,32 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_InvalidIfExists_ThrowsInsteadOfOverwriting()
+    {
+        // if_exists 拼错（如 "eror"）时两个 if 都不命中 → 静默走覆盖分支，
+        // 用户本想「存在就报错」，结果文件被直接覆盖（数据丢失）
+        File.WriteAllText(Path.Combine(_dir, "keep.txt"), "ORIGINAL");
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            new WriteFileTool().ExecuteAsync(
+                new JsonObject { ["path"] = "keep.txt", ["content"] = "NEW", ["if_exists"] = "eror" },
+                MakeContext(_dir), CancellationToken.None));
+        Assert.Contains("if_exists", ex.Message);
+        Assert.Equal("ORIGINAL", File.ReadAllText(Path.Combine(_dir, "keep.txt")));
+    }
+
+    [Fact]
+    public async Task WriteFile_InvalidLineEnding_ThrowsInsteadOfSilentlyIgnoring()
+    {
+        // line_ending 拼错（如 "crf"）时两个分支都不命中，targetEnding 保持 null，
+        // 文件按默认风格写出——用户以为已强制 CRLF，实际可能仍是 LF
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            new WriteFileTool().ExecuteAsync(
+                new JsonObject { ["path"] = "le.txt", ["content"] = "a\nb", ["line_ending"] = "crf" },
+                MakeContext(_dir), CancellationToken.None));
+        Assert.Contains("line_ending", ex.Message);
+    }
+
+    [Fact]
     public async Task ListDirectory_InvalidSortBy_ThrowsInsteadOfSilentlyIgnoring()
     {
         // 与 glob/grep 同口径：拼错 sort_by 时 OrderEntries 静默回落按名称排序，

@@ -495,6 +495,19 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_InvalidBinaryFiles_ThrowsInsteadOfSearchingBinaryAsText()
+    {
+        // binary_files 拼错（如 "skp"）时 skipBinary=false 且不等于 without-match，
+        // 会直接落到「当作文本搜索」分支——最不安全的一种模式，且与文档默认相反
+        var bin = new byte[] { 0x41, 0x00, 0x42, 0x00 };
+        File.WriteAllBytes(PathOf("bin.dat"), bin);
+        var args = new JsonObject { ["pattern"] = "A", ["binary_files"] = "skp" };
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None));
+        Assert.Contains("binary_files", ex.Message);
+    }
+
+    [Fact]
     public async Task Glob_InvalidSortBy_ThrowsInsteadOfSilentlyIgnoring()
     {
         // sort_by 拼错时静默回落成「不排序」（等价于 name），模型以为按大小排好了，
