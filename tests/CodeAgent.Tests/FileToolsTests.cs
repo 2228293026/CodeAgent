@@ -1410,6 +1410,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SortBySize_WithSubdirectory_StillListsFiles()
+    {
+        // sort_by=size 时目录也走同一个排序键选择器，但目录没有「文件大小」：
+        // new FileInfo(dir).Length 抛 FileNotFoundException（IOException 子类），
+        // 被 Walk 的 catch (IOException) 吞掉 → 该目录下的文件一行都不输出
+        Directory.CreateDirectory(Path.Combine(_dir, "sub"));
+        File.WriteAllText(Path.Combine(_dir, "data.txt"), "hello");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["sort_by"] = "size" }, ctx, CancellationToken.None);
+
+        Assert.Contains("sub/", output);      // 目录仍被列出
+        Assert.Contains("data.txt", output);  // 文件不能被目录排序异常吞掉
+    }
+
+    [Fact]
     public async Task ListDirectory_SortByModified_NewestFirst()
     {
         // sort_by=modified:按修改时间降序（最新修改在前）

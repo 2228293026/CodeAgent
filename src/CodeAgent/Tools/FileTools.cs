@@ -1014,15 +1014,44 @@ public sealed class ListDirectoryTool : ITool
         return head + sb.ToString().TrimEnd() + (emitted >= maxItems ? "\n…(条目过多，已截断)" : "") + summary;
     }
 
-    /// <summary>对目录/文件列表做排序（按名称、大小或修改时间）。</summary>
+    /// <summary>对目录/文件列表做排序（按名称、大小或修改时间）。
+    /// 目录没有「文件大小」：new FileInfo(dir).Length 抛 FileNotFoundException（IOException 子类），
+    /// 会被 Walk 的 catch (IOException) 吞掉，导致 sort_by=size 时遇到子目录就整段输出中断。
+    /// 这里把目录的大小键固定为 0（排在文件之后），并用名称做稳定的次级排序。</summary>
     private static IEnumerable<string> OrderEntries(IEnumerable<string> entries, string? sortBy, bool reverse = false)
     {
         IEnumerable<string> ordered = sortBy switch
         {
-            "size" => entries.OrderByDescending(x => new FileInfo(x).Length),
-            "modified" => entries.OrderByDescending(x => File.GetLastWriteTimeUtc(x)),
+            "size" => entries
+                .OrderByDescending(SafeFileLength)
+                .ThenBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
+            "modified" => entries
+                .OrderByDescending(x => SafeLastWriteTimeUtc(x))
+                .ThenBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
             _ => entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
         };
         return reverse ? ordered.Reverse() : ordered;
+    }
+
+    /// <summary>文件大小；目录或读取失败时返回 0（不抛异常，避免排序过程中断整个列表输出）。</summary>
+    private static long SafeFileLength(string path)
+    {
+        try
+        {
+            return Directory.Exists(path) ? 0 : new FileInfo(path).Length;
+        }
+        catch (IOException) { return 0; }
+        catch (UnauthorizedAccessException) { return 0; }
+    }
+
+    /// <summary>最后修改时间（UTC）；读取失败时返回 DateTime.MinValue（排序靠后，不抛异常）。</summary>
+    private static DateTime SafeLastWriteTimeUtc(string path)
+    {
+        try
+        {
+            return File.GetLastWriteTimeUtc(path);
+        }
+        catch (IOException) { return DateTime.MinValue; }
+        catch (UnauthorizedAccessException) { return DateTime.MinValue; }
     }
 }
