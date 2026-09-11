@@ -106,6 +106,29 @@ public class ToolArgsTests
         Assert.Null(ToolArgs.GetStringList(new JsonObject(), "pattern"));
     }
 
+    [Fact]
+    public void GetStringList_NonStringScalars_AreCoercedNotDropped()
+    {
+        // 与 GetString 同一口径：标量统一转成其 JSON 文本表示。
+        // 旧实现只认 string/int，数组里的 3.14 或 true 会被静默丢弃 → include/exclude 少过滤条件
+        var args = new JsonObject
+        {
+            ["pattern"] = new JsonArray("*.cs", 42, 3.14, true),
+        };
+
+        var list = ToolArgs.GetStringList(args, "pattern");
+
+        Assert.NotNull(list);
+        Assert.Equal(["*.cs", "42", "3.14", "true"], list);
+    }
+
+    [Fact]
+    public void GetStringList_SingleFloatScalar_IsCoerced()
+    {
+        var args = new JsonObject { ["pattern"] = JsonNode.Parse("3.14")! };
+        Assert.Equal(["3.14"], ToolArgs.GetStringList(args, "pattern"));
+    }
+
     [Theory]
     [InlineData(true, "true")]      // 布尔值转字符串
     [InlineData(3.14, "3.14")]      // 浮点值转字符串

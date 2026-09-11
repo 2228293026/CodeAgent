@@ -304,19 +304,35 @@ internal static class ToolArgs
             {
                 if (item is JsonValue v)
                 {
-                    if (v.TryGetValue<string>(out var s) && s.Length > 0)
-                        list.Add(s);
-                    else if (v.TryGetValue<int>(out var n))
-                        list.Add(n.ToString()); // 数字项按字符串处理（模型偶发把数组项发成数字）
+                    if (v.TryGetValue<string>(out var s))
+                    {
+                        if (s.Length > 0)
+                            list.Add(s);
+                    }
+                    else
+                    {
+                        // 与 GetString 同一口径：非字符串标量转成 JSON 文本。
+                        // 旧实现只认 int，数组里的 3.14/true 会被静默丢弃 → include/exclude 少过滤条件
+                        var text = v.ToJsonString().Trim('"');
+                        if (text.Length > 0 && text != "null")
+                            list.Add(text);
+                    }
                 }
             }
         }
         else if (node is JsonValue v2)
         {
-            if (v2.TryGetValue<string>(out var single) && single.Length > 0)
-                list.Add(single);
-            else if (v2.TryGetValue<int>(out var n))
-                list.Add(n.ToString());
+            if (v2.TryGetValue<string>(out var single))
+            {
+                if (single.Length > 0)
+                    list.Add(single);
+            }
+            else
+            {
+                var text = v2.ToJsonString().Trim('"');
+                if (text.Length > 0 && text != "null")
+                    list.Add(text);
+            }
         }
         return list.Count == 0 ? null : list;
     }
