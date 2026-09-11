@@ -4249,6 +4249,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_ShowFileCount_WithNestedFiles_CountsTopLevelOnly()
+    {
+        // 回归：show_file_count 用 Directory.EnumerateFiles() 递归统计，会把子目录的文件也算进去。
+        // recursive=false 时子目录不展开，文件数应只含当前层。
+        Directory.CreateDirectory(Path.Combine(_dir, "parent"));
+        File.WriteAllText(Path.Combine(_dir, "parent", "a.txt"), "x");
+        Directory.CreateDirectory(Path.Combine(_dir, "parent", "child"));
+        File.WriteAllText(Path.Combine(_dir, "parent", "child", "b.txt"), "x"); // 嵌套文件不应计入
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_file_count"] = true, ["recursive"] = false }, ctx, CancellationToken.None);
+
+        Assert.Contains("parent/ (1 个文件)", output); // 仅 a.txt，不含 child/b.txt
+    }
+
+    [Fact]
     public async Task WriteFile_PreserveTimestamp_True_KeepsOriginalModificationTime()
     {
         // preserve_timestamp=true:覆盖后保持原修改时间

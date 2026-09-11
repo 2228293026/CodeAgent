@@ -875,7 +875,11 @@ public sealed class ListDirectoryTool : ITool
                         }
                         if (showFileCount)
                         {
-                            var fileInDir = Directory.EnumerateFiles(d).Count();
+                            // 只统计当前目录层可见的文件数：recursive=false 时子目录文件不显示，
+                            // 若用 EnumerateFiles() 会把嵌套目录的文件也算进来，数字与输出不符。
+                            var fileInDir = recursive
+                                ? Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories).Count()
+                                : Directory.EnumerateFiles(d).Count();
                             suffix += $" ({fileInDir} 个文件)";
                         }
                         if (showType)
