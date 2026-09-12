@@ -539,4 +539,20 @@ public class ConsoleRendererTests : IDisposable
         Assert.Contains("标题", output);
         Assert.Contains("code", output);
     }
+
+    [Fact]
+    public void ClosedCodeBlock_DoesNotLeakClosingBackticks()
+    {
+        // 闭合的代码围栏不应把结尾的 ``` 泄漏进代码内容
+        var output = Render("```\ncode\n```");
+        Assert.Equal("code\n", output);
+    }
+
+    [Fact]
+    public void CodeFence_Opening_NotEmittedAsContent()
+    {
+        // 开头的 ``` 围栏分隔符本身不应作为普通文本输出
+        var output = Render("text\n```\ncode\n```");
+        Assert.Equal("text\ncode\n", output);
+    }
 }
