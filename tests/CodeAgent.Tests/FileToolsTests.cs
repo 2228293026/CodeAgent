@@ -2229,6 +2229,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_LargeFile_DoesNotOverwrite()
+    {
+        // append=true + 大文件（>4MB）：仍应追加而非覆盖
+        var bigContent = new string('x', 5 * 1024 * 1024); // 5MB
+        File.WriteAllText(Path.Combine(_dir, "large_append.txt"), bigContent);
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "large_append.txt", ["content"] = "APPENDED", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("9 字节", result); // 追加了 "APPENDED"（9 字节）
+        var text = File.ReadAllText(Path.Combine(_dir, "large_append.txt"));
+        Assert.StartsWith(bigContent, text);
+        Assert.EndsWith("APPENDED", text);
+    }
+
+    [Fact]
     public async Task WriteFile_Bom_NewFile_WritesUtf8Bom()
     {
         // bom=true + 新文件：写入 UTF-8 BOM

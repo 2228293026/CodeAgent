@@ -341,7 +341,7 @@ public sealed class WriteFileTool : ITool
         if (hadFile)
         {
             var info = new FileInfo(full);
-            if (info.Length <= 4 * 1024 * 1024)
+            if (info.Length <= 4 * 1024 * 1024 || append)
                 old = await TextUtil.ReadTextSmartAsync(full, ct);
         }
 
