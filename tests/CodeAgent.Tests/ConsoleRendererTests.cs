@@ -494,7 +494,7 @@ public class ConsoleRendererTests : IDisposable
     public void CodeFence_EmptyBody_DoesNotCrash()
     {
         var output = Render("```\n```\n");
-        Assert.Contains("```", output); // 围栏标记本身输出
+        Assert.DoesNotContain("```", output); // 围栏标记是 Markdown 语法，不应出现在渲染输出中
     }
 
     [Fact]
