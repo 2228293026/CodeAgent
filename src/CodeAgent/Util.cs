@@ -1060,7 +1060,7 @@ public static class DiffUtil
         return sb.ToString().TrimEnd();
     }
 
-    private static string[] SplitLines(string text)
+    internal static string[] SplitLines(string text)
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');
         // 去掉末尾空串（结尾换行产生的），使 "a\nb\n" 与 "a\nb" 都得到 ["a","b"]

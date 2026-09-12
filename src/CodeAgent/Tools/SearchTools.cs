@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using CodeAgent;
 
 namespace CodeAgent.Tools;
 
@@ -365,7 +366,7 @@ public sealed class GrepTool : ITool
                     // 正常模式按整文件是否含匹配行判断；invert 时按「是否含任一非匹配行」判断（逐行），
                     // 否则含匹配行的文件（如 DROP\nkeep）会被整文件命中误判为「无匹配」
                     var fileHits = invert
-                        ? text.Split('\n').Any(l => !re.IsMatch(l.TrimEnd('\r')))
+                        ? DiffUtil.SplitLines(text).Any(l => !re.IsMatch(l.TrimEnd('\r')))
                         : re.IsMatch(text);
                     if (fileHits)
                     {
@@ -376,7 +377,7 @@ public sealed class GrepTool : ITool
                         if (multiline)
                             totalMatches += re.Matches(text).Count(m => m.Length > 0);
                         else
-                            totalMatches += text.Split('\n').Count(l => Hit(l.TrimEnd('\r')));
+                            totalMatches += DiffUtil.SplitLines(text).Count(l => Hit(l.TrimEnd('\r')));
                         var extra = "";
                         if (showModified)
                         {
@@ -429,7 +430,7 @@ public sealed class GrepTool : ITool
                             }
                             else
                             {
-                                firstMatch = text.Split('\n').FirstOrDefault(l => Hit(l.TrimEnd('\r')));
+                                firstMatch = DiffUtil.SplitLines(text).FirstOrDefault(l => Hit(l.TrimEnd('\r')));
                             }
                             if (firstMatch != null)
                                 extra += $" | {truncateLine(firstMatch)}";
@@ -461,7 +462,7 @@ public sealed class GrepTool : ITool
                     // invert 时统计非匹配行数。hits 以文件为粒度递增，max_results 限制列出的文件数
                     var n = multiline
                         ? re.Matches(text).Count(m => m.Length > 0)
-                        : text.Split('\n').Count(l => Hit(l.TrimEnd('\r')));
+                        : DiffUtil.SplitLines(text).Count(l => Hit(l.TrimEnd('\r')));
                     if (n > 0)
                     {
                         hits++;
@@ -488,7 +489,7 @@ public sealed class GrepTool : ITool
                         totalMatches++; // 与普通模式/count_only 一致：show_total_matches 依赖它
                         var startLine = 1 + CountNewlines(text, 0, m.Index);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
-                        var spanLines = m.Value.Replace("\r", "").Split('\n');
+                        var spanLines = DiffUtil.SplitLines(m.Value);
                         string firstLine;
                         if (outputMode == "content")
                             firstLine = truncateLine(spanLines[0]);
@@ -519,7 +520,7 @@ public sealed class GrepTool : ITool
                     return;
                 }
 
-                var lines = text.Split('\n');
+                var lines = DiffUtil.SplitLines(text);
                 var printedUntil = -1; // 已打印过的上下文行（避免邻近匹配的共享行重复输出）
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {

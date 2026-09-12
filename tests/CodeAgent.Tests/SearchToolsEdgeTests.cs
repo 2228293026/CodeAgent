@@ -276,6 +276,17 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_Invert_FilesOnly_TrailingNewline_DoesNotFalsePositive()
+    {
+        // invert=true + files_only=true：文件以 \n 结尾时，Split('\n') 产生的末尾空串
+        // 曾让 !re.IsMatch("")=true 触发 Any()，文件明明所有真实行都匹配却被误判为"有非匹配行"。
+        File.WriteAllText(PathOf("inv.txt"), "alpha\nbeta\n");
+        var args = new JsonObject { ["pattern"] = "alpha|beta", ["invert"] = true, ["files_only"] = true, ["context"] = 0 };
+        var result = await new GrepTool().ExecuteAsync(args, MakeContext(_dir), CancellationToken.None);
+        Assert.DoesNotContain("inv.txt", result); // 所有真实行都命中，invert 不应列出该文件
+    }
+
+    [Fact]
     public async Task Grep_Word_WithAlternation_MatchesWholeWords()
     {
         // word=true + 含 | 的模式：两侧加 \b 应包裹整个模式
