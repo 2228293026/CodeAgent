@@ -279,9 +279,8 @@ public sealed class ReadFileTool : ITool
         if (showStats)
         {
             // 行数用与 list_directory/grep 相同的实现（CountFileLines）：
-            // text.Split('\n').Length 会把末尾换行后的空段也算一行，
-            // 同一个文件在这里报 4 行、在 list_directory 报 3 行，自相矛盾
-            var lineCount = SkipDirs.CountFileLines(full) ?? text.Split('\n').Length;
+            // 回退时也走 CountLines（而非 text.Split('\n').Length），避免末尾换行后的空段被算成一行
+            var lineCount = SkipDirs.CountFileLines(full) ?? SkipDirs.CountLines(text);
             var words = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
             // 真实文件大小：Encoding.UTF8.GetByteCount(text) 会把 GBK 等旧编码的文本
             // 按 UTF-8 重算（中文 2 字节被算成 3 字节），报出的数字与磁盘上的文件不符
