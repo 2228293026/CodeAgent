@@ -264,6 +264,8 @@ public static class InputLine
                     if (lastCursorLine > 0)
                         Console.Write($"\x1b[{lastCursorLine}A");
                     var textLines = text.Split('\n');
+                    if (textLines.Length > 0 && textLines[^1].Length == 0)
+                        textLines = textLines[..^1]; // 去掉末尾换行产生的空段
                     for (int i = 0; i < rows; i++)
                     {
                         Console.Write("\r\x1b[2K");
