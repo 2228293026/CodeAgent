@@ -422,7 +422,9 @@ public sealed class WriteFileTool : ITool
                 // 统一到目标换行再判断是否需要插入分隔符。
                 var oldNorm = NormalizeLineEndings(old, targetEnding);
                 var sep = targetEnding == "crlf" ? "\r\n" : "\n";
-                finalContent = oldNorm.EndsWith("\n") ? oldNorm + normalized : oldNorm + sep + normalized;
+                finalContent = oldNorm.Length == 0
+                    ? normalized // 空文件追加：不加前导分隔符
+                    : (oldNorm.EndsWith("\n") ? oldNorm + normalized : oldNorm + sep + normalized);
             }
             else
             {
@@ -432,7 +434,9 @@ public sealed class WriteFileTool : ITool
         else if (append && hadFile && old is not null)
         {
             // 未指定 line_ending:追加模式保留原行为
-            finalContent = old.EndsWith("\n") ? old + content : old + "\n" + content;
+            finalContent = old.Length == 0
+                ? content // 空文件追加：不加前导分隔符
+                : (old.EndsWith("\n") ? old + content : old + "\n" + content);
         }
         else
         {

@@ -2152,6 +2152,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_Append_ToExistingEmptyFile_DoesNotAddLeadingNewline()
+    {
+        // 回归：空文件 + append=true 不应插入前导换行（曾变成 "\nfirst"）
+        File.WriteAllText(Path.Combine(_dir, "zero.txt"), "");
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "zero.txt", ["content"] = "first", ["append"] = true }, ctx, CancellationToken.None);
+
+        Assert.Equal("first", File.ReadAllText(Path.Combine(_dir, "zero.txt")));
+    }
+
+    [Fact]
     public async Task WriteFile_Append_WithIdenticalContent_SkipsWrite()
     {
         // append=true 但追加后内容未变化：跳过写入（不刷 mtime）
