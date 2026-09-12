@@ -43,6 +43,9 @@ public static class InputLine
     internal static string FoldText(string text, int threshold = 3)
     {
         var lines = text.Split('\n');
+        // 末尾换行会产生多余空串，不应计入行数（否则 "a\nb\nc\n" 会被误判为 4 行并提前折叠）
+        if (text.EndsWith("\n") && lines.Length > 0)
+            lines = lines[..^1];
         if (lines.Length <= threshold)
             return text;
         return string.Join('\n', lines.Take(threshold - 1)) + "\n⏷ 共 " + lines.Length + " 行 ↓ 展开";

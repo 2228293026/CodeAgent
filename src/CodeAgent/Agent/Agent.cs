@@ -602,7 +602,7 @@ public sealed partial class Agent
         var content = ToolArgs.GetString(args, "content");
         var full = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, path));
         if (!File.Exists(full))
-            return content.Length == 0 ? "" : $"+ 新文件：{content.Split('\n').Length} 行 / {Encoding.UTF8.GetByteCount(content):N0} 字节";
+            return content.Length == 0 ? "" : $"+ 新文件：{SkipDirs.CountLines(content)} 行 / {Encoding.UTF8.GetByteCount(content):N0} 字节";
         try
         {
             var fi = new FileInfo(full);

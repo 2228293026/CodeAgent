@@ -138,6 +138,25 @@ public class InputLineCommandsTests
         Assert.Contains("c", folded);                  // 第 3 行保留（阈值 4 折前 3 行）
     }
 
+    [Fact]
+    public void FoldText_TrailingNewline_DoesNotFoldAtThreshold()
+    {
+        // 回归：末尾换行产生的空串不应被计入行数（否则 3 行内容会被误判为 4 行并提前折叠）
+        var input = "a\nb\nc\n";
+        var folded = InputLine.FoldText(input, threshold: 3);
+        Assert.Equal(input, folded); // 恰好 3 行：不折叠
+    }
+
+    [Fact]
+    public void FoldText_TrailingNewline_HintCountIsCorrect()
+    {
+        // 折叠提示中的总行数应与实际内容行数一致，不受末尾换行干扰
+        var input = "a\nb\nc\nd\n";
+        var folded = InputLine.FoldText(input, threshold: 3);
+        Assert.Contains("共 4 行", folded);
+        Assert.StartsWith("a\nb\n", folded); // 保留前 2 行
+    }
+
     // ===== FitToWidth / CursorLeftOffset（显示宽度：CJK/emoji 按 2 列）=====
 
     [Theory]
