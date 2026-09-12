@@ -355,6 +355,28 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_EscapedLine_InHunk_IsPreservedAsContext()
+    {
+        // 转义行（\ 前缀）在 unified diff 中表示「原文本身以易混淆字符开头」，
+        // 应当去掉前缀后当上下文行保留，而非静默丢弃。
+        File.WriteAllText(Path.Combine(_dir, "esc.txt"), @"\begin{verbatim}
+old
+\end{verbatim}");
+        var patch = @"@@ -1,3 +1,3 @@
+ \begin{verbatim}
+-old
++new
+ \end{verbatim}";
+
+        await Apply(patch, "esc.txt");
+
+        var content = File.ReadAllText(Path.Combine(_dir, "esc.txt"));
+        Assert.Contains(@"\begin{verbatim}", content);
+        Assert.Contains(@"\end{verbatim}", content);
+        Assert.Contains("new", content);
+    }
+
+    [Fact]
     public async Task Apply_Generous_MultiHunk_WithFuzz_AppliesSuccessfully()
     {
         // generous=true + 多 hunk + 行号漂移：放宽匹配后仍能应用

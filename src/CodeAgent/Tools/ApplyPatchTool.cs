@@ -111,7 +111,9 @@ public sealed class ApplyPatchTool : ITool
                 while (i < lines.Count && IsDataStart(lines[i]))
                 {
                     var dl = lines[i];
-                    if (dl[0] != '\\')
+                    if (dl[0] == '\\')
+                        hunk.Lines.Add(new HunkLine(' ', dl.Length > 1 ? dl[1..] : "")); // 转义行：去掉前缀后当上下文保留
+                    else
                         hunk.Lines.Add(new HunkLine(dl[0], dl.Length > 1 ? dl[1..] : ""));
                     i++;
                 }
@@ -136,7 +138,9 @@ public sealed class ApplyPatchTool : ITool
                 while (i < lines.Count && IsDataStart(lines[i]))
                 {
                     var dl = lines[i];
-                    if (dl[0] != '\\')
+                    if (dl[0] == '\\')
+                        hunk.Lines.Add(new HunkLine(' ', dl.Length > 1 ? dl[1..] : "")); // 转义行：去掉前缀后当上下文保留
+                    else
                         hunk.Lines.Add(new HunkLine(dl[0], dl.Length > 1 ? dl[1..] : ""));
                     i++;
                 }
