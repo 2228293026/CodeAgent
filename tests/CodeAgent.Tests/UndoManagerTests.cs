@@ -145,6 +145,30 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void TryUndo_EditLargeFileFallback_GbkFile_DoesNotCorruptEncoding()
+    {
+        // 回归：大文件 edit 撤销用 File.ReadAllText 读当前文件（默认 UTF-8），
+        // GBK 文件会先被乱码解码，Replace 后再按原编码写回，导致内容永久损坏。
+        var path = Path.Combine(_dir, "gbk-edit.txt");
+        var gbk = System.Text.Encoding.GetEncoding("GB18030");
+        var original = "中文旧内容";
+        var modified = "中文新内容";
+        File.WriteAllBytes(path, gbk.GetBytes(original));
+
+        var um = new UndoManager();
+        // 模拟 EditFileTool 大文件退化：记录 old/new 片段，NewText 非 null
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = original, NewText = modified, EncodingName = "gb18030" });
+        File.WriteAllText(path, modified); // 当前文件被改为新内容
+
+        var desc = um.TryUndo();
+        Assert.NotNull(desc);
+        Assert.Contains("撤销 edit_file", desc);
+        var bytes = File.ReadAllBytes(path);
+        Assert.Equal(gbk.GetBytes(original), bytes); // 字节级一致：仍是 GB18030，内容正确
+        Assert.Equal(original, gbk.GetString(bytes));
+    }
+
+    [Fact]
     public void LastDiff_EditWithFullSnapshot_ShowsExactOriginal()
     {
         var path = Path.Combine(_dir, "e.txt");
