@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent.Providers;
@@ -23,7 +24,7 @@ public class AgentSessionTests : IDisposable
         try { Directory.Delete(Path.GetDirectoryName(_sessionDir)!, true); } catch { /* 忽略 */ }
     }
 
-    private static AgentClass MakeAgent(string sessionDir, out string sessionPath, FakeProvider? provider = null)
+    private static AgentClass MakeAgent(string sessionDir, out string sessionPath, FakeProvider? provider = null, string? workingDirectory = null)
     {
         var config = new AgentConfig
         {
@@ -32,7 +33,7 @@ public class AgentSessionTests : IDisposable
             MaxToolIterations = 5,  // 防止无限制循环：FakeProvider 返回 ToolCall 时依赖此限
         };
         provider ??= new FakeProvider { NextResponse = new Providers.ProviderResponse { Text = "ok" } };
-        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault());
+        var agent = new AgentClass(config, provider, ToolRegistry.CreateDefault(), workingDirectory);
         sessionPath = Path.Combine(sessionDir, "s.json");
         return agent;
     }
@@ -473,5 +474,30 @@ public class AgentSessionTests : IDisposable
         agent.Reset();
         Assert.Null(agent.UndoLastTurn()); // 清空后无「上一轮」可撤回
         Assert.Equal(1, agent.MessageCount); // 仅剩 system
+    }
+
+    [Fact]
+    public async Task Reset_ClearsUndoManager()
+    {
+        // 回归：/clear 只清空消息与撤回起点栈，未清空 UndoManager；
+        // 导致 /files 与 /undo 仍能看到/执行上一会话的文件改动
+        var workDir = Path.Combine(Path.GetTempPath(), "codeagent-reset-undo-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workDir);
+        try
+        {
+            var agent = MakeAgent(_sessionDir, out _, workingDirectory: workDir);
+            var file = Path.Combine(workDir, "undo-reset.txt");
+            File.WriteAllText(file, "before");
+            var tool = new WriteFileTool();
+            await tool.ExecuteAsync(new JsonObject { ["path"] = "undo-reset.txt", ["content"] = "after" }, agent.Context, CancellationToken.None);
+            Assert.Equal(1, agent.Context.Undo.Count); // 有撤销记录
+
+            agent.Reset();
+            Assert.Equal(0, agent.Context.Undo.Count); // 清空后撤销记录消失
+        }
+        finally
+        {
+            try { Directory.Delete(workDir, true); } catch { }
+        }
     }
 }

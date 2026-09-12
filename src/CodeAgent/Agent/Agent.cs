@@ -156,6 +156,8 @@ public sealed partial class Agent
         // 新日志先写入当前 system 提示，保持自包含
         RollSessionLog();
         LogMessage(_messages[0]);
+        // 清空后不应残留上一会话的文件修改记录：/files 与 /undo 只应对当前对话生效
+        _ctx.Undo.Clear();
     }
 
     /// <summary>当前生效的系统提示（消息里的实际值；/prompt 调试用）。</summary>
