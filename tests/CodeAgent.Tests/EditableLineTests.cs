@@ -286,6 +286,20 @@ public class EditableLineTests
     }
 
     [Fact]
+    public void MoveLineUp_LeadingNewline_DoesNotThrow()
+    {
+        // 文本以 \n 开头时，光标在第二行行首（first==0）曾触发 LastIndexOf(..., -1) 异常
+        var line = new EditableLine();
+        line.SetInitial("\nabc");
+        line.Home();           // 光标在首行行首（index 0）
+        Assert.True(line.MoveLineDown()); // 移到第二行行首（index 1）
+        Assert.Equal(1, line.Cursor);
+        Assert.True(line.MoveLineUp()); // 应移到首行行首（index 0），不抛异常
+        Assert.Equal(0, line.Cursor);
+        Assert.False(line.MoveLineUp()); // 已在首行：不再移动
+    }
+
+    [Fact]
     public void MoveLineDown_SingleLine_ClampsToEnd()
     {
         var line = new EditableLine();

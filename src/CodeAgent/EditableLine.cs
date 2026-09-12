@@ -136,7 +136,9 @@ public sealed class EditableLine
         }
         else
         {
-            var second = text.LastIndexOf('\n', first - 1); // 上一行行首前的 \n
+            // 首行就是 \n（如 "\nabc"）时 first==0，LastIndexOf(..., -1) 会抛异常：
+            // 此时上一行就是首行，target=0
+            var second = first > 0 ? text.LastIndexOf('\n', first - 1) : -1;
             target = second < 0 ? 0 : second + 1;           // 上一行行首（无则首行）
         }
         if (target == Cursor)
