@@ -152,6 +152,7 @@ public class PathDisplayTests
     [Theory]
     [InlineData("任务描述")]   // 普通位置参数不是旗标
     [InlineData("-")]          // 单个 '-'（常见 stdin 惯例）不当旗标拒绝
+    [InlineData("--")]         // 结束旗标标记，不当旗标拒绝
     [InlineData("")]
     public void LooksLikeUnknownFlag_PositionalText_NotFlag(string arg) =>
         Assert.False(Program.LooksLikeUnknownFlag(arg));

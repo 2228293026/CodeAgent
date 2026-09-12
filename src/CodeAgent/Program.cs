@@ -103,6 +103,11 @@ internal static class Program
                     case "-h" or "--help":
                         PrintHelp();
                         return 0;
+                    case "--":
+                        // End of flags marker: all remaining args are positional
+                        for (i++; i < args.Length; i++)
+                            positional.Add(args[i]);
+                        break;
                     default:
                         // 未识别的 -flag 此前被静默拼进任务文本发给模型（--verbos 变成任务的一部分）；
                         // 明确报错让用户发现拼写错误。纯任务文本以 "-" 开头属罕见场景（用 -- 分隔或去掉横线）。
@@ -561,7 +566,7 @@ internal static class Program
 
     /// <summary>判断是否为未识别的旗标（以 '-' 开头且不在已知列表）：拒绝而非当任务文本。</summary>
     internal static bool LooksLikeUnknownFlag(string arg) =>
-        arg.Length > 1 && arg[0] == '-' && !KnownFlags.Contains(arg);
+        arg.Length > 1 && arg[0] == '-' && arg != "--" && !KnownFlags.Contains(arg);
 
     /// <summary>
     /// 执行一轮请求：支持 Ctrl+C 与 ESC 优雅取消。
