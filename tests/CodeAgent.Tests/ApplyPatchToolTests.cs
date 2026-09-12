@@ -331,6 +331,30 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task Apply_PatchWithFileHeaderButNoHunks_RejectsWithoutAllowEmpty()
+    {
+        // 回归：有 +++ 文件头但无 @@ hunk 的补丁在 allow_empty=false 时应拒绝，
+        // 而非静默当作 no-op 应用（曾让模型以为修改成功，实际文件未动）
+        var patch = "+++ b/foo.txt\n";
+
+        var ex = await Assert.ThrowsAsync<ToolException>(() => Apply(patch, "foo.txt"));
+        Assert.Contains("空补丁", ex.Message);
+    }
+
+    [Fact]
+    public async Task Apply_PatchWithFileHeaderButNoHunks_AllowsWithAllowEmpty()
+    {
+        // allow_empty=true 时，空 hunk 的补丁不报错，但也不会实际修改文件
+        File.WriteAllText(Path.Combine(_dir, "foo.txt"), "hello");
+        var patch = "+++ b/foo.txt\n";
+
+        var result = await Apply(patch, "foo.txt", allowEmpty: true);
+
+        Assert.Contains("已应用 0 个 hunk", result);
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(_dir, "foo.txt"))); // 文件未变
+    }
+
+    [Fact]
     public async Task Apply_Generous_MultiHunk_WithFuzz_AppliesSuccessfully()
     {
         // generous=true + 多 hunk + 行号漂移：放宽匹配后仍能应用

@@ -54,6 +54,11 @@ public sealed class ApplyPatchTool : ITool
                 return "补丁为空：没有可用的文件块，未做任何修改（allow_empty=true）。";
             throw new ToolException("补丁中没有可用的文件块:需要至少一个 '@@ -N,M +... @@' hunk(以及 +++ 文件头,或提供 path 参数)。");
         }
+        // 有文件块但全部 hunks 为空：补丁名存实亡，与无文件块同口径处理
+        if (!allowEmpty && files.All(f => f.Hunks.Count == 0))
+        {
+            throw new ToolException("补丁中有文件块但没有任何 @@ hunk（空补丁）。如需允许空补丁请设置 allow_empty=true。");
+        }
 
         // 多文件补丁先整体校验再写盘：逐个文件边验证边写时，第 2 个文件失败会
         // 把第 1 个文件留在已修改状态，而报错文案却是「未做任何修改」。
