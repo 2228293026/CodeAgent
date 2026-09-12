@@ -157,6 +157,16 @@ public class InputLineCommandsTests
         Assert.StartsWith("a\nb\n", folded); // 保留前 2 行
     }
 
+    [Fact]
+    public void CountLines_TrailingNewline_DoesNotOvercount()
+    {
+        // 回归：InputLine 折叠判断曾用 1 + CountNewlines(text)，末尾换行会被算成额外一行，
+        // 导致 3 行内容 + \n 被误判为 4 行并提前折叠，但 FoldText 实际不折叠它——两者口径矛盾。
+        Assert.Equal(3, SkipDirs.CountLines("a\nb\nc\n")); // 3 行内容，末尾换行不额外计行
+        Assert.Equal(3, SkipDirs.CountLines("a\nb\nc"));   // 无末尾换行：等价
+        Assert.Equal(4, SkipDirs.CountLines("a\nb\nc\nd\n")); // 4 行内容 + 末尾换行
+    }
+
     // ===== FitToWidth / CursorLeftOffset（显示宽度：CJK/emoji 按 2 列）=====
 
     [Theory]

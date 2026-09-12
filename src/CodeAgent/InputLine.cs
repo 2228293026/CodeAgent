@@ -240,14 +240,14 @@ public static class InputLine
         /// <summary>输入块的显示文本：与 ScrollInput 同口径（未展开且 &gt;3 行时折叠）。
         /// 菜单重绘也必须画折叠视图——画原始多行会把块高从 3 行撑回 N 行，与菜单定位的行数口径不符。</summary>
         string DisplayedInputText() =>
-            !inputExpanded && 1 + CountNewlines(buf.Text) > 3 ? FoldText(InputText()) : InputText();
+            !inputExpanded && SkipDirs.CountLines(buf.Text) > 3 ? FoldText(InputText()) : InputText();
 
         void ScrollInput()
         {
             if (ansiOk)
             {
                 // 折叠显示：行数 > 3 且未展开时，只显示前 2 行 + 折叠提示行（减少屏幕占用）
-                var fold = !inputExpanded && 1 + CountNewlines(buf.Text) > 3;
+                var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > 3;
                 var text = fold ? InputLine.FoldText(InputText()) : InputText();
                 var lines = 1 + CountNewlines(text); // 显示块总行数（折叠时 = 3）
                 if (lines > 1 || lastInputLines > 1)
@@ -930,7 +930,7 @@ public static class InputLine
                     {
                         // 多行输入且未在浏览历史：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入）。
                         // 正在浏览历史时（idx < session.Count）↓ 一律前进历史，即使条目是多行文本
-                        if (!inputExpanded && 1 + CountNewlines(buf.Text) > 3)
+                        if (!inputExpanded && SkipDirs.CountLines(buf.Text) > 3)
                             inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
                         else
                             buf.MoveLineDown();
