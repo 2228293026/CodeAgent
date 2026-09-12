@@ -4550,6 +4550,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_ByteRange_WithEncoding_UsesSpecifiedEncoding()
+    {
+        // byte_offset/byte_limit 也必须尊重 encoding 参数：
+        // GBK 文件用 byte_offset 读时应按 GBK 解码，而不是静默按 UTF-8 解成乱码
+        _ = TextUtil.EstimateTokens(""); // 注册 GB18030 代码页
+        var gbkBytes = System.Text.Encoding.GetEncoding("GB18030").GetBytes("中文");
+        File.WriteAllBytes(Path.Combine(_dir, "gbk_range.bin"), gbkBytes);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "gbk_range.bin", ["byte_offset"] = 0, ["byte_limit"] = gbkBytes.Length, ["encoding"] = "gbk", ["no_header"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("中文", output);
+    }
+
+    [Fact]
     public async Task ReadFile_BinaryFile_StillRejectedWithoutByteRange()
     {
         // 不带字节范围时，二进制文件仍应被拒绝（原行为不能被这次改动放宽）

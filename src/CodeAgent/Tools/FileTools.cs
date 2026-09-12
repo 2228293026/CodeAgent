@@ -141,6 +141,30 @@ public sealed class ReadFileTool : ITool
         //  1) 旧顺序把二进制检查放在前面，含 NUL 的文件（正是分段读取的目标）必然抛「疑似二进制」，参数形同虚设；
         //  2) 旧实现先 ReadAllTextAsync 再 ReadAllBytesAsync，同一个大文件被整读两遍，与分段读取的初衷相反。
         // 这里只 seek 到偏移、按需读取所需字节，不整读文件。
+        System.Text.Encoding? rangeEnc = null;
+        if (!string.IsNullOrEmpty(encoding))
+        {
+            rangeEnc = FileEncoding.Parse(encoding);
+        }
+        else if (byteOffset > 0 || byteLimit > 0)
+        {
+            // 字节范围读取时也要尊重文件实际编码：GBK 文件按 UTF-8 解会乱码
+            rangeEnc = TextUtil.DetectFileEncoding(full) is "utf8-bom" ? System.Text.Encoding.UTF8 : null;
+            if (rangeEnc is null)
+            {
+                try
+                {
+                    await using var fs = File.OpenRead(full);
+                    var encBuf = new byte[4096];
+                    var n = await fs.ReadAsync(encBuf.AsMemory(0, encBuf.Length), ct);
+                    var end = TextUtil.TrimPartialTail(encBuf, n);
+                    rangeEnc = new System.Text.UTF8Encoding(false, throwOnInvalidBytes: true);
+                    try { rangeEnc.GetString(encBuf[..end]); }
+                    catch (System.Text.DecoderFallbackException) { rangeEnc = System.Text.Encoding.GetEncoding("GB18030"); }
+                }
+                catch { rangeEnc = System.Text.Encoding.UTF8; }
+            }
+        }
         if (byteOffset > 0 || byteLimit > 0)
         {
             await using var rangeFs = File.OpenRead(full);
@@ -162,7 +186,7 @@ public sealed class ReadFileTool : ITool
             }
             if (read < slice.Length)
                 slice = slice[..read];
-            text = System.Text.Encoding.UTF8.GetString(slice);
+            text = (rangeEnc ?? System.Text.Encoding.UTF8).GetString(slice);
         }
         else if (!string.IsNullOrEmpty(encoding))
         {
