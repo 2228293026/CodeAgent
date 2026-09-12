@@ -619,9 +619,12 @@ public sealed partial class Agent
     }
 
     /// <summary>diff 文本截断：最多 15 行、每行 200 字符，超出提示总行数。</summary>
-    private static string CapDiff(string diff)
+    internal static string CapDiff(string diff)
     {
         var lines = diff.Split('\n');
+        // 去掉末尾换行产生的空串（与 CountLines / ReadAllLines 语义一致），避免把 "a\nb\n" 误判为 3 行
+        if (lines.Length > 0 && lines[^1].Length == 0)
+            lines = lines[..^1];
         const int maxLines = 15;
         var shown = lines.Take(maxLines).Select(l => TextUtil.TruncateLine(l, 200)).ToList();
         if (lines.Length > maxLines)

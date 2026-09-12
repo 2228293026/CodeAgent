@@ -141,6 +141,17 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void CapDiff_TrailingNewline_DoesNotOvercountLines()
+    {
+        // 回归：diff 末尾的换行产生的空串不应被计入行数（否则 2 行 diff 会被误判为 3 行并提前截断）
+        var diff = "--- a/a.cs\n+++ b/a.cs\n@@ -1 +1 @@\n-old\n+new\n";
+        var capped = AgentClass.CapDiff(diff);
+        Assert.DoesNotContain("共 3 行", capped); // 实际 2 行，不应报 3
+        Assert.Contains("-old", capped);
+        Assert.Contains("+new", capped);
+    }
+
+    [Fact]
     public void SummarizeCall_ChineseArg_ShownAsIs()
     {
         // 回归：参数值曾用 JsonNode.ToJsonString() 提取，默认编码器把中文转义成 \uXXXX，
