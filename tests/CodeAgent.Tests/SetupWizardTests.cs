@@ -107,4 +107,21 @@ public class SetupWizardTests
         Assert.Contains("跳过连接测试", sw.ToString());
         Assert.Contains(envName, sw.ToString());
     }
+
+    [Fact]
+    public void TestConnection_Ollama_WithPlaceholderKey_DoesNotCrash()
+    {
+        // 回归：ollama 使用占位 API Key 进行连接测试，不应抛出 NullReferenceException
+        var sw = new System.IO.StringWriter();
+        var ex = Record.Exception(() =>
+            SetupWizard.TestConnection("ollama", new ProviderOptions
+            {
+                Type = "openai",
+                BaseUrl = "http://localhost:11434/v1",
+                Model = "qwen2.5-coder:7b",
+                ApiKey = "ollama"
+            }, sw));
+
+        Assert.Null(ex);
+    }
 }

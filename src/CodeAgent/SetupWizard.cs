@@ -165,6 +165,9 @@ public static class SetupWizard
             output.WriteLine($"\n⏭ 跳过连接测试（{opts.ApiKeyEnv ?? "API Key"} 未设置）");
             return;
         }
+        // 免费服务（ollama / hitmargin）不校验鉴权：若调用方未预填占位 Key，补一个以免后续 Provider 初始化报错
+        if (providerName is "ollama" or "hitmargin" && string.IsNullOrWhiteSpace(opts.ApiKey))
+            opts.ApiKey = providerName == "ollama" ? "ollama" : "dummy";
 
         output.Write("\n⏳ 测试连接…");
         try
