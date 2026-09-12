@@ -174,4 +174,21 @@ public class SetupWizardFlowTests : IDisposable
         Assert.Contains("配置已保存", writer.ToString());
         Assert.Contains(savePath, writer.ToString()); // 提示使用指定路径
     }
+
+    [Fact]
+    public void SaveFailure_PropagatesException()
+    {
+        // 回归：保存路径不可写时，SetupWizard.Run 应抛出异常而非静默吞掉；
+        // Program.cs 的 /setup 路径需捕获所有异常，不能只捕获 OperationCanceledException
+        var config = new AgentConfig();
+        var savePath = Path.Combine(_dir, "readonly", "codeagent.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+        // 先创建文件再设为只读：File.WriteAllText 对只读文件会抛 UnauthorizedAccessException
+        File.WriteAllText(savePath, "{}");
+        File.SetAttributes(savePath, FileAttributes.ReadOnly);
+        using var reader = new StringReader("1\n\n\n1\n\n");
+        using var writer = new StringWriter();
+
+        Assert.ThrowsAny<Exception>(() => SetupWizard.Run(config, reader, writer, savePath));
+    }
 }

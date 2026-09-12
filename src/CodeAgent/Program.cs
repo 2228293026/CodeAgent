@@ -183,6 +183,11 @@ internal static class Program
             {
                 Console.WriteLine("已取消配置向导。");
             }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"配置向导失败: {ex.Message}");
+                return 2;
+            }
             return 0;
         }
 
@@ -1338,6 +1343,11 @@ internal static class Program
                 catch (OperationCanceledException)
                 {
                     Console.WriteLine("已取消配置向导。");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"配置向导失败: {ex.Message}");
                     break;
                 }
                 opts = EnsureSelectedProvider(config);
