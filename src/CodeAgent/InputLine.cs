@@ -263,9 +263,7 @@ public static class InputLine
                     // 把参数 0 按 1 处理，"\x1b[0A" 会真的上移一行，覆盖掉输入块上方的提示符行
                     if (lastCursorLine > 0)
                         Console.Write($"\x1b[{lastCursorLine}A");
-                    var textLines = text.Split('\n');
-                    if (textLines.Length > 0 && textLines[^1].Length == 0)
-                        textLines = textLines[..^1]; // 去掉末尾换行产生的空段
+                    var textLines = DiffUtil.SplitLines(text);
                     for (int i = 0; i < rows; i++)
                     {
                         Console.Write("\r\x1b[2K");

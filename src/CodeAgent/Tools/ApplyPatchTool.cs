@@ -84,7 +84,7 @@ public sealed class ApplyPatchTool : ITool
     /// <summary>逐行解析补丁:识别 +++ 文件头与 @@ hunk,数据行(前缀 ' '/'-'/'+'/'\\')归入当前 hunk。</summary>
     internal static List<PatchFile> ParsePatch(string patch, string? fallbackPath)
     {
-        var lines = SplitLines(patch);
+        var lines = DiffUtil.SplitLines(patch).ToList();
         var result = new List<PatchFile>();
         PatchFile? cur = null;
 
@@ -167,15 +167,6 @@ public sealed class ApplyPatchTool : ITool
 
     private static bool StartsWithAny(string s, string prefix) =>
         s.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
-
-    private static List<string> SplitLines(string text)
-    {
-        var outList = new List<string>();
-        var parts = text.Replace("\r\n", "\n").Split('\n');
-        foreach (var p in parts)
-            outList.Add(p);
-        return outList;
-    }
 
     /// <summary>去掉 a/ 或 b/ 前缀(模拟 git 补丁的路径语义)。</summary>
     private static string ExtractPath(string path)
