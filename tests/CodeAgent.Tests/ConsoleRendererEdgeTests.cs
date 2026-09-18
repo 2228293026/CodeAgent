@@ -150,4 +150,15 @@ public class ConsoleRendererEdgeTests : IDisposable
         r.Flush();
         Assert.Contains("**bold** `code`", _out.ToString()); // 关闭渲染时原样输出
     }
+
+    [Fact]
+    public void Render_CRLFInput_NoStrayCarriageReturnInOutput()
+    {
+        // 回归：ConsoleRenderer 的 HandleTextChar 曾直接把 \r 追加进缓冲，
+        // 导致 \r\n 输入在非代码文本里残留 \r，终端会把文本送回行首造成覆盖渲染。
+        var output = Render("line1\r\nline2\r\n");
+        Assert.DoesNotContain("\r", output);
+        Assert.Contains("line1", output);
+        Assert.Contains("line2", output);
+    }
 }

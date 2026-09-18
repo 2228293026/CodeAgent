@@ -110,6 +110,8 @@ public sealed class ConsoleRenderer
             return;
         }
         _tickRun = 0;
+        if (ch == '\r')
+            return; // 跳过 CRLF 的 \r，避免混入普通文本（终端会把 \r 当回车覆盖渲染）
         if (_inInlineCode && ch == '\n')
         {
             // 未闭合的行内代码到行尾：原样输出（含开头的 `），恢复状态继续
