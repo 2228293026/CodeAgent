@@ -185,6 +185,21 @@ public class InputLineCommandsTests
         Assert.Equal("line2", foldLines[1]);
     }
 
+    [Fact]
+    public void FoldText_WindowsNewlines_NoStrayCarriageReturn()
+    {
+        // 回归：FoldText 曾用 text.Split('\n')，Windows 输入含 \r\n 时每行残留 \r，
+        // 折叠提示行与后续行内比对/终端渲染都会出错。
+        var input = "line1\r\nline2\r\nline3\r\n";
+        // 超过阈值时折叠：检查折叠结果无 \r，且行数正确
+        var folded2 = InputLine.FoldText(input, threshold: 2);
+        Assert.DoesNotContain("\r", folded2);
+        var lines2 = DiffUtil.SplitLines(folded2);
+        Assert.Equal(2, lines2.Length);
+        Assert.Equal("line1", lines2[0]);
+        Assert.StartsWith("⏷ 共 3 行", lines2[1]);
+    }
+
     // ===== FitToWidth / CursorLeftOffset（显示宽度：CJK/emoji 按 2 列）=====
 
     [Theory]

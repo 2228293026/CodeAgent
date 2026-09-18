@@ -42,10 +42,7 @@ public static class InputLine
     /// </summary>
     internal static string FoldText(string text, int threshold = 3)
     {
-        var lines = text.Split('\n');
-        // 末尾换行会产生多余空串，不应计入行数（否则 "a\nb\nc\n" 会被误判为 4 行并提前折叠）
-        if (text.EndsWith("\n") && lines.Length > 0)
-            lines = lines[..^1];
+        var lines = DiffUtil.SplitLines(text);
         if (lines.Length <= threshold)
             return text;
         return string.Join('\n', lines.Take(threshold - 1)) + "\n⏷ 共 " + lines.Length + " 行 ↓ 展开";
@@ -321,7 +318,7 @@ public static class InputLine
                     int col;
                     if (dispLine == 2)
                     {
-                        var foldLines = InputLine.FoldText(InputText()).Split('\n'); // TEMP old buggy
+                        var foldLines = DiffUtil.SplitLines(InputLine.FoldText(InputText()));
                         seg = foldLines.Length > 2 ? foldLines[2] : ""; // 折叠行文本，光标显示在末尾
                         col = DisplayWidth(seg); // 折叠行独立成行，无提示符前缀
                     }
