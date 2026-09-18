@@ -5039,6 +5039,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_ShowDiff_TrailingNewline_NoSpuriousEmptyContextLine()
+    {
+        // 文件以 \n 结尾时，Split('\n') 产生的末尾空串曾让 diff 末尾多出一行空的 context 行（"  "）。
+        File.WriteAllText(Path.Combine(_dir, "diff3.txt"), "hello world\n");
+        var tool = new EditFileTool();
+        var ctx = MakeContext(_dir);
+
+        var result = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "diff3.txt", ["old_string"] = "hello world", ["new_string"] = "hello universe", ["show_diff"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("+ hello universe", result);
+        Assert.Contains("- hello world", result);
+        // diff 末尾不应有空 context 行：以非空白字符结尾或以 ---/+++ 行结尾
+        var diffPart = result.Substring(result.IndexOf("--- a/"));
+        Assert.DoesNotContain("\n  \n", diffPart); // 无空 context 行
+    }
+
+    [Fact]
     public async Task ListDirectory_ShowMimeType_True_DisplaysMimeType()
     {
         // show_mime_type=true:文件名后附加 MIME 类型

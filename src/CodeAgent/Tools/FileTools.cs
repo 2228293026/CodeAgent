@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using CodeAgent;
 
 namespace CodeAgent.Tools;
 
@@ -721,8 +722,8 @@ public sealed class EditFileTool : ITool
         string? diff = null;
         if (showDiff)
         {
-            var oldLines = workOld.Split('\n');
-            var newLines = workNew.Split('\n');
+            var oldLines = DiffUtil.SplitLines(workOld);
+            var newLines = DiffUtil.SplitLines(workNew);
             var sb = new StringBuilder();
             sb.AppendLine("--- a/" + Path.GetFileName(full));
             sb.AppendLine("+++ b/" + Path.GetFileName(full));
