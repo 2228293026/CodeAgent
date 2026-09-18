@@ -653,6 +653,7 @@ public static class InputLine
         var pasteStream = false; // 最近一次 ReadKey 等待 < 阈值 → 键已缓冲（无括号粘贴终端的回退启发式）
         var pasteActive = false; // 括号粘贴中（终端显式标记了粘贴边界）：Enter/Tab 都是内容
         var lastPasteWasCR = false; // 粘贴中上一个换行来自 \r（CRLF 的 \n 折叠用）
+        var pasteEndedWithNewline = false; // 粘贴刚结束时缓冲区末尾有 \n（避免 Enter 重复插入）
         var needsRedraw = false; // 挂起的重绘：粘贴流中逐键整行重画会卡顿，缓冲排空后一次画
         while (true)
         {
@@ -708,6 +709,7 @@ public static class InputLine
                 if (detector.Result == PasteMarkerResult.End)
                 {
                     pasteActive = false;
+                    pasteEndedWithNewline = buf.Text.Length > 0 && buf.Text[^1] == '\n';
                     if (needsRedraw)
                     {
                         needsRedraw = false;
@@ -720,7 +722,10 @@ public static class InputLine
                     pending.Enqueue(ck);
             }
             if (key.Key != ConsoleKey.Enter)
+            {
                 lastPasteWasCR = false; // 非换行键到达：下一个 \n 不再是 CRLF 的尾半
+                pasteEndedWithNewline = false;
+            }
 
             // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
             if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
@@ -748,6 +753,12 @@ public static class InputLine
                             needsRedraw = true;
                         else
                             OnTextChanged();
+                        break;
+                    }
+                    // 粘贴刚结束时缓冲区末尾已有 \n：Enter 不再重复插入（避免内容尾换行被翻倍）
+                    if (pasteEndedWithNewline)
+                    {
+                        pasteEndedWithNewline = false;
                         break;
                     }
                     if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
@@ -1166,6 +1177,7 @@ public static class InputLine
                         buf.Insert(key.KeyChar);
                         draft = null; // 输入使草稿失效
                         lastPasteWasCR = false;
+                        pasteEndedWithNewline = false;
                         // 粘贴流中不逐键整行重绘（大粘贴会卡顿/闪烁）：挂起，缓冲排空或粘贴结束时一次画
                         if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
                             needsRedraw = true;
