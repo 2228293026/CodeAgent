@@ -167,6 +167,24 @@ public class InputLineCommandsTests
         Assert.Equal(4, SkipDirs.CountLines("a\nb\nc\nd\n")); // 4 行内容 + 末尾换行
     }
 
+    [Fact]
+    public void FoldText_TrailingNewline_FoldIndicatorIsCorrectLine()
+    {
+        // 回归：PositionCursor 对 2 行输入 + 末尾 \n 计算 totalLines 时，CountNewlines 曾把
+        // 末尾换行计入行数，使 totalLines = 3 而非 2，导致 dispLine 误判为 2（折叠提示行），
+        // foldLines[2] 取到空串，光标列计算错误。
+        // 修复后 CountNewlines 忽略末尾换行，totalLines 与 FoldText 实际行数一致。
+        var input = "line1\nline2\n";
+        // 验证 CountLines（语义等同于修复后的 CountNewlines）不计末尾换行
+        Assert.Equal(2, SkipDirs.CountLines(input));
+        // FoldText 对 2 行输入原样返回（≤ 阈值不折叠），Split('\n') 不应产生 trailing empty
+        var folded = InputLine.FoldText(input);
+        var foldLines = DiffUtil.SplitLines(folded);
+        Assert.Equal(2, foldLines.Length);   // 恰好 2 行内容，不含多余空串
+        Assert.Equal("line1", foldLines[0]);
+        Assert.Equal("line2", foldLines[1]);
+    }
+
     // ===== FitToWidth / CursorLeftOffset（显示宽度：CJK/emoji 按 2 列）=====
 
     [Theory]

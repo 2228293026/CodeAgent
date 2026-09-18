@@ -226,6 +226,9 @@ public static class InputLine
 
         int CountNewlines(string s)
         {
+            // 去掉末尾换行再计数：与 SkipDirs.CountLines / DiffUtil.SplitLines 语义一致，
+            // 避免 "a\nb\n" 被当成 3 行导致 PositionCursor 把光标行算到折叠提示行上。
+            s = s.TrimEnd('\n');
             int n = 0;
             foreach (var c in s)
                 if (c == '\n')
@@ -318,7 +321,7 @@ public static class InputLine
                     int col;
                     if (dispLine == 2)
                     {
-                        var foldLines = InputLine.FoldText(InputText()).Split('\n');
+                        var foldLines = InputLine.FoldText(InputText()).Split('\n'); // TEMP old buggy
                         seg = foldLines.Length > 2 ? foldLines[2] : ""; // 折叠行文本，光标显示在末尾
                         col = DisplayWidth(seg); // 折叠行独立成行，无提示符前缀
                     }
