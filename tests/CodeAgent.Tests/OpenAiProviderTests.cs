@@ -194,6 +194,20 @@ public class OpenAiProviderTests
     }
 
     [Fact]
+    public async Task GetContextWindowAsync_ParsesStringNumericValues()
+    {
+        // 回归：部分网关把 context_length 序列化为字符串（"128000"），此前只认整数，
+        // 导致状态栏 ctx 百分比回退到纯数字而非自动探测值。
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"data":[{"id":"m3","context_length":"128000","top_provider":{"context_length":"128000"}}]}""",
+        };
+        var provider = new OpenAiProvider(
+            new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+        Assert.Equal(128000, await provider.GetContextWindowAsync("m3", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ChatAsync_RequestTimeout_ThrowsProviderException()
     {
         // 用短超时的 HttpClient：SlowHandler 永远延迟，触发超时路径（避免等默认 100s）

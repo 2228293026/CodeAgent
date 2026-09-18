@@ -482,9 +482,9 @@ public sealed class OpenAiProvider : IAgentProvider
             if (entry is null)
                 return null; // 模型不在列表（网关隐藏列表等）：交给内置表兜底
             foreach (var key in new[] { "context_length", "context_window", "max_context_length", "max_model_len", "max_input_tokens", "input_token_limit" })
-                if (entry[key] is JsonValue v && v.TryGetValue<int>(out var n) && n > 0)
+                if (ProviderJson.OptInt(entry[key]) is { } n && n > 0)
                     return n;
-            if (entry["top_provider"]?["context_length"] is JsonValue tv && tv.TryGetValue<int>(out var n2) && n2 > 0)
+            if (ProviderJson.OptInt(entry["top_provider"]?["context_length"]) is { } n2 && n2 > 0)
                 return n2;
             return null; // 找到模型但元数据无窗口字段
         }
