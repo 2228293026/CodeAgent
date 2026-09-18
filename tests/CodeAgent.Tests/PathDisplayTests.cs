@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using CodeAgent;
 using Xunit;
 
@@ -309,6 +310,30 @@ public class PathDisplayTests
         finally
         {
             try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void PrintColoredDiff_TrailingNewline_NoSpuriousEmptyLine()
+    {
+        // 回归：PrintColoredDiff 对以 \n 结尾的 diff 若用 Split('\n') 会产生 trailing empty
+        // string，多调用 Console.WriteLine("") 输出额外空行（多 2 字节 \r\n）。
+        // DiffUtil.SplitLines 去掉 trailing empty string，确保只输出实际 diff 行数。
+        using var sw = new StringWriter();
+        var originalOut = Console.Out;
+        Console.SetOut(sw);
+        try
+        {
+            // 5 行 diff（结尾带 \n）
+            Program.PrintColoredDiff("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n");
+            var output = sw.ToString();
+            // 预期：恰好 5 行 × (内容 + \r\n)，无额外空行
+            var expected = "--- a/x\r\n+++ b/x\r\n@@ -1 +1 @@\r\n-old\r\n+new\r\n";
+            Assert.Equal(expected, output);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
         }
     }
 }

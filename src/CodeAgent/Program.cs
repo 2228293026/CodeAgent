@@ -788,9 +788,9 @@ internal static class Program
     }
 
     /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。</summary>
-    private static void PrintColoredDiff(string diff)
+    internal static void PrintColoredDiff(string diff)
     {
-        foreach (var line in diff.Split('\n'))
+        foreach (var line in DiffUtil.SplitLines(diff))
         {
             if (line.StartsWith("== ", StringComparison.Ordinal))
                 SafeColor.Foreground(ConsoleColor.White);       // 文件标题
