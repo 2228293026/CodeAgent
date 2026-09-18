@@ -377,7 +377,19 @@ public sealed class OpenAiProvider : IAgentProvider
                 onText?.Invoke(refusalText);
             }
             var content = delta["content"];
-            if (content is JsonValue cv && cv.TryGetValue<string>(out var t) && t.Length > 0)
+            if (content is JsonArray parts)
+            {
+                foreach (var part in parts)
+                {
+                    var pt = part?["text"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(pt))
+                    {
+                        text.Append(pt);
+                        onText?.Invoke(pt);
+                    }
+                }
+            }
+            else if (content is JsonValue cv && cv.TryGetValue<string>(out var t) && t.Length > 0)
             {
                 text.Append(t);
                 onText?.Invoke(t);

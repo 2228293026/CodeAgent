@@ -494,4 +494,56 @@ public class OpenAiProviderTests
         Assert.Equal(5, resp.CachedTokens);
     }
 
+    [Fact]
+    public async Task ChatStreamAsync_DeltaContentArray_JoinsTextBlocks()
+    {
+        // 回归：部分兼容网关把 streaming delta.content 返回为分块数组；
+        // 原实现只处理 JsonValue，JsonArray 分支不可达，导致流式文本丢失。
+        var streamBody =
+            "data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}\n\n" +
+            "data: {\"choices\":[{\"delta\":{\"content\":\"好\"}}]}\n\n" +
+            "data: [DONE]\n";
+        var handler = new StreamCaptureHandler(streamBody);
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("你好", resp.Text);
+    }
+
+    [Fact]
+    public async Task ChatStreamAsync_DeltaContentJsonArray_JoinsTextBlocks()
+    {
+        // 回归：部分兼容网关把 streaming delta.content 返回为分块数组；
+        // 原实现只处理 JsonValue，JsonArray 分支不可达，导致流式文本丢失。
+        var streamBody =
+            "data: {\"choices\":[{\"delta\":{\"content\":[{\"type\":\"text\",\"text\":\"你\"},{\"type\":\"text\",\"text\":\"好\"}]}}]}\n\n" +
+            "data: [DONE]\n";
+        var handler = new StreamCaptureHandler(streamBody);
+        var provider = new OpenAiProvider(new ProviderOptions { ApiKey = "test-key" }, new HttpClient(handler));
+
+        var resp = await provider.ChatStreamAsync(
+            [new ProviderMessage { Role = MessageRole.User, Content = "hi" }],
+            [], "off", null, null, null, CancellationToken.None);
+
+        Assert.Equal("你好", resp.Text);
+    }
+
+    /// <summary>流式响应假处理器：返回 text/event-stream 内容。</summary>
+    private sealed class StreamCaptureHandler(string body) : HttpMessageHandler
+    {
+        public string? LastBody;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            LastBody = request.Content?.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "text/event-stream"),
+            });
+        }
+    }
+
 }
