@@ -165,6 +165,21 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void CapDiff_NormalizesWindowsNewlines_NoStrayCarriageReturn()
+    {
+        // 回归：DiffUtil.Unified 曾用 AppendLine 输出 \r\n，TrimEnd 只去尾部；
+        //  downstream 的 CapDiff / ShowFilePreview 用 Split('\n') 后每行残留 \r，
+        //  Windows 终端里 \r 会把本行文本送回行首，视觉上出现错位/多余空行。
+        var diff = "--- a/file\r\n+++ b/file\r\n@@ -1 +1 @@\r\n-old\r\n+new\r\n";
+        var capped = AgentClass.CapDiff(diff);
+        Assert.DoesNotContain("\r", capped); // 不应残留任何 \r
+        Assert.Contains("--- a/file", capped);
+        Assert.Contains("+++ b/file", capped);
+        Assert.Contains("-old", capped);
+        Assert.Contains("+new", capped);
+    }
+
+    [Fact]
     public void SummarizeCall_ChineseArg_ShownAsIs()
     {
         // 回归：参数值曾用 JsonNode.ToJsonString() 提取，默认编码器把中文转义成 \uXXXX，

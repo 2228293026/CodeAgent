@@ -622,10 +622,7 @@ public sealed partial class Agent
     /// <summary>diff 文本截断：最多 15 行、每行 200 字符，超出提示总行数。</summary>
     internal static string CapDiff(string diff)
     {
-        var lines = diff.Split('\n');
-        // 去掉末尾换行产生的空串（与 CountLines / ReadAllLines 语义一致），避免把 "a\nb\n" 误判为 3 行
-        if (lines.Length > 0 && lines[^1].Length == 0)
-            lines = lines[..^1];
+        var lines = DiffUtil.SplitLines(diff);
         const int maxLines = 15;
         var shown = lines.Take(maxLines).Select(l => TextUtil.TruncateLine(l, 200)).ToList();
         if (lines.Length > maxLines)
@@ -647,7 +644,7 @@ public sealed partial class Agent
             var text = name == "write_file" ? WritePreviewText(args) : EditPreviewText(args);
             if (text.Length == 0)
                 return;
-            foreach (var line in text.Split('\n'))
+            foreach (var line in DiffUtil.SplitLines(text))
             {
                 // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿
                 if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))

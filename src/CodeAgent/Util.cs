@@ -1057,7 +1057,7 @@ public static class DiffUtil
             if (op != '+') oldPos++;
             if (op != '-') newPos++;
         }
-        return sb.ToString().TrimEnd();
+        return sb.ToString().TrimEnd().Replace("\r\n", "\n");
     }
 
     internal static string[] SplitLines(string text)
