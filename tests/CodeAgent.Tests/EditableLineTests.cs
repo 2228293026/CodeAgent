@@ -95,6 +95,21 @@ public class EditableLineTests
     }
 
     [Fact]
+    public void Delete_InsideEmoji_RemovesWholeSurrogatePair()
+    {
+        // 回归：光标落在 emoji 的低代理上时，Delete 应整体移除配对的高+低代理
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        // "a😀b" 的 UTF-16 码元序列：a(0) \uD83D(1) \uDE00(2) b(3)
+        line.End();
+        line.MoveLeft(); // 光标在 b 前（位置 3）
+        line.MoveLeft(); // 光标落在 😀 的低代理 \uDE00 上（位置 2）
+        Assert.True(line.Delete());
+        Assert.Equal("ab", line.Text);
+        Assert.Equal(2, line.Cursor);
+    }
+
+    [Fact]
     public void Delete_AtEnd_DoesNothing()
     {
         var line = new EditableLine();

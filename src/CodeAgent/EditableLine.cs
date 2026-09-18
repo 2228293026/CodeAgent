@@ -58,10 +58,17 @@ public sealed class EditableLine
         if (Cursor >= _text.Length)
             return false;
         var count = 1;
+        var start = Cursor;
         // 光标处的高代理 + 后面的低代理是一个码点：一起删
         if (char.IsHighSurrogate(_text[Cursor]) && Cursor + 1 < _text.Length && char.IsLowSurrogate(_text[Cursor + 1]))
             count = 2;
-        _text.Remove(Cursor, count);
+        // 光标处的低代理（前面是高代理）：一起删配对的高+低代理
+        else if (Cursor > 0 && char.IsLowSurrogate(_text[Cursor]) && char.IsHighSurrogate(_text[Cursor - 1]))
+        {
+            count = 2;
+            start = Cursor - 1;
+        }
+        _text.Remove(start, count);
         return true;
     }
 
