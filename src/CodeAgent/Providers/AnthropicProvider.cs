@@ -523,6 +523,12 @@ public sealed class AnthropicProvider : IAgentProvider
                 var last = arr[^1]!;
                 var target = last["content"] as JsonArray;
                 var source = msg["content"] as JsonArray;
+                if (target is null && last["content"] is JsonValue lv)
+                {
+                    // 上一条同角色消息是纯文本（JsonValue）：先转成数组，再合并
+                    target = new JsonArray(TextBlock(lv.GetValue<string>()));
+                    last["content"] = target;
+                }
                 if (target is not null && source is not null)
                 {
                     foreach (var block in source)

@@ -505,6 +505,45 @@ public class AnthropicProviderTests
         Assert.Equal(2, page); // 确实请求了第二页
     }
 
+    [Fact]
+    public async Task BuildMessages_MergesConsecutiveUserMessages_PlainTextThenArray()
+    {
+        // 回归：BuildMessages 的 Append 合并逻辑曾只处理「last 和 source 都是 JsonArray」的情况；
+        // 若上一条 user 是纯文本（JsonValue），下一条 user 是数组，last["content"] 仍为 JsonValue，
+        // 不进任何一个分支，导致连续 user 未被合并——Anthropic API 会拒绝连续同角色消息。
+        var handler = new CaptureHandler
+        {
+            OverrideBody = """{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}""",
+        };
+        var provider = new AnthropicProvider(
+            new ProviderOptions { ApiKey = "k", BaseUrl = "http://localhost" },
+            new HttpClient(handler));
+
+        await provider.ChatAsync(
+            [
+                new ProviderMessage { Role = MessageRole.System, Content = "sys" },
+                new ProviderMessage { Role = MessageRole.User, Content = "hello" },
+                new ProviderMessage { Role = MessageRole.User, Content = "world" },
+            ],
+            [],
+            "off",
+            CancellationToken.None);
+
+        var body = JsonNode.Parse(handler.LastBody!)!;
+        // 首条 system 走顶层 system 字段，messages 里不应再出现 system
+        Assert.Equal("sys", body["system"]?.GetValue<string>());
+        var msgs = body["messages"] as JsonArray;
+        Assert.NotNull(msgs);
+        Assert.Single(msgs); // 两条 user 被合并为一条
+        var userMsg = msgs[0] as JsonObject;
+        Assert.Equal("user", userMsg?["role"]?.GetValue<string>());
+        var content = userMsg?["content"] as JsonArray;
+        Assert.NotNull(content);
+        Assert.Equal(2, content.Count);
+        Assert.Equal("hello", content[0]?["text"]?.GetValue<string>());
+        Assert.Equal("world", content[1]?["text"]?.GetValue<string>());
+    }
+
     private sealed class PagedHandler(Func<string> body) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
