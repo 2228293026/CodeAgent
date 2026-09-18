@@ -209,9 +209,9 @@ public sealed partial class Agent
                 Content = n["content"]?.GetValue<string>(),
                 ToolCalls = (n["toolCalls"] as JsonArray)?.Select(tc => new ToolCall
                 {
-                    Id = tc?["Id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
-                    Name = tc?["Name"]?.GetValue<string>() ?? "unknown",
-                    ArgumentsJson = tc?["ArgumentsJson"]?.GetValue<string>() ?? "{}",
+                    Id = tc?["id"]?.GetValue<string>() ?? Guid.NewGuid().ToString("N"),
+                    Name = tc?["name"]?.GetValue<string>() ?? "unknown",
+                    ArgumentsJson = tc?["arguments"]?.GetValue<string>() ?? "{}",
                 }).ToList(),
                 ToolCallId = n["toolCallId"]?.GetValue<string>(),
                 ToolName = n["tool"]?.GetValue<string>(),

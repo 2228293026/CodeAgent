@@ -500,4 +500,28 @@ public class AgentSessionTests : IDisposable
             try { Directory.Delete(workDir, true); } catch { }
         }
     }
+
+    [Fact]
+    public void ReadSessionLogFile_ParsesToolCalls_FromCamelCaseJsonl()
+    {
+        // 回归：会话日志的 toolCalls 用 camelCase（id/name/arguments），
+        // ParseLogLine 曾用 PascalCase（Id/Name/ArgumentsJson）取字段，导致工具调用丢失。
+        var path = Path.Combine(_sessionDir, "tool-calls.jsonl");
+        File.WriteAllText(path, """
+            {"role":"user","content":"请读文件"}
+            {"role":"assistant","content":"好的","toolCalls":[{"id":"tc-1","name":"read_file","arguments":"{\"path\":\"a.cs\"}"}]}
+            {"role":"tool","toolCallId":"tc-1","tool":"read_file","content":"内容"}
+            """);
+        var msgs = AgentClass.ReadSessionLogFile(path);
+        var asst = msgs.Single(m => m.Role == MessageRole.Assistant);
+        Assert.Single(asst.ToolCalls);
+        Assert.Equal("tc-1", asst.ToolCalls[0].Id);
+        Assert.Equal("read_file", asst.ToolCalls[0].Name);
+        Assert.Equal("{\"path\":\"a.cs\"}", asst.ToolCalls[0].ArgumentsJson);
+
+        var tool = msgs.Single(m => m.Role == MessageRole.Tool);
+        Assert.Equal("tc-1", tool.ToolCallId);
+        Assert.Equal("read_file", tool.ToolName);
+        Assert.Equal("内容", tool.Content);
+    }
 }
