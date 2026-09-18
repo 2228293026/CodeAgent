@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CodeAgent;
 using CodeAgent.Providers;
 using CodeAgent.Tools;
 
@@ -632,6 +633,12 @@ public sealed partial class Agent
         return string.Join('\n', shown);
     }
 
+    /// <summary>命令类工具输出预览：最多 8 行，超出截断。</summary>
+    internal static string BuildToolOutputPreview(string output)
+    {
+        return string.Join('\n', DiffUtil.SplitLines(output).Take(8));
+    }
+
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
     private static void ShowFilePreview(string name, JsonObject? args)
     {
@@ -800,7 +807,7 @@ public sealed partial class Agent
                     if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
-                        var preview = string.Join('\n', output.Split('\n').Take(8));
+                        var preview = BuildToolOutputPreview(output);
                         Console.WriteLine("      " + TextUtil.Truncate(preview, 800));
                         SafeColor.Reset();
                     }

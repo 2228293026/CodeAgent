@@ -152,6 +152,19 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ToolOutputPreview_TrailingNewline_NoSpuriousBlankLine()
+    {
+        // 回归：Agent.ShowFilePreview 对 run_command/bash/powershell 的输出预览曾用
+        // output.Split('\n').Take(8)，当输出以 \n 结尾且不足 8 行时，trailing empty string
+        // 被 Take(8) 收入，string.Join 后 preview 末尾多出 \n，多打一行空行。
+        var output = "line1\nline2\nline3\nline4\nline5\nline6\nline7\n";
+        var preview = AgentClass.BuildToolOutputPreview(output);
+        // preview 不应以 \n 结尾（否则 Console.WriteLine 会多输出一个空行）
+        Assert.DoesNotMatch(@"\n$", preview);
+        Assert.Equal(7, preview.Split('\n').Length);
+    }
+
+    [Fact]
     public void SummarizeCall_ChineseArg_ShownAsIs()
     {
         // 回归：参数值曾用 JsonNode.ToJsonString() 提取，默认编码器把中文转义成 \uXXXX，
