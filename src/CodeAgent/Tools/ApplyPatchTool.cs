@@ -210,10 +210,7 @@ public sealed class ApplyPatchTool : ITool
 
         var text = TextUtil.ReadTextSmart(full); // GBK 等旧编码按原编码读取
         var crlf = text.Contains("\r\n");
-        var norm = text.Replace("\r\n", "\n");
-        var original = norm.Split('\n');
-        if (original.Length > 0 && original[^1].Length == 0)
-            original = original[..^1]; // 去掉末尾空段
+        var original = DiffUtil.SplitLines(text);
 
         var applied = ApplyHunks(file.Hunks, original, file.Path, generous || file.Hunks.Count == 1);
 
