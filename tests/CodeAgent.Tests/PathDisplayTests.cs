@@ -327,8 +327,9 @@ public class PathDisplayTests
             // 5 行 diff（结尾带 \n）
             Program.PrintColoredDiff("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-old\n+new\n");
             var output = sw.ToString();
-            // 预期：恰好 5 行 × (内容 + \r\n)，无额外空行
-            var expected = "--- a/x\r\n+++ b/x\r\n@@ -1 +1 @@\r\n-old\r\n+new\r\n";
+            // 与平台无关：按 Console.WriteLine 实际换行符拆分，断言恰好 5 行内容，无额外空行
+            var sep = Environment.NewLine;
+            var expected = string.Join(sep, "--- a/x", "+++ b/x", "@@ -1 +1 @@", "-old", "+new") + sep;
             Assert.Equal(expected, output);
         }
         finally
