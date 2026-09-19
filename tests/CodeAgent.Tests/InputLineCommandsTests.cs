@@ -266,6 +266,17 @@ public class InputLineCommandsTests
         Assert.Equal(-1, InputLine.FindHistoryMatch(history, "zzz", 99));  // 越界 fromIndex 安全
     }
 
+    [Fact]
+    public void FindHistoryMatch_NormalizesLeadingFullWidthSlash()
+    {
+        // 回归：Ctrl+R 搜索历史时，全角斜杠输入的历史条目应能被半角斜杠 query 命中
+        var history = new[] { "／help", "／clear", "git status" };
+        Assert.Equal(1, InputLine.FindHistoryMatch(history, "/clear", history.Length - 1));
+        Assert.Equal(0, InputLine.FindHistoryMatch(history, "/help", 0));
+        // 反向：半角斜杠历史条目也应能被全角斜杠 query 命中
+        Assert.Equal(1, InputLine.FindHistoryMatch(history, "／clear", history.Length - 1));
+    }
+
     [Theory]
     [InlineData("/model", "/model")]
     [InlineData("／model", "/model")] // 全角斜杠归一化

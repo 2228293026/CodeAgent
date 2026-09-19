@@ -1238,9 +1238,10 @@ public static class InputLine
     {
         if (query.Length == 0 || history.Count == 0)
             return -1;
+        var normalizedQuery = NormalizeCommandFilter(query);
         for (var i = Math.Min(fromIndex, history.Count - 1); i >= 0; i--)
         {
-            if (history[i].Contains(query, StringComparison.OrdinalIgnoreCase))
+            if (NormalizeCommandFilter(history[i]).Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
                 return i;
         }
         return -1;
