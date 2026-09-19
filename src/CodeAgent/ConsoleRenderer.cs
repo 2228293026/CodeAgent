@@ -24,6 +24,10 @@ public sealed class ConsoleRenderer
             Console.Write(text);
             return;
         }
+        // 流式边界：若上一个 chunk 停在语言标识符行且代码缓冲为空，
+        // 说明标识符已被截断——结束 intro 状态，让本 chunk 的内容进入 _code
+        if (_inCode && _skipCodeIntro && _code.Length == 0 && text.Length > 0 && text[0] != '\n')
+            _skipCodeIntro = false;
         foreach (var ch in text)
         {
             if (_inCode)
@@ -39,6 +43,7 @@ public sealed class ConsoleRenderer
         if (!_enabled)
             return;
         _inInlineCode = false; // 流结束时丢弃未闭合的行内代码状态
+        _skipCodeIntro = false; // 刷新时重置：避免跨 Append 调用丢弃有效代码内容
         if (_inCode)
         {
             EmitCode(_code.ToString());

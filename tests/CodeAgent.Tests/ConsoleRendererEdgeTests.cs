@@ -161,4 +161,19 @@ public class ConsoleRendererEdgeTests : IDisposable
         Assert.Contains("line1", output);
         Assert.Contains("line2", output);
     }
+
+    [Fact]
+    public void Append_CodeFenceSplitAcrossAppend_DoesNotLoseCode()
+    {
+        // 回归：代码围栏语言标识符跨 Append 调用时，_skipCodeIntro 未在 Flush 重置，
+        // 且流式 chunk 边界落在标识符后时下一段代码内容被静默丢弃。
+        var r = new ConsoleRenderer(enabled: true);
+        r.Append(" ```cs");   // 触发 _skipCodeIntro = true，丢弃 cs
+        r.Flush();            // Flush 应重置 _skipCodeIntro
+        r.Append("code");     // 代码内容应进入 _code 而非被丢弃
+        r.Append("\n```");    // 关闭围栏
+        r.Flush();
+        var output = _out.ToString();
+        Assert.Contains("code", output);
+    }
 }
