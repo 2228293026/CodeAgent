@@ -2443,6 +2443,19 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_PreserveTrailingNewline_False_StripsBareCR()
+    {
+        // preserve_trailing_newline=false: 也应去掉末尾裸 \r（旧 Mac 换行，SplitLines 将其视为换行）
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "cr.txt", ["content"] = "hello\r", ["preserve_trailing_newline"] = false }, ctx, CancellationToken.None);
+
+        Assert.Equal("hello", File.ReadAllText(Path.Combine(_dir, "cr.txt"))); // 裸 \r 被去掉
+    }
+
+    [Fact]
     public async Task WriteFile_IfExists_Skip_DoesNotOverwrite()
     {
         // if_exists=skip:文件已存在时跳过写入，不修改原文件

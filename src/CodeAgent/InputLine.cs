@@ -534,8 +534,9 @@ public static class InputLine
         void RefreshMenu()
         {
             var pat = NormalizeCommandFilter(buf.Text);
-            var newItems = Commands
-                .Where(c => c.Name.StartsWith(pat, StringComparison.OrdinalIgnoreCase))
+            var source = modePicker ? modes ?? [] : Commands;
+            var newItems = source
+                .Where(m => m.Name.StartsWith(pat, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             // 仅当过滤结果真的变化时才重绘，避免 /m→/mo→/mod 每个按键都刷一块菜单
             var same = newItems.Count == menuItems.Count &&

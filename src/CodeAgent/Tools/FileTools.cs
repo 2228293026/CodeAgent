@@ -440,12 +440,12 @@ public sealed class WriteFileTool : ITool
             finalContent = content;
         }
 
-        // preserve_trailing_newline=false:去掉末尾换行符
+        // preserve_trailing_newline=false:去掉末尾换行符（含裸 \r，与 SplitLines 口径一致）
         if (!ToolArgs.GetBool(args, "preserve_trailing_newline", true) && !string.IsNullOrEmpty(finalContent))
         {
             if (finalContent.EndsWith("\r\n"))
                 finalContent = finalContent[..^2];
-            else if (finalContent.EndsWith('\n'))
+            else if (finalContent.EndsWith('\n') || finalContent.EndsWith('\r'))
                 finalContent = finalContent[..^1];
         }
 
