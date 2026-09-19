@@ -784,19 +784,23 @@ public static class InputLine
                     // 仅靠 KeyAvailable 不可靠，需结合 ReadKey 等待时间（<30ms=粘贴流）判定。
                     if (pasteStream)
                     {
+                        // 与括号粘贴分支一致：CRLF 的 \r 后紧跟的 \n 应被折叠而非插入
+                        if (TryConsumePasteEnter(ref lastPasteWasCR, key.KeyChar))
+                            break;
                         buf.Insert('\n');
-                        // 分批注入竞态：CRLF 的 \n 可能在 \r 读走后才到（此刻 KeyAvailable=false）。
-                        // 粘贴流的下一批通常 <5ms 到达，而真人不会在 5ms 内紧跟按键——小睡再查一次，
-                        // 堵住「半截草稿被当成独立提交」的旧竞态
-                        if (pasteStream && !Console.KeyAvailable)
-                            System.Threading.Thread.Sleep(5);
-                        // CRLF 粘贴的 \r\n 中 \r 触发本分支后 \n 还会再触发一次 Enter：
-                        // 读取并丢弃；若下一个是普通字符（LF-only 粘贴的下一行内容）则放回暂存
-                        if (Console.KeyAvailable)
+                        lastPasteWasCR = key.KeyChar == '\r';
+                        // 仅当本次是 \r（CRLF 首段）时才等待并折叠紧随的 \n；
+                        // 纯 LF 粘贴不折叠下一行的 Enter，避免多行粘贴丢换行
+                        if (lastPasteWasCR)
                         {
-                            var next = Console.ReadKey(intercept: true);
-                            if (next.Key != ConsoleKey.Enter)
-                                pending.Enqueue(next);
+                            if (!Console.KeyAvailable)
+                                System.Threading.Thread.Sleep(5);
+                            if (Console.KeyAvailable)
+                            {
+                                var next = Console.ReadKey(intercept: true);
+                                if (next.Key != ConsoleKey.Enter)
+                                    pending.Enqueue(next);
+                            }
                         }
                         OnTextChanged();
                         break;
