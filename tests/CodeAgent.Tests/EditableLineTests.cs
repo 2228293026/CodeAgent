@@ -417,6 +417,56 @@ public class WordNavTests
     }
 
     [Fact]
+    public void MoveWordRight_FromBeforeEmoji_SkipsEmojiAsOneUnit()
+    {
+        // "a😀b"：光标在 0（a 前），Ctrl+→ 应跳过 a😀b 停在行尾（4）
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveWordRight();
+        Assert.Equal(4, line.Cursor);
+        Assert.Equal("a😀b", line.Text);
+    }
+
+    [Fact]
+    public void MoveWordRight_FromOnHighSurrogate_SkipsWholePair()
+    {
+        // "a😀b"：光标在 1（高代理上），Ctrl+→ 应跳过整对代理 + b 停在行尾（4）
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); // cursor=1
+        line.MoveWordRight();
+        Assert.Equal(4, line.Cursor);
+        Assert.Equal("a😀b", line.Text);
+    }
+
+    [Fact]
+    public void MoveWordRight_FromBetweenSurrogates_SkipsRestOfPairAndAfter()
+    {
+        // "a😀b"：光标在 2（高低代理之间），Ctrl+→ 应把剩余低代理 + b 一起跳过
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); line.MoveRight(); // cursor=2
+        line.MoveWordRight();
+        Assert.Equal(4, line.Cursor);
+        Assert.Equal("a😀b", line.Text);
+    }
+
+    [Fact]
+    public void MoveWordRight_EmojiThenSpace_StopsAtSpace()
+    {
+        // "😀 b"：光标在 0，Ctrl+→ 应停在 emoji 后的空格（2）
+        var line = new EditableLine();
+        line.SetInitial("😀 b");
+        line.Home();
+        line.MoveWordRight();
+        Assert.Equal(2, line.Cursor);
+        Assert.Equal("😀 b", line.Text);
+    }
+
+    [Fact]
     public void DeleteWordForward_RemovesWordAndTrailingSpaces()
     {
         var b = new EditableLine();

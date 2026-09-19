@@ -127,7 +127,18 @@ public sealed class EditableLine
         var text = _text.ToString();
         var i = Cursor;
         while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
-        while (i < text.Length && !char.IsWhiteSpace(text[i])) i++;
+        while (i < text.Length)
+        {
+            // 代理对保护：遇到代理对时视为一个整体，跳过并继续（代理对边界即词边界）
+            if (i + 1 < text.Length && char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))
+            {
+                i += 2;
+                continue;
+            }
+            if (char.IsWhiteSpace(text[i]))
+                break;
+            i++;
+        }
         Cursor = i;
     }
 
