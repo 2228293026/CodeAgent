@@ -162,6 +162,18 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void CountLines_HandlesBareCR_AndMixedLineEndings()
+    {
+        // 旧 Mac 的裸 \r 换行、以及 \r\n / \n / \r 混合时，行数语义应一致
+        Assert.Equal(2, SkipDirs.CountLines("a\rb\r"));         // 裸 CR：两行，末尾换行不额外计
+        Assert.Equal(2, SkipDirs.CountLines("a\rb"));           // 裸 CR 在中间
+        Assert.Equal(2, SkipDirs.CountLines("a\r\nb\r\n"));     // CRLF：与 LF 同口径
+        Assert.Equal(3, SkipDirs.CountLines("a\nb\rc"));        // 混合：LF + 裸 CR
+        Assert.Equal(1, SkipDirs.CountLines("\r"));             // 单个裸 CR = 一个空行
+        Assert.Equal(1, SkipDirs.CountLines("\r\n"));           // CRLF 空行
+    }
+
+    [Fact]
     public void CountLines_AgreesWithCountFileLines_OnDisk()
     {
         // 同一内容：内存版与磁盘版结果必须一致（否则工具间报数互相矛盾）

@@ -596,15 +596,20 @@ public static class SkipDirs
         if (string.IsNullOrEmpty(text))
             return 0;
         var lines = 0;
-        foreach (var c in text)
+        for (int i = 0; i < text.Length; i++)
         {
-            if (c == '\n')
+            if (text[i] == '\n')
                 lines++;
+            else if (text[i] == '\r' && (i + 1 == text.Length || text[i + 1] != '\n'))
+                lines++; // 裸 \r（非 CRLF）也算一行结尾
         }
-        // 末尾无换行时最后一行也算一行（与 CountFileLines / ReadAllLines 语义一致）
-        if (text[^1] != '\n')
-            lines++;
-        return lines;
+        if (lines == 0)
+            return 1; // 没有任何换行：整段就是一行
+        // 末尾是换行（\n 或裸 \r）时，不额外加一行（与 CountFileLines / ReadAllLines 语义一致）
+        var last = text[^1];
+        if (last == '\n' || last == '\r')
+            return lines;
+        return lines + 1;
     }
 
     /// <summary>流式统计文本行数（不整读进内存）。按 \n 计；空文件为 0 行。读取失败返回 null。</summary>
@@ -1066,7 +1071,8 @@ public static class DiffUtil
 
     internal static string[] SplitLines(string text)
     {
-        var lines = text.Replace("\r\n", "\n").Split('\n');
+        var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+        var lines = normalized.Split('\n');
         // 去掉末尾空串（结尾换行产生的），使 "a\nb\n" 与 "a\nb" 都得到 ["a","b"]
         if (lines.Length > 0 && lines[^1].Length == 0)
             lines = lines[..^1];

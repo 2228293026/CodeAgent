@@ -99,4 +99,19 @@ public class DiffUtilTests
         var withoutNewline = DiffUtil.Unified("a\nb", "a\nB", "f.txt");
         Assert.Equal(withNewline, withoutNewline);
     }
+
+    [Fact]
+    public void Unified_BareCR_AndMixedLineEndings_AreNormalized()
+    {
+        // 旧 Mac 的裸 \r 换行、以及 \r\n/\n/\r 混合时，SplitLines 应归一化后正确拆分
+        var cr = DiffUtil.Unified("a\rb\r", "a\rB\r", "f.txt");
+        var lf = DiffUtil.Unified("a\nb\n", "a\nB\n", "f.txt");
+        Assert.Equal(lf, cr); // 裸 CR 与 LF 应产生相同 diff
+
+        var mixed = DiffUtil.Unified("a\r\nb\rc", "a\r\nB\rC", "f.txt");
+        Assert.Contains("- b", mixed);
+        Assert.Contains("+ B", mixed);
+        Assert.Contains("- c", mixed);
+        Assert.Contains("+ C", mixed);
+    }
 }
