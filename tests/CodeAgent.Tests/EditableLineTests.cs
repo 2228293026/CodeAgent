@@ -110,6 +110,21 @@ public class EditableLineTests
     }
 
     [Fact]
+    public void Backspace_InsideEmoji_RemovesWholeSurrogatePair()
+    {
+        // 回归：光标落在 emoji 两代理之间时，Backspace 应整体移除配对的高+低代理
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        // "a😀b" 的 UTF-16 码元序列：a(0) \uD83D(1) \uDE00(2) b(3)
+        line.End();
+        line.MoveLeft(); // 光标在 b 前（位置 3）
+        line.MoveLeft(); // 光标落在 😀 的两代理之间（位置 2）
+        Assert.True(line.Backspace());
+        Assert.Equal("ab", line.Text);
+        Assert.Equal(0, line.Cursor);
+    }
+
+    [Fact]
     public void Delete_AtEnd_DoesNothing()
     {
         var line = new EditableLine();

@@ -43,10 +43,20 @@ public sealed class EditableLine
         if (Cursor <= 0)
             return false;
         var count = 1;
+        var start = Cursor - 1;
         // 光标前的低代理 + 它前面的高代理是一个码点：一起删
         if (char.IsLowSurrogate(_text[Cursor - 1]) && Cursor >= 2 && char.IsHighSurrogate(_text[Cursor - 2]))
+        {
             count = 2;
-        _text.Remove(Cursor - count, count);
+            start = Cursor - 2;
+        }
+        // 光标前的高代理 + 光标处的低代理是一个码点：一起删（光标落在代理对中间时）
+        else if (char.IsHighSurrogate(_text[Cursor - 1]) && Cursor < _text.Length && char.IsLowSurrogate(_text[Cursor]))
+        {
+            count = 2;
+            start = Cursor - 1;
+        }
+        _text.Remove(start, count);
         Cursor -= count;
         return true;
     }
