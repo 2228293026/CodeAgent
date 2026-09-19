@@ -319,4 +319,19 @@ public class InputLineCommandsTests
         Assert.False(consumed2);
         Assert.False(lastPasteWasCR);
     }
+
+    [Fact]
+    public void TryConsumePasteEnter_EnterDuringPaste_SetsCrFlag()
+    {
+        // 回归：粘贴中按 Enter（key.KeyChar = '\r'）应设置 lastPasteWasCR，
+        // 使紧跟的 \n 被识别为 CRLF 的尾半并折叠。
+        var lastPasteWasCR = false;
+        var consumed = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\r');
+        Assert.False(consumed); // \r 本身不消费，等待后续 \n 折叠
+        Assert.True(lastPasteWasCR);
+        // 后续 \n 被 CRLF 折叠
+        var consumed2 = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\n');
+        Assert.True(consumed2);
+        Assert.False(lastPasteWasCR);
+    }
 }

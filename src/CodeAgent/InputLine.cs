@@ -756,12 +756,10 @@ public static class InputLine
                             OnTextChanged();
                         break;
                     }
-                    // 粘贴刚结束时缓冲区末尾已有 \n：Enter 不再重复插入（避免内容尾换行被翻倍）
+                    // 粘贴刚结束时缓冲区末尾已有 \n：Enter 不再重复插入（避免内容尾换行被翻倍），
+                    // 但仍应提交当前输入——break 会导致需要按两次 Enter，体验错误
                     if (pasteEndedWithNewline)
-                    {
                         pasteEndedWithNewline = false;
-                        break;
-                    }
                     if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
                     {
                         var sel = menuItems[menuIndex].Name;
