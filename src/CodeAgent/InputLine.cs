@@ -781,10 +781,10 @@ public static class InputLine
                         Remember(raw);
                         return raw;
                     }
-                    // 粘贴多行内容：缓冲未空或键快速连续到达（粘贴流）时，换行是内容的一部分，插入而非提交。
+                    // 粘贴多行内容：键快速连续到达（粘贴流）时，换行是内容的一部分，插入而非提交。
                     // Windows 终端粘贴是分批注入，首个 \r 到达时后续字符可能尚未进入缓冲区，
                     // 仅靠 KeyAvailable 不可靠，需结合 ReadKey 等待时间（<30ms=粘贴流）判定。
-                    if (pasteStream || Console.KeyAvailable)
+                    if (pasteStream)
                     {
                         buf.Insert('\n');
                         // 分批注入竞态：CRLF 的 \n 可能在 \r 读走后才到（此刻 KeyAvailable=false）。
