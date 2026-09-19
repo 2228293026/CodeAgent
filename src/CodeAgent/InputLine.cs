@@ -738,6 +738,8 @@ public static class InputLine
                 case ConsoleKey.Enter when (key.Modifiers & ConsoleModifiers.Shift) != 0:
                     searching = false;
                     buf.Insert((char)10); // Shift+Enter 插入换行
+                    if (pasteActive)
+                        lastPasteWasCR = false; // 明确换行：中断 CRLF 折叠链
                     break;
                 case ConsoleKey.Enter:
                     searching = false; // 搜索结束：提交当前命中的历史条目
