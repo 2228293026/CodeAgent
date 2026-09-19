@@ -274,4 +274,49 @@ public class InputLineCommandsTests
     [InlineData("", "")]
     public void NormalizeCommandFilter_ConvertsLeadingFullWidthSlash(string input, string expected) =>
         Assert.Equal(expected, InputLine.NormalizeCommandFilter(input));
+
+    // ===== CRLF 粘贴的 Enter 折叠（TryConsumePasteEnter）=====
+
+    [Fact]
+    public void TryConsumePasteEnter_AfterCrLfPair_ConsumesNewlineAndResetsFlag()
+    {
+        // 回归：CRLF 的 \n 被折叠后，lastPasteWasCR 必须复位，否则后续独立 \n 会被误折叠。
+        var lastPasteWasCR = true;
+        var consumed = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\n');
+        Assert.True(consumed);
+        Assert.False(lastPasteWasCR);
+    }
+
+    [Fact]
+    public void TryConsumePasteEnter_LfOnly_DoesNotConsume()
+    {
+        var lastPasteWasCR = false;
+        var consumed = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\n');
+        Assert.False(consumed);
+        Assert.False(lastPasteWasCR);
+    }
+
+    [Fact]
+    public void TryConsumePasteEnter_Cr_SetsFlag()
+    {
+        var lastPasteWasCR = false;
+        var consumed = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\r');
+        Assert.False(consumed);
+        Assert.True(lastPasteWasCR);
+    }
+
+    [Fact]
+    public void TryConsumePasteEnter_AfterCrLf_SubsequentNewlineIsNotConsumed()
+    {
+        // 这是核心回归：CRLF 对 (\r\n) 后，再来一个独立 \n 时应正常插入，不应继续折叠。
+        var lastPasteWasCR = true;
+        // 第一个 \n：被 CRLF 折叠
+        var consumed1 = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\n');
+        Assert.True(consumed1);
+        Assert.False(lastPasteWasCR);
+        // 第二个 \n：独立换行，不再折叠
+        var consumed2 = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\n');
+        Assert.False(consumed2);
+        Assert.False(lastPasteWasCR);
+    }
 }

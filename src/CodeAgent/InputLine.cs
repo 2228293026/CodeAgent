@@ -745,10 +745,9 @@ public static class InputLine
                     {
                         // 括号粘贴中的换行一律是内容：不提交、不选菜单。
                         // CRLF 成对到达：\r 插入，紧跟的 \n 折叠掉；LF-only 各自插入（空行不塌）
-                        if (key.KeyChar == '\n' && lastPasteWasCR)
+                        if (TryConsumePasteEnter(ref lastPasteWasCR, key.KeyChar))
                             break;
                         buf.Insert('\n');
-                        lastPasteWasCR = key.KeyChar == '\r';
                         if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
                             needsRedraw = true;
                         else
@@ -1253,6 +1252,23 @@ public static class InputLine
             if (c == '\n')
                 raw++;
         return !expanded && raw + 1 > 3 ? 2 : raw;
+    }
+
+    /// <summary>
+    /// 粘贴中 Enter 键的 CRLF 折叠决策：\r 后紧跟 \n 时把 \n 折叠掉并复位状态。
+    /// </summary>
+    /// <param name="lastPasteWasCR">上一次粘贴换行是否为 \r。</param>
+    /// <param name="keyChar">当前键字符。</param>
+    /// <returns>true 表示该 \n 被 CRLF 折叠，调用方不应再插入换行。</returns>
+    internal static bool TryConsumePasteEnter(ref bool lastPasteWasCR, char keyChar)
+    {
+        if (keyChar == '\n' && lastPasteWasCR)
+        {
+            lastPasteWasCR = false;
+            return true;
+        }
+        lastPasteWasCR = keyChar == '\r';
+        return false;
     }
 
     /// <summary>光标在输入块内的显示行（0-based，块首为 0）：折叠时第 2 行及以后都落在折叠行上（=2）。
