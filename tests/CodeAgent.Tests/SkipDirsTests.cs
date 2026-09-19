@@ -131,6 +131,28 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void CountFileLines_HandlesBareCR_AndMixedLineEndings()
+    {
+        // 旧 Mac 裸 \r、CRLF、LF 以及混合换行时，流式行数须与 CountLines 一致
+        foreach (var (name, content, expected) in new[]
+        {
+            ("barecr.txt", "a\rb\r", 2),          // 裸 CR：两行，末尾换行不额外计
+            ("barecr_no_trailing.txt", "a\rb", 2), // 裸 CR 在中间
+            ("crlf.txt", "a\r\nb\r\n", 2),        // CRLF：与 LF 同口径
+            ("mixed.txt", "a\nb\rc", 3),          // 混合：LF + 裸 CR
+            ("barecr_empty.txt", "\r", 1),        // 单个裸 CR = 一个空行
+            ("crlf_empty.txt", "\r\n", 1),        // CRLF 空行
+            ("lf_only.txt", "a\nb\nc\n", 3),     // LF 回归
+        })
+        {
+            var path = Path.Combine(_dir, name);
+            File.WriteAllText(path, content);
+            Assert.Equal(expected, SkipDirs.CountFileLines(path));
+            Assert.Equal(expected, SkipDirs.CountLines(content)); // 内存版与文件版必须一致
+        }
+    }
+
+    [Fact]
     public void CountFileWords_MatchesReadAllTextSplit()
     {
         // 流式实现必须与旧的 File.ReadAllText(...).Split(空白) 结果完全一致

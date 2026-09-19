@@ -612,7 +612,7 @@ public static class SkipDirs
         return lines + 1;
     }
 
-    /// <summary>流式统计文本行数（不整读进内存）。按 \n 计；空文件为 0 行。读取失败返回 null。</summary>
+    /// <summary>流式统计文本行数（不整读进内存）。按 \n / 裸 \r 计；空文件为 0 行。读取失败返回 null。</summary>
     public static long? CountFileLines(string path)
     {
         try
@@ -621,19 +621,34 @@ public static class SkipDirs
             var buffer = new byte[64 * 1024];
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             int n;
+            bool pendingR = false; // 上一字节是 \r 且尚未确认是否为 \r\n
             while ((n = fs.Read(buffer, 0, buffer.Length)) > 0)
             {
                 for (int i = 0; i < n; i++)
                 {
                     if (buffer[i] == (byte)'\n')
+                    {
+                        if (!pendingR)
+                            lines++;
+                        pendingR = false;
+                    }
+                    else if (buffer[i] == (byte)'\r')
+                    {
                         lines++;
+                        pendingR = true;
+                    }
+                    else
+                    {
+                        pendingR = false;
+                    }
                 }
             }
-            // 末尾无换行时最后一行也算一行（与 File.ReadAllLines 语义一致）
+            // 末尾无换行时最后一行也算一行（与 File.ReadAllLines / CountLines 语义一致）
             if (fs.Length > 0)
             {
                 fs.Position = fs.Length - 1;
-                if (fs.ReadByte() != '\n')
+                var last = (byte)fs.ReadByte();
+                if (last != (byte)'\n' && last != (byte)'\r')
                     lines++;
             }
             return lines;
