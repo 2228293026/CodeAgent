@@ -345,4 +345,19 @@ public class InputLineCommandsTests
         Assert.True(consumed2);
         Assert.False(lastPasteWasCR);
     }
+
+    [Fact]
+    public void TryConsumePasteEnter_ConsecutiveCr_EachSetsFlagIndependently()
+    {
+        // 粘贴流中连续多个 \r（Enter）应各自独立设置标志，不应被当作 CRLF 折叠。
+        // 回归：pasteStream 分支曾把后续 Enter 也当 \n 折叠掉，导致连续回车粘贴丢行。
+        var lastPasteWasCR = false;
+        var consumed1 = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\r');
+        Assert.False(consumed1);
+        Assert.True(lastPasteWasCR);
+
+        var consumed2 = InputLine.TryConsumePasteEnter(ref lastPasteWasCR, '\r');
+        Assert.False(consumed2);
+        Assert.True(lastPasteWasCR); // 第二个 \r 也应独立设置标志
+    }
 }

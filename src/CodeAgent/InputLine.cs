@@ -799,8 +799,7 @@ public static class InputLine
                             if (Console.KeyAvailable)
                             {
                                 var next = Console.ReadKey(intercept: true);
-                                if (next.Key != ConsoleKey.Enter)
-                                    pending.Enqueue(next);
+                                pending.Enqueue(next);
                             }
                         }
                         OnTextChanged();
