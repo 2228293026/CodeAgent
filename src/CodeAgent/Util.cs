@@ -94,7 +94,9 @@ public static class TextUtil
                 keepBom = await fs.ReadAsync(head.AsMemory(0, 3), ct) == 3
                           && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
         }
-        await File.WriteAllTextAsync(path, content, new System.Text.UTF8Encoding(keepBom), ct);
+        var tmp = SkipDirs.TempPathFor(path);
+        await File.WriteAllTextAsync(tmp, content, new System.Text.UTF8Encoding(keepBom), ct);
+        File.Move(tmp, path, overwrite: true);
     }
 
     /// <summary>探测文件编码（撤销原样恢复用）："utf8-bom"（带 BOM）| "gb18030"（非 UTF-8 的旧编码）
@@ -186,7 +188,9 @@ public static class TextUtil
             Span<byte> head = stackalloc byte[3];
             keepBom = fs.Read(head) == 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
         }
-        File.WriteAllText(path, content, new System.Text.UTF8Encoding(keepBom));
+        var tmp = SkipDirs.TempPathFor(path);
+        File.WriteAllText(tmp, content, new System.Text.UTF8Encoding(keepBom));
+        File.Move(tmp, path, overwrite: true);
     }
 
     internal static string DecodeSmart(byte[] bytes) // internal：ShellRunner 命令输出解码复用

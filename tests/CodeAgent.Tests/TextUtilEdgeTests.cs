@@ -486,4 +486,26 @@ public class TextUtilEdgeTests : IDisposable
         Assert.DoesNotContain(Directory.EnumerateFiles(_dir, "*.tmp", SearchOption.AllDirectories), f => true);
     }
 
+    [Fact]
+    public void WriteTextPreserveBom_Atomic_NoLeftoverTmp()
+    {
+        // 同步版本也应使用原子写（tmp → rename），不应留下 .tmp 残留
+        var path = Path.Combine(_dir, "b.txt");
+        File.WriteAllText(path, "before");
+        TextUtil.WriteTextPreserveBom(path, "after");
+        Assert.Equal("after", File.ReadAllText(path));
+        Assert.DoesNotContain(Directory.GetFiles(_dir, "*.tmp"), f => true);
+    }
+
+    [Fact]
+    public async Task WriteTextPreserveBomAsync_Atomic_NoLeftoverTmp()
+    {
+        // 异步版本同样应使用原子写
+        var path = Path.Combine(_dir, "ba.txt");
+        await File.WriteAllTextAsync(path, "before");
+        await TextUtil.WriteTextPreserveBomAsync(path, "after");
+        Assert.Equal("after", await File.ReadAllTextAsync(path));
+        Assert.DoesNotContain(Directory.GetFiles(_dir, "*.tmp"), f => true);
+    }
+
 }
