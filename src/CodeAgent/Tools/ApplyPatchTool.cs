@@ -112,7 +112,10 @@ public sealed class ApplyPatchTool : ITool
                 {
                     var dl = lines[i];
                     if (dl[0] == '\\')
-                        hunk.Lines.Add(new HunkLine(' ', dl.Length > 1 ? dl[1..] : "")); // 转义行：去掉前缀后当上下文保留
+                    {
+                        // \ No newline at end of file 是元数据标记，不当作内容行加入 hunk
+                        cur.HasNoNewlineMarker = true;
+                    }
                     else
                         hunk.Lines.Add(new HunkLine(dl[0], dl.Length > 1 ? dl[1..] : ""));
                     i++;
@@ -139,7 +142,10 @@ public sealed class ApplyPatchTool : ITool
                 {
                     var dl = lines[i];
                     if (dl[0] == '\\')
-                        hunk.Lines.Add(new HunkLine(' ', dl.Length > 1 ? dl[1..] : "")); // 转义行：去掉前缀后当上下文保留
+                    {
+                        // \ No newline at end of file 是元数据标记，不当作内容行加入 hunk
+                        cur.HasNoNewlineMarker = true;
+                    }
                     else
                         hunk.Lines.Add(new HunkLine(dl[0], dl.Length > 1 ? dl[1..] : ""));
                     i++;
@@ -222,7 +228,8 @@ public sealed class ApplyPatchTool : ITool
 
         var newText = string.Join('\n', applied);
         // 保留目标文件原有的结尾换行风格(先补末尾换行,再统一转 CRLF,避免混入 \r\r\n)
-        if (text.Length > 0 && text[^1] == '\n')
+        // 补丁含 \ No newline at end of file 时，结果文件不应带末尾换行
+        if (text.Length > 0 && text[^1] == '\n' && !file.HasNoNewlineMarker)
             newText += "\n";
         if (crlf)
             newText = newText.Replace("\n", "\r\n");
@@ -345,6 +352,7 @@ public sealed class ApplyPatchTool : ITool
         public PatchFile(string path) => Path = path;
         public string Path { get; }
         public List<PatchHunk> Hunks { get; } = [];
+        public bool HasNoNewlineMarker { get; set; }
     }
 
     internal sealed class PatchHunk

@@ -483,4 +483,24 @@ old
         Assert.False(File.Exists(Path.Combine(_dir, "nobak.txt.bak"))); // 无备份文件
     }
 
+    [Fact]
+    public async Task Apply_Patch_WithNoNewlineMarker_DoesNotAddTrailingNewline()
+    {
+        // 回归：补丁含 \ No newline at end of file 时，不应把末尾换行补回去
+        File.WriteAllText(Path.Combine(_dir, "nonlf.txt"), "hello\n");
+        var patch = "@@ -1 +1 @@\n-hello\n+world\n\\ No newline at end of file\n";
+        await Apply(patch, "nonlf.txt");
+        Assert.Equal("world", File.ReadAllText(Path.Combine(_dir, "nonlf.txt")));
+    }
+
+    [Fact]
+    public async Task Apply_Patch_WithNoNewlineMarker_OnFileWithoutTrailingNewline_Applies()
+    {
+        // 回归：\ No newline at end of file 曾被当成上下文行，导致补丁应用失败
+        File.WriteAllText(Path.Combine(_dir, "nonlfsrc.txt"), "hello");
+        var patch = "@@ -1 +1 @@\n-hello\n+world\n\\ No newline at end of file\n";
+        await Apply(patch, "nonlfsrc.txt");
+        Assert.Equal("world", File.ReadAllText(Path.Combine(_dir, "nonlfsrc.txt")));
+    }
+
 }
