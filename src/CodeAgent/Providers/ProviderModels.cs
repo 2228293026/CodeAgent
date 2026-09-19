@@ -287,7 +287,7 @@ internal sealed class SseDataAssembler
             JsonNode.Parse(s);
             return true;
         }
-        catch (JsonException)
+        catch
         {
             return false;
         }

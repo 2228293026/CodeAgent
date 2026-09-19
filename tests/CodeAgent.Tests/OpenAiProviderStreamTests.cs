@@ -307,6 +307,46 @@ public class OpenAiProviderStreamTests
     }
 
     [Fact]
+    public void SseDataAssembler_MultiLineJsonObject_AssemblesAcrossDataLines()
+    {
+        // 部分网关把单个 JSON 对象拆到多个 data 行；首行以 '{' 开头但不完整，
+        // 后续行补齐尾部。assembler 应在凑齐时立即产出，而不是等空行。
+        var asm = new SseDataAssembler();
+        Assert.Null(asm.Feed("data: {\"prompt_tokens\":"));
+        Assert.Null(asm.Feed("data: 123,"));
+        Assert.Equal("{\"prompt_tokens\":\n123,\n\"completion_tokens\":456}", asm.Feed("data: \"completion_tokens\":456}"));
+    }
+
+    [Fact]
+    public void SseDataAssembler_MultiLineJsonArray_AssemblesAcrossDataLines()
+    {
+        var asm = new SseDataAssembler();
+        Assert.Null(asm.Feed("data: [{\"delta\":"));
+        Assert.Equal("[{\"delta\":\n{\"content\":\"Hello\"}}]", asm.Feed("data: {\"content\":\"Hello\"}}]"));
+    }
+
+    [Fact]
+    public void SseDataAssembler_PartialJson_NotEmittedUntilComplete()
+    {
+        // 不完整的 JSON 不应提前放出；流结束时仍残缺则丢弃
+        var asm = new SseDataAssembler();
+        Assert.Null(asm.Feed("data: {\"a\":"));
+        Assert.Null(asm.Feed("data: 1")); // 仍缺 }
+        Assert.Null(asm.Flush()); // 残缺尾部丢弃
+    }
+
+    [Fact]
+    public void SseDataAssembler_InvalidJsonBetweenLines_DoesNotCrass()
+    {
+        // 拼接后若仍非法 JSON（如字符串内换行未转义），assembler 应静默继续缓冲
+        // 而不是抛异常中断流解析
+        var asm = new SseDataAssembler();
+        Assert.Null(asm.Feed("data: {\"content\":\"hello"));
+        Assert.Null(asm.Feed("data: world\"}")); // 含未转义换行，非法 JSON
+        Assert.Null(asm.Flush()); // 最终仍不完整，丢弃
+    }
+
+    [Fact]
     public async Task ChatStreamAsync_DataAfterDoneSentinel_IsNotProcessed()
     {
         // [DONE] 之后的数据不应再被处理：哨兵失效时 doneSentinel 永远为 false，
