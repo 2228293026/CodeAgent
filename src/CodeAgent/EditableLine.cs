@@ -100,7 +100,18 @@ public sealed class EditableLine
         var text = _text.ToString();
         var i = Cursor;
         while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
-        while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
+        while (i > 0)
+        {
+            // 代理对保护：遇到代理对时视为一个整体，跳过并停止（代理对边界即词边界）
+            if (i > 1 && char.IsLowSurrogate(text[i - 1]) && char.IsHighSurrogate(text[i - 2]))
+            {
+                i -= 2;
+                break;
+            }
+            if (char.IsWhiteSpace(text[i - 1]))
+                break;
+            i--;
+        }
         Cursor = i;
     }
 
@@ -120,11 +131,32 @@ public sealed class EditableLine
         var text = _text.ToString();
         var i = Cursor;
         while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--;
-        while (i > 0 && !char.IsWhiteSpace(text[i - 1])) i--;
+        while (i > 0)
+        {
+            // 代理对保护：遇到代理对时视为一个整体，跳过并停止（代理对边界即词边界）
+            if (i > 1 && char.IsLowSurrogate(text[i - 1]) && char.IsHighSurrogate(text[i - 2]))
+            {
+                i -= 2;
+                break;
+            }
+            // 光标紧贴代理对后半（低代理）时，把整对纳入删除范围后停止
+            if (i < text.Length && char.IsHighSurrogate(text[i - 1]) && char.IsLowSurrogate(text[i]))
+            {
+                i--;
+                break;
+            }
+            if (char.IsWhiteSpace(text[i - 1]))
+                break;
+            i--;
+        }
         while (i > 0 && char.IsWhiteSpace(text[i - 1])) i--; // 连同单词前的空白一起删
         if (i == Cursor)
             return false;
-        _text.Remove(i, Cursor - i);
+        // 代理对保护：如果删除范围会留下 dangling surrogate，扩展范围以包含整个代理对
+        var count = Cursor - i;
+        if (Cursor > 0 && char.IsHighSurrogate(text[Cursor - 1]) && Cursor < text.Length && char.IsLowSurrogate(text[Cursor]))
+            count++;
+        _text.Remove(i, count);
         Cursor = i;
         return true;
     }
@@ -136,7 +168,11 @@ public sealed class EditableLine
         while (i < text.Length && !char.IsWhiteSpace(text[i])) i++;
         if (i == Cursor)
             return false;
-        _text.Remove(Cursor, i - Cursor);
+        var start = Cursor;
+        // 代理对保护：光标在低代理上时，其前的高代理属于同一码点，整对一起删
+        if (Cursor > 0 && char.IsLowSurrogate(text[Cursor]) && char.IsHighSurrogate(text[Cursor - 1]))
+            start--;
+        _text.Remove(start, i - start);
         return true;
     }
     /// <summary>光标向上移一行（多行输入）：移到上一行行首；已在首行则移到行首。返回是否移动。</summary>
