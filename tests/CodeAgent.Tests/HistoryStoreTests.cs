@@ -166,6 +166,19 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Remember_EntryWithLiteralBackslashN_AndBackslashR_Roundtrips()
+    {
+        // 字面 \n、\r（两个字符）与真换行/回车必须可区分且各自还原
+        // 回归：Decode 曾把 \\ 与后续 \n/\r 顺序处理，导致字面 \n 被误解码为真换行
+        var literal = @"print(""a\nb\r c"")";
+        var store = new HistoryStore(_file);
+        store.Remember(literal);
+
+        var reloaded = new HistoryStore(_file);
+        Assert.Equal(literal, reloaded.Entries[0]);
+    }
+
+    [Fact]
     public void Contains_ReturnsTrueForExistingEntry()
     {
         var store = new HistoryStore(_file);

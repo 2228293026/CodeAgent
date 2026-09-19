@@ -97,15 +97,15 @@ public sealed class HistoryStore
     {
         if (!s.Contains('\\'))
             return s;
-        return HistoryEscapeRe.Replace(s, m => m.Groups[1].Value switch
+        return HistoryEscapeRe.Replace(s, m => m.Value switch
         {
-            "n" => "\n",
-            "r" => "\r",
-            "\\" => "\\",
+            "\\n" => "\n",
+            "\\r" => "\r",
+            "\\\\" => "\\",
             _ => m.Value, // 未识别的转义（旧版文件里的 \P 等）保持原样
         });
     }
 
     private static readonly System.Text.RegularExpressions.Regex HistoryEscapeRe =
-        new(@"\\(.)", System.Text.RegularExpressions.RegexOptions.Compiled);
+        new(@"\\\\|\\n|\\r", System.Text.RegularExpressions.RegexOptions.Compiled);
 }
