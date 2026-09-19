@@ -108,6 +108,12 @@ public sealed class EditableLine
                 i -= 2;
                 break;
             }
+            // 光标紧贴代理对后半（低代理）时，把整对纳入删除范围后停止
+            if (i < text.Length && char.IsHighSurrogate(text[i - 1]) && char.IsLowSurrogate(text[i]))
+            {
+                i--;
+                break;
+            }
             if (char.IsWhiteSpace(text[i - 1]))
                 break;
             i--;

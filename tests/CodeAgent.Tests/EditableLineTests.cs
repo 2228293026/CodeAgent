@@ -501,4 +501,84 @@ public class WordNavTests
     {
         Assert.Equal(expected, InputLine.DisplayedCursorLine(expanded, text, cursor));
     }
+
+    // ===== 代理对（emoji）单词操作 =====
+
+    [Fact]
+    public void MoveWordLeft_FromAfterEmoji_StopsAtEmojiStart()
+    {
+        // "a😀b"：光标在 3（emoji 与 b 之间），Ctrl+← 应停在 emoji 开头（1）
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); line.MoveRight(); line.MoveRight(); // cursor=3
+        line.MoveWordLeft();
+        Assert.Equal(1, line.Cursor);
+        Assert.Equal("a😀b", line.Text);
+    }
+
+    [Fact]
+    public void MoveWordLeft_FromBetweenSurrogates_StopsAtEmojiStart()
+    {
+        // "a😀b"：光标在 2（高低代理之间），Ctrl+← 应停在 emoji 开头（1）
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); line.MoveRight(); // cursor=2
+        line.MoveWordLeft();
+        Assert.Equal(1, line.Cursor);
+        Assert.Equal("a😀b", line.Text);
+    }
+
+    [Fact]
+    public void DeleteWordBackward_FromAfterEmoji_DeletesEmojiOnly()
+    {
+        // "a😀b"：光标在 3（emoji 与 b 之间），Ctrl+Backspace 应删除 emoji
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); line.MoveRight(); line.MoveRight(); // cursor=3
+        Assert.True(line.DeleteWordBackward());
+        Assert.Equal("ab", line.Text);
+        Assert.Equal(1, line.Cursor);
+    }
+
+    [Fact]
+    public void DeleteWordBackward_FromBetweenSurrogates_DeletesWholePair()
+    {
+        // "a😀b"：光标在 2（高低代理之间），Ctrl+Backspace 应删除整对代理
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); line.MoveRight(); // cursor=2
+        Assert.True(line.DeleteWordBackward());
+        Assert.Equal("ab", line.Text);
+        Assert.Equal(1, line.Cursor);
+    }
+
+    [Fact]
+    public void DeleteWordForward_FromBeforeEmoji_DeletesEmojiAndAfter()
+    {
+        // "a😀b"：光标在 1（a 与 emoji 之间），Ctrl+Delete 应删除 emoji + b
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); // cursor=1
+        Assert.True(line.DeleteWordForward());
+        Assert.Equal("a", line.Text);
+        Assert.Equal(1, line.Cursor);
+    }
+
+    [Fact]
+    public void DeleteWordForward_FromOnLowSurrogate_DeletesWholePairAndAfter()
+    {
+        // "a😀b"：光标在 2（低代理上），Ctrl+Delete 应删除整对代理 + b
+        var line = new EditableLine();
+        line.SetInitial("a😀b");
+        line.Home();
+        line.MoveRight(); line.MoveRight(); // cursor=2
+        Assert.True(line.DeleteWordForward());
+        Assert.Equal("a", line.Text);
+        Assert.Equal(2, line.Cursor); // DeleteWordForward 不移动光标
+    }
 }
