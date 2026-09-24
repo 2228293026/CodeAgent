@@ -390,6 +390,9 @@ public sealed class AgentConfig
     /// <summary>以 camelCase 格式保存配置到指定路径。</summary>
     public static void Save(AgentConfig config, string path)
     {
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+            Directory.CreateDirectory(directory);
         var json = JsonSerializer.Serialize(config, JsonOpts);
         File.WriteAllText(path, json);
     }

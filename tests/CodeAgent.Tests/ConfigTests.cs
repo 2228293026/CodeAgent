@@ -805,6 +805,16 @@ public class ConfigTests : IDisposable
     }
 
     [Fact]
+    public void Save_CreatesMissingParentDirectory()
+    {
+        var path = Path.Combine(_dir, "nested", "config", "codeagent.json");
+        AgentConfig.Save(new AgentConfig { Provider = "test" }, path);
+
+        Assert.True(File.Exists(path));
+        Assert.Equal("test", AgentConfig.Load(path).Provider);
+    }
+
+    [Fact]
     public void Save_ThenLoad_RoundTripsFileAccess()
     {
         // /access 切换后写回配置文件：fileAccess 与 readOnlyDirs 应能保存并重新加载（重启保持）

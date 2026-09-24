@@ -343,10 +343,11 @@ public class ConfigEdgeTests : IDisposable
     }
 
     [Fact]
-    public void Save_ToMissingDirectory_Throws()
+    public void Save_ToMissingDirectory_CreatesDirectory()
     {
-        var bad = Path.Combine(_dir, "no", "such", "dir", "cfg.json");
-        Assert.ThrowsAny<IOException>(() => AgentConfig.Save(new AgentConfig(), bad));
+        var path = Path.Combine(_dir, "no", "such", "dir", "cfg.json");
+        AgentConfig.Save(new AgentConfig(), path);
+        Assert.True(File.Exists(path));
     }
 
     // ===== FileAccess / ReadOnlyDirs 与 Workspace 联动 =====
