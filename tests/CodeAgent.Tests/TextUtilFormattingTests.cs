@@ -213,6 +213,30 @@ public class TextUtilFormattingTests
     }
 
     [Fact]
+    public void GetDirectorySizeBytes_DoesNotFollowSymlinksOutsideDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-link-" + Guid.NewGuid().ToString("N"));
+        var outside = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(outside);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "inside.bin"), new byte[100]);
+            File.WriteAllBytes(Path.Combine(outside, "outside.bin"), new byte[200]);
+            try { Directory.CreateSymbolicLink(Path.Combine(root, "outside-link"), outside); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            Assert.Equal(100, TextUtil.GetDirectorySizeBytes(root));
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void GetDirectorySizeBytes_SumOfFiles_ReturnsTotalBytes()
     {
         var dir = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-" + Guid.NewGuid().ToString("N"));

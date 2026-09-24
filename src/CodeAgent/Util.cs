@@ -478,9 +478,16 @@ public static class TextUtil
         if (!Directory.Exists(dir))
             return 0;
         long total = 0;
-        foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+        // 不跟随目录链接，避免诊断命令把工作区外内容或链接环纳入统计。
+        foreach (var f in SkipDirs.EnumerateFilesPruned(dir, includeIgnored: true, followSymlinks: false))
         {
-            try { total += new FileInfo(f).Length; }
+            try
+            {
+                var fi = new FileInfo(f);
+                if (fi.LinkTarget is not null)
+                    continue;
+                total += fi.Length;
+            }
             catch { /* 无权限/竞态文件跳过，不影响其余统计 */ }
         }
         return total;
