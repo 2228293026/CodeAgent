@@ -156,7 +156,13 @@ public sealed partial class Agent
             throw new FileNotFoundException($"会话不存在: {name}（{path}）");
         var dto = JsonSerializer.Deserialize<List<MessageDto>>(File.ReadAllText(path), JsonOpts)
                   ?? throw new InvalidDataException($"会话文件损坏: {path}");
-        return dto.Select(FromDto).ToList();
+        var messages = new List<ProviderMessage>(dto.Count);
+        foreach (var message in dto)
+        {
+            ct.ThrowIfCancellationRequested();
+            messages.Add(FromDto(message));
+        }
+        return messages;
     }
 
     /// <summary>从会话日志（.jsonl，每条消息自动写入）恢复对话：--continue / /resume 用。

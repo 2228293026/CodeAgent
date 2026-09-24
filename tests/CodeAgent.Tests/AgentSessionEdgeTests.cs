@@ -235,7 +235,7 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
-    public void LoadSession_CanceledToken_PrecedesStateChanges()
+    public void LoadSession_CanceledToken_PrecedesStateChangesOrDeserialization()
     {
         var path = Path.Combine(SessionDir, "cancel-snapshot.json");
         File.WriteAllText(path, "[]");
