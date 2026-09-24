@@ -63,6 +63,7 @@ public sealed class SessionSearchTool : ITool
             : StringComparer.Ordinal;
 
         // 会话日志（.jsonl，新 → 旧）
+        ct.ThrowIfCancellationRequested();
         foreach (var log in Directory.GetFiles(sessionDir, "*.jsonl")
                      .Where(HasNonEmptyFile)
                      .OrderByDescending(File.GetLastWriteTimeUtc)
@@ -76,6 +77,7 @@ public sealed class SessionSearchTool : ITool
                 "/resume 可恢复", AgentClass.SearchSessionLog(log, keyword, caseSensitive, ct: ct));
         }
         // 命名快照（/save 的 .json）
+        ct.ThrowIfCancellationRequested();
         foreach (var snap in Directory.GetFiles(sessionDir, "*.json")
                      .OrderByDescending(File.GetLastWriteTimeUtc)
                      .ThenByDescending(Path.GetFileName, nameComparer))
