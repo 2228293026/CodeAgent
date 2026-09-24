@@ -31,8 +31,14 @@ public static class SetupWizard
     {
         config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
         config.Modes ??= new List<AgentModeConfig>();
-        foreach (var key in config.Providers.Keys.ToList())
-            config.Providers[key] ??= new ProviderOptions();
+        var normalizedProviders = new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in config.Providers)
+        {
+            var key = pair.Key?.Trim();
+            if (!string.IsNullOrEmpty(key))
+                normalizedProviders[key] = pair.Value ?? new ProviderOptions();
+        }
+        config.Providers = normalizedProviders;
         var path = savePath ?? Path.Combine(Environment.CurrentDirectory, "codeagent.json");
 
         // 配置中已存在、但不在预设表里的 provider（如手工编辑 codeagent.json 加的自定义项），

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using CodeAgent;
 using Xunit;
@@ -147,6 +148,26 @@ public class SetupWizardFlowTests : IDisposable
         Assert.Equal("https://ai.freescdn.com/v1", opts.BaseUrl); // 原设置原样保留
         Assert.Equal("DeepSeek-V4-Flash", opts.Model);
         Assert.Equal("sk-test", opts.ApiKey);
+    }
+
+    [Fact]
+    public void ExistingProviderKeys_AreTrimmedBeforeListing()
+    {
+        var config = new AgentConfig
+        {
+            Providers = new Dictionary<string, ProviderOptions>
+            {
+                ["  myprovider  "] = new ProviderOptions { Type = "openai", ApiKey = "test-key", Model = "m1" },
+            },
+        };
+        var writer = new StringWriter();
+        using var reader = new StringReader("8\n");
+
+        SetupWizard.Run(config, reader, writer, null, testConnection: false);
+
+        Assert.Contains("myprovider（已配置）", writer.ToString());
+        Assert.Equal("myprovider", config.Provider);
+        Assert.True(config.Providers.ContainsKey("myprovider"));
     }
 
     [Fact]
