@@ -286,7 +286,7 @@ public sealed class ReadFileTool : ITool
         {
             // 行数用与 list_directory/grep 相同的实现（CountFileLines）：
             // 回退时也走 CountLines（而非 text.Split('\n').Length），避免末尾换行后的空段被算成一行
-            var lineCount = SkipDirs.CountFileLines(full) ?? SkipDirs.CountLines(text);
+            var lineCount = SkipDirs.CountFileLines(full, ct) ?? SkipDirs.CountLines(text);
             var words = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
             // 真实文件大小：Encoding.UTF8.GetByteCount(text) 会把 GBK 等旧编码的文本
             // 按 UTF-8 重算（中文 2 字节被算成 3 字节），报出的数字与磁盘上的文件不符
@@ -1049,7 +1049,7 @@ public sealed class ListDirectoryTool : ITool
                         if (showLineCount)
                         {
                             // 流式统计：File.ReadAllLines 会把整个文件读进内存（大文件 OOM）
-                            var lineCount = SkipDirs.CountFileLines(f);
+                            var lineCount = SkipDirs.CountFileLines(f, ct);
                             if (lineCount is long n)
                                 bracketParts.Add($"{n} lines");
                         }

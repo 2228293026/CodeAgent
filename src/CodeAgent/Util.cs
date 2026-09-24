@@ -650,7 +650,7 @@ public static class SkipDirs
     }
 
     /// <summary>流式统计词数（不整读进内存）：按空白分隔，与 ReadAllText(...).Split(空白) 一致。失败返回 null。</summary>
-    public static long? CountFileWords(string path)
+    public static long? CountFileWords(string path, CancellationToken ct = default)
     {
         try
         {
@@ -661,6 +661,7 @@ public static class SkipDirs
             int n;
             while ((n = fs.Read(buffer, 0, buffer.Length)) > 0)
             {
+                ct.ThrowIfCancellationRequested();
                 for (int i = 0; i < n; i++)
                 {
                     var b = buffer[i];
@@ -676,8 +677,10 @@ public static class SkipDirs
                     }
                 }
             }
+            ct.ThrowIfCancellationRequested();
             return words;
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
             return null;
@@ -708,7 +711,7 @@ public static class SkipDirs
     }
 
     /// <summary>流式统计文本行数（不整读进内存）。按 \n / 裸 \r 计；空文件为 0 行。读取失败返回 null。</summary>
-    public static long? CountFileLines(string path)
+    public static long? CountFileLines(string path, CancellationToken ct = default)
     {
         try
         {
@@ -719,6 +722,7 @@ public static class SkipDirs
             bool pendingR = false; // 上一字节是 \r 且尚未确认是否为 \r\n
             while ((n = fs.Read(buffer, 0, buffer.Length)) > 0)
             {
+                ct.ThrowIfCancellationRequested();
                 for (int i = 0; i < n; i++)
                 {
                     if (buffer[i] == (byte)'\n')
@@ -738,6 +742,7 @@ public static class SkipDirs
                     }
                 }
             }
+            ct.ThrowIfCancellationRequested();
             // 末尾无换行时最后一行也算一行（与 File.ReadAllLines / CountLines 语义一致）
             if (fs.Length > 0)
             {
@@ -748,6 +753,7 @@ public static class SkipDirs
             }
             return lines;
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
             return null;

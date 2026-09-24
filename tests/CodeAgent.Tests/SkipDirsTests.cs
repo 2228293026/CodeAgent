@@ -159,6 +159,28 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void CountFileWords_CanceledToken_PropagatesCancellation()
+    {
+        var path = Path.Combine(_dir, "cancel-words.txt");
+        File.WriteAllText(path, "one two three");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => SkipDirs.CountFileWords(path, cts.Token));
+    }
+
+    [Fact]
+    public void CountFileLines_CanceledToken_PropagatesCancellation()
+    {
+        var path = Path.Combine(_dir, "cancel-lines.txt");
+        File.WriteAllText(path, "one\ntwo\n");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => SkipDirs.CountFileLines(path, cts.Token));
+    }
+
+    [Fact]
     public void CountFileLines_CountsLikeReadAllLines()
     {
         // 流式行数须与 File.ReadAllLines 语义一致：末尾无换行也算一行

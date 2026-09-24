@@ -473,7 +473,7 @@ public sealed class GrepTool : ITool
                         if (showWordCount)
                         {
                             // 流式统计：File.ReadAllText 会把整个文件读进内存（大文件 OOM）
-                            var words = SkipDirs.CountFileWords(path);
+                            var words = SkipDirs.CountFileWords(path, ct);
                             if (words is long w)
                                 extra += $" [{w} words]";
                         }
@@ -486,7 +486,7 @@ public sealed class GrepTool : ITool
                         if (showLineCount)
                         {
                             // 流式统计：File.ReadAllLines 会把整个文件读进内存（大文件 OOM）
-                            var lineCount = SkipDirs.CountFileLines(path);
+                            var lineCount = SkipDirs.CountFileLines(path, ct);
                             if (lineCount is long n)
                                 extra += $" [{n} lines]";
                         }
