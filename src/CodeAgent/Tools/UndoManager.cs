@@ -259,7 +259,7 @@ public sealed class UndoManager
         long total = 0;
         try
         {
-            foreach (var file in SkipDirs.EnumerateFilesPruned(cwd))
+            foreach (var file in SkipDirs.EnumerateFilesPruned(cwd, followSymlinks: false))
             {
                 try
                 {

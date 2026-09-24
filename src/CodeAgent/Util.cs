@@ -544,7 +544,7 @@ public static class SkipDirs
     /// 递归枚举文件，但剪枝掉被跳过的目录（不进入其中遍历），避免 glob/grep
     /// 在 node_modules / bin / obj 等目录里做无用扫描。
     /// </summary>
-    public static IEnumerable<string> EnumerateFilesPruned(string root, int maxDepth = int.MaxValue, bool includeIgnored = false, CancellationToken ct = default)
+    public static IEnumerable<string> EnumerateFilesPruned(string root, int maxDepth = int.MaxValue, bool includeIgnored = false, CancellationToken ct = default, bool followSymlinks = true)
     {
         var stack = new Stack<(string dir, int depth)>();
         stack.Push((root, 0));
@@ -581,7 +581,10 @@ public static class SkipDirs
                     var child = d;
                     try
                     {
-                        var target = new DirectoryInfo(child).ResolveLinkTarget(returnFinalTarget: true);
+                        var childInfo = new DirectoryInfo(child);
+                        if (!followSymlinks && childInfo.LinkTarget is not null)
+                            continue;
+                        var target = childInfo.ResolveLinkTarget(returnFinalTarget: true);
                         if (target is not null)
                             child = target.FullName;
                     }
