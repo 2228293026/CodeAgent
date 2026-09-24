@@ -595,13 +595,24 @@ public sealed partial class Agent
 
     /// <summary>生成 write_file 的预览文本：覆盖已有文件时给出与现有内容的 diff，
     /// 新文件给出规模摘要（+N 行 / 字节）；超大文件跳过 diff。</summary>
-    internal static string WritePreviewText(JsonObject? args)
+    internal static string WritePreviewText(JsonObject? args) => WritePreviewText(args, null);
+
+    internal static string WritePreviewText(JsonObject? args, Workspace? workspace)
     {
         if (args is null)
             return "";
         var path = ToolArgs.GetString(args, "path");
         var content = ToolArgs.GetString(args, "content");
-        var full = Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, path));
+        string full;
+        try
+        {
+            // 生产路径必须走 Workspace 沙箱；旧的单参数重载仅保留给内部兼容调用。
+            full = workspace?.Resolve(path) ?? Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, path));
+        }
+        catch (ToolException)
+        {
+            return "";
+        }
         if (!File.Exists(full))
             return content.Length == 0 ? "" : $"+ 新文件：{SkipDirs.CountLines(content)} 行 / {Encoding.UTF8.GetByteCount(content):N0} 字节";
         try
@@ -637,11 +648,11 @@ public sealed partial class Agent
     }
 
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
-    private static void ShowFilePreview(string name, JsonObject? args)
+    private static void ShowFilePreview(string name, JsonObject? args, Workspace workspace)
     {
         try
         {
-            var text = name == "write_file" ? WritePreviewText(args) : EditPreviewText(args);
+            var text = name == "write_file" ? WritePreviewText(args, workspace) : EditPreviewText(args);
             if (text.Length == 0)
                 return;
             foreach (var line in DiffUtil.SplitLines(text))
@@ -746,7 +757,7 @@ public sealed partial class Agent
                     JsonObject? previewArgs = null;
                     try { previewArgs = JsonNode.Parse(tc.ArgumentsJson) as JsonObject; }
                     catch { }
-                    ShowFilePreview(tc.Name, previewArgs);
+                    ShowFilePreview(tc.Name, previewArgs, _ctx.Workspace);
                 }
             }
         }

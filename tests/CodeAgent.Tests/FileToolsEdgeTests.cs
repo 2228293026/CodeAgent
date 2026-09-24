@@ -158,6 +158,28 @@ public class FileToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public void WritePreviewText_OutsideWorkspace_DoesNotReadExistingFile()
+    {
+        var outside = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-preview-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var outsideFile = Path.Combine(outside, "secret.txt");
+            File.WriteAllText(outsideFile, "old secret line");
+            var args = new JsonObject { ["path"] = outsideFile, ["content"] = "new line" };
+
+            var preview = AgentClass.WritePreviewText(args, new Workspace(_dir));
+
+            Assert.DoesNotContain("old secret line", preview);
+            Assert.Equal("", preview);
+        }
+        finally
+        {
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void WritePreviewText_Overwrite_ShowsDiff()
     {
         var path = PathOf("over-preview.txt");
