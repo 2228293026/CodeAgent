@@ -143,6 +143,22 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void RecentSessionLogs_EqualTimestamps_UsesDeterministicNameOrder()
+    {
+        var stamp = DateTime.UtcNow;
+        var a = Path.Combine(SessionDir, "a-tie.jsonl");
+        var b = Path.Combine(SessionDir, "b-tie.jsonl");
+        File.WriteAllText(a, "{}\n");
+        File.WriteAllText(b, "{}\n");
+        File.SetLastWriteTimeUtc(a, stamp);
+        File.SetLastWriteTimeUtc(b, stamp);
+
+        var logs = Program.RecentSessionLogs(new AgentConfig { SessionDir = SessionDir });
+
+        Assert.Equal([b, a], logs);
+    }
+
+    [Fact]
     public void RecentSessionLogs_SkipsEmptyLogs_AndOrdersNewestFirst()
     {
         // 回归：启动后未对话就退出会留下 0 字节日志；曾混进 /resume 列表与 --continue 的

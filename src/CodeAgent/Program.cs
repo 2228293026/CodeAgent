@@ -507,10 +507,13 @@ internal static class Program
             if (!Directory.Exists(dir))
                 return [];
             // 按最后写入时间排序（同秒滚动的 -2/-3 后缀文件名字典序不可靠）
+            var nameComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
             return Directory.GetFiles(dir, "*.jsonl")
                 .Where(f => new FileInfo(f).Length > 0)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
-                .ThenByDescending(f => f, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(Path.GetFileName, nameComparer)
                 .Take(max)
                 .ToList();
         }
@@ -715,8 +718,12 @@ internal static class Program
         {
             if (!Directory.Exists(sessionDir))
                 return [];
+            var nameComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
             return Directory.GetFiles(sessionDir, "*.json")
                 .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ThenByDescending(Path.GetFileName, nameComparer)
                 .Select(f => (Path.GetFileNameWithoutExtension(f),
                     TextUtil.RelativeTime(File.GetLastWriteTimeUtc(f), DateTime.UtcNow)))
                 .ToList();

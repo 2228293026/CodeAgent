@@ -239,6 +239,31 @@ public class PathDisplayTests
     }
 
     [Fact]
+    public void SavedSessions_EqualTimestamps_UsesDeterministicNameOrder()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-saves-tie-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var stamp = DateTime.UtcNow;
+            var a = Path.Combine(dir, "a-tie.json");
+            var b = Path.Combine(dir, "b-tie.json");
+            File.WriteAllText(a, "{}");
+            File.WriteAllText(b, "{}");
+            File.SetLastWriteTimeUtc(a, stamp);
+            File.SetLastWriteTimeUtc(b, stamp);
+
+            var sessions = Program.SavedSessions(dir);
+
+            Assert.Equal(["b-tie", "a-tie"], sessions.Select(s => s.Name));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void SavedSessions_MissingDir_ReturnsEmpty()
     {
         Assert.Empty(Program.SavedSessions(Path.Combine(Path.GetTempPath(), "never-" + Guid.NewGuid().ToString("N"))));
