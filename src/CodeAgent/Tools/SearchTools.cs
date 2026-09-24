@@ -85,6 +85,8 @@ public sealed class GlobTool : ITool
                 capped = true; // 提前停止：结果可能不完整（曾静默截断，总数显示还误导）
                 break;
             }
+            try { ctx.Workspace.ResolveRead(file); }
+            catch (ToolException) { continue; } // symlink target outside sandbox
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
             if (!showHidden && !includeIgnored && SkipDirs.IsHiddenPath(file, start))
                 continue; // 跳过隐藏文件/目录
@@ -390,6 +392,8 @@ public sealed class GrepTool : ITool
         void ScanFile(string path, int fileMaxMatches = 0)
         {
             ct.ThrowIfCancellationRequested();
+            try { ctx.Workspace.ResolveRead(path); }
+            catch (ToolException) { return; } // symlink target outside sandbox
             if (hits >= max)
                 return;
             var fileMatchCount = 0;

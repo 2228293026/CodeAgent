@@ -32,6 +32,33 @@ public class SearchToolsEdgeTests : IDisposable
 
     private string PathOf(string a, string b) => Path.Combine(_dir, a, b);
 
+    [Fact]
+    public async Task SearchTools_DoNotFollowSymlinksOutsideWorkspace()
+    {
+        var outside = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-search-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "secret.txt"), "OUTSIDE-CONTENT-MARKER");
+            var link = Path.Combine(_dir, "outside-link");
+            try { Directory.CreateSymbolicLink(link, outside); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            var glob = await new GlobTool().ExecuteAsync(
+                new JsonObject { ["pattern"] = "**/*" }, MakeContext(_dir), CancellationToken.None);
+            var grep = await new GrepTool().ExecuteAsync(
+                new JsonObject { ["pattern"] = "needle" }, MakeContext(_dir), CancellationToken.None);
+
+            Assert.DoesNotContain("secret.txt", glob);
+            Assert.DoesNotContain("OUTSIDE-CONTENT-MARKER", grep);
+        }
+        finally
+        {
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
     // ===== glob =====
 
     [Fact]
