@@ -50,6 +50,18 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_BomProbeCanceledToken_IsNotSwallowed()
+    {
+        File.WriteAllText(Path.Combine(_dir, "bom-probe.txt"), "content");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ReadFileTool().ExecuteAsync(
+                new JsonObject { ["path"] = "bom-probe.txt" }, MakeContext(_dir), cts.Token));
+    }
+
+    [Fact]
     public async Task ReadFile_TailReadsLastLines()
     {
         // tail 模式：读末尾 N 行（日志排查），行号保持全局编号

@@ -211,6 +211,7 @@ public sealed class ReadFileTool : ITool
                 var n = await fs.ReadAsync(bomHead.AsMemory(0, 3), ct);
                 hadBom = n == 3 && bomHead[0] == 0xEF && bomHead[1] == 0xBB && bomHead[2] == 0xBF;
             }
+            catch (OperationCanceledException) { throw; }
             catch { }
             text = await TextUtil.ReadTextSmartAsync(full, ct);
         }
