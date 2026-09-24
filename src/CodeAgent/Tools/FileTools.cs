@@ -956,15 +956,19 @@ public sealed class ListDirectoryTool : ITool
                 }
                 if (!dirsOnly)
                 {
-                    foreach (var f in OrderEntries(Directory.EnumerateFiles(dir), sortBy, reverse))
+                    // 先过滤越界文件，再排序/读取元数据，避免外部链接参与排序时泄漏属性。
+                    var files = Directory.EnumerateFiles(dir).Where(f =>
+                    {
+                        try { ctx.Workspace.ResolveRead(f); return true; }
+                        catch (ToolException) { return false; }
+                    });
+                    foreach (var f in OrderEntries(files, sortBy, reverse))
                     {
                         ct.ThrowIfCancellationRequested();
                         if (emitted >= maxItems)
                             break;
                         if (!showHidden && SkipDirs.IsHidden(f))
                             continue; // 跳过隐藏文件
-                        try { ctx.Workspace.ResolveRead(f); }
-                        catch (ToolException) { continue; } // 链接目标越出沙箱
                         var fileName = Path.GetFileName(f);
                         var suffix = new List<string>();
                         var parenParts = new List<string>();
