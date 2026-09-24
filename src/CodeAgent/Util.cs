@@ -86,6 +86,7 @@ public static class TextUtil
     /// 改写后 BOM 丢失会让其中的中文变成乱码。</summary>
     public static async Task WriteTextPreserveBomAsync(string path, string content, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         bool keepBom = false;
         if (File.Exists(path))
         {

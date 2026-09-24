@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent;
 using Xunit;
@@ -519,6 +520,18 @@ public class TextUtilEdgeTests : IDisposable
         TextUtil.WriteTextPreserveBom(path, "after");
         Assert.Equal("after", File.ReadAllText(path));
         Assert.DoesNotContain(Directory.GetFiles(_dir, "*.tmp"), f => true);
+    }
+
+    [Fact]
+    public async Task WriteTextPreserveBomAsync_CanceledToken_PrecedesFileAccess()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var path = Path.Combine(_dir, "canceled.txt");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            TextUtil.WriteTextPreserveBomAsync(path, "content", cts.Token));
+        Assert.False(File.Exists(path));
     }
 
     [Fact]
