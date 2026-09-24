@@ -142,6 +142,13 @@ public class SearchToolsEdgeTests : IDisposable
             new JsonObject { ["pattern"] = "needle", ["path"] = ".secret.txt", ["show_hidden"] = true },
             ctx, CancellationToken.None);
         Assert.Contains(".secret.txt", shown);
+
+        Directory.CreateDirectory(Path.Combine(_dir, ".git"));
+        File.WriteAllText(Path.Combine(_dir, ".git", "config"), "needle");
+        var included = await new GrepTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle", ["path"] = ".git/config", ["include_ignored"] = true },
+            ctx, CancellationToken.None);
+        Assert.Contains(".git/config", included);
     }
 
     [Fact]
