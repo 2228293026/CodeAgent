@@ -556,8 +556,8 @@ public sealed class GrepTool : ITool
                         fileMatchCount++;
                         hits++;
                         totalMatches++; // 与普通模式/count_only 一致：show_total_matches 依赖它
-                        var startLine = 1 + CountNewlines(text, 0, m.Index);
-                        var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length);
+                        var startLine = 1 + CountNewlines(text, 0, m.Index, ct);
+                        var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length, ct);
                         var spanLines = DiffUtil.SplitLines(m.Value);
                         string firstLine;
                         if (outputMode == "content")
@@ -707,12 +707,15 @@ public sealed class GrepTool : ITool
     }
 
     /// <summary>统计 text[start,end) 内的换行数（跨行匹配的行号计算）。</summary>
-    private static int CountNewlines(string text, int start, int end)
+    private static int CountNewlines(string text, int start, int end, CancellationToken ct = default)
     {
         int n = 0;
         for (int i = start; i < end; i++)
+        {
+            ct.ThrowIfCancellationRequested();
             if (text[i] == '\n')
                 n++;
+        }
         return n;
     }
 }

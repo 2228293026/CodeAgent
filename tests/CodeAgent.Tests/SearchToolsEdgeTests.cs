@@ -172,7 +172,7 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
-    public async Task Grep_CanceledToken_StopsBeforeScanningMatchesOrCountingOrFormattingOrPreview()
+    public async Task Grep_CanceledToken_StopsBeforeScanningMatchesOrCountingOrFormattingOrPreviewOrLineNumbers()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
