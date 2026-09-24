@@ -51,10 +51,15 @@ public sealed class SessionSearchTool : ITool
             printed++;
         }
 
+        var nameComparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+
         // 会话日志（.jsonl，新 → 旧）
         foreach (var log in Directory.GetFiles(sessionDir, "*.jsonl")
                      .Where(f => new FileInfo(f).Length > 0)
-                     .OrderByDescending(File.GetLastWriteTimeUtc))
+                     .OrderByDescending(File.GetLastWriteTimeUtc)
+                     .ThenByDescending(Path.GetFileName, nameComparer))
         {
             ct.ThrowIfCancellationRequested();
             if (printed >= maxFiles)
@@ -65,7 +70,8 @@ public sealed class SessionSearchTool : ITool
         }
         // 命名快照（/save 的 .json）
         foreach (var snap in Directory.GetFiles(sessionDir, "*.json")
-                     .OrderByDescending(File.GetLastWriteTimeUtc))
+                     .OrderByDescending(File.GetLastWriteTimeUtc)
+                     .ThenByDescending(Path.GetFileName, nameComparer))
         {
             ct.ThrowIfCancellationRequested();
             if (printed >= maxFiles)

@@ -56,6 +56,25 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task SessionSearch_EqualTimestamps_UsesDeterministicNameTieBreaker()
+    {
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        var stamp = DateTime.UtcNow;
+        var olderName = Path.Combine(sessDir, "a-tie.jsonl");
+        var newerName = Path.Combine(sessDir, "b-tie.jsonl");
+        File.WriteAllText(olderName, """{"role":"user","content":"tie keyword"}""");
+        File.WriteAllText(newerName, """{"role":"user","content":"tie keyword"}""");
+        File.SetLastWriteTimeUtc(olderName, stamp);
+        File.SetLastWriteTimeUtc(newerName, stamp);
+
+        var output = await new SessionSearchTool().ExecuteAsync(
+            new JsonObject { ["keyword"] = "tie", ["max_files"] = 1 }, MakeContext(), CancellationToken.None);
+
+        Assert.Contains("b-tie", output);
+        Assert.DoesNotContain("a-tie", output);
+    }
+
+    [Fact]
     public async Task SessionSearch_NoKeyword_Throws()
     {
         var tool = new SessionSearchTool();
