@@ -26,6 +26,7 @@ public sealed class SessionSearchTool : ITool
 
     public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var keyword = ToolArgs.GetString(args, "keyword");
         if (string.IsNullOrWhiteSpace(keyword))
             throw new ToolException("缺少必填参数 keyword");
@@ -52,6 +53,7 @@ public sealed class SessionSearchTool : ITool
                      .Where(f => new FileInfo(f).Length > 0)
                      .OrderByDescending(File.GetLastWriteTimeUtc))
         {
+            ct.ThrowIfCancellationRequested();
             if (printed >= maxFiles)
                 break;
             var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
@@ -62,6 +64,7 @@ public sealed class SessionSearchTool : ITool
         foreach (var snap in Directory.GetFiles(sessionDir, "*.json")
                      .OrderByDescending(File.GetLastWriteTimeUtc))
         {
+            ct.ThrowIfCancellationRequested();
             if (printed >= maxFiles)
                 break;
             var name = Path.GetFileNameWithoutExtension(snap);

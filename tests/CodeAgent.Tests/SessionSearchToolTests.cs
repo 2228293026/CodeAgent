@@ -64,6 +64,17 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task SessionSearch_CanceledToken_StopsBeforeScanning()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new SessionSearchTool().ExecuteAsync(
+                new JsonObject { ["keyword"] = "anything" }, MakeContext(), cts.Token));
+    }
+
+    [Fact]
     public async Task SessionSearch_EmptySessionDir_ReturnsFriendlyMessage()
     {
         var tool = new SessionSearchTool();
