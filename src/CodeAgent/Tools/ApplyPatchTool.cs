@@ -209,12 +209,12 @@ public sealed class ApplyPatchTool : ITool
             if (!allowNewFile)
                 throw new ToolException($"目标文件不存在,无法应用补丁(请先 write_file 创建,或设置 allow_new_file=true): {file.Path}");
             // 新建文件:补丁全量由 additions 组成(original 为空),旧内容为 null
-            var createStat = StatHunks(file.Hunks);
+            var createStat = StatHunks(file.Hunks, ct);
             if (validateOnly)
                 return $"验证通过(新建): {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
             if (dryRun)
                 return $"[dry_run] 将创建: {file.Path}(+{createStat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
-            var createText = string.Join('\n', ApplyHunks(file.Hunks, [], file.Path, true));
+            var createText = string.Join('\n', ApplyHunks(file.Hunks, [], file.Path, true, ct));
             var dir = Path.GetDirectoryName(full);
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
@@ -235,9 +235,9 @@ public sealed class ApplyPatchTool : ITool
         var crlf = text.Contains("\r\n");
         var original = DiffUtil.SplitLines(text);
 
-        var applied = ApplyHunks(file.Hunks, original, file.Path, generous || file.Hunks.Count == 1);
+        var applied = ApplyHunks(file.Hunks, original, file.Path, generous || file.Hunks.Count == 1, ct);
 
-        var stat = StatHunks(file.Hunks);
+        var stat = StatHunks(file.Hunks, ct);
         if (validateOnly)
             return $"验证通过: {file.Path}(-{stat.removed} +{stat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
         if (dryRun)
@@ -288,13 +288,15 @@ public sealed class ApplyPatchTool : ITool
     /// <summary>把 hunk 应用到原文行。用每个 hunk 的 oldStart(1 基、指向原文)绝对定位,
     /// 处理 hunk 之间有空行/间隔的情况;任一上下文/删除行不匹配即整体拒绝。单 hunk 时若
     /// 行号漂移(模型补丁删行导致 oldStart 不准),退化为按首数据行全文搜索定位。</summary>
-    internal static string[] ApplyHunks(List<PatchHunk> hunks, string[] original, string displayPath, bool generousLocate)
+    internal static string[] ApplyHunks(List<PatchHunk> hunks, string[] original, string displayPath, bool generousLocate, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var result = new List<string>(original.Length + 64);
         var cursor = 0; // 已复制到 result 的原文最大索引(0 基,下一位)
 
         foreach (var hunk in hunks)
         {
+            ct.ThrowIfCancellationRequested();
             if (hunk.Lines.Count == 0)
                 continue;
 
@@ -303,12 +305,16 @@ public sealed class ApplyPatchTool : ITool
 
             // 复制 start 之前的间隔行(未在任何 hunk 中出现的内容)
             for (; cursor < original.Length && cursor < start; cursor++)
+            {
+                ct.ThrowIfCancellationRequested();
                 result.Add(original[cursor]);
+            }
 
             // 逐行处理本 hunk:新增('+')直接写;上下文(' ')与删除('-')必须在原文按序匹配并消费
             int pos = cursor;
             foreach (var l in hunk.Lines)
             {
+                ct.ThrowIfCancellationRequested();
                 if (l.Op == '+')
                 {
                     result.Add(l.Text);
@@ -317,14 +323,17 @@ public sealed class ApplyPatchTool : ITool
                 if (pos >= original.Length || original[pos] != l.Text)
                 {
                     // 上下文不匹配:单 hunk 且允许搜索时,尝试从 pos 往后找首数据行(行号漂移容错)
-                    var located = TryLocateAfterFuzz(generousLocate || hunks.Count == 1, original, pos, l);
+                    var located = TryLocateAfterFuzz(generousLocate || hunks.Count == 1, original, pos, l, ct);
                     if (located < 0)
                         throw new ToolException(
                             $"补丁上下文不匹配: 文件 {displayPath} 第 {pos + 1} 行应为 '{Short(l.Text)}' 但实际是 '{Short(pos < original.Length ? original[pos] : "<文件已到结尾>")}'。未做任何修改。请基于 read_file 的最新内容重新生成补丁。");
                     // 漂移跳过的行必须原样保留:此前只把 pos 推过去而没把中间的行写进 result,
                     // 这些行会从文件里静默消失（oldStart 偏小 + 单 hunk 时尤其容易触发）
                     for (int i = pos; i < located; i++)
+                    {
+                        ct.ThrowIfCancellationRequested();
                         result.Add(original[i]);
+                    }
                     pos = located;
                 }
                 pos++; // 消费该行
@@ -334,33 +343,41 @@ public sealed class ApplyPatchTool : ITool
             cursor = pos; // 本 hunk 消费后的位置作为下一个 hunk 的下界
         }
         for (; cursor < original.Length; cursor++)
+        {
+            ct.ThrowIfCancellationRequested();
             result.Add(original[cursor]);
+        }
         return result.ToArray();
     }
 
     /// <summary>单 hunk 行号漂移容错:在 pos 之后(含)找第一个「内容等于 l.Text 且该行在 hunk 中为
     /// 首个非新增行对应文本」的位置。为免误吞,只在找到后才把 pos 推进;找不到返回 false。</summary>
-    private static int TryLocateAfterFuzz(bool enabled, string[] original, int pos, HunkLine l)
+    private static int TryLocateAfterFuzz(bool enabled, string[] original, int pos, HunkLine l, CancellationToken ct = default)
     {
         if (!enabled || l.Op == '+')
             return -1;
         for (int i = pos; i < original.Length; i++)
         {
+            ct.ThrowIfCancellationRequested();
             if (original[i] == l.Text)
                 return i;
         }
         return -1;
     }
 
-    private static (int added, int removed) StatHunks(List<PatchHunk> hunks)
+    private static (int added, int removed) StatHunks(List<PatchHunk> hunks, CancellationToken ct = default)
     {
         int a = 0, r = 0;
         foreach (var h in hunks)
+        {
+            ct.ThrowIfCancellationRequested();
             foreach (var l in h.Lines)
             {
+                ct.ThrowIfCancellationRequested();
                 if (l.Op == '+') a++;
                 else if (l.Op == '-') r++;
             }
+        }
         return (a, r);
     }
 

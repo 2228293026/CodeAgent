@@ -32,6 +32,18 @@ public class ApplyPatchToolTests : IDisposable
     }
 
     [Fact]
+    public void ApplyHunks_CanceledToken_PropagatesCancellation()
+    {
+        var hunk = new ApplyPatchTool.PatchHunk { OldStart = 1 };
+        hunk.Lines.Add(new ApplyPatchTool.HunkLine(' ', "line"));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            ApplyPatchTool.ApplyHunks([hunk], ["line"], "file.txt", false, cts.Token));
+    }
+
+    [Fact]
     public void ParsePatch_CanceledToken_PropagatesCancellation()
     {
         using var cts = new CancellationTokenSource();
