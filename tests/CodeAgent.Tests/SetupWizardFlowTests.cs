@@ -181,11 +181,9 @@ public class SetupWizardFlowTests : IDisposable
         // 回归：保存路径不可写时，SetupWizard.Run 应抛出异常而非静默吞掉；
         // Program.cs 的 /setup 路径需捕获所有异常，不能只捕获 OperationCanceledException
         var config = new AgentConfig();
-        var savePath = Path.Combine(_dir, "readonly", "codeagent.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-        // 先创建文件再设为只读：File.WriteAllText 对只读文件会抛 UnauthorizedAccessException
-        File.WriteAllText(savePath, "{}");
-        File.SetAttributes(savePath, FileAttributes.ReadOnly);
+        var savePath = Path.Combine(_dir, "readonly");
+        Directory.CreateDirectory(savePath);
+        // 目标本身就是目录：跨平台都能稳定让最终原子替换失败（Linux 上普通用户可写只读文件）。
         using var reader = new StringReader("1\n\n\n1\n\n");
         using var writer = new StringWriter();
 
