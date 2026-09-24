@@ -31,9 +31,11 @@ public sealed partial class Agent
     public bool SessionExists(string name) => File.Exists(SessionFilePath(name));
 
     /// <summary>从命名会话恢复对话（替换当前历史）。</summary>
-    public void LoadSession(string name)
+    public void LoadSession(string name, CancellationToken ct = default)
     {
-        var msgs = LoadMessages(name);
+        ct.ThrowIfCancellationRequested();
+        var msgs = LoadMessages(name, ct);
+        ct.ThrowIfCancellationRequested();
         _messages.Clear();
         _messages.AddRange(msgs);
         // 快照可能在别的模式下保存：system 换成当前模式提示（与 LoadSessionLog 后 SetMode 的语义一致）
@@ -139,8 +141,9 @@ public sealed partial class Agent
         return file;
     }
 
-    private List<ProviderMessage> LoadMessages(string name)
+    private List<ProviderMessage> LoadMessages(string name, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var path = SessionFilePath(name);
         if (!File.Exists(path))
             throw new FileNotFoundException($"会话不存在: {name}（{path}）");

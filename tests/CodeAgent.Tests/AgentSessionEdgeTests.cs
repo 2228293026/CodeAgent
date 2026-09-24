@@ -195,6 +195,18 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void LoadSession_CanceledToken_PrecedesStateChanges()
+    {
+        var path = Path.Combine(SessionDir, "cancel-snapshot.json");
+        File.WriteAllText(path, "[]");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var agent = MakeAgent(new FakeProvider());
+
+        Assert.Throws<OperationCanceledException>(() => agent.LoadSession("cancel-snapshot", cts.Token));
+    }
+
+    [Fact]
     public async Task LoadSession_ResetsUndoAnchor()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };
