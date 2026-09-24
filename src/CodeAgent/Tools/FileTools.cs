@@ -905,9 +905,9 @@ public sealed class ListDirectoryTool : ITool
                         {
                             // 只统计当前目录层可见的文件数：recursive=false 时子目录文件不显示，
                             // 若用 EnumerateFiles() 会把嵌套目录的文件也算进来，数字与输出不符。
-                            var fileInDir = recursive
-                                ? Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories).Count()
-                                : Directory.EnumerateFiles(d).Count();
+                            var fileInDir = SkipDirs.EnumerateFilesPruned(d, recursive ? int.MaxValue : 0)
+                                .Count(f => (showHidden || !SkipDirs.IsHiddenPath(f, d))
+                                    && (ignoreSet is null || !ignoreSet.Contains(Path.GetFileName(f))));
                             suffix += $" ({fileInDir} 个文件)";
                         }
                         if (showType)

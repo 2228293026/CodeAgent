@@ -4357,6 +4357,22 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_ShowFileCount_ExcludesPrunedFiles()
+    {
+        // 计数应与实际可见输出一致：被剪枝目录中的文件不能计入目录文件数。
+        var dir = Path.Combine(_dir, "count-onlybin");
+        Directory.CreateDirectory(Path.Combine(dir, "bin"));
+        File.WriteAllText(Path.Combine(dir, "bin", "artifact.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["show_file_count"] = true, ["recursive"] = true }, ctx, CancellationToken.None);
+
+        Assert.Contains("count-onlybin/ (0 个文件)", output);
+    }
+
+    [Fact]
     public async Task WriteFile_Append_LineEndingLf_OldFileCrlf_ConvertsToLf()
     {
         // 回归：append=true + line_ending=lf + 旧文件带 CRLF 时，旧内容的 \r\n 应被转为 \n，
