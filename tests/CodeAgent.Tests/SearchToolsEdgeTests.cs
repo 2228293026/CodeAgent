@@ -59,6 +59,26 @@ public class SearchToolsEdgeTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task SearchTools_DoNotTraverseDirectorySymlinks()
+    {
+        var target = Path.Combine(_dir, "target");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "inside.txt"), "needle");
+        var link = Path.Combine(_dir, "linked-target");
+        try { Directory.CreateSymbolicLink(link, target); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var glob = await new GlobTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "**/*", ["include_ignored"] = true }, MakeContext(_dir), CancellationToken.None);
+        var grep = await new GrepTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle", ["include_ignored"] = true }, MakeContext(_dir), CancellationToken.None);
+
+        Assert.DoesNotContain("linked-target", glob);
+        Assert.DoesNotContain("linked-target", grep);
+    }
+
     // ===== glob =====
 
     [Fact]
