@@ -14,7 +14,17 @@ public sealed partial class Agent
         var path = SessionFilePath(name);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var dto = _messages.Select(ToDto).ToList();
-        File.WriteAllText(path, JsonSerializer.Serialize(dto, JsonOpts));
+        var tmp = SkipDirs.TempPathFor(path);
+        try
+        {
+            File.WriteAllText(tmp, JsonSerializer.Serialize(dto, JsonOpts));
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
     }
 
     /// <summary>命名会话是否存在（/export 的名/编号二义消解：同名快照优先于 /resume 编号）。</summary>

@@ -156,6 +156,7 @@ public class AgentSessionEdgeTests : IDisposable
 
         agent.SaveSession("snap1");
         Assert.True(File.Exists(Path.Combine(SessionDir, "snap1.json")));
+        Assert.Empty(Directory.GetFiles(SessionDir, "*.tmp"));
     }
 
     [Fact]
