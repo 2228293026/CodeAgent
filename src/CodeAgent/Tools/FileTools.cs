@@ -1051,6 +1051,7 @@ public sealed class ListDirectoryTool : ITool
 
         await Task.Yield();
         Walk(root, 0);
+        ct.ThrowIfCancellationRequested();
 
         if (emitted == 0)
             return $"(目录为空或全部被跳过: {path})";
