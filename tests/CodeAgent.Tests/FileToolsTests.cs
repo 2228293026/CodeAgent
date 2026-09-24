@@ -721,6 +721,19 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteFile_CanceledToken_StopsBeforeSideEffects()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new WriteFileTool().ExecuteAsync(
+                new JsonObject { ["path"] = "canceled.txt", ["content"] = "x" },
+                MakeContext(_dir), cts.Token));
+        Assert.False(File.Exists(Path.Combine(_dir, "canceled.txt")));
+    }
+
+    [Fact]
     public async Task WriteFile_MissingContent_Throws()
     {
         var tool = new WriteFileTool();

@@ -327,6 +327,7 @@ public sealed class WriteFileTool : ITool
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var path = ToolArgs.GetString(args, "path");
         if (string.IsNullOrWhiteSpace(path))
             throw new ToolException("缺少必填参数 path");
