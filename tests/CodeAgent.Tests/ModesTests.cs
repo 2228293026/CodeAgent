@@ -67,11 +67,13 @@ public class ModesTests
     {
         var config = new AgentConfig
         {
-            Modes = { new AgentModeConfig { Name = "custom", Tools = [" read_file ", "read_file", null!, " edit_file "] } },
+            Modes = { new AgentModeConfig { Name = " custom ", Description = " desc ", SystemPrompt = " prompt ", Tools = [" read_file ", "read_file", null!, " edit_file "] } },
         };
 
         var mode = Modes.Build(config).Single(m => m.Name == "custom");
 
+        Assert.Equal("desc", mode.Description);
+        Assert.Equal("prompt", mode.SystemPrompt);
         Assert.Equal(new[] { "read_file", "edit_file" }, mode.AllowedTools);
     }
 

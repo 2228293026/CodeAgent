@@ -231,9 +231,9 @@ public sealed class AgentConfig
             }
             foreach (var mode in cfg.Modes)
             {
-                mode.Name ??= "";
-                mode.Description ??= "";
-                mode.SystemPrompt ??= AgentConfig.DefaultSystemPrompt;
+                mode.Name = (mode.Name ?? "").Trim();
+                mode.Description = (mode.Description ?? "").Trim();
+                mode.SystemPrompt = (mode.SystemPrompt ?? AgentConfig.DefaultSystemPrompt).Trim();
                 if (mode.Tools is not null)
                 {
                     mode.Tools = mode.Tools

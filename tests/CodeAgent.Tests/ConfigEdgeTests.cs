@@ -98,6 +98,22 @@ public class ConfigEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Load_TrimsModeMetadata()
+    {
+        var path = WriteJson("""
+        {
+          "modes": [{ "name": "  fix  ", "description": "  repair  ", "systemPrompt": "  prompt  " }]
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.Equal("fix", config.Modes[0].Name);
+        Assert.Equal("repair", config.Modes[0].Description);
+        Assert.Equal("prompt", config.Modes[0].SystemPrompt);
+    }
+
+    [Fact]
     public void Load_NormalizesModeToolEntries()
     {
         var path = WriteJson("""
