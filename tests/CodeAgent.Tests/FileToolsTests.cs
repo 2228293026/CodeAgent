@@ -4895,6 +4895,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SkipEmptyDirs_IgnoresPrunedDirectories()
+    {
+        // 仅包含被剪枝目录内文件的目录，对可见输出而言仍应视为空目录。
+        var dir = Path.Combine(_dir, "onlybin");
+        Directory.CreateDirectory(Path.Combine(dir, "bin"));
+        File.WriteAllText(Path.Combine(dir, "bin", "artifact.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["skip_empty_dirs"] = true }, ctx, CancellationToken.None);
+
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        Assert.DoesNotContain("onlybin/", lines);
+    }
+
+    [Fact]
     public async Task ListDirectory_SkipEmptyDirs_False_IncludesEmptyDirectories()
     {
         // skip_empty_dirs=false（默认）:包含空目录
