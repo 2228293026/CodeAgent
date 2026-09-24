@@ -64,7 +64,7 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
-    public async Task SessionSearch_CanceledToken_StopsBeforeScanningOrFormatting()
+    public async Task SessionSearch_CanceledToken_StopsBeforeScanningOrFormattingHits()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();

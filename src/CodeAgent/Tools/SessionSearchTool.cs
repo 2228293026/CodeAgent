@@ -44,7 +44,10 @@ public sealed class SessionSearchTool : ITool
                 return;
             sb.AppendLine($"{label}（{restoreHint}）:");
             foreach (var (role, snippet) in hits)
+            {
+                ct.ThrowIfCancellationRequested();
                 sb.AppendLine($"  [{role}] {TextUtil.TruncateLine(snippet, 110)}");
+            }
             printed++;
         }
 
