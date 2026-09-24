@@ -2347,6 +2347,22 @@ public class FileToolsTests : IDisposable
         Assert.Equal("a\nb\nc", File.ReadAllText(Path.Combine(_dir, "lf.txt")));
     }
 
+    [Theory]
+    [InlineData("lf", "a\nb\nc\nd")]
+    [InlineData("crlf", "a\r\nb\r\nc\r\nd")]
+    public async Task WriteFile_LineEnding_Forced_MapsBareCr(string ending, string expected)
+    {
+        // 强制换行模式也必须覆盖裸 \r；否则 line_ending=lf/crlf 会留下旧 Mac 行尾
+        var tool = new WriteFileTool();
+        var ctx = MakeContext(_dir);
+
+        await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "mixed-endings.txt", ["content"] = "a\r\nb\rc\nd", ["line_ending"] = ending },
+            ctx, CancellationToken.None);
+
+        Assert.Equal(expected, File.ReadAllText(Path.Combine(_dir, "mixed-endings.txt")));
+    }
+
     [Fact]
     public async Task WriteFile_LineEnding_Crlf_ForcesCrlf()
     {

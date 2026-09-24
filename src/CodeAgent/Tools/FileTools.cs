@@ -372,6 +372,7 @@ public sealed class WriteFileTool : ITool
         }
 
         var lineEnding = ToolArgs.GetString(args, "line_ending");
+        var forceLineEnding = lineEnding is "lf" or "crlf";
         // 拼错时静默忽略会骗过模型（以为已强制 CRLF，实际仍是原风格）
         if (!string.IsNullOrEmpty(lineEnding) && lineEnding is not ("preserve" or "lf" or "crlf"))
             throw new ToolException($"无效 line_ending: {lineEnding}（可选 preserve / lf / crlf）");
@@ -410,19 +411,21 @@ public sealed class WriteFileTool : ITool
         string finalContent;
         if (targetEnding is not null)
         {
-            string NormalizeLineEndings(string text, string target)
+            string NormalizeLineEndings(string text, string target, bool normalizeBareCr)
             {
-                if (target == "crlf")
-                    return text.Replace("\r\n", "\n").Replace("\n", "\r\n");
-                return text.Replace("\r\n", "\n");
+                var normalized = text.Replace("\r\n", "\n");
+                // 显式 lf/crlf 表示强制统一全部行尾；preserve 仍保留旧 Mac 裸 \r。
+                if (normalizeBareCr)
+                    normalized = normalized.Replace("\r", "\n");
+                return target == "crlf" ? normalized.Replace("\n", "\r\n") : normalized;
             }
-            var normalized = NormalizeLineEndings(content, targetEnding);
+            var normalized = NormalizeLineEndings(content, targetEnding, forceLineEnding);
             if (append && hadFile && old is not null)
             {
                 // 旧文件末尾的 \r\n 在 LF 模式下也被 End("\n") 命中，不加分隔符会导致
                 // 旧行尾 \r\n + 新行首 \n = \r\n\n（多余空行 + 混排换行）；先把旧文本
                 // 统一到目标换行再判断是否需要插入分隔符。
-                var oldNorm = NormalizeLineEndings(old, targetEnding);
+                var oldNorm = NormalizeLineEndings(old, targetEnding, forceLineEnding);
                 var sep = targetEnding == "crlf" ? "\r\n" : "\n";
                 finalContent = oldNorm.Length == 0
                     ? normalized // 空文件追加：不加前导分隔符
