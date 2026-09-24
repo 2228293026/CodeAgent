@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using CodeAgent;
 using Xunit;
 
@@ -199,6 +200,15 @@ public class TextUtilFormattingTests
     [InlineData(12.345, "12.35")]      // 四舍五入
     public void FormatCost_PicksPrecisionByMagnitude(double cost, string expected) =>
         Assert.Equal(expected, TextUtil.FormatCost(cost));
+
+    [Fact]
+    public void CountLines_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => SkipDirs.CountLines(new string('a', 10_000), cts.Token));
+    }
 
     [Fact]
     public void GetDirectorySizeBytes_EmptyDir_ReturnsZero()

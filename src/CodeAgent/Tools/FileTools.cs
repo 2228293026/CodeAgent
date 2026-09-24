@@ -286,7 +286,7 @@ public sealed class ReadFileTool : ITool
         {
             // 行数用与 list_directory/grep 相同的实现（CountFileLines）：
             // 回退时也走 CountLines（而非 text.Split('\n').Length），避免末尾换行后的空段被算成一行
-            var lineCount = SkipDirs.CountFileLines(full, ct) ?? SkipDirs.CountLines(text);
+            var lineCount = SkipDirs.CountFileLines(full, ct) ?? SkipDirs.CountLines(text, ct);
             var words = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
             // 真实文件大小：Encoding.UTF8.GetByteCount(text) 会把 GBK 等旧编码的文本
             // 按 UTF-8 重算（中文 2 字节被算成 3 字节），报出的数字与磁盘上的文件不符
@@ -473,7 +473,7 @@ public sealed class WriteFileTool : ITool
                 // 按目标编码计算：encoding=gbk 时 UTF-8 的 GetByteCount 会多算
                 // （"中文" GBK 4 字节 vs UTF-8 6 字节），dry_run 报的数也要与将要写出的文件一致
                 var dryRunBytes = EstimateWrittenBytes(finalContent, explicitEncoding, hadFile, originalEncoding, bom);
-                var dryRunLineCount = SkipDirs.CountLines(finalContent); // 与 read_file/list_directory 同一语义
+                var dryRunLineCount = SkipDirs.CountLines(finalContent, ct); // 与 read_file/list_directory 同一语义
                 return $"[dry_run] 将写入 {dryRunBytes:N0} 字节（{dryRunLineCount} 行）→ {path}（{(hadFile ? "覆盖已有文件" : "新建文件")}）。未写盘。";
             }
 
@@ -558,7 +558,7 @@ public sealed class WriteFileTool : ITool
         var newSize = new FileInfo(full).Length;
         var bytes = append && hadFile ? newSize - oldSizeBytes : newSize;
         // 行数同样只算本次写入的内容（append 时 finalContent 含原有内容，直接算会报成整个文件的行数）
-        var lineCount = append && hadFile ? SkipDirs.CountLines(content) : SkipDirs.CountLines(finalContent);
+        var lineCount = append && hadFile ? SkipDirs.CountLines(content, ct) : SkipDirs.CountLines(finalContent, ct);
         var action = append ? "追加" : "写入";
         return $"{action} {bytes:N0} 字节（{lineCount} 行）→ {path}";
     }
