@@ -285,6 +285,31 @@ public class AgentTrimHistoryTests : IDisposable
     }
 
     [Fact]
+    public void PruneSessionLogs_CaseDistinctPaths_UsesFilesystemOrdering()
+    {
+        var dir = Path.Combine(_dir, "sess-case");
+        Directory.CreateDirectory(dir);
+        var current = Path.Combine(dir, "a.jsonl");
+        var other = Path.Combine(dir, "A.jsonl");
+        File.WriteAllText(current, "{}");
+        var isDistinct = !File.Exists(other);
+        File.WriteAllText(other, "{}");
+
+        var deleted = AgentClass.PruneSessionLogs(dir, keep: 1, exceptPath: current);
+
+        if (isDistinct)
+        {
+            Assert.Equal(1, deleted);
+            Assert.True(File.Exists(current));
+            Assert.False(File.Exists(other));
+        }
+        else
+        {
+            Assert.Equal(0, deleted);
+        }
+    }
+
+    [Fact]
     public void PruneSessionLogs_ZeroKeep_Disabled()
     {
         var dir = Path.Combine(_dir, "sess0");

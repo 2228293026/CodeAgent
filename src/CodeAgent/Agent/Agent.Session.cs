@@ -423,8 +423,14 @@ public sealed partial class Agent
             return 0;
         try
         {
+            var pathComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+            var pathComparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
             var logs = Directory.GetFiles(dir, "*.jsonl")
-                .OrderBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(p => Path.GetFileName(p), pathComparer)
                 .ToList();
             var extra = logs.Count - keep;
             if (extra <= 0)
@@ -432,7 +438,7 @@ public sealed partial class Agent
             var deleted = 0;
             foreach (var p in logs.Take(extra))
             {
-                if (string.Equals(p, exceptPath, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(p, exceptPath, pathComparison))
                     continue;
                 try
                 {
