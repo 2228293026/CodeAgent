@@ -202,6 +202,26 @@ public class TextUtilFormattingTests
         Assert.Equal(expected, TextUtil.FormatCost(cost));
 
     [Fact]
+    public void CountOccurrences_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            TextUtil.CountOccurrences(new string('a', 10_000), "a", cts.Token));
+    }
+
+    [Fact]
+    public void NormalizeWhitespace_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            TextUtil.NormalizeWhitespace(new string('a', 10_000), cts.Token));
+    }
+
+    [Fact]
     public void CountLines_CanceledToken_PropagatesCancellation()
     {
         using var cts = new CancellationTokenSource();

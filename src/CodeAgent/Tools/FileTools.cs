@@ -673,14 +673,14 @@ public sealed class EditFileTool : ITool
         if (firstIdx < 0)
         {
             // 空白归一化后能命中 → 差异只在缩进/行尾空白，给出可行动的提示而不是让模型盲试
-            var hint = TextUtil.NormalizeWhitespace(text).Contains(TextUtil.NormalizeWhitespace(oldString), cmp)
+            var hint = TextUtil.NormalizeWhitespace(text, ct).Contains(TextUtil.NormalizeWhitespace(oldString, ct), cmp)
                 ? "\n提示：文件中存在仅空白/缩进差异的相似内容——请从 read_file 输出逐字复制 old_string（注意行首缩进与行尾空白）。"
                 : "";
             throw new ToolException(
                 $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---{hint}");
         }
         ct.ThrowIfCancellationRequested();
-        int count = TextUtil.CountOccurrences(workText, workOld, cmp);
+        int count = TextUtil.CountOccurrences(workText, workOld, cmp, ct);
         ct.ThrowIfCancellationRequested();
         if (count > 1 && !replaceAll && !allowMultiple)
             throw new ToolException($"old_string 出现 {count} 次（非唯一匹配）。如需替换全部请设置 replace_all=true；如需允许多处匹配请设置 allow_multiple=true。");

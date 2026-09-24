@@ -333,7 +333,7 @@ public static class TextUtil
         return s[..max];
     }
 
-    public static int CountOccurrences(string text, string sub)
+    public static int CountOccurrences(string text, string sub, CancellationToken ct = default)
     {
         // 空子串会令 IndexOf 恒返回 idx 且 idx += 0 永不前进 → 死循环（回归：测试曾触发主机挂起）
         if (sub.Length == 0)
@@ -341,19 +341,21 @@ public static class TextUtil
         int count = 0, idx = 0;
         while ((idx = text.IndexOf(sub, idx, StringComparison.Ordinal)) >= 0)
         {
+            ct.ThrowIfCancellationRequested();
             count++;
             idx += sub.Length;
         }
         return count;
     }
 
-    public static int CountOccurrences(string text, string sub, StringComparison comparison)
+    public static int CountOccurrences(string text, string sub, StringComparison comparison, CancellationToken ct = default)
     {
         if (sub.Length == 0)
             return 0;
         int count = 0, idx = 0;
         while ((idx = text.IndexOf(sub, idx, comparison)) >= 0)
         {
+            ct.ThrowIfCancellationRequested();
             count++;
             idx += sub.Length;
         }
@@ -364,7 +366,7 @@ public static class TextUtil
     /// 空白归一化：把每段连续空白（含换行）压成单个空格并去首尾。
     /// 用于「old_string 未命中」时的相似度判断——缩进/换行差异导致的失配可被识别出来并给出提示。
     /// </summary>
-    public static string NormalizeWhitespace(string s)
+    public static string NormalizeWhitespace(string s, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(s))
             return string.Empty;
@@ -372,6 +374,8 @@ public static class TextUtil
         bool pendingSpace = false;
         foreach (var ch in s)
         {
+            if ((sb.Length & 4095) == 0)
+                ct.ThrowIfCancellationRequested();
             if (char.IsWhiteSpace(ch))
             {
                 pendingSpace = sb.Length > 0; // 首部空白直接丢弃
@@ -386,6 +390,7 @@ public static class TextUtil
                 sb.Append(ch);
             }
         }
+        ct.ThrowIfCancellationRequested();
         return sb.ToString();
     }
 
