@@ -13,6 +13,8 @@ public sealed partial class Agent
     {
         ct.ThrowIfCancellationRequested();
         var path = SessionFilePath(name);
+        if (new FileInfo(path).LinkTarget is not null)
+            throw new IOException($"会话目标不能是符号链接: {path}");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var dto = _messages.Select(ToDto).ToList();
         ct.ThrowIfCancellationRequested();

@@ -341,6 +341,23 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveSession_DoesNotOverwriteLinkedTarget()
+    {
+        var outside = Path.Combine(_dir, "outside-session-save.json");
+        File.WriteAllText(outside, "keep me");
+        var link = Path.Combine(SessionDir, "linked.json");
+        try { File.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "new" } });
+        await agent.RunAsync("x", CancellationToken.None);
+        var ex = Assert.Throws<IOException>(() => agent.SaveSession("linked"));
+        Assert.Contains("符号链接", ex.Message);
+        Assert.Equal("keep me", File.ReadAllText(outside));
+    }
+
+    [Fact]
     public async Task SaveSession_PathTraversalName_IsSanitized()
     {
         // 回归：会话名含 ../ 时 '/' 被替换为 _（防目录穿越），文件仍落在会话目录内
