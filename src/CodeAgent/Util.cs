@@ -544,7 +544,7 @@ public static class SkipDirs
     /// 递归枚举文件，但剪枝掉被跳过的目录（不进入其中遍历），避免 glob/grep
     /// 在 node_modules / bin / obj 等目录里做无用扫描。
     /// </summary>
-    public static IEnumerable<string> EnumerateFilesPruned(string root, int maxDepth = int.MaxValue, bool includeIgnored = false)
+    public static IEnumerable<string> EnumerateFilesPruned(string root, int maxDepth = int.MaxValue, bool includeIgnored = false, CancellationToken ct = default)
     {
         var stack = new Stack<(string dir, int depth)>();
         stack.Push((root, 0));
@@ -554,6 +554,7 @@ public static class SkipDirs
             : StringComparer.Ordinal);
         while (stack.Count > 0)
         {
+            ct.ThrowIfCancellationRequested();
             var (dir, depth) = stack.Pop();
             if (!visited.Add(dir))
                 continue;
@@ -568,11 +569,15 @@ public static class SkipDirs
             catch (IOException) { continue; }
 
             foreach (var f in files)
+            {
+                ct.ThrowIfCancellationRequested();
                 yield return f;
+            }
             if (depth < maxDepth)
             {
                 foreach (var d in subDirs)
                 {
+                    ct.ThrowIfCancellationRequested();
                     var name = Path.GetFileName(d);
                     if (!includeIgnored && IsSkipped(name))
                         continue; // 剪枝：不进入被跳过的目录

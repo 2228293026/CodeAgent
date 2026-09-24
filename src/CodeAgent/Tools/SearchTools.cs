@@ -77,7 +77,7 @@ public sealed class GlobTool : ITool
 
         var capped = false;
         ct.ThrowIfCancellationRequested();
-        foreach (var file in SkipDirs.EnumerateFilesPruned(start, depth >= 0 ? depth : int.MaxValue, includeIgnored))
+        foreach (var file in SkipDirs.EnumerateFilesPruned(start, depth >= 0 ? depth : int.MaxValue, includeIgnored, ct))
         {
             ct.ThrowIfCancellationRequested();
             if (scanned++ > 200_000 || results.Count >= maxResults)
@@ -646,7 +646,7 @@ public sealed class GrepTool : ITool
         else if (Directory.Exists(full))
         {
             // 确定性输出：先收集再排序（枚举顺序跨平台不定），与 glob 保持一致
-            var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue, includeIgnored).ToList();
+            var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue, includeIgnored, ct).ToList();
             ct.ThrowIfCancellationRequested();
             var nameComparer = OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase

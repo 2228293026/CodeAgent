@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using CodeAgent;
 using Xunit;
 
@@ -15,6 +16,16 @@ public class SkipDirsTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { /* 忽略 */ }
+    }
+
+    [Fact]
+    public void EnumerateFilesPruned_CanceledToken_PropagatesBeforeEnumeration()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            SkipDirs.EnumerateFilesPruned(_dir, ct: cts.Token).ToList());
     }
 
     [Fact]

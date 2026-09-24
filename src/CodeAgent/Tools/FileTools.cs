@@ -907,7 +907,7 @@ public sealed class ListDirectoryTool : ITool
                     if (!filesOnly)
                     {
                         // skip_empty_dirs=true:跳过没有文件的目录（递归检查）
-                        if (skipEmptyDirs && !SkipDirs.EnumerateFilesPruned(d)
+                        if (skipEmptyDirs && !SkipDirs.EnumerateFilesPruned(d, ct: ct)
                             .Any(f => (showHidden || !SkipDirs.IsHiddenPath(f, d))
                                 && !IsIgnoredPath(f, d)))
                             continue;
@@ -921,7 +921,7 @@ public sealed class ListDirectoryTool : ITool
                         {
                             // 只统计当前目录层可见的文件数：recursive=false 时子目录文件不显示，
                             // 若用 EnumerateFiles() 会把嵌套目录的文件也算进来，数字与输出不符。
-                            var fileInDir = SkipDirs.EnumerateFilesPruned(d, recursive ? int.MaxValue : 0)
+                            var fileInDir = SkipDirs.EnumerateFilesPruned(d, recursive ? int.MaxValue : 0, ct: ct)
                                 .Count(f => (showHidden || !SkipDirs.IsHiddenPath(f, d))
                                     && !IsIgnoredPath(f, d));
                             suffix += $" ({fileInDir} 个文件)";
