@@ -273,8 +273,12 @@ public static class TextUtil
             return s;
         var head = Math.Max(0, max * 2 / 3);
         var tail = Math.Max(0, max - head);
-        var marker = $"\n…[工具输出过长，已截断：原 {s.Length:N0} 字符，保留头 {head:N0} 与尾 {tail:N0}，中间省略]…\n";
-        return SafeCut(s, head) + marker + s[^tail..];
+        var tailStart = s.Length - tail;
+        if (tailStart > 0 && char.IsLowSurrogate(s[tailStart]) && char.IsHighSurrogate(s[tailStart - 1]))
+            tailStart--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
+        var actualTail = s.Length - tailStart;
+        var marker = $"\n…[工具输出过长，已截断：原 {s.Length:N0} 字符，保留头 {head:N0} 与尾 {actualTail:N0}，中间省略]…\n";
+        return SafeCut(s, head) + marker + s[tailStart..];
     }
 
     public static string TruncateLine(string s, int max)
