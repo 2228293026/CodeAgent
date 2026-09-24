@@ -496,6 +496,13 @@ internal static class Program
         return 0;
     }
 
+    internal static bool IsReadableNonEmptyFile(string path)
+    {
+        try { return new FileInfo(path).Length > 0; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     /// <summary>最近的会话日志文件（.jsonl，最新在前，最多 max 个）；无日志返回空表。
     /// 跳过 0 字节文件：启动后未对话就退出会留下空日志，恢复它毫无意义（曾导致
     /// /resume 与 --continue 报「文件可能损坏」的误导错误）。</summary>
@@ -511,7 +518,7 @@ internal static class Program
                 ? StringComparer.OrdinalIgnoreCase
                 : StringComparer.Ordinal;
             return Directory.GetFiles(dir, "*.jsonl")
-                .Where(f => new FileInfo(f).Length > 0)
+                .Where(IsReadableNonEmptyFile)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .ThenByDescending(Path.GetFileName, nameComparer)
                 .Take(max)

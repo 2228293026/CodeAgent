@@ -143,6 +143,19 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void RecentSessionLogs_UnavailableLog_IsSkippedWithoutLosingValidLogs()
+    {
+        var missing = Path.Combine(SessionDir, "missing.jsonl");
+        var valid = Path.Combine(SessionDir, "valid.jsonl");
+        File.WriteAllText(valid, "{}\n");
+
+        var logs = Program.RecentSessionLogs(new AgentConfig { SessionDir = SessionDir });
+
+        Assert.Equal([valid], logs);
+        Assert.False(Program.IsReadableNonEmptyFile(missing));
+    }
+
+    [Fact]
     public void RecentSessionLogs_EqualTimestamps_UsesDeterministicNameOrder()
     {
         var stamp = DateTime.UtcNow;
