@@ -28,6 +28,7 @@ public class HistoryStoreTests : IDisposable
             store.Remember("bare-path-entry");
             var reloaded = new HistoryStore(file);
             Assert.Equal(["bare-path-entry"], reloaded.Entries);
+            Assert.Empty(Directory.GetFiles(".", "*.tmp"));
         }
         finally
         {

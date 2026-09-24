@@ -75,15 +75,18 @@ public sealed class HistoryStore
 
     private void Save()
     {
+        var tmp = SkipDirs.TempPathFor(_path);
         try
         {
             var directory = Path.GetDirectoryName(_path);
             if (!string.IsNullOrEmpty(directory))
                 Directory.CreateDirectory(directory);
-            File.WriteAllLines(_path, _entries.TakeLast(MaxEntries).Select(Encode));
+            File.WriteAllLines(tmp, _entries.TakeLast(MaxEntries).Select(Encode));
+            File.Move(tmp, _path, overwrite: true);
         }
         catch
         {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
             // 历史保存失败不影响主流程
         }
     }
