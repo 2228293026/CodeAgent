@@ -61,24 +61,27 @@ public sealed partial class Agent
     }
 
     /// <summary>把当前对话（或指定命名会话）导出为 Markdown 记录，返回文件路径。</summary>
-    public string ExportMarkdown(string? name)
+    public string ExportMarkdown(string? name, CancellationToken ct = default)
     {
-        IReadOnlyList<ProviderMessage> msgs = name is null ? _messages : LoadMessages(name);
+        ct.ThrowIfCancellationRequested();
+        IReadOnlyList<ProviderMessage> msgs = name is null ? _messages : LoadMessages(name, ct);
         var safeName = name is null ? $"chat-{DateTime.Now:yyyyMMdd-HHmmss}" : SanitizeName(name);
-        return ExportMessages(msgs, safeName, name);
+        return ExportMessages(msgs, safeName, name, ct);
     }
 
     /// <summary>把指定会话日志（/resume 列表中的编号对应文件）导出为 Markdown，不动当前对话。</summary>
-    public string ExportSessionLogMarkdown(string logPath)
+    public string ExportSessionLogMarkdown(string logPath, CancellationToken ct = default)
     {
-        var msgs = ReadSessionLogFile(logPath);
+        ct.ThrowIfCancellationRequested();
+        var msgs = ReadSessionLogFile(logPath, ct);
         if (msgs.Count == 0)
             throw new FileNotFoundException($"会话日志为空或损坏: {logPath}");
-        return ExportMessages(msgs, SanitizeName(Path.GetFileNameWithoutExtension(logPath)), null);
+        return ExportMessages(msgs, SanitizeName(Path.GetFileNameWithoutExtension(logPath)), null, ct);
     }
 
-    private string ExportMessages(IReadOnlyList<ProviderMessage> msgs, string safeName, string? title)
+    private string ExportMessages(IReadOnlyList<ProviderMessage> msgs, string safeName, string? title, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var dir = Path.Combine(Environment.CurrentDirectory, _ctx.Config.ExportDir);
         Directory.CreateDirectory(dir);
         // name 同样需 sanitize：/export ../evil 曾写入 ExportDir 父目录（路径穿越）
@@ -98,6 +101,7 @@ public sealed partial class Agent
         sb.AppendLine();
         foreach (var m in msgs)
         {
+            ct.ThrowIfCancellationRequested();
             sb.AppendLine(m.Role switch
             {
                 MessageRole.System => "## 系统",
@@ -127,6 +131,7 @@ public sealed partial class Agent
             sb.AppendLine("---");
             sb.AppendLine();
         }
+        ct.ThrowIfCancellationRequested();
         var tmp = SkipDirs.TempPathFor(file);
         try
         {

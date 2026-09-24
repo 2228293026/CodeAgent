@@ -237,6 +237,16 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ExportMarkdown_CanceledToken_PrecedesFileCreation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var agent = MakeAgent(new FakeProvider());
+
+        Assert.Throws<OperationCanceledException>(() => agent.ExportMarkdown(null, cts.Token));
+    }
+
+    [Fact]
     public async Task ExportMarkdown_ToolCall_IsListed()
     {
         var provider = new FakeProvider
