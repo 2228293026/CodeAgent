@@ -896,6 +896,7 @@ public sealed class ListDirectoryTool : ITool
             {
                 foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy, reverse))
                 {
+                    ct.ThrowIfCancellationRequested();
                     if (emitted >= maxItems)
                         break; // 上限在循环内也生效：平铺大目录不再把 max_items 之后的行全部输出
                     var name = Path.GetFileName(d);
@@ -939,6 +940,7 @@ public sealed class ListDirectoryTool : ITool
                 {
                     foreach (var f in OrderEntries(Directory.EnumerateFiles(dir), sortBy, reverse))
                     {
+                        ct.ThrowIfCancellationRequested();
                         if (emitted >= maxItems)
                             break;
                         if (!showHidden && SkipDirs.IsHidden(f))

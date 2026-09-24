@@ -971,7 +971,7 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task ListDirectory_CanceledToken_StopsBeforeScanningOrFormatting()
+    public async Task ListDirectory_CanceledToken_StopsBeforeScanningEntriesOrFormatting()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
