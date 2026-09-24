@@ -64,9 +64,12 @@ public static class Modes
     /// <summary>完整模式目录 = 内置模式 + 配置中的自定义模式。</summary>
     public static List<AgentMode> Build(AgentConfig config)
     {
+        config.Modes ??= new List<AgentModeConfig>();
         var list = All.ToList();
         foreach (var c in config.Modes)
         {
+            if (c is null)
+                continue;
             if (string.IsNullOrWhiteSpace(c.Name))
                 continue;
             list.Add(new AgentMode(

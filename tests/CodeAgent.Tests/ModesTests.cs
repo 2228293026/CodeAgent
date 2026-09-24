@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using CodeAgent;
 using Xunit;
@@ -45,6 +46,20 @@ public class ModesTests
         Assert.Equal("修复模式", fix.Description);
         Assert.Equal("fix prompt", fix.SystemPrompt);
         Assert.Equal(new[] { "read_file", "edit_file" }, fix.AllowedTools);
+    }
+
+    [Fact]
+    public void Build_NullModesAndEntries_UsesBuiltins()
+    {
+        var config = new AgentConfig
+        {
+            Modes = new List<AgentModeConfig> { null! },
+        };
+
+        var modes = Modes.Build(config);
+
+        Assert.Equal(Modes.All.Length, modes.Count);
+        Assert.NotNull(config.Modes);
     }
 
     [Fact]
