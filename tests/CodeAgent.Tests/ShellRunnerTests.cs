@@ -225,6 +225,16 @@ public class ShellRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_CanceledToken_PrecedesDirectoryValidation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ShellRunner.RunAsync("bash", "echo", Path.Combine(Path.GetTempPath(), "missing-" + Guid.NewGuid()), 60, cts.Token));
+    }
+
+    [Fact]
     public async Task RunAsync_UserCancel_PropagatesFast()
     {
         // 回归：用户取消（ESC）曾不杀子进程，长命令变成脱管后台进程继续跑；

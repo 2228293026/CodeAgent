@@ -22,6 +22,7 @@ public static class ShellRunner
         string shell, string command, string cwd, int timeoutSeconds, CancellationToken ct,
         IReadOnlyDictionary<string, string>? env = null)
     {
+        ct.ThrowIfCancellationRequested();
         if (!Directory.Exists(cwd))
             throw new ToolException($"执行目录不存在: {cwd}");
 
