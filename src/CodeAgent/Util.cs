@@ -584,6 +584,16 @@ public static class SkipDirs
             foreach (var f in files)
             {
                 ct.ThrowIfCancellationRequested();
+                if (!followSymlinks)
+                {
+                    try
+                    {
+                        if (new FileInfo(f).LinkTarget is not null)
+                            continue;
+                    }
+                    catch (IOException) { continue; }
+                    catch (UnauthorizedAccessException) { continue; }
+                }
                 yield return f;
             }
             if (depth < maxDepth)
