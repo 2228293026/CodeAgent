@@ -547,6 +547,17 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteTextPreserveBomAsync_Failure_CleansUpTmp()
+    {
+        var targetDir = Path.Combine(_dir, "target-dir");
+        Directory.CreateDirectory(targetDir);
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            TextUtil.WriteTextPreserveBomAsync(targetDir, "content"));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
     public async Task WriteTextPreserveBomAsync_Atomic_NoLeftoverTmp()
     {
         // 异步版本同样应使用原子写

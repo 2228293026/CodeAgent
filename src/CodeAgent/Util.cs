@@ -96,8 +96,16 @@ public static class TextUtil
                           && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
         }
         var tmp = SkipDirs.TempPathFor(path);
-        await File.WriteAllTextAsync(tmp, content, new System.Text.UTF8Encoding(keepBom), ct);
-        File.Move(tmp, path, overwrite: true);
+        try
+        {
+            await File.WriteAllTextAsync(tmp, content, new System.Text.UTF8Encoding(keepBom), ct);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
     }
 
     /// <summary>探测文件编码（撤销原样恢复用）："utf8-bom"（带 BOM）| "gb18030"（非 UTF-8 的旧编码）
