@@ -283,7 +283,10 @@ public static class TextUtil
                 return Truncate(s, max); // 只剩一格时无法容纳完整代理对，退回普通截断
             tailStart--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
         }
-        return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - head - tailStart) + s[tailStart..];
+        var actualHead = head;
+        if (head > 0 && head < s.Length && char.IsHighSurrogate(s[head - 1]))
+            actualHead--; // SafeCut 为保持代理对完整会少保留一个码元
+        return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - actualHead - tailStart) + s[tailStart..];
     }
 
     /// <summary>
@@ -307,7 +310,10 @@ public static class TextUtil
             tailStart--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
         }
         var actualTail = s.Length - tailStart;
-        var marker = $"\n…[工具输出过长，已截断：原 {s.Length:N0} 字符，保留头 {head:N0} 与尾 {actualTail:N0}，中间省略]…\n";
+        var actualHead = head;
+        if (head > 0 && head < s.Length && char.IsHighSurrogate(s[head - 1]))
+            actualHead--; // SafeCut 为保持代理对完整会少保留一个码元
+        var marker = $"\n…[工具输出过长，已截断：原 {s.Length:N0} 字符，保留头 {actualHead:N0} 与尾 {actualTail:N0}，中间省略]…\n";
         return SafeCut(s, head) + marker + s[tailStart..];
     }
 

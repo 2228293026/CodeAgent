@@ -421,6 +421,14 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public void TruncateToolOutput_HeadBoundary_ReportsActualSafeHeadLength()
+    {
+        var s = "ab😀xxxxx";
+        var t = TextUtil.TruncateToolOutput(s, 5);
+        Assert.Contains("保留头 2", t);
+    }
+
+    [Fact]
     public void Truncate_SurrogatePairAtCut_NotSplit()
     {
         // 回归：切点落在代理对中间会产生半个码点（终端显示乱码）
