@@ -527,10 +527,15 @@ internal static class Program
     /// <summary>/resume 列表与 /export &lt;编号&gt; 共用的日志列表：排除当前会话自己的日志。
     /// 两处必须同源——/export 曾直接用未过滤的 RecentSessionLogs，当前会话日志挤占 1 号
     /// 时 /export 1 与 /resume 1 会指向不同文件。</summary>
-    internal static List<string> ResumableLogs(AgentClass agent, AgentConfig config) =>
-        RecentSessionLogs(config)
-            .Where(p => !string.Equals(p, agent.SessionPath, StringComparison.OrdinalIgnoreCase))
+    internal static List<string> ResumableLogs(AgentClass agent, AgentConfig config)
+    {
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return RecentSessionLogs(config)
+            .Where(p => !string.Equals(p, agent.SessionPath, pathComparison))
             .ToList();
+    }
 
     private static ProviderOptions EnsureSelectedProvider(AgentConfig config)
     {

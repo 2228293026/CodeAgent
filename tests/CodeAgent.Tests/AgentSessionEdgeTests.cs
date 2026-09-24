@@ -393,6 +393,25 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ResumableLogs_PreservesCaseDistinctSessionOnCaseSensitiveFileSystem()
+    {
+        var agent = MakeAgent(new FakeProvider());
+        var current = Path.Combine(SessionDir, "Current.jsonl");
+        var variant = Path.Combine(SessionDir, "current.jsonl");
+        File.WriteAllText(current, "{\"role\":\"user\",\"content\":\"当前会话\"}\n");
+        var isDistinct = !File.Exists(variant);
+        File.WriteAllText(variant, "{\"role\":\"user\",\"content\":\"仅大小写不同的旧会话\"}\n");
+        typeof(AgentClass).GetProperty("SessionPath")!.SetValue(agent, current);
+
+        var logs = Program.ResumableLogs(agent, new AgentConfig { SessionDir = SessionDir });
+
+        if (isDistinct)
+            Assert.Equal(variant, Assert.Single(logs));
+        else
+            Assert.Empty(logs); // 大小写不敏感文件系统上 variant 就是当前日志
+    }
+
+    [Fact]
     public void LoadSessionLog_RestampsSystemWithCurrentModePrompt()
     {
         // 回归：REPL /resume 恢复后不再 SetMode（只有启动 --continue 会），日志里的旧
