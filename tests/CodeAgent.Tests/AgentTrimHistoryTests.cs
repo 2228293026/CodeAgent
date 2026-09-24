@@ -330,6 +330,21 @@ public class AgentTrimHistoryTests : IDisposable
     }
 
     [Fact]
+    public void PruneSessionLogs_CanceledToken_PrecedesDeletion()
+    {
+        var dir = Path.Combine(_dir, "sess-cancel");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "a.jsonl");
+        File.WriteAllText(path, "{}");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            AgentClass.PruneSessionLogs(dir, keep: 0, exceptPath: null, cts.Token));
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
     public void PruneSessionLogs_ZeroKeep_Disabled()
     {
         var dir = Path.Combine(_dir, "sess0");

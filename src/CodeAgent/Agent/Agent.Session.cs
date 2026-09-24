@@ -480,7 +480,7 @@ public sealed partial class Agent
             Directory.CreateDirectory(dir);
             SessionPath = NewSessionLogPath(dir);
             _sessionLog = new StreamWriter(SessionPath, append: true) { AutoFlush = true };
-            PruneSessionLogs(dir, _ctx.Config.MaxSessionLogs, SessionPath);
+            PruneSessionLogs(dir, _ctx.Config.MaxSessionLogs, SessionPath, ct);
         }
         catch (OperationCanceledException)
         {
@@ -495,8 +495,9 @@ public sealed partial class Agent
 
     /// <summary>删除超出保留数量的最旧会话日志（文件名 = 时间戳，字典序即时间序）。
     /// keep &lt;= 0 不清理；正在使用的当前日志跳过；单个删除失败忽略。</summary>
-    internal static int PruneSessionLogs(string dir, int keep, string? exceptPath = null)
+    internal static int PruneSessionLogs(string dir, int keep, string? exceptPath = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (keep <= 0)
             return 0;
         try
@@ -516,6 +517,7 @@ public sealed partial class Agent
             var deleted = 0;
             foreach (var p in logs.Take(extra))
             {
+                ct.ThrowIfCancellationRequested();
                 if (string.Equals(p, exceptPath, pathComparison))
                     continue;
                 try
@@ -526,6 +528,10 @@ public sealed partial class Agent
                 catch { /* 被占用/权限：跳过该文件 */ }
             }
             return deleted;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
