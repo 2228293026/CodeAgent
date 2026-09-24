@@ -94,6 +94,14 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
+    public void SessionSearch_UnavailableLog_IsSkippedWithoutThrowing()
+    {
+        var missing = Path.Combine(_dir, "missing.jsonl");
+
+        Assert.False(SessionSearchTool.HasNonEmptyFile(missing));
+    }
+
+    [Fact]
     public async Task SessionSearch_EmptySessionDir_ReturnsFriendlyMessage()
     {
         var tool = new SessionSearchTool();

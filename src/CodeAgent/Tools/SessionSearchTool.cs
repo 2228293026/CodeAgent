@@ -24,6 +24,13 @@ public sealed class SessionSearchTool : ITool
         ["required"] = new JsonArray("keyword"),
     };
 
+    internal static bool HasNonEmptyFile(string path)
+    {
+        try { return new FileInfo(path).Length > 0; }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -57,7 +64,7 @@ public sealed class SessionSearchTool : ITool
 
         // 会话日志（.jsonl，新 → 旧）
         foreach (var log in Directory.GetFiles(sessionDir, "*.jsonl")
-                     .Where(f => new FileInfo(f).Length > 0)
+                     .Where(HasNonEmptyFile)
                      .OrderByDescending(File.GetLastWriteTimeUtc)
                      .ThenByDescending(Path.GetFileName, nameComparer))
         {
