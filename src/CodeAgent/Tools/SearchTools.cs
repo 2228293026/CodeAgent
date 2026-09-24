@@ -349,7 +349,7 @@ public sealed class GrepTool : ITool
         int CountLines(string value)
         {
             var count = 0;
-            foreach (var line in DiffUtil.SplitLines(value))
+            foreach (var line in DiffUtil.SplitLines(value, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 if (Hit(line.TrimEnd('\r')))
@@ -359,7 +359,7 @@ public sealed class GrepTool : ITool
         }
         string? FirstMatchingLine(string value)
         {
-            foreach (var line in DiffUtil.SplitLines(value))
+            foreach (var line in DiffUtil.SplitLines(value, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 var trimmed = line.TrimEnd('\r');
@@ -380,7 +380,7 @@ public sealed class GrepTool : ITool
         }
         bool AnyLine(string value, Func<string, bool> predicate)
         {
-            foreach (var line in DiffUtil.SplitLines(value))
+            foreach (var line in DiffUtil.SplitLines(value, ct))
             {
                 ct.ThrowIfCancellationRequested();
                 if (predicate(line.TrimEnd('\r')))
@@ -562,7 +562,7 @@ public sealed class GrepTool : ITool
                         totalMatches++; // 与普通模式/count_only 一致：show_total_matches 依赖它
                         var startLine = 1 + CountNewlines(text, 0, m.Index, ct);
                         var endLine = 1 + CountNewlines(text, 0, m.Index + m.Length, ct);
-                        var spanLines = DiffUtil.SplitLines(m.Value);
+                        var spanLines = DiffUtil.SplitLines(m.Value, ct);
                         string firstLine;
                         if (outputMode == "content")
                             firstLine = truncateLine(spanLines[0]);
@@ -593,7 +593,7 @@ public sealed class GrepTool : ITool
                     return;
                 }
 
-                var lines = DiffUtil.SplitLines(text);
+                var lines = DiffUtil.SplitLines(text, ct);
                 var printedUntil = -1; // 已打印过的上下文行（避免邻近匹配的共享行重复输出）
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {

@@ -48,7 +48,7 @@ public sealed class ApplyPatchTool : ITool
         var dryRun = ToolArgs.GetBool(args, "dry_run", false);
         var backup = ToolArgs.GetBool(args, "backup", false);
 
-        var files = ParsePatch(patch, fallbackPath);
+        var files = ParsePatch(patch, fallbackPath, ct);
         if (files.Count == 0)
         {
             if (allowEmpty)
@@ -83,14 +83,15 @@ public sealed class ApplyPatchTool : ITool
     }
 
     /// <summary>逐行解析补丁:识别 +++ 文件头与 @@ hunk,数据行(前缀 ' '/'-'/'+'/'\\')归入当前 hunk。</summary>
-    internal static List<PatchFile> ParsePatch(string patch, string? fallbackPath)
+    internal static List<PatchFile> ParsePatch(string patch, string? fallbackPath, CancellationToken ct = default)
     {
-        var lines = DiffUtil.SplitLines(patch).ToList();
+        var lines = DiffUtil.SplitLines(patch, ct).ToList();
         var result = new List<PatchFile>();
         PatchFile? cur = null;
 
         for (int i = 0; i < lines.Count; i++)
         {
+            ct.ThrowIfCancellationRequested();
             var line = lines[i];
             if (StartsWithAny(line, "+++ ") || StartsWithAny(line, "+++\t"))
             {
@@ -112,6 +113,7 @@ public sealed class ApplyPatchTool : ITool
                 char? lastDataOp = null;
                 while (i < lines.Count && IsDataStart(lines[i]))
                 {
+                    ct.ThrowIfCancellationRequested();
                     var dl = lines[i];
                     if (dl[0] == '\\')
                     {
@@ -149,6 +151,7 @@ public sealed class ApplyPatchTool : ITool
                 char? lastDataOp = null;
                 while (i < lines.Count && IsDataStart(lines[i]))
                 {
+                    ct.ThrowIfCancellationRequested();
                     var dl = lines[i];
                     if (dl[0] == '\\')
                     {

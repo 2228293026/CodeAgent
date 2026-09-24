@@ -1188,10 +1188,13 @@ public static class DiffUtil
         return sb.ToString().TrimEnd().Replace("\r\n", "\n");
     }
 
-    internal static string[] SplitLines(string text)
+    internal static string[] SplitLines(string text, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n");
+        ct.ThrowIfCancellationRequested();
         var lines = normalized.Split('\n');
+        ct.ThrowIfCancellationRequested();
         // 去掉末尾空串（结尾换行产生的），使 "a\nb\n" 与 "a\nb" 都得到 ["a","b"]
         if (lines.Length > 0 && lines[^1].Length == 0)
             lines = lines[..^1];

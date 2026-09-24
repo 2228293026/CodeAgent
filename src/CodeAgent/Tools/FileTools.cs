@@ -225,7 +225,7 @@ public sealed class ReadFileTool : ITool
         if (byteOffset == 0 && byteLimit == 0 && SkipDirs.LooksBinary(text))
             throw new ToolException($"文件疑似二进制（含 NUL 字节），无法作为文本读取: {path}");
 
-        var lines = DiffUtil.SplitLines(text);
+        var lines = DiffUtil.SplitLines(text, ct);
         if (lines.Length == 0)
             return $"(文件 {path} 为空)";
 
@@ -733,8 +733,8 @@ public sealed class EditFileTool : ITool
         string? diff = null;
         if (showDiff)
         {
-            var oldLines = DiffUtil.SplitLines(workOld);
-            var newLines = DiffUtil.SplitLines(workNew);
+            var oldLines = DiffUtil.SplitLines(workOld, ct);
+            var newLines = DiffUtil.SplitLines(workNew, ct);
             var sb = new StringBuilder();
             sb.AppendLine("--- a/" + Path.GetFileName(full));
             sb.AppendLine("+++ b/" + Path.GetFileName(full));

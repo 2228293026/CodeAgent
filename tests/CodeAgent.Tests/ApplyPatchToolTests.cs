@@ -31,6 +31,16 @@ public class ApplyPatchToolTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_dir, "canceled.txt")));
     }
 
+    [Fact]
+    public void ParsePatch_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            ApplyPatchTool.ParsePatch(new string('x', 10_000), null, cts.Token));
+    }
+
     private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false, bool dryRun = false, bool backup = false)
     {
         var tool = new ApplyPatchTool();
