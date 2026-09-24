@@ -180,6 +180,19 @@ public class FileToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public void WritePreviewText_CanceledToken_PropagatesCancellation()
+    {
+        var path = PathOf("cancel-preview.txt");
+        File.WriteAllText(path, "old line");
+        var args = new JsonObject { ["path"] = path, ["content"] = "new line" };
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            AgentClass.WritePreviewText(args, new Workspace(_dir), cts.Token));
+    }
+
+    [Fact]
     public void WritePreviewText_Overwrite_ShowsDiff()
     {
         var path = PathOf("over-preview.txt");

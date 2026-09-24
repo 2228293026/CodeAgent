@@ -624,6 +624,10 @@ public sealed partial class Agent
             var diff = DiffUtil.Unified(old, content, path, ct);
             return diff.Length == 0 ? "（内容无差异）" : CapDiff(diff, ct);
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch
         {
             return ""; // 预览失败（读取受限等）静默
@@ -655,7 +659,7 @@ public sealed partial class Agent
             var text = name == "write_file" ? WritePreviewText(args, workspace, ct) : EditPreviewText(args, ct);
             if (text.Length == 0)
                 return;
-            foreach (var line in DiffUtil.SplitLines(text))
+            foreach (var line in DiffUtil.SplitLines(text, ct))
             {
                 // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿
                 if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
@@ -672,6 +676,7 @@ public sealed partial class Agent
                 SafeColor.Reset();
             }
         }
+        catch (OperationCanceledException) { throw; }
         catch { /* 预览失败不影响工具执行 */ }
     }
 
