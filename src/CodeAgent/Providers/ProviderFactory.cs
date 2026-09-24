@@ -21,6 +21,7 @@ public static class ProviderFactory
                 }
             }
         }
+        config.Provider = name;
         if (opts is null)
         {
             opts = new ProviderOptions();

@@ -154,6 +154,7 @@ public class ProviderFactoryTests
         ProviderFactory.Create(config);
 
         Assert.Equal("existing", config.Providers["custom"].Model);
+        Assert.Equal("custom", config.Provider);
         Assert.DoesNotContain("CUSTOM", config.Providers.Keys);
     }
 
