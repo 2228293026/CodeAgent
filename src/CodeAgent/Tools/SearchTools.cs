@@ -76,8 +76,10 @@ public sealed class GlobTool : ITool
         var scanned = 0;
 
         var capped = false;
+        ct.ThrowIfCancellationRequested();
         foreach (var file in SkipDirs.EnumerateFilesPruned(start, depth >= 0 ? depth : int.MaxValue, includeIgnored))
         {
+            ct.ThrowIfCancellationRequested();
             if (scanned++ > 200_000 || results.Count >= maxResults)
             {
                 capped = true; // 提前停止：结果可能不完整（曾静默截断，总数显示还误导）

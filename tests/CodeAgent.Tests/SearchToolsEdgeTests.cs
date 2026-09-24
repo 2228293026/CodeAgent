@@ -161,6 +161,17 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Glob_CanceledToken_StopsBeforeScanning()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new GlobTool().ExecuteAsync(
+                new JsonObject { ["pattern"] = "*" }, MakeContext(_dir), cts.Token));
+    }
+
+    [Fact]
     public async Task Glob_Ignore_SkipsMatchingFiles()
     {
         // ignore:排除匹配 glob 的文件
