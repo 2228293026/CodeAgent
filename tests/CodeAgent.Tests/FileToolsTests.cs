@@ -947,6 +947,16 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_CanceledToken_StopsBeforeScanning()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ListDirectoryTool().ExecuteAsync(new JsonObject(), MakeContext(_dir), cts.Token));
+    }
+
+    [Fact]
     public async Task ListDirectory_AppendsCountSummary()
     {
         // 统计摘要：目录数与文件数一目了然（截断时提示可能未列全）

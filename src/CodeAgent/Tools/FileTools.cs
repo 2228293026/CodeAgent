@@ -831,6 +831,7 @@ public sealed class ListDirectoryTool : ITool
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var path = ToolArgs.GetString(args, "path");
         var recursive = ToolArgs.GetBool(args, "recursive", false);
         var depth = recursive ? 5 : Math.Clamp(ToolArgs.GetInt(args, "depth", 2), 0, 5);
@@ -883,6 +884,7 @@ public sealed class ListDirectoryTool : ITool
 
         void Walk(string dir, int level)
         {
+            ct.ThrowIfCancellationRequested();
             if (level > depth || emitted >= maxItems)
                 return;
             var indent = new string(' ', level * 2);
