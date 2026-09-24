@@ -204,6 +204,16 @@ public sealed class AgentConfig
         {
             var text = File.ReadAllText(found);
             var cfg = JsonSerializer.Deserialize<AgentConfig>(text, JsonOpts) ?? new AgentConfig();
+            // JSON 显式 null 可覆盖属性初始化值；启动路径随后会直接使用这些集合/路径，先恢复安全默认值。
+            cfg.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
+            cfg.ReadOnlyDirs ??= new List<string>();
+            cfg.Modes ??= new List<AgentModeConfig>();
+            cfg.Provider ??= "openai";
+            cfg.Shell ??= "";
+            cfg.SessionDir ??= ".codeagent/sessions";
+            cfg.ExportDir ??= ".codeagent/exports";
+            cfg.DefaultMode ??= "code";
+            cfg.SystemPrompt ??= DefaultSystemPrompt;
             cfg.SourceFile = found;
             // 边界校验：非法值收敛到可用范围，避免空转/异常。
             // 上限防止误配超大值：MaxToolIterations 过大导致超长循环烧 token（0 或负 = 不限制），

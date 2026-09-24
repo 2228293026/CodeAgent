@@ -28,6 +28,35 @@ public class ConfigEdgeTests : IDisposable
         return path;
     }
 
+    [Fact]
+    public void Load_NullCollectionsAndPaths_UseSafeDefaults()
+    {
+        var path = WriteJson("""
+        {
+          "provider": null,
+          "providers": null,
+          "readOnlyDirs": null,
+          "modes": null,
+          "shell": null,
+          "sessionDir": null,
+          "exportDir": null,
+          "defaultMode": null,
+          "systemPrompt": null
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.Equal("openai", config.Provider);
+        Assert.NotNull(config.Providers);
+        Assert.NotNull(config.ReadOnlyDirs);
+        Assert.NotNull(config.Modes);
+        Assert.Equal(".codeagent/sessions", config.SessionDir);
+        Assert.Equal(".codeagent/exports", config.ExportDir);
+        Assert.Equal("code", config.DefaultMode);
+        Assert.Equal(AgentConfig.DefaultSystemPrompt, config.SystemPrompt);
+    }
+
     // ===== ProviderOptions 默认值 =====
 
     [Fact]
