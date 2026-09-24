@@ -26,7 +26,11 @@ public sealed class SessionSearchTool : ITool
 
     internal static bool HasNonEmptyFile(string path)
     {
-        try { return new FileInfo(path).Length > 0; }
+        try
+        {
+            var fi = new FileInfo(path);
+            return fi.LinkTarget is null && fi.Length > 0;
+        }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
     }
@@ -82,6 +86,7 @@ public sealed class SessionSearchTool : ITool
         // 命名快照（/save 的 .json）
         ct.ThrowIfCancellationRequested();
         var snapshots = Directory.GetFiles(sessionDir, "*.json")
+            .Where(HasNonEmptyFile)
             .OrderByDescending(File.GetLastWriteTimeUtc)
             .ThenByDescending(Path.GetFileName, nameComparer)
             .ToList();

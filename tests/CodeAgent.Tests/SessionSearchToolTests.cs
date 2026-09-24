@@ -102,6 +102,24 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task SessionSearch_DoesNotReadLinkedSessionFiles()
+    {
+        var sessDir = Path.Combine(_dir, ".codeagent", "sessions");
+        var outside = Path.Combine(_dir, "outside-session.txt");
+        File.WriteAllText(outside, """{"role":"user","content":"secret-linked-keyword"}""");
+        var link = Path.Combine(sessDir, "linked.jsonl");
+        try { File.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var output = await new SessionSearchTool().ExecuteAsync(
+            new JsonObject { ["keyword"] = "secret-linked-keyword" }, MakeContext(), CancellationToken.None);
+
+        Assert.DoesNotContain("linked.jsonl", output);
+        Assert.Contains("没有匹配", output);
+    }
+
+    [Fact]
     public async Task SessionSearch_EmptySessionDir_ReturnsFriendlyMessage()
     {
         var tool = new SessionSearchTool();
