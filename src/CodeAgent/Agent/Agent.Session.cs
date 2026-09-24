@@ -184,11 +184,13 @@ public sealed partial class Agent
     /// <summary>从会话日志（.jsonl，每条消息自动写入）恢复对话：--continue / /resume 用。
     /// 恢复后滚动新日志并把已恢复的消息写进去，新日志自包含（可再次被恢复）；
     /// 开头的 system 一律重盖为当前模式提示（启动路径随后的 SetMode 重盖为相同值）。</summary>
-    public bool LoadSessionLog(string path)
+    public bool LoadSessionLog(string path, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (!File.Exists(path))
             return false;
-        var msgs = ReadSessionLogFile(path);
+        var msgs = ReadSessionLogFile(path, ct);
+        ct.ThrowIfCancellationRequested();
         if (msgs.Count == 0)
             return false;
         // 丢弃末尾未完成的工具轮（ESC 取消/进程中断时，assistant(toolCalls) 已写日志、

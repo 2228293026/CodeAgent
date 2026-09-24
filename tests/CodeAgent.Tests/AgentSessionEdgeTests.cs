@@ -110,6 +110,19 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.False(MakeAgent(new FakeProvider()).LoadSessionLog(Path.Combine(SessionDir, "nope.jsonl")));
 
     [Fact]
+    public void LoadSessionLog_CanceledToken_PrecedesStateChanges()
+    {
+        var path = Path.Combine(SessionDir, "cancel-load.jsonl");
+        File.WriteAllText(path, """{"role":"user","content":"should-not-load"}""");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var agent = MakeAgent(new FakeProvider());
+
+        Assert.Throws<OperationCanceledException>(() => agent.LoadSessionLog(path, cts.Token));
+        Assert.DoesNotContain(agent.Messages, m => m.Content == "should-not-load");
+    }
+
+    [Fact]
     public void LoadSessionLog_DropsTrailingIncompleteToolRound()
     {
         // 回归：ESC 取消回合时 assistant(toolCalls) 已写日志、结果没写全；带着孤儿 tool_calls
