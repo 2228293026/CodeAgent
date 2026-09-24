@@ -305,6 +305,8 @@ public static class TextUtil
 
     public static string TruncateLine(string s, int max)
     {
+        if (max <= 0)
+            return string.Empty;
         s = s.Replace("\t", "    ");
         return s.Length <= max ? s : SafeCut(s, max) + " …";
     }

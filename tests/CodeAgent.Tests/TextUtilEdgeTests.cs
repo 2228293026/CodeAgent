@@ -418,6 +418,14 @@ public class TextUtilEdgeTests : IDisposable
         Assert.DoesNotContain("�", tl);
     }
 
+    [Fact]
+    public void TruncateAndLine_NonPositiveMax_ReturnEmpty()
+    {
+        var s = "some output";
+        Assert.Equal("", TextUtil.TruncateLine(s, 0));
+        Assert.Equal("", TextUtil.TruncateLine(s, -1));
+    }
+
     [Theory]
     [InlineData("", 0)]
     [InlineData("abcd", 1)]        // 4 ASCII = 1 token
