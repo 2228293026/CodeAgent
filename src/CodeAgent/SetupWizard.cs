@@ -29,6 +29,10 @@ public static class SetupWizard
     /// </summary>
     internal static void Run(AgentConfig config, TextReader input, TextWriter output, string? savePath, bool testConnection = false)
     {
+        config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
+        config.Modes ??= new List<AgentModeConfig>();
+        foreach (var key in config.Providers.Keys.ToList())
+            config.Providers[key] ??= new ProviderOptions();
         var path = savePath ?? Path.Combine(Environment.CurrentDirectory, "codeagent.json");
 
         // 配置中已存在、但不在预设表里的 provider（如手工编辑 codeagent.json 加的自定义项），

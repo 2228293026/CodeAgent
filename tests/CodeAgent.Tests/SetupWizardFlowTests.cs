@@ -49,6 +49,19 @@ public class SetupWizardFlowTests : IDisposable
     }
 
     [Fact]
+    public void NullProviderCollection_IsInitializedByWizard()
+    {
+        var config = new AgentConfig { Providers = null! };
+        var writer = new StringWriter();
+        using var reader = new StringReader("1\n\n\n1\n\n");
+
+        SetupWizard.Run(config, reader, writer, null);
+
+        Assert.NotNull(config.Providers);
+        Assert.Equal("openai", config.Provider);
+    }
+
+    [Fact]
     public void SelectCustom_WithDirectKey_WritesProvidedValues()
     {
         // 输入：选 custom(7) → 模型 → 地址 → maxTokens 4096 → temperature 0.7 → Key 方式 2 → key
