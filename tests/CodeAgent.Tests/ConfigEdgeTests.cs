@@ -152,6 +152,31 @@ public class ConfigEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Load_TrimsProviderConnectionFields()
+    {
+        var path = WriteJson("""
+        {
+          "providers": {
+            "custom": {
+              "type": "  anthropic  ",
+              "baseUrl": "  https://api.example  ",
+              "model": "  model-x  ",
+              "apiKeyEnv": "  CUSTOM_KEY  "
+            }
+          }
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+        var provider = config.Providers["custom"];
+
+        Assert.Equal("anthropic", provider.Type);
+        Assert.Equal("https://api.example", provider.BaseUrl);
+        Assert.Equal("model-x", provider.Model);
+        Assert.Equal("CUSTOM_KEY", provider.ApiKeyEnv);
+    }
+
+    [Fact]
     public void Load_TrimsProviderDictionaryKeys()
     {
         var path = WriteJson("""

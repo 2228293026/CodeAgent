@@ -225,9 +225,10 @@ public sealed class AgentConfig
             cfg.Modes.RemoveAll(m => m is null);
             foreach (var provider in cfg.Providers.Values)
             {
-                provider.Type ??= "openai";
-                provider.BaseUrl ??= "";
-                provider.Model ??= "";
+                provider.Type = (provider.Type ?? "openai").Trim();
+                provider.BaseUrl = (provider.BaseUrl ?? "").Trim();
+                provider.Model = (provider.Model ?? "").Trim();
+                provider.ApiKeyEnv = provider.ApiKeyEnv?.Trim();
             }
             foreach (var mode in cfg.Modes)
             {
