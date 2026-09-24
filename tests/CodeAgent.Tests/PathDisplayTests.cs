@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using CodeAgent;
@@ -14,6 +15,25 @@ public class PathDisplayTests
     [InlineData("D:/Projects/CodeAgent")]
     public void TruncatePathHead_ShortPaths_Unchanged(string path) =>
         Assert.Equal(path, Program.TruncatePathHead(path));
+
+    [Fact]
+    public void EnsureSelectedProvider_HandlesCaseInsensitiveAndNullEntries()
+    {
+        var config = new AgentConfig
+        {
+            Provider = " CUSTOM ",
+            Providers = new Dictionary<string, ProviderOptions>
+            {
+                ["custom"] = new ProviderOptions { Model = "existing" },
+                ["null-provider"] = null!,
+            },
+        };
+
+        var selected = Program.EnsureSelectedProvider(config);
+
+        Assert.Equal("existing", selected.Model);
+        Assert.Equal("custom", config.Provider);
+    }
 
     [Fact]
     public void TruncatePathHead_LongPath_KeepsTailWithEllipsis()

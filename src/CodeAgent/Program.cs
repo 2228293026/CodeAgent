@@ -551,12 +551,30 @@ internal static class Program
             .ToList();
     }
 
-    private static ProviderOptions EnsureSelectedProvider(AgentConfig config)
+    internal static ProviderOptions EnsureSelectedProvider(AgentConfig config)
     {
-        if (!config.Providers.TryGetValue(config.Provider, out var opts))
+        config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(config.Provider))
+            config.Provider = "openai";
+        var name = config.Provider.Trim();
+        config.Provider = name;
+        if (!config.Providers.TryGetValue(name, out var opts) || opts is null)
+        {
+            foreach (var pair in config.Providers)
+            {
+                if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = pair.Key;
+                    opts = pair.Value;
+                    break;
+                }
+            }
+        }
+        config.Provider = name;
+        if (opts is null)
         {
             opts = new ProviderOptions();
-            config.Providers[config.Provider] = opts;
+            config.Providers[name] = opts;
         }
         return opts;
     }
