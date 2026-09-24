@@ -48,6 +48,27 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void EnumerateFilesPruned_FollowSymlinksFalse_SkipsLinkedRoot()
+    {
+        var target = Path.Combine(_dir, "root-target");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "inside.txt"), "x");
+        var link = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-root-link-" + Guid.NewGuid().ToString("N"));
+        try { Directory.CreateSymbolicLink(link, target); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        try
+        {
+            Assert.Empty(SkipDirs.EnumerateFilesPruned(link, followSymlinks: false));
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void EnumerateFilesPruned_FollowSymlinksFalse_SkipsLinkedFiles()
     {
         var target = Path.Combine(_dir, "target.txt");

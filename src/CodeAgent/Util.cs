@@ -565,6 +565,15 @@ public static class SkipDirs
     /// </summary>
     public static IEnumerable<string> EnumerateFilesPruned(string root, int maxDepth = int.MaxValue, bool includeIgnored = false, CancellationToken ct = default, bool followSymlinks = true)
     {
+        if (!followSymlinks)
+        {
+            bool linkedRoot = false;
+            try { linkedRoot = new DirectoryInfo(root).LinkTarget is not null; }
+            catch (IOException) { linkedRoot = true; }
+            catch (UnauthorizedAccessException) { linkedRoot = true; }
+            if (linkedRoot)
+                yield break;
+        }
         var stack = new Stack<(string dir, int depth)>();
         stack.Push((root, 0));
         // 已访问目录集合：junction/symlink 成环（A→B→A）时避免死循环（曾会永久挂起 glob/grep）
