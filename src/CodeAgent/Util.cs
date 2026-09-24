@@ -482,6 +482,13 @@ public static class TextUtil
     {
         if (!Directory.Exists(dir))
             return 0;
+        try
+        {
+            if (new DirectoryInfo(dir).LinkTarget is not null)
+                return 0;
+        }
+        catch (IOException) { return 0; }
+        catch (UnauthorizedAccessException) { return 0; }
         long total = 0;
         // 不跟随目录链接，避免诊断命令把工作区外内容或链接环纳入统计。
         foreach (var f in SkipDirs.EnumerateFilesPruned(dir, includeIgnored: true, followSymlinks: false))
