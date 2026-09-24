@@ -822,6 +822,8 @@ internal static class Program
         var keep = max - 1;
         if (keep == 0)
             return "…";
+        if (keep == 1 && char.IsLowSurrogate(path[^1]) && char.IsHighSurrogate(path[^2]))
+            return "…"; // 省略号已占满宽度，不能只保留代理对低半部
         if (char.IsLowSurrogate(path[^keep]) && char.IsHighSurrogate(path[^(keep - 1)]))
             keep--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
         return "…" + path[^keep..];

@@ -48,6 +48,12 @@ public class PathDisplayTests
         Assert.True(shown.Length <= 43);
     }
 
+    [Fact]
+    public void TruncatePathHead_OneSlotEmojiTail_ReturnsOnlyEllipsis()
+    {
+        Assert.Equal("…", Program.TruncatePathHead("long/path/😀", 2));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
