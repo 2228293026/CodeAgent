@@ -173,6 +173,17 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void SaveSession_CanceledToken_PrecedesFileAccess()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var agent = MakeAgent(new FakeProvider());
+
+        Assert.Throws<OperationCanceledException>(() => agent.SaveSession("cancelled", cts.Token));
+        Assert.Empty(Directory.GetFiles(SessionDir, "cancelled.json"));
+    }
+
+    [Fact]
     public async Task SaveThenLoad_RoundTripsMessages()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } };

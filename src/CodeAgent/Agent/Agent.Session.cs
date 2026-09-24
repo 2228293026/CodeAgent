@@ -9,11 +9,13 @@ namespace CodeAgent.Agent;
 public sealed partial class Agent
 {
     /// <summary>把当前对话保存为命名会话（.codeagent/sessions/&lt;name&gt;.json）。</summary>
-    public void SaveSession(string name)
+    public void SaveSession(string name, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var path = SessionFilePath(name);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var dto = _messages.Select(ToDto).ToList();
+        ct.ThrowIfCancellationRequested();
         var tmp = SkipDirs.TempPathFor(path);
         try
         {
