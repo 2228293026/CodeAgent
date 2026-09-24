@@ -718,7 +718,32 @@ public static class SkipDirs
         }
     }
 
-    /// <summary>统计内存中文本的行数，语义与 CountFileLines 一致（末尾换行不算额外空行）。
+    /// <summary>流式统计内存文本中的词数，避免 Split 为统计数字分配完整词数组。
+    /// 分隔符与旧的 string.Split 口径一致：仅空格、制表符、CR、LF。</summary>
+    public static long CountWords(string? text, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+        long words = 0;
+        var inWord = false;
+        for (int i = 0; i < text!.Length; i++)
+        {
+            if ((i & 4095) == 0)
+                ct.ThrowIfCancellationRequested();
+            var ch = text[i];
+            if (ch is ' ' or '\t' or '\r' or '\n')
+                inWord = false;
+            else if (!inWord)
+            {
+                inWord = true;
+                words++;
+            }
+        }
+        ct.ThrowIfCancellationRequested();
+        return words;
+    }
+
+    /// <summary>统计内存文本的行数，语义与 CountFileLines 一致（末尾换行不算额外空行）。
     /// 供 write_file 等尚未落盘的场景复用，避免各工具各写一份 Split('\n').Length 而互相矛盾。</summary>
     public static int CountLines(string? text, CancellationToken ct = default)
     {

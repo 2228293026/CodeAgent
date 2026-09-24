@@ -222,6 +222,24 @@ public class TextUtilFormattingTests
     }
 
     [Fact]
+    public void CountWords_MatchesLegacySplitSemantics()
+    {
+        Assert.Equal(4, SkipDirs.CountWords("  one\t two\nthree\r\nfour  "));
+        Assert.Equal(0, SkipDirs.CountWords(" \t\r\n"));
+        Assert.Equal(0, SkipDirs.CountWords(null));
+    }
+
+    [Fact]
+    public void CountWords_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            SkipDirs.CountWords(new string('a', 10_000), cts.Token));
+    }
+
+    [Fact]
     public void CountLines_CanceledToken_PropagatesCancellation()
     {
         using var cts = new CancellationTokenSource();
