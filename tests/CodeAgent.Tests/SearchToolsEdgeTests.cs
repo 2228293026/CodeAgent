@@ -102,6 +102,32 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Search_HiddenAncestorDirectory_IsExcludedUnlessShowHidden()
+    {
+        var hiddenDir = Path.Combine(_dir, ".hidden");
+        Directory.CreateDirectory(hiddenDir);
+        File.WriteAllText(Path.Combine(hiddenDir, "secret.txt"), "needle");
+        File.WriteAllText(Path.Combine(_dir, "visible.txt"), "needle");
+        var ctx = MakeContext(_dir);
+
+        var glob = await new GlobTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "**/*.txt" }, ctx, CancellationToken.None);
+        Assert.DoesNotContain(".hidden/secret.txt", glob);
+
+        var globShown = await new GlobTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "**/*.txt", ["show_hidden"] = true }, ctx, CancellationToken.None);
+        Assert.Contains(".hidden/secret.txt", globShown);
+
+        var grep = await new GrepTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle" }, ctx, CancellationToken.None);
+        Assert.DoesNotContain(".hidden/secret.txt", grep);
+
+        var grepShown = await new GrepTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle", ["show_hidden"] = true }, ctx, CancellationToken.None);
+        Assert.Contains(".hidden/secret.txt", grepShown);
+    }
+
+    [Fact]
     public async Task Glob_NoMatch_ReturnsEmpty()
     {
         // 无匹配时返回空（或提示）

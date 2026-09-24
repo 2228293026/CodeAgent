@@ -84,7 +84,7 @@ public sealed class GlobTool : ITool
                 break;
             }
             var rel = Path.GetRelativePath(start, file).Replace('\\', '/');
-            if (!showHidden && SkipDirs.IsHidden(file))
+            if (!showHidden && !includeIgnored && SkipDirs.IsHiddenPath(file, start))
                 continue; // 跳过隐藏文件/目录
             // 命中 pattern 且未被 ignore 排除才保留
             if (regexes.Any(r => r.IsMatch(rel)) && (ignoreRes is null || !ignoreRes.Any(r => r.IsMatch(rel))))
@@ -582,8 +582,8 @@ public sealed class GrepTool : ITool
             {
                 if (hits >= max)
                     break;
-                if (!showHidden && SkipDirs.IsHidden(file))
-                    continue; // 跳过隐藏文件
+                if (!showHidden && !includeIgnored && SkipDirs.IsHiddenPath(file, full))
+                    continue; // 跳过隐藏文件/目录
                 var rel = Path.GetRelativePath(full, file).Replace('\\', '/');
                 if (heading)
                 {

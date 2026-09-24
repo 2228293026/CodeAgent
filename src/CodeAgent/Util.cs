@@ -480,6 +480,21 @@ public static class SkipDirs
         return false;
     }
 
+    /// <summary>判断搜索结果是否位于 root 下的隐藏目录/文件中；显式指定的 root 本身不算。</summary>
+    public static bool IsHiddenPath(string path, string root)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        var current = root;
+        foreach (var part in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar,
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, part);
+            if (IsHidden(current))
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// 递归枚举文件，但剪枝掉被跳过的目录（不进入其中遍历），避免 glob/grep
     /// 在 node_modules / bin / obj 等目录里做无用扫描。
