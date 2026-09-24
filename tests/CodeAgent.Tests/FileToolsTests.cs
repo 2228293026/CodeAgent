@@ -5403,6 +5403,33 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SkipEmptyAndFileCount_DoNotTraverseNestedSymlink()
+    {
+        var outside = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-outside-count-" + Guid.NewGuid().ToString("N"));
+        var container = Path.Combine(_dir, "container");
+        Directory.CreateDirectory(outside);
+        Directory.CreateDirectory(container);
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "secret.txt"), "do-not-list");
+            var link = Path.Combine(container, "outside-link");
+            try { Directory.CreateSymbolicLink(link, outside); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            var output = await new ListDirectoryTool().ExecuteAsync(
+                new JsonObject { ["recursive"] = true, ["skip_empty_dirs"] = true, ["show_file_count"] = true },
+                MakeContext(_dir), CancellationToken.None);
+
+            Assert.DoesNotContain("container/", output);
+        }
+        finally
+        {
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task ListDirectory_SymlinkFileOutsideWorkspace_IsSkipped()
     {
         var outside = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-outside-file-" + Guid.NewGuid().ToString("N"));
