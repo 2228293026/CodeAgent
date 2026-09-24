@@ -355,6 +355,16 @@ public sealed class GrepTool : ITool
             }
             return count;
         }
+        bool AnyMatch(string value)
+        {
+            foreach (System.Text.RegularExpressions.Match match in re.Matches(value))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (match.Length > 0)
+                    return true;
+            }
+            return false;
+        }
         bool AnyLine(string value, Func<string, bool> predicate)
         {
             foreach (var line in DiffUtil.SplitLines(value))
@@ -416,7 +426,7 @@ public sealed class GrepTool : ITool
                     // 否则含匹配行的文件（如 DROP\nkeep）会被整文件命中误判为「无匹配」
                     var fileHits = invert
                         ? AnyLine(text, l => !re.IsMatch(l))
-                        : re.IsMatch(text);
+                        : AnyMatch(text);
                     if (fileHits)
                     {
                         hits++;
