@@ -157,6 +157,8 @@ public sealed partial class Agent
         var path = SessionFilePath(name);
         if (!File.Exists(path))
             throw new FileNotFoundException($"会话不存在: {name}（{path}）");
+        if (new FileInfo(path).LinkTarget is not null)
+            throw new InvalidDataException($"会话文件不能是符号链接: {path}");
         var dto = JsonSerializer.Deserialize<List<MessageDto>>(File.ReadAllText(path), JsonOpts)
                   ?? throw new InvalidDataException($"会话文件损坏: {path}");
         var messages = new List<ProviderMessage>(dto.Count);
@@ -285,6 +287,8 @@ public sealed partial class Agent
     private static IEnumerable<string> ReadLogLines(string path, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        if (new FileInfo(path).LinkTarget is not null)
+            throw new IOException($"会话日志不能是符号链接: {path}");
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var sr = new StreamReader(fs);
         while (true)

@@ -194,6 +194,21 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void LoadSession_DoesNotReadLinkedSnapshot()
+    {
+        var outside = Path.Combine(_dir, "outside-session.json");
+        File.WriteAllText(outside, "[{\"role\":\"user\",\"content\":\"external secret\"}]");
+        var link = Path.Combine(SessionDir, "linked.json");
+        try { File.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var agent = MakeAgent(new FakeProvider());
+        var ex = Assert.Throws<InvalidDataException>(() => agent.LoadSession("linked"));
+        Assert.Contains("符号链接", ex.Message);
+    }
+
+    [Fact]
     public void RecentSessionLogs_SkipsEmptyLogs_AndOrdersNewestFirst()
     {
         // 回归：启动后未对话就退出会留下 0 字节日志；曾混进 /resume 列表与 --continue 的
