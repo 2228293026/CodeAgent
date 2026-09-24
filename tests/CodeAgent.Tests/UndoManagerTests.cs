@@ -179,6 +179,7 @@ public class UndoManagerTests : IDisposable
         // 回归：大文件 edit 撤销用 File.ReadAllText 读当前文件（默认 UTF-8），
         // GBK 文件会先被乱码解码，Replace 后再按原编码写回，导致内容永久损坏。
         var path = Path.Combine(_dir, "gbk-edit.txt");
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
         var gbk = System.Text.Encoding.GetEncoding("GB18030");
         var original = "中文旧内容";
         var modified = "中文新内容";
@@ -195,6 +196,7 @@ public class UndoManagerTests : IDisposable
         var bytes = File.ReadAllBytes(path);
         Assert.Equal(gbk.GetBytes(original), bytes); // 字节级一致：仍是 GB18030，内容正确
         Assert.Equal(original, gbk.GetString(bytes));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }
 
     [Fact]

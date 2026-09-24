@@ -30,6 +30,8 @@ public sealed class UndoEntry
 /// <summary>文件修改撤销栈（REPL 的 /undo 命令）。</summary>
 public sealed class UndoManager
 {
+    static UndoManager() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
     private const int MaxEntries = 50;
     private readonly object _lock = new();
     private readonly List<UndoEntry> _entries = [];
@@ -154,17 +156,30 @@ public sealed class UndoManager
     /// <summary>按撤销条目记录的原编码写回：GBK 文件撤销后仍是 GBK，BOM 文件保 BOM。</summary>
     private static void WriteEntryText(UndoEntry e, string text)
     {
+        System.Text.Encoding encoding;
         switch (e.EncodingName)
         {
             case "gb18030":
-                File.WriteAllText(e.Path, text, System.Text.Encoding.GetEncoding("GB18030"));
+                encoding = System.Text.Encoding.GetEncoding("GB18030");
                 break;
             case "utf8-bom":
-                File.WriteAllText(e.Path, text, new System.Text.UTF8Encoding(true));
+                encoding = new System.Text.UTF8Encoding(true);
                 break;
             default:
                 TextUtil.WriteTextPreserveBom(e.Path, text); // 未知/纯 UTF-8：保 BOM 逻辑
-                break;
+                return;
+        }
+
+        var tmp = SkipDirs.TempPathFor(e.Path);
+        try
+        {
+            File.WriteAllText(tmp, text, encoding);
+            File.Move(tmp, e.Path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
         }
     }
     private static string ReplaceFirst(string text, string newText, string oldText)
