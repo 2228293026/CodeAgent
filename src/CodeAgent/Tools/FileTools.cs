@@ -872,6 +872,15 @@ public sealed class ListDirectoryTool : ITool
         var dirCount = 0;
         var fileCount = 0;
 
+        bool IsIgnoredPath(string candidate, string baseDir)
+        {
+            if (ignoreSet is null)
+                return false;
+            var relative = Path.GetRelativePath(baseDir, candidate);
+            return relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar,
+                StringSplitOptions.RemoveEmptyEntries).Any(ignoreSet.Contains);
+        }
+
         void Walk(string dir, int level)
         {
             if (level > depth || emitted >= maxItems)
@@ -893,7 +902,7 @@ public sealed class ListDirectoryTool : ITool
                         // skip_empty_dirs=true:跳过没有文件的目录（递归检查）
                         if (skipEmptyDirs && !SkipDirs.EnumerateFilesPruned(d)
                             .Any(f => (showHidden || !SkipDirs.IsHidden(f))
-                                && (ignoreSet is null || !ignoreSet.Contains(Path.GetFileName(f)))))
+                                && !IsIgnoredPath(f, d)))
                             continue;
                         var suffix = "";
                         if (showModified)
@@ -907,7 +916,7 @@ public sealed class ListDirectoryTool : ITool
                             // 若用 EnumerateFiles() 会把嵌套目录的文件也算进来，数字与输出不符。
                             var fileInDir = SkipDirs.EnumerateFilesPruned(d, recursive ? int.MaxValue : 0)
                                 .Count(f => (showHidden || !SkipDirs.IsHiddenPath(f, d))
-                                    && (ignoreSet is null || !ignoreSet.Contains(Path.GetFileName(f))));
+                                    && !IsIgnoredPath(f, d));
                             suffix += $" ({fileInDir} 个文件)";
                         }
                         if (showType)

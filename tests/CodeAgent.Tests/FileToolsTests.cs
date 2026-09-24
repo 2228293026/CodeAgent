@@ -4928,6 +4928,24 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SkipEmptyDirs_AppliesIgnoreToDescendantPaths()
+    {
+        // 用户 ignore 的目录不应让父目录看起来有可见文件。
+        var dir = Path.Combine(_dir, "onlyignored");
+        Directory.CreateDirectory(Path.Combine(dir, "ignored"));
+        File.WriteAllText(Path.Combine(dir, "ignored", "artifact.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["skip_empty_dirs"] = true, ["ignore"] = new JsonArray("ignored") },
+            ctx, CancellationToken.None);
+
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        Assert.DoesNotContain("onlyignored/", lines);
+    }
+
+    [Fact]
     public async Task ListDirectory_SkipEmptyDirs_False_IncludesEmptyDirectories()
     {
         // skip_empty_dirs=false（默认）:包含空目录
