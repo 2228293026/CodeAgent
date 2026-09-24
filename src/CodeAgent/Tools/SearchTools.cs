@@ -355,6 +355,17 @@ public sealed class GrepTool : ITool
             }
             return count;
         }
+        string? FirstMatchingLine(string value)
+        {
+            foreach (var line in DiffUtil.SplitLines(value))
+            {
+                ct.ThrowIfCancellationRequested();
+                var trimmed = line.TrimEnd('\r');
+                if (Hit(trimmed))
+                    return trimmed;
+            }
+            return null;
+        }
         bool AnyMatch(string value)
         {
             foreach (System.Text.RegularExpressions.Match match in re.Matches(value))
@@ -489,7 +500,7 @@ public sealed class GrepTool : ITool
                             }
                             else
                             {
-                                firstMatch = DiffUtil.SplitLines(text).FirstOrDefault(l => Hit(l.TrimEnd('\r')));
+                                firstMatch = FirstMatchingLine(text);
                             }
                             if (firstMatch != null)
                                 extra += $" | {truncateLine(firstMatch)}";
