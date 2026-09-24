@@ -646,9 +646,17 @@ public sealed partial class Agent
     }
 
     /// <summary>命令类工具输出预览：最多 8 行，超出截断。</summary>
-    internal static string BuildToolOutputPreview(string output)
+    internal static string BuildToolOutputPreview(string output, CancellationToken ct = default)
     {
-        return string.Join('\n', DiffUtil.SplitLines(output).Take(8));
+        ct.ThrowIfCancellationRequested();
+        var lines = new List<string>(8);
+        using var reader = new StringReader(output);
+        while (lines.Count < 8 && reader.ReadLine() is { } line)
+        {
+            ct.ThrowIfCancellationRequested();
+            lines.Add(line);
+        }
+        return string.Join('\n', lines);
     }
 
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
@@ -820,7 +828,7 @@ public sealed partial class Agent
                     if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
-                        var preview = BuildToolOutputPreview(output);
+                        var preview = BuildToolOutputPreview(output, ct);
                         Console.WriteLine("      " + TextUtil.Truncate(preview, 800));
                         SafeColor.Reset();
                     }

@@ -152,6 +152,16 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ToolOutputPreview_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            AgentClass.BuildToolOutputPreview(string.Join('\n', Enumerable.Range(1, 100)), cts.Token));
+    }
+
+    [Fact]
     public void ToolOutputPreview_TrailingNewline_NoSpuriousBlankLine()
     {
         // 回归：Agent.ShowFilePreview 对 run_command/bash/powershell 的输出预览曾用
