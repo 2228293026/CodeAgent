@@ -1826,6 +1826,20 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task EditFile_CanceledToken_StopsBeforeSideEffects()
+    {
+        File.WriteAllText(Path.Combine(_dir, "canceled.txt"), "old");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new EditFileTool().ExecuteAsync(
+                new JsonObject { ["path"] = "canceled.txt", ["old_string"] = "old", ["new_string"] = "new" },
+                MakeContext(_dir), cts.Token));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(_dir, "canceled.txt")));
+    }
+
+    [Fact]
     public async Task EditFile_MissingOldString_ThrowsHelpfulError()
     {
         File.WriteAllText(Path.Combine(_dir, "nomatch.txt"), "hello world");

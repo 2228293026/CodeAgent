@@ -615,6 +615,7 @@ public sealed class EditFileTool : ITool
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var path = ToolArgs.GetString(args, "path");
         var oldString = ToolArgs.GetString(args, "old_string");
         var newString = ToolArgs.GetString(args, "new_string");
