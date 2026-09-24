@@ -264,6 +264,8 @@ public sealed class UndoManager
                 try
                 {
                     var fi = new FileInfo(file);
+                    if (fi.LinkTarget is not null)
+                        continue; // 不跟随文件符号链接，避免快照工作区外内容
                     var rel = Path.GetRelativePath(cwd, file).Replace('\\', '/');
                     seen.Add(rel); // 先记录存在：下面的尺寸/读取检查跳过的文件同样不能被误删
                     if (fi.Length > SnapshotMaxFileBytes)
