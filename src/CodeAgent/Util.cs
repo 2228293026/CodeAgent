@@ -256,7 +256,10 @@ public static class TextUtil
         var tail = Math.Max(0, max - head - markerLen);
         if (tail == 0)
             return Truncate(s, max);
-        return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - head - tail) + s[^tail..];
+        var tailStart = s.Length - tail;
+        if (tailStart > 0 && char.IsLowSurrogate(s[tailStart]) && char.IsHighSurrogate(s[tailStart - 1]))
+            tailStart--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
+        return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - head - tailStart) + s[tailStart..];
     }
 
     /// <summary>

@@ -313,6 +313,18 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public void TruncateHeadTail_TailBoundary_DoesNotSplitSurrogatePair()
+    {
+        var s = "A" + string.Concat(Enumerable.Repeat("😀", 100)) + "Z";
+        var t = TextUtil.TruncateHeadTail(s, 100);
+        var z = t.IndexOf('Z');
+        Assert.True(z > 0);
+        var markerEnd = t.LastIndexOf('\n', z);
+        Assert.True(markerEnd >= 0 && markerEnd + 1 < t.Length);
+        Assert.False(char.IsLowSurrogate(t[markerEnd + 1]));
+    }
+
+    [Fact]
     public void TruncateHeadTail_ShortInput_Unchanged()
     {
         var s = new string('a', 100);
