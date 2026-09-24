@@ -57,6 +57,26 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal(AgentConfig.DefaultSystemPrompt, config.SystemPrompt);
     }
 
+    [Fact]
+    public void Load_NullCollectionEntries_AreRemovedOrReplaced()
+    {
+        var path = WriteJson("""
+        {
+          "providers": { "broken": null, "valid": { "model": "test" } },
+          "readOnlyDirs": [null, "  "],
+          "modes": [null, { "name": "custom" }]
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.Equal("test", config.Providers["valid"].Model);
+        Assert.NotNull(config.Providers["broken"]);
+        Assert.Empty(config.ReadOnlyDirs);
+        Assert.Single(config.Modes);
+        Assert.Equal("custom", config.Modes[0].Name);
+    }
+
     // ===== ProviderOptions 默认值 =====
 
     [Fact]

@@ -208,6 +208,10 @@ public sealed class AgentConfig
             cfg.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
             cfg.ReadOnlyDirs ??= new List<string>();
             cfg.Modes ??= new List<AgentModeConfig>();
+            foreach (var key in cfg.Providers.Keys.ToList())
+                cfg.Providers[key] ??= new ProviderOptions();
+            cfg.ReadOnlyDirs.RemoveAll(string.IsNullOrWhiteSpace);
+            cfg.Modes.RemoveAll(m => m is null);
             cfg.Provider ??= "openai";
             cfg.Shell ??= "";
             cfg.SessionDir ??= ".codeagent/sessions";
