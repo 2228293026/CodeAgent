@@ -181,6 +181,7 @@ public sealed partial class Agent
             foreach (var line in ReadLogLines(path, ct))
             {
                 var m = ParseLogLine(line);
+                ct.ThrowIfCancellationRequested();
                 if (m is not null)
                     msgs.Add(m);
             }

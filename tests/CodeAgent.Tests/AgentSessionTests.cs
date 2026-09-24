@@ -70,7 +70,7 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
-    public void ReadSessionLogFile_CanceledToken_PropagatesCancellation()
+    public void ReadSessionLogFile_CanceledToken_PropagatesBeforeOrDuringParsing()
     {
         var path = Path.Combine(_sessionDir, "cancel-read.jsonl");
         File.WriteAllText(path, """{"role":"user","content":"needle"}""");
