@@ -827,7 +827,10 @@ public sealed partial class Agent
     /// 不归一化会被误判为无冲突而并行执行，造成丢失更新。</summary>
     internal static bool DetectWriteConflict(IReadOnlyList<ToolCall> calls, Func<string, string> resolvePath)
     {
-        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pathComparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var paths = new HashSet<string>(pathComparer);
         foreach (var tc in calls)
         {
             if (tc.Name is "write_file" or "edit_file")

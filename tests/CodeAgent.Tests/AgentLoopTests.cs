@@ -374,13 +374,13 @@ public class AgentLoopTests : IDisposable
         string Resolve(string p) => Path.GetFullPath(Path.Combine(_dir, p));
         Assert.True(AgentClass.DetectWriteConflict(calls, Resolve));
 
-        // 大小写与子目录回溯也算同一文件（Windows 大小写不敏感）
+        // 大小写与子目录回溯：Windows 上视为同一文件，大小写敏感 FS 上是不同文件。
         ToolCall[] caseCalls =
         [
             new() { Id = "w2", Name = "write_file", ArgumentsJson = """{"path":"Same.TXT","content":"x"}""" },
             new() { Id = "e2", Name = "edit_file", ArgumentsJson = """{"path":"sub/../same.txt","old_string":"a","new_string":"b"}""" },
         ];
-        Assert.True(AgentClass.DetectWriteConflict(caseCalls, Resolve));
+        Assert.Equal(OperatingSystem.IsWindows(), AgentClass.DetectWriteConflict(caseCalls, Resolve));
 
         // 不同文件、以及不含写操作的批次：无冲突
         ToolCall[] noConflict =
