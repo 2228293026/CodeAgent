@@ -5398,6 +5398,27 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SymlinkCycle_DoesNotRecurseForever()
+    {
+        var targetDir = Path.Combine(_dir, "cycle-target");
+        Directory.CreateDirectory(targetDir);
+        File.WriteAllText(Path.Combine(targetDir, "file.txt"), "x");
+        var linkDir = Path.Combine(_dir, "cycle-link");
+        try
+        {
+            Directory.CreateSymbolicLink(linkDir, targetDir);
+        }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var output = await new ListDirectoryTool().ExecuteAsync(
+            new JsonObject { ["recursive"] = true }, MakeContext(_dir), CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Contains("file.txt", output);
+    }
+
+    [Fact]
     public async Task ListDirectory_ShowSymlink_False_NoSymlinkInfo()
     {
         // show_symlink=false（默认）:不显示链接信息

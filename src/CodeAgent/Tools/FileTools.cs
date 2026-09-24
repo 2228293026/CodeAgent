@@ -886,9 +886,25 @@ public sealed class ListDirectoryTool : ITool
                 StringSplitOptions.RemoveEmptyEntries).Any(ignoreSet.Contains);
         }
 
+        var visitedDirectories = new HashSet<string>(OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal);
+        string DirectoryIdentity(string path)
+        {
+            try
+            {
+                var target = new DirectoryInfo(path).ResolveLinkTarget(returnFinalTarget: true);
+                return Path.GetFullPath(target?.FullName ?? path);
+            }
+            catch (IOException) { return Path.GetFullPath(path); }
+            catch (UnauthorizedAccessException) { return Path.GetFullPath(path); }
+        }
+
         void Walk(string dir, int level)
         {
             ct.ThrowIfCancellationRequested();
+            if (!visitedDirectories.Add(DirectoryIdentity(dir)))
+                return;
             if (level > depth || emitted >= maxItems)
                 return;
             var indent = new string(' ', level * 2);
