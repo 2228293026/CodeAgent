@@ -232,6 +232,33 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void PruneSessionLogs_DoesNotDeleteThroughLinkedRoot()
+    {
+        var outside = Path.Combine(_dir, "outside-prune-root");
+        Directory.CreateDirectory(outside);
+        var link = Path.Combine(_dir, "linked-prune-root");
+        try { Directory.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        try
+        {
+            var old = Path.Combine(outside, "old.jsonl");
+            var newer = Path.Combine(outside, "new.jsonl");
+            File.WriteAllText(old, "old");
+            File.WriteAllText(newer, "new");
+
+            Assert.Equal(0, AgentClass.PruneSessionLogs(link, 1));
+            Assert.True(File.Exists(old));
+            Assert.True(File.Exists(newer));
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void RecentSessionLogs_EqualTimestamps_UsesDeterministicNameOrder()
     {
         var stamp = DateTime.UtcNow;

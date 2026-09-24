@@ -517,6 +517,8 @@ public sealed partial class Agent
             return 0;
         try
         {
+            if (new DirectoryInfo(dir).LinkTarget is not null)
+                return 0;
             var pathComparer = OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase
                 : StringComparer.Ordinal;
