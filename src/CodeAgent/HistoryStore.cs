@@ -61,11 +61,16 @@ public sealed class HistoryStore
         {
             if (!File.Exists(_path))
                 return [];
-            return File.ReadAllLines(_path)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .TakeLast(MaxEntries)
-                .Select(Decode)
-                .ToList();
+            var entries = new Queue<string>(MaxEntries);
+            foreach (var line in File.ReadLines(_path))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+                entries.Enqueue(Decode(line));
+                if (entries.Count > MaxEntries)
+                    entries.Dequeue();
+            }
+            return entries.ToList();
         }
         catch
         {

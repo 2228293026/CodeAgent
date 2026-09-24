@@ -129,6 +129,19 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_LargeHistoryFile_KeepsBoundedLatestEntries()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
+        File.WriteAllLines(_file, Enumerable.Range(0, 5_000)
+            .Select(i => i % 7 == 0 ? "" : $"line{i}"));
+
+        var store = new HistoryStore(_file);
+
+        Assert.Equal(HistoryStore.MaxEntries, store.Count);
+        Assert.Equal("line4999", store.Entries[^1]);
+    }
+
+    [Fact]
     public void Remember_AfterLoad_AppendsNew()
     {
         // 加载旧历史后继续记录：新条目追加到末尾并持久化
