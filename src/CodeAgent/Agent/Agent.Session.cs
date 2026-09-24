@@ -349,18 +349,20 @@ public sealed partial class Agent
     }
 
     /// <summary>在命名快照（/save 的 .json）里搜索关键字：返回最多 maxHits 条 (角色, 命中片段)。/find 用。</summary>
-    internal static List<(string Role, string Snippet)> SearchSnapshot(string path, string keyword, bool caseSensitive = false, int maxHits = 3)
+    internal static List<(string Role, string Snippet)> SearchSnapshot(string path, string keyword, bool caseSensitive = false, int maxHits = 3, CancellationToken ct = default)
     {
         var hits = new List<(string, string)>();
         if (string.IsNullOrEmpty(keyword))
             return hits;
         try
         {
+            ct.ThrowIfCancellationRequested();
             var dto = JsonSerializer.Deserialize<List<MessageDto>>(File.ReadAllText(path), JsonOpts);
             if (dto is null)
                 return hits;
             foreach (var d in dto)
             {
+                ct.ThrowIfCancellationRequested();
                 if (hits.Count >= maxHits)
                     break;
                 var content = d.content;
@@ -376,6 +378,10 @@ public sealed partial class Agent
                         break;
                 }
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {

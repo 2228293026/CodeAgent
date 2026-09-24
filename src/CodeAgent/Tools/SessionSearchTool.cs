@@ -68,7 +68,7 @@ public sealed class SessionSearchTool : ITool
             if (printed >= maxFiles)
                 break;
             var name = Path.GetFileNameWithoutExtension(snap);
-            Emit($"快照 {name}", $"/load {name} 可恢复", AgentClass.SearchSnapshot(snap, keyword, caseSensitive));
+            Emit($"快照 {name}", $"/load {name} 可恢复", AgentClass.SearchSnapshot(snap, keyword, caseSensitive, ct: ct));
         }
 
         return Task.FromResult(printed == 0
