@@ -1393,6 +1393,19 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public void ListDirectory_NameOrdering_UsesFilesystemCaseSemantics()
+    {
+        var lower = Path.Combine(_dir, "a.txt");
+        var upper = Path.Combine(_dir, "A.txt");
+        var entries = ListDirectoryTool.OrderEntries([lower, upper], "name").ToArray();
+
+        if (OperatingSystem.IsWindows())
+            Assert.Equal(new[] { lower, upper }, entries); // 大小写不敏感：稳定保留输入顺序
+        else
+            Assert.Equal(new[] { upper, lower }, entries); // 大小写敏感：Ordinal 中大写字母在前
+    }
+
+    [Fact]
     public async Task ListDirectory_SortBySize_LargestFirst()
     {
         // sort_by=size:文件按大小降序排列（大文件在前）

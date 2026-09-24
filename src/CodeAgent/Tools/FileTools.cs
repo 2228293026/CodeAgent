@@ -1048,17 +1048,20 @@ public sealed class ListDirectoryTool : ITool
     /// 目录没有「文件大小」：new FileInfo(dir).Length 抛 FileNotFoundException（IOException 子类），
     /// 会被 Walk 的 catch (IOException) 吞掉，导致 sort_by=size 时遇到子目录就整段输出中断。
     /// 这里把目录的大小键固定为 0（排在文件之后），并用名称做稳定的次级排序。</summary>
-    private static IEnumerable<string> OrderEntries(IEnumerable<string> entries, string? sortBy, bool reverse = false)
+    internal static IEnumerable<string> OrderEntries(IEnumerable<string> entries, string? sortBy, bool reverse = false)
     {
+        var nameComparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
         IEnumerable<string> ordered = sortBy switch
         {
             "size" => entries
                 .OrderByDescending(SafeFileLength)
-                .ThenBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
+                .ThenBy(x => Path.GetFileName(x), nameComparer),
             "modified" => entries
                 .OrderByDescending(x => SafeLastWriteTimeUtc(x))
-                .ThenBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
-            _ => entries.OrderBy(x => Path.GetFileName(x), StringComparer.OrdinalIgnoreCase),
+                .ThenBy(x => Path.GetFileName(x), nameComparer),
+            _ => entries.OrderBy(x => Path.GetFileName(x), nameComparer),
         };
         return reverse ? ordered.Reverse() : ordered;
     }
