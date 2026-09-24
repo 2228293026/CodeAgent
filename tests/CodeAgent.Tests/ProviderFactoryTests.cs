@@ -112,6 +112,34 @@ public class ProviderFactoryTests
     }
 
     [Fact]
+    public void Create_TrimsDirectProviderOptions()
+    {
+        var config = new AgentConfig
+        {
+            Provider = "custom",
+            Providers =
+            {
+                ["custom"] = new ProviderOptions
+                {
+                    Type = "  anthropic  ",
+                    BaseUrl = "  https://api.example  ",
+                    Model = "  model-x  ",
+                    ApiKeyEnv = "  CUSTOM_KEY  ",
+                    ApiKey = "test-key",
+                },
+            },
+        };
+
+        ProviderFactory.Create(config);
+        var opts = config.Providers["custom"];
+
+        Assert.Equal("anthropic", opts.Type);
+        Assert.Equal("https://api.example", opts.BaseUrl);
+        Assert.Equal("model-x", opts.Model);
+        Assert.Equal("CUSTOM_KEY", opts.ApiKeyEnv);
+    }
+
+    [Fact]
     public void Create_KeepsExplicitValues()
     {
         var config = new AgentConfig
