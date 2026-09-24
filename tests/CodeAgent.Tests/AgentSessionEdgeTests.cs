@@ -202,6 +202,36 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void SaveSession_DoesNotWriteThroughLinkedSessionRoot()
+    {
+        var outside = Path.Combine(_dir, "outside-session-root-save");
+        Directory.CreateDirectory(outside);
+        var link = Path.Combine(_dir, "linked-session-root-save");
+        try { Directory.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        try
+        {
+            var config = new AgentConfig
+            {
+                SaveSessions = false,
+                SessionDir = link,
+                ExportDir = ExportDir,
+            };
+            var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+            var ex = Assert.Throws<IOException>(() => agent.SaveSession("outside"));
+            Assert.Contains("符号链接", ex.Message);
+            Assert.Empty(Directory.GetFiles(outside));
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void RecentSessionLogs_EqualTimestamps_UsesDeterministicNameOrder()
     {
         var stamp = DateTime.UtcNow;

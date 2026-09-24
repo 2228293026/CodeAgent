@@ -491,6 +491,7 @@ public sealed partial class Agent
         try
         {
             var dir = Path.Combine(Environment.CurrentDirectory, _config.SessionDir);
+            EnsureUnlinkedSessionDirectory(dir);
             Directory.CreateDirectory(dir);
             SessionPath = NewSessionLogPath(dir);
             _sessionLog = new StreamWriter(SessionPath, append: true) { AutoFlush = true };
@@ -565,7 +566,15 @@ public sealed partial class Agent
     private string SessionFilePath(string name)
     {
         var safe = SanitizeName(name);
-        return Path.Combine(Environment.CurrentDirectory, _ctx.Config.SessionDir, safe + ".json");
+        var dir = Path.Combine(Environment.CurrentDirectory, _ctx.Config.SessionDir);
+        EnsureUnlinkedSessionDirectory(dir);
+        return Path.Combine(dir, safe + ".json");
+    }
+
+    private static void EnsureUnlinkedSessionDirectory(string dir)
+    {
+        if (new DirectoryInfo(dir).LinkTarget is not null)
+            throw new IOException($"会话目录不能是符号链接: {dir}");
     }
 
     private static MessageDto ToDto(ProviderMessage m) => new()
