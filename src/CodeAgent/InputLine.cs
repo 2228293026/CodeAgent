@@ -114,6 +114,8 @@ public static class InputLine
     /// </summary>
     public static string FitToWidth(string s, int maxWidth)
     {
+        if (maxWidth <= 0)
+            return string.Empty;
         if (DisplayWidth(s) <= maxWidth)
             return s;
         var sb = new StringBuilder();

@@ -233,6 +233,13 @@ public class InputLineCommandsTests
     public void FitToWidth_DoesNotExceedMaxWidth(string s, int width, string expected) =>
         Assert.Equal(expected, InputLine.FitToWidth(s, width));
 
+    [Fact]
+    public void FitToWidth_NonPositiveWidth_ReturnsEmpty()
+    {
+        Assert.Equal("", InputLine.FitToWidth("中文", 0));
+        Assert.Equal("", InputLine.FitToWidth("中文", -1));
+    }
+
     [Theory]
     [InlineData("中文ab", 0, 6)]   // 2*2+2
     [InlineData("中文ab", 2, 2)]   // 移过「中」占 2 列
