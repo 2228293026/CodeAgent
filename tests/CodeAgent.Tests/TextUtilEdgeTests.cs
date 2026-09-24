@@ -500,6 +500,18 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task WriteTextPreserveEncodingAsync_CanceledToken_PrecedesFileAccess()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var path = Path.Combine(_dir, "canceled-encoding.txt");
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            TextUtil.WriteTextPreserveEncodingAsync(path, "content", cts.Token));
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public async Task WriteTextPreserveEncodingAsync_Atomic_CleansUpTmpOnFailure()
     {
         // 写入中途失败时临时文件也应清理（不泄漏垃圾 .tmp）

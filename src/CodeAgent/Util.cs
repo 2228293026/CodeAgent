@@ -132,6 +132,7 @@ public static class TextUtil
     /// 新建文件一律无 BOM UTF-8。</summary>
     public static async Task WriteTextPreserveEncodingAsync(string path, string content, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         System.Text.Encoding enc = new System.Text.UTF8Encoding(false);
         if (File.Exists(path))
         {
