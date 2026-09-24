@@ -416,6 +416,7 @@ public sealed partial class Agent
         {
             ct.ThrowIfCancellationRequested();
             var dto = JsonSerializer.Deserialize<List<MessageDto>>(File.ReadAllText(path), JsonOpts);
+            ct.ThrowIfCancellationRequested();
             if (dto is null)
                 return hits;
             foreach (var d in dto)

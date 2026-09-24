@@ -104,7 +104,7 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
-    public void SearchSnapshot_CanceledToken_PropagatesCancellation()
+    public void SearchSnapshot_CanceledToken_PropagatesBeforeOrAfterDeserialization()
     {
         var path = Path.Combine(_sessionDir, "cancel-search.json");
         File.WriteAllText(path, """[{"role":"user","content":"needle"}]""");
