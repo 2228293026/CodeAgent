@@ -273,14 +273,31 @@ public class ShellRunnerTests
                 Config = new AgentConfig { AllowCommands = true },
                 Workspace = new Workspace(dir),
             };
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                ShellRunner.ExecuteCommandToolAsync("bash",
-                    new JsonObject { ["command"] = "echo hello > made.txt && sleep 30" },
-                    ctx, cts.Token));
-
-            Assert.True(File.Exists(Path.Combine(dir, "made.txt")), "前置条件：取消前命令已写出文件");
-            Assert.Contains(ctx.Undo.AllPaths(), p => p.EndsWith("made.txt", StringComparison.OrdinalIgnoreCase));
+            using var cts = new CancellationTokenSource();
+            var run = ShellRunner.ExecuteCommandToolAsync("bash",
+                new JsonObject { ["command"] = "echo hello > made.txt && sleep 30" },
+                ctx, cts.Token);
+            try
+            {
+                // 等待命令真正完成写入后再取消：CI 机器启动 bash 可能超过固定 3 秒，
+                // 用固定延时会把“命令尚未启动”的时序抖动误报成撤销回归。
+                var made = Path.Combine(dir, "made.txt");
+                var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+                while (!File.Exists(made) && DateTime.UtcNow < deadline)
+                {
+                    if (run.IsCompleted)
+                        await run; // 命令提前失败/结束时立即暴露真实异常
+                    await Task.Delay(50);
+                }
+                Assert.True(File.Exists(made), "前置条件：取消前命令已写出文件");
+                cts.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+                Assert.Contains(ctx.Undo.AllPaths(), p => p.EndsWith("made.txt", StringComparison.OrdinalIgnoreCase));
+            }
+            finally
+            {
+                cts.Cancel();
+            }
         }
         finally
         {
