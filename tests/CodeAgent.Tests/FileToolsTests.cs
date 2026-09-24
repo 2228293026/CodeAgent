@@ -5403,6 +5403,32 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SymlinkFileOutsideWorkspace_IsSkipped()
+    {
+        var outside = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-outside-file-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var outsideFile = Path.Combine(outside, "secret.txt");
+            File.WriteAllText(outsideFile, "do-not-list");
+            var link = Path.Combine(_dir, "outside-file-link.txt");
+            try { File.CreateSymbolicLink(link, outsideFile); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            var output = await new ListDirectoryTool().ExecuteAsync(
+                new JsonObject { ["show_hash"] = true }, MakeContext(_dir), CancellationToken.None);
+
+            Assert.DoesNotContain("outside-file-link.txt", output);
+            Assert.DoesNotContain("secret.txt", output);
+        }
+        finally
+        {
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task ListDirectory_ShowSymlink_True_DisplaysSymlinkTarget()
     {
         // show_symlink=true:符号链接后附加目标路径（不是目标文件的内容）

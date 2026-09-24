@@ -963,6 +963,8 @@ public sealed class ListDirectoryTool : ITool
                             break;
                         if (!showHidden && SkipDirs.IsHidden(f))
                             continue; // 跳过隐藏文件
+                        try { ctx.Workspace.ResolveRead(f); }
+                        catch (ToolException) { continue; } // 链接目标越出沙箱
                         var fileName = Path.GetFileName(f);
                         var suffix = new List<string>();
                         var parenParts = new List<string>();
