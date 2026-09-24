@@ -465,6 +465,27 @@ public class ConfigEdgeTests : IDisposable
     // ===== Save 往返 =====
 
     [Fact]
+    public void Save_NormalizesNullCollectionsBeforeWriting()
+    {
+        var path = Path.Combine(_dir, "null-collections.json");
+        var cfg = new AgentConfig
+        {
+            Providers = null!,
+            ReadOnlyDirs = null!,
+            Modes = null!,
+        };
+
+        AgentConfig.Save(cfg, path);
+        var loaded = AgentConfig.Load(path);
+
+        Assert.NotNull(loaded.Providers);
+        Assert.NotNull(loaded.ReadOnlyDirs);
+        Assert.NotNull(loaded.Modes);
+        Assert.Empty(loaded.Providers);
+        Assert.Empty(loaded.Modes);
+    }
+
+    [Fact]
     public void Save_RoundTripsFullConfig()
     {
         var path = Path.Combine(_dir, "full.json");
