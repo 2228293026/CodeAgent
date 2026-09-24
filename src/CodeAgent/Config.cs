@@ -394,7 +394,17 @@ public sealed class AgentConfig
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
         var json = JsonSerializer.Serialize(config, JsonOpts);
-        File.WriteAllText(path, json);
+        var tmp = SkipDirs.TempPathFor(path);
+        try
+        {
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
     }
 
     /// <summary>写出示例配置到指定路径（--init 用）。</summary>

@@ -812,6 +812,7 @@ public class ConfigTests : IDisposable
 
         Assert.True(File.Exists(path));
         Assert.Equal("test", AgentConfig.Load(path).Provider);
+        Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp"));
     }
 
     [Fact]
