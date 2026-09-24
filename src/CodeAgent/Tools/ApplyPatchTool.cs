@@ -35,6 +35,7 @@ public sealed class ApplyPatchTool : ITool
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var patch = ToolArgs.GetString(args, "patch");
         if (string.IsNullOrWhiteSpace(patch))
             throw new ToolException("缺少必填参数 patch");

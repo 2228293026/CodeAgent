@@ -18,6 +18,19 @@ public class ApplyPatchToolTests : IDisposable
 
     private AgentContext MakeContext() => new() { Config = new AgentConfig(), Workspace = new Workspace(_dir) };
 
+    [Fact]
+    public async Task Apply_CanceledToken_StopsBeforeSideEffects()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ApplyPatchTool().ExecuteAsync(
+                new JsonObject { ["patch"] = "@@ -1 +1 @@\n-a\n+b", ["path"] = "canceled.txt", ["allow_new_file"] = true },
+                MakeContext(), cts.Token));
+        Assert.False(File.Exists(Path.Combine(_dir, "canceled.txt")));
+    }
+
     private async Task<string> Apply(string patch, string? path = null, bool validateOnly = false, bool allowNewFile = false, bool allowEmpty = false, bool generous = false, bool dryRun = false, bool backup = false)
     {
         var tool = new ApplyPatchTool();
