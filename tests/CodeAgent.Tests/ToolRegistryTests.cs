@@ -27,6 +27,17 @@ public class ToolRegistryTests : IDisposable
     };
 
     [Fact]
+    public async Task ExecuteAsync_CanceledToken_StopsBeforeDispatch()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ToolRegistry.CreateDefault().ExecuteAsync(
+                "read_file", "{}", MakeContext(_dir), cts.Token));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_UnknownTool_ThrowsWithAvailableList()
     {
         var registry = ToolRegistry.CreateDefault();
