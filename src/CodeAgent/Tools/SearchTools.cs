@@ -631,6 +631,7 @@ public sealed class GrepTool : ITool
             throw new ToolException($"路径不存在: {target}");
         }
 
+        ct.ThrowIfCancellationRequested();
         if (hits == 0)
             return $"(无匹配: {pattern})";
         var notice = hits >= max ? $"\n…(已达 max_results={max} 上限，可能还有更多匹配；可用 max_results 参数提高)" : "";
