@@ -4554,6 +4554,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_ByteRange_StripBom_RemovesBomFromOutput()
+    {
+        // 回归：字节范围读取绕过 ReadTextSmart，strip_bom=true 时也必须去掉 UTF-8 BOM
+        File.WriteAllBytes(Path.Combine(_dir, "bom-range.txt"),
+            [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes("hello")]);
+        var tool = new ReadFileTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["path"] = "bom-range.txt", ["byte_limit"] = 32, ["strip_bom"] = true, ["no_header"] = true },
+            ctx, CancellationToken.None);
+
+        Assert.Contains("hello", output);
+        Assert.Equal(-1, output.IndexOf('\uFEFF'));
+    }
+
+    [Fact]
     public async Task ReadFile_ByteRange_DoesNotFullReadLargeFile()
     {
         // 分段读取的意义在于不整读文件：写一个 8MB 文件，只取 1 字节，

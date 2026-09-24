@@ -187,6 +187,11 @@ public sealed class ReadFileTool : ITool
             }
             if (read < slice.Length)
                 slice = slice[..read];
+            // 分段读取不会经过 ReadTextSmart 的 BOM 清理；strip_bom=true 时需在此显式去掉文件头。
+            // 仅 byteStart==0 才可能从 BOM 起始处读取，避免误删正文中恰好出现的 BOM 字节。
+            if (stripBom && byteStart == 0 && slice.Length >= 3
+                && slice[0] == 0xEF && slice[1] == 0xBB && slice[2] == 0xBF)
+                slice = slice[3..];
             text = (rangeEnc ?? System.Text.Encoding.UTF8).GetString(slice);
         }
         else if (!string.IsNullOrEmpty(encoding))
