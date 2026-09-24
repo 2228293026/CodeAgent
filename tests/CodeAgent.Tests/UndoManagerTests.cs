@@ -480,6 +480,31 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void SnapshotDir_DoesNotFollowRootDirectorySymlink()
+    {
+        var outside = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-undo-root-outside-" + Guid.NewGuid().ToString("N"));
+        var link = Path.Combine(Path.GetDirectoryName(_dir)!, "codeagent-undo-root-link-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "secret.txt"), "outside");
+            try { Directory.CreateSymbolicLink(link, outside); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            var snapshot = UndoManager.SnapshotDir(link);
+
+            Assert.Empty(snapshot.Texts);
+            Assert.Empty(snapshot.Seen);
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void RecordCommandSideEffects_ModifiedEmptyFile_RestoresEmptyContent()
     {
         var dir = Path.Combine(_dir, "empty-mod");

@@ -259,6 +259,8 @@ public sealed class UndoManager
         long total = 0;
         try
         {
+            if (new DirectoryInfo(cwd).LinkTarget is not null)
+                return new DirSnapshot(texts, encodings, seen);
             foreach (var file in SkipDirs.EnumerateFilesPruned(cwd, followSymlinks: false))
             {
                 try
