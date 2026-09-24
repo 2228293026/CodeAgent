@@ -355,6 +355,16 @@ public sealed class GrepTool : ITool
             }
             return count;
         }
+        bool AnyLine(string value, Func<string, bool> predicate)
+        {
+            foreach (var line in DiffUtil.SplitLines(value))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (predicate(line.TrimEnd('\r')))
+                    return true;
+            }
+            return false;
+        }
 
         void ScanFile(string path, int fileMaxMatches = 0)
         {
@@ -405,7 +415,7 @@ public sealed class GrepTool : ITool
                     // 正常模式按整文件是否含匹配行判断；invert 时按「是否含任一非匹配行」判断（逐行），
                     // 否则含匹配行的文件（如 DROP\nkeep）会被整文件命中误判为「无匹配」
                     var fileHits = invert
-                        ? DiffUtil.SplitLines(text).Any(l => !re.IsMatch(l.TrimEnd('\r')))
+                        ? AnyLine(text, l => !re.IsMatch(l))
                         : re.IsMatch(text);
                     if (fileHits)
                     {
