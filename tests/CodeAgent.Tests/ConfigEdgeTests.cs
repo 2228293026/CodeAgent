@@ -324,6 +324,17 @@ public class ConfigEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Load_RelativeExplicitPath_StoresAbsoluteSourceFile()
+    {
+        var path = WriteJson("""{ "provider": "x" }""");
+        var relative = Path.GetRelativePath(Environment.CurrentDirectory, path);
+        var cfg = AgentConfig.Load(relative);
+
+        Assert.Equal(Path.GetFullPath(path), cfg.SourceFile);
+        Assert.Equal(Path.GetFullPath(path), ConfigSavePath(null, cfg));
+    }
+
+    [Fact]
     public void Load_SetsSourceFile()
     {
         var path = WriteJson("""{ "provider": "x" }""");

@@ -180,7 +180,7 @@ public sealed class AgentConfig
         {
             if (!File.Exists(explicitPath))
                 throw new FileNotFoundException($"配置文件不存在: {explicitPath}");
-            found = explicitPath;
+            found = Path.GetFullPath(explicitPath);
         }
         else
         {
