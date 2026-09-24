@@ -1357,8 +1357,7 @@ internal static class Program
                         var baseDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
                         if (Directory.Exists(baseDir))
                         {
-                            var totalBytes = Directory.EnumerateFiles(baseDir, "*", SearchOption.AllDirectories)
-                                .Sum(f => new FileInfo(f).Length);
+                            var totalBytes = TextUtil.GetDirectorySizeBytes(baseDir);
                             Console.WriteLine($".codeagent 目录占用 {TextUtil.FormatBytes(totalBytes)}（/diag 可再次查看；整目录可安全删除）。");
                         }
                     }

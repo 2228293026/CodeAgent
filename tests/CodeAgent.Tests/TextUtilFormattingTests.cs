@@ -237,6 +237,19 @@ public class TextUtilFormattingTests
     }
 
     [Fact]
+    public void GetDirectorySizeBytes_IncludesIgnoredDirectories_ForDiskUsage()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-ignored-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "bin"));
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "bin", "cache.bin"), new byte[123]);
+            Assert.Equal(123, TextUtil.GetDirectorySizeBytes(dir));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void GetDirectorySizeBytes_SumOfFiles_ReturnsTotalBytes()
     {
         var dir = Path.Combine(Path.GetTempPath(), "codeagent-dirsize-" + Guid.NewGuid().ToString("N"));
