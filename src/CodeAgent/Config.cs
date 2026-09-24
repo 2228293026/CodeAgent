@@ -210,7 +210,10 @@ public sealed class AgentConfig
             cfg.Modes ??= new List<AgentModeConfig>();
             foreach (var key in cfg.Providers.Keys.ToList())
                 cfg.Providers[key] ??= new ProviderOptions();
-            cfg.ReadOnlyDirs.RemoveAll(string.IsNullOrWhiteSpace);
+            cfg.ReadOnlyDirs = cfg.ReadOnlyDirs
+                .Where(d => !string.IsNullOrWhiteSpace(d))
+                .Select(d => d.Trim())
+                .ToList();
             cfg.Modes.RemoveAll(m => m is null);
             foreach (var provider in cfg.Providers.Values)
             {
@@ -224,11 +227,11 @@ public sealed class AgentConfig
                 mode.Description ??= "";
                 mode.SystemPrompt ??= AgentConfig.DefaultSystemPrompt;
             }
-            cfg.Provider ??= "openai";
-            cfg.Shell ??= "";
-            cfg.SessionDir ??= ".codeagent/sessions";
-            cfg.ExportDir ??= ".codeagent/exports";
-            cfg.DefaultMode ??= "code";
+            cfg.Provider = string.IsNullOrWhiteSpace(cfg.Provider) ? "openai" : cfg.Provider.Trim();
+            cfg.Shell = cfg.Shell?.Trim() ?? "";
+            cfg.SessionDir = string.IsNullOrWhiteSpace(cfg.SessionDir) ? ".codeagent/sessions" : cfg.SessionDir.Trim();
+            cfg.ExportDir = string.IsNullOrWhiteSpace(cfg.ExportDir) ? ".codeagent/exports" : cfg.ExportDir.Trim();
+            cfg.DefaultMode = string.IsNullOrWhiteSpace(cfg.DefaultMode) ? "code" : cfg.DefaultMode.Trim();
             cfg.SystemPrompt ??= DefaultSystemPrompt;
             cfg.SourceFile = found;
             // 边界校验：非法值收敛到可用范围，避免空转/异常。

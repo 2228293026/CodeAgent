@@ -97,6 +97,30 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal(AgentConfig.DefaultSystemPrompt, config.Modes[0].SystemPrompt);
     }
 
+    [Fact]
+    public void Load_TrimsProviderPathsAndShellNames()
+    {
+        var path = WriteJson("""
+        {
+          "provider": " openai ",
+          "shell": " bash ",
+          "sessionDir": " sessions ",
+          "exportDir": " exports ",
+          "defaultMode": " code ",
+          "readOnlyDirs": ["  libs  "]
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.Equal("openai", config.Provider);
+        Assert.Equal("bash", config.Shell);
+        Assert.Equal("sessions", config.SessionDir);
+        Assert.Equal("exports", config.ExportDir);
+        Assert.Equal("code", config.DefaultMode);
+        Assert.Equal(["libs"], config.ReadOnlyDirs);
+    }
+
     // ===== ProviderOptions 默认值 =====
 
     [Fact]
