@@ -494,6 +494,16 @@ old
     }
 
     [Fact]
+    public async Task Apply_OldSideNoNewlineMarker_DoesNotSuppressNewTrailingNewline()
+    {
+        // \ No newline at end of file 紧跟 - 行时只描述旧文件；新文件仍应以换行结尾。
+        File.WriteAllText(Path.Combine(_dir, "old-no-newline.txt"), "hello");
+        var patch = "@@ -1 +1 @@\n-hello\n\\ No newline at end of file\n+world\n";
+        await Apply(patch, "old-no-newline.txt");
+        Assert.Equal("world\n", File.ReadAllText(Path.Combine(_dir, "old-no-newline.txt")));
+    }
+
+    [Fact]
     public async Task Apply_Patch_WithNoNewlineMarker_OnFileWithoutTrailingNewline_Applies()
     {
         // 回归：\ No newline at end of file 曾被当成上下文行，导致补丁应用失败

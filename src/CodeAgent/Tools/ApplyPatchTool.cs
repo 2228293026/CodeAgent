@@ -108,16 +108,23 @@ public sealed class ApplyPatchTool : ITool
                 var oldStart = RegexOldStart(line);
                 i++;
                 var hunk = new PatchHunk { OldStart = oldStart };
+                char? lastDataOp = null;
                 while (i < lines.Count && IsDataStart(lines[i]))
                 {
                     var dl = lines[i];
                     if (dl[0] == '\\')
                     {
-                        // \ No newline at end of file 是元数据标记，不当作内容行加入 hunk
-                        cur.HasNoNewlineMarker = true;
+                        // 标记描述紧邻的数据行：+ / 上下文行属于新文件侧，- 行只描述旧文件侧。
+                        if (lastDataOp == '-')
+                            cur.OldSideHasNoNewlineMarker = true;
+                        else if (lastDataOp is '+' or ' ')
+                            cur.NewSideHasNoNewlineMarker = true;
                     }
                     else
+                    {
                         hunk.Lines.Add(new HunkLine(dl[0], dl.Length > 1 ? dl[1..] : ""));
+                        lastDataOp = dl[0];
+                    }
                     i++;
                 }
                 i--; // 回退:让外层循环重新处理非数据行
@@ -138,16 +145,22 @@ public sealed class ApplyPatchTool : ITool
                     continue;
                 i++;
                 var hunk = new PatchHunk { OldStart = RegexOldStart(lines[i - 1]) };
+                char? lastDataOp = null;
                 while (i < lines.Count && IsDataStart(lines[i]))
                 {
                     var dl = lines[i];
                     if (dl[0] == '\\')
                     {
-                        // \ No newline at end of file 是元数据标记，不当作内容行加入 hunk
-                        cur.HasNoNewlineMarker = true;
+                        if (lastDataOp == '-')
+                            cur.OldSideHasNoNewlineMarker = true;
+                        else if (lastDataOp is '+' or ' ')
+                            cur.NewSideHasNoNewlineMarker = true;
                     }
                     else
+                    {
                         hunk.Lines.Add(new HunkLine(dl[0], dl.Length > 1 ? dl[1..] : ""));
+                        lastDataOp = dl[0];
+                    }
                     i++;
                 }
                 i--;
@@ -227,9 +240,12 @@ public sealed class ApplyPatchTool : ITool
             return $"[dry_run] 将应用: {file.Path}(-{stat.removed} +{stat.added},共 {file.Hunks.Count} 个 hunk;未写盘)";
 
         var newText = string.Join('\n', applied);
-        // 保留目标文件原有的结尾换行风格(先补末尾换行,再统一转 CRLF,避免混入 \r\r\n)
-        // 补丁含 \ No newline at end of file 时，结果文件不应带末尾换行
-        if (text.Length > 0 && text[^1] == '\n' && !file.HasNoNewlineMarker)
+        // 保留目标文件原有的结尾换行风格(先补末尾换行,再统一转 CRLF,避免混入 \r\r\n)。
+        // no-newline 标记按旧/新文件侧解释：仅旧侧无换行时，新侧应补上；新侧也无换行时不补。
+        var trailingNewline = file.NewSideHasNoNewlineMarker
+            ? false
+            : file.OldSideHasNoNewlineMarker || (text.Length > 0 && text[^1] == '\n');
+        if (text.Length > 0 && trailingNewline)
             newText += "\n";
         if (crlf)
             newText = newText.Replace("\n", "\r\n");
@@ -352,7 +368,8 @@ public sealed class ApplyPatchTool : ITool
         public PatchFile(string path) => Path = path;
         public string Path { get; }
         public List<PatchHunk> Hunks { get; } = [];
-        public bool HasNoNewlineMarker { get; set; }
+        public bool OldSideHasNoNewlineMarker { get; set; }
+        public bool NewSideHasNoNewlineMarker { get; set; }
     }
 
     internal sealed class PatchHunk
