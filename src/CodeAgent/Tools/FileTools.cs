@@ -901,7 +901,7 @@ public sealed class ListDirectoryTool : ITool
                     {
                         // skip_empty_dirs=true:跳过没有文件的目录（递归检查）
                         if (skipEmptyDirs && !SkipDirs.EnumerateFilesPruned(d)
-                            .Any(f => (showHidden || !SkipDirs.IsHidden(f))
+                            .Any(f => (showHidden || !SkipDirs.IsHiddenPath(f, d))
                                 && !IsIgnoredPath(f, d)))
                             continue;
                         var suffix = "";

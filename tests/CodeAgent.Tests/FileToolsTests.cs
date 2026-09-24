@@ -4928,6 +4928,23 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ListDirectory_SkipEmptyDirs_IgnoresHiddenDescendantFiles()
+    {
+        // 隐藏子目录中的普通文件名不应让父目录看起来有可见文件。
+        var dir = Path.Combine(_dir, "onlyhidden");
+        Directory.CreateDirectory(Path.Combine(dir, ".hidden"));
+        File.WriteAllText(Path.Combine(dir, ".hidden", "artifact.txt"), "x");
+        var tool = new ListDirectoryTool();
+        var ctx = MakeContext(_dir);
+
+        var output = await tool.ExecuteAsync(
+            new JsonObject { ["skip_empty_dirs"] = true }, ctx, CancellationToken.None);
+
+        var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Trim()).ToList();
+        Assert.DoesNotContain("onlyhidden/", lines);
+    }
+
+    [Fact]
     public async Task ListDirectory_SkipEmptyDirs_AppliesIgnoreToDescendantPaths()
     {
         // 用户 ignore 的目录不应让父目录看起来有可见文件。
