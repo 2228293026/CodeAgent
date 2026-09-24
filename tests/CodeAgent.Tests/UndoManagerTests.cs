@@ -402,6 +402,28 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void SnapshotDir_PreservesCaseDistinctPaths_WhenFileSystemDoes()
+    {
+        var upper = Path.Combine(_dir, "Case.txt");
+        var lower = Path.Combine(_dir, "case.txt");
+        File.WriteAllText(upper, "upper");
+        File.WriteAllText(lower, "lower");
+
+        var snap = UndoManager.SnapshotDir(_dir);
+        if (OperatingSystem.IsWindows() || File.ReadAllText(upper) == "lower")
+        {
+            // 大小写不敏感文件系统上两个路径指向同一文件。
+            Assert.Single(snap.Texts);
+        }
+        else
+        {
+            Assert.Equal(2, snap.Texts.Count);
+            Assert.Equal("upper", snap.Texts["Case.txt"]);
+            Assert.Equal("lower", snap.Texts["case.txt"]);
+        }
+    }
+
+    [Fact]
     public void RecordCommandSideEffects_DeletedGbkFile_UndoRebuildsAsGbk()
     {
         // 回归：命令删除 GBK 文件后，撤销重建曾按无 BOM UTF-8 写回（编码静默丢失）；

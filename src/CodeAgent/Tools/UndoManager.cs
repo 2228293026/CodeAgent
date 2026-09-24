@@ -210,6 +210,11 @@ public sealed class UndoManager
     private const long SnapshotMaxFileBytes = 1 * 1024 * 1024;   // 单文件上限：>1MB 不记录（无法撤销）
     private const long SnapshotMaxTotalBytes = 20 * 1024 * 1024; // 快照总大小上限：防止大项目拖慢每次命令
 
+    // 快照键必须匹配文件系统大小写语义：Linux 上 Case.txt 与 case.txt 是两个文件，
+    // 固定 OrdinalIgnoreCase 会让后枚举文件覆盖前一个，命令撤销可能改错目标。
+    private static StringComparer PathComparer =>
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     /// <summary>目录快照：文件内容 + 各文件编码。编码取自命令执行前——被删文件无法
     /// 从磁盘探测，若只靠执行后推断，撤销重建会把 GBK 文件写成 UTF-8。
     /// Seen 是枚举到的全部文件（含被跳过未记内容的 &gt;1MB/不可读文件）：命令把这类文件
@@ -222,9 +227,9 @@ public sealed class UndoManager
     /// <summary>对目录做文本文件快照（相对路径 → 内容）：跳过构建/缓存目录、二进制与超大文件。</summary>
     public static DirSnapshot SnapshotDir(string cwd)
     {
-        var texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var encodings = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var texts = new Dictionary<string, string>(PathComparer);
+        var encodings = new Dictionary<string, string?>(PathComparer);
+        var seen = new HashSet<string>(PathComparer);
         long total = 0;
         try
         {
@@ -261,7 +266,7 @@ public sealed class UndoManager
     public static void RecordCommandSideEffects(string cwd, DirSnapshot before, UndoManager undo)
     {
         var after = SnapshotDir(cwd);
-        var paths = new HashSet<string>(before.Texts.Keys, StringComparer.OrdinalIgnoreCase);
+        var paths = new HashSet<string>(before.Texts.Keys, PathComparer);
         paths.UnionWith(after.Texts.Keys);
         foreach (var rel in paths)
         {
@@ -290,7 +295,7 @@ public sealed class UndoManager
         lock (_lock)
             return _entries
                 .Select(e => e.Path)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(PathComparer)
                 .ToList();
     }
 
