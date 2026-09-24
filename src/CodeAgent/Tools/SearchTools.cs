@@ -154,7 +154,7 @@ public sealed class GlobTool : ITool
                 }
                 if (showHash && File.Exists(full))
                 {
-                    var hash = SkipDirs.ComputeFileSha256(full); // 流式：不整读进内存
+                    var hash = SkipDirs.ComputeFileSha256(full, ct); // 流式：不整读进内存
                     if (hash is not null)
                         parts.Add($"sha256:{hash[..8]}..."); // 只显示前 8 位，避免输出过长
                 }
@@ -479,7 +479,7 @@ public sealed class GrepTool : ITool
                         }
                         if (showHash)
                         {
-                            var hash = SkipDirs.ComputeFileSha256(path); // 流式：不整读进内存
+                            var hash = SkipDirs.ComputeFileSha256(path, ct); // 流式：不整读进内存
                             if (hash is not null)
                                 extra += $" (sha256:{hash[..8]}...)";
                         }

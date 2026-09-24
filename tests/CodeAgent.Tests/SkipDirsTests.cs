@@ -148,6 +148,17 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void ComputeFileSha256_CanceledToken_PropagatesCancellation()
+    {
+        var path = Path.Combine(_dir, "cancel-hash.txt");
+        File.WriteAllText(path, "content");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => SkipDirs.ComputeFileSha256(path, cts.Token));
+    }
+
+    [Fact]
     public void CountFileLines_CountsLikeReadAllLines()
     {
         // 流式行数须与 File.ReadAllLines 语义一致：末尾无换行也算一行

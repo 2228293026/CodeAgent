@@ -625,14 +625,24 @@ public static class SkipDirs
 
     /// <summary>流式计算文件 SHA256（不整读进内存）：大文件（GB 级）不会因 show_hash 触发 OOM。
     /// 返回大写十六进制串；读取失败返回 null。</summary>
-    public static string? ComputeFileSha256(string path)
+    public static string? ComputeFileSha256(string path, CancellationToken ct = default)
     {
         try
         {
             using var sha = System.Security.Cryptography.SHA256.Create();
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            return Convert.ToHexString(sha.ComputeHash(fs));
+            var buffer = new byte[64 * 1024];
+            int n;
+            while ((n = fs.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                sha.TransformBlock(buffer, 0, n, buffer, 0);
+            }
+            ct.ThrowIfCancellationRequested();
+            sha.TransformFinalBlock([], 0, 0);
+            return Convert.ToHexString(sha.Hash!);
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
             return null;

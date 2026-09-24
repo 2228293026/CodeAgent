@@ -278,7 +278,7 @@ public sealed class ReadFileTool : ITool
         var output = (encNote.Length > 0 ? encNote + "\n" : "") + head + sb.ToString().TrimEnd();
         if (includeHash)
         {
-            var hash = SkipDirs.ComputeFileSha256(full); // 流式：不整读进内存
+            var hash = SkipDirs.ComputeFileSha256(full, ct); // 流式：不整读进内存
             if (hash is not null)
                 output += $"\nsha256:{hash}";
         }
@@ -993,7 +993,7 @@ public sealed class ListDirectoryTool : ITool
                         if (showHash)
                         {
                             // 流式计算：File.ReadAllBytes 会把大文件整个读进内存（GB 级直接 OOM）
-                            var hash = SkipDirs.ComputeFileSha256(f);
+                            var hash = SkipDirs.ComputeFileSha256(f, ct);
                             if (hash is not null)
                                 parenParts.Add($"sha256:{hash[..8]}...");
                         }
