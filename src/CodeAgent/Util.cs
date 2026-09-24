@@ -278,7 +278,11 @@ public static class TextUtil
             return Truncate(s, max);
         var tailStart = s.Length - tail;
         if (tailStart > 0 && char.IsLowSurrogate(s[tailStart]) && char.IsHighSurrogate(s[tailStart - 1]))
+        {
+            if (tail == 1)
+                return Truncate(s, max); // 只剩一格时无法容纳完整代理对，退回普通截断
             tailStart--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
+        }
         return SafeCut(s, head) + string.Format(markerFormat, (long)s.Length - head - tailStart) + s[tailStart..];
     }
 

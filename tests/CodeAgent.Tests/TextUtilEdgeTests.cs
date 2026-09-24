@@ -326,6 +326,14 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public void TruncateHeadTail_NarrowTailBudget_DoesNotExceedLimit()
+    {
+        var s = "A" + string.Concat(Enumerable.Repeat("😀", 100)) + "Z";
+        var t = TextUtil.TruncateHeadTail(s, 84);
+        Assert.True(t.Length <= 84, $"截断结果不应超出 max（实际 {t.Length}）");
+    }
+
+    [Fact]
     public void TruncateHeadTail_ShortInput_Unchanged()
     {
         var s = new string('a', 100);
