@@ -488,7 +488,9 @@ public class TextUtilEdgeTests : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        using (var p = System.Diagnostics.Process.Start(psi)!) p.WaitForExit(5000);
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        if (!p.WaitForExit(5000) || p.ExitCode != 0)
+            return; // 当前 Windows 环境不允许创建 junction 时跳过动态回归
 
         var listing = await Task.Run(() => SkipDirs.EnumerateFilesPruned(_dir).ToList());
         Assert.Contains(listing, f => f.EndsWith("f.txt", StringComparison.Ordinal));

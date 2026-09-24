@@ -578,10 +578,19 @@ public static class SkipDirs
                 foreach (var d in subDirs)
                 {
                     ct.ThrowIfCancellationRequested();
-                    var name = Path.GetFileName(d);
+                    var child = d;
+                    try
+                    {
+                        var target = new DirectoryInfo(child).ResolveLinkTarget(returnFinalTarget: true);
+                        if (target is not null)
+                            child = target.FullName;
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                    var name = Path.GetFileName(child);
                     if (!includeIgnored && IsSkipped(name))
                         continue; // 剪枝：不进入被跳过的目录
-                    stack.Push((d, depth + 1));
+                    stack.Push((child, depth + 1));
                 }
             }
         }
