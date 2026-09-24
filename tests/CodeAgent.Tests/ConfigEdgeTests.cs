@@ -465,6 +465,18 @@ public class ConfigEdgeTests : IDisposable
     // ===== Save 往返 =====
 
     [Fact]
+    public void Save_RelativePath_WritesToStableAbsoluteLocation()
+    {
+        var path = Path.Combine(_dir, "relative-save.json");
+        var relative = Path.GetRelativePath(Environment.CurrentDirectory, path);
+
+        AgentConfig.Save(new AgentConfig { Provider = "openai" }, relative);
+
+        Assert.True(File.Exists(path));
+        Assert.Equal("openai", AgentConfig.Load(path).Provider);
+    }
+
+    [Fact]
     public void Save_NormalizesNullCollectionsBeforeWriting()
     {
         var path = Path.Combine(_dir, "null-collections.json");

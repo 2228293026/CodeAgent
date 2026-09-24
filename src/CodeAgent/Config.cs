@@ -436,6 +436,7 @@ public sealed class AgentConfig
     /// <summary>以 camelCase 格式保存配置到指定路径。</summary>
     public static void Save(AgentConfig config, string path)
     {
+        path = Path.GetFullPath(path);
         config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
         config.ReadOnlyDirs ??= new List<string>();
         config.Modes ??= new List<AgentModeConfig>();
