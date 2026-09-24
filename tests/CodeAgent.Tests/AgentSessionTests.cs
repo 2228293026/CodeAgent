@@ -92,7 +92,7 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
-    public void SessionLogSummary_CanceledToken_PropagatesCancellation()
+    public void SessionLogSummary_CanceledToken_PropagatesBeforeOrDuringParsing()
     {
         var path = Path.Combine(_sessionDir, "cancel-summary.jsonl");
         File.WriteAllText(path, """{"role":"user","content":"needle"}""");
