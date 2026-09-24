@@ -19,6 +19,23 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void Remember_BareFilename_SavesInCurrentDirectory()
+    {
+        var file = "history-round136.txt";
+        try
+        {
+            var store = new HistoryStore(file);
+            store.Remember("bare-path-entry");
+            var reloaded = new HistoryStore(file);
+            Assert.Equal(["bare-path-entry"], reloaded.Entries);
+        }
+        finally
+        {
+            try { File.Delete(file); } catch { }
+        }
+    }
+
+    [Fact]
     public void Remember_AppendsEntries()
     {
         var store = new HistoryStore(_file);

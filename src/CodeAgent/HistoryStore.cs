@@ -77,7 +77,9 @@ public sealed class HistoryStore
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+            var directory = Path.GetDirectoryName(_path);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
             File.WriteAllLines(_path, _entries.TakeLast(MaxEntries).Select(Encode));
         }
         catch
