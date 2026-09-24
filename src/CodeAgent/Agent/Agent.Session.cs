@@ -57,9 +57,12 @@ public sealed partial class Agent
         LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
         LastPrompt = null;   // 加载前的「上一条请求」不应被 /retry 复活进加载的对话
         // 与 LoadSessionLog 一致：滚动新日志并重写，--continue 恢复的是加载后的对话而非旧日志
-        RollSessionLog();
+        RollSessionLog(ct);
         foreach (var m in _messages)
+        {
+            ct.ThrowIfCancellationRequested();
             LogMessage(m);
+        }
     }
 
     /// <summary>把当前对话（或指定命名会话）导出为 Markdown 记录，返回文件路径。</summary>
@@ -231,9 +234,12 @@ public sealed partial class Agent
         _turnStarts.Clear(); // 恢复的会话没有「上一轮」可撤回
         LastInputTokens = 0; // 上下文变为恢复的历史：退回估算口径
 
-        RollSessionLog();
+        RollSessionLog(ct);
         foreach (var m in _messages)
+        {
+            ct.ThrowIfCancellationRequested();
             LogMessage(m);
+        }
         return true;
     }
 
@@ -462,8 +468,9 @@ public sealed partial class Agent
     }
 
     /// <summary>切换到新的会话日志文件（/clear 与恢复会话后用，使日志与新历史一一对应）。</summary>
-    private void RollSessionLog()
+    private void RollSessionLog(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_sessionLog is null)
             return;
         try { _sessionLog.Dispose(); } catch { /* 忽略 */ }
@@ -474,6 +481,10 @@ public sealed partial class Agent
             SessionPath = NewSessionLogPath(dir);
             _sessionLog = new StreamWriter(SessionPath, append: true) { AutoFlush = true };
             PruneSessionLogs(dir, _ctx.Config.MaxSessionLogs, SessionPath);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
