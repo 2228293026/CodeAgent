@@ -106,6 +106,7 @@ public static class ShellRunner
     /// 模型可用 `shell` 参数按次覆盖默认选择（如必须用 powershell 跑 PS 脚本）。</summary>
     internal static async Task<string> ExecuteCommandToolAsync(string shell, JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var command = ToolArgs.GetString(args, "command");
         if (string.IsNullOrWhiteSpace(command))
             throw new ToolException("缺少必填参数 command");

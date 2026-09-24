@@ -12,6 +12,19 @@ namespace CodeAgent.Tests;
 public class ShellRunnerTests
 {
     [Fact]
+    public async Task ExecuteCommandTool_CanceledToken_PrecedesArgumentValidation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ShellRunner.ExecuteCommandToolAsync("bash",
+                new JsonObject { ["shell"] = "fish" },
+                new AgentContext { Config = new AgentConfig(), Workspace = new Workspace(Path.GetTempPath()) },
+                cts.Token));
+    }
+
+    [Fact]
     public async Task ExecuteCommandTool_InvalidShell_ThrowsHelpfulError()
     {
         // 单次调用级 shell 覆盖：非法值明确报错而不是静默回落默认 shell
