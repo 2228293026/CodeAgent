@@ -495,6 +495,7 @@ public sealed class GrepTool : ITool
                     // 行号按命中起点计算；跨多行的命中折叠显示（前 3 行 + 总行数）
                     foreach (System.Text.RegularExpressions.Match m in re.Matches(text))
                     {
+                        ct.ThrowIfCancellationRequested();
                         if (hits >= max)
                             break;
                         if (fileMaxMatches > 0 && fileMatchCount >= fileMaxMatches)
@@ -541,6 +542,7 @@ public sealed class GrepTool : ITool
                 var printedUntil = -1; // 已打印过的上下文行（避免邻近匹配的共享行重复输出）
                 for (int i = 0; i < lines.Length && hits < max; i++)
                 {
+                    ct.ThrowIfCancellationRequested();
                     if (fileMaxMatches > 0 && fileMatchCount >= fileMaxMatches)
                         break; // 达到单文件匹配上限
                     var line = lines[i].TrimEnd('\r');
