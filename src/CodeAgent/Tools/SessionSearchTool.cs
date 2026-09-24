@@ -58,7 +58,7 @@ public sealed class SessionSearchTool : ITool
                 break;
             var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
             Emit(Path.GetFileNameWithoutExtension(log) + $" · {age}",
-                "/resume 可恢复", AgentClass.SearchSessionLog(log, keyword, caseSensitive));
+                "/resume 可恢复", AgentClass.SearchSessionLog(log, keyword, caseSensitive, ct: ct));
         }
         // 命名快照（/save 的 .json）
         foreach (var snap in Directory.GetFiles(sessionDir, "*.json")

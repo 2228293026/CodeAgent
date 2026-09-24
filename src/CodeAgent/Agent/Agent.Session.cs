@@ -233,13 +233,18 @@ public sealed partial class Agent
 
     /// <summary>读会话日志行。用 FileShare.ReadWrite 打开：日志文件可能正被本进程的
     /// StreamWriter 追加持有，File.ReadLines 的 FileShare.Read 会与之共享冲突。</summary>
-    private static IEnumerable<string> ReadLogLines(string path)
+    private static IEnumerable<string> ReadLogLines(string path, CancellationToken ct = default)
     {
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var sr = new StreamReader(fs);
-        string? line;
-        while ((line = sr.ReadLine()) is not null)
-            yield return line;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var next = sr.ReadLine();
+            if (next is null)
+                break;
+            yield return next;
+        }
     }
 
     /// <summary>会话日志摘要（/resume 列表用）：首条用户消息预览（多行折叠为 ⏎）+ 消息条数。
@@ -297,14 +302,14 @@ public sealed partial class Agent
 
     /// <summary>在会话日志里搜索关键字（忽略大小写）：返回最多 maxHits 条 (角色, 命中片段)。
     /// 片段取命中点前后窗口并折叠换行；损坏行/读取失败按无命中处理。/find 用。</summary>
-    internal static List<(string Role, string Snippet)> SearchSessionLog(string path, string keyword, bool caseSensitive = false, int maxHits = 3)
+    internal static List<(string Role, string Snippet)> SearchSessionLog(string path, string keyword, bool caseSensitive = false, int maxHits = 3, CancellationToken ct = default)
     {
         var hits = new List<(string, string)>();
         if (string.IsNullOrEmpty(keyword))
             return hits;
         try
         {
-            foreach (var line in ReadLogLines(path))
+            foreach (var line in ReadLogLines(path, ct))
             {
                 if (hits.Count >= maxHits)
                     break;
@@ -331,6 +336,10 @@ public sealed partial class Agent
                     // 损坏行跳过（与 ParseLogLine 一致）
                 }
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
