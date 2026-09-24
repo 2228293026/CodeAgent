@@ -272,14 +272,14 @@ public sealed partial class Agent
     /// 文件名只是时间戳，看不出哪个会话是哪段对话——首条用户输入才是可辨识的标题。
     /// 流式读取且行数封顶 5000：超大日志不做完整解析，避免列表卡顿；Capped=true 表示
     /// 条数只是下限（实际更多），显示层应标「≥」而不是当成精确值。</summary>
-    internal static (string? Preview, int Count, bool Capped) SessionLogSummary(string path)
+    internal static (string? Preview, int Count, bool Capped) SessionLogSummary(string path, CancellationToken ct = default)
     {
         try
         {
             string? preview = null;
             var count = 0;
             var capped = false;
-            foreach (var line in ReadLogLines(path))
+            foreach (var line in ReadLogLines(path, ct))
             {
                 if (count >= 5000)
                 {
@@ -304,6 +304,10 @@ public sealed partial class Agent
                 }
             }
             return (preview, count, capped);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {

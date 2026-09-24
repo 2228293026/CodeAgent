@@ -80,6 +80,18 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void SessionLogSummary_CanceledToken_PropagatesCancellation()
+    {
+        var path = Path.Combine(_sessionDir, "cancel-summary.jsonl");
+        File.WriteAllText(path, """{"role":"user","content":"needle"}""");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            AgentClass.SessionLogSummary(path, cts.Token));
+    }
+
+    [Fact]
     public void SearchSnapshot_CanceledToken_PropagatesCancellation()
     {
         var path = Path.Combine(_sessionDir, "cancel-search.json");
