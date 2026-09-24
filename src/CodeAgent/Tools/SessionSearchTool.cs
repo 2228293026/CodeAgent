@@ -64,10 +64,13 @@ public sealed class SessionSearchTool : ITool
 
         // 会话日志（.jsonl，新 → 旧）
         ct.ThrowIfCancellationRequested();
-        foreach (var log in Directory.GetFiles(sessionDir, "*.jsonl")
-                     .Where(HasNonEmptyFile)
-                     .OrderByDescending(File.GetLastWriteTimeUtc)
-                     .ThenByDescending(Path.GetFileName, nameComparer))
+        var logs = Directory.GetFiles(sessionDir, "*.jsonl")
+            .Where(HasNonEmptyFile)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ThenByDescending(Path.GetFileName, nameComparer)
+            .ToList();
+        ct.ThrowIfCancellationRequested();
+        foreach (var log in logs)
         {
             ct.ThrowIfCancellationRequested();
             if (printed >= maxFiles)
@@ -78,9 +81,12 @@ public sealed class SessionSearchTool : ITool
         }
         // 命名快照（/save 的 .json）
         ct.ThrowIfCancellationRequested();
-        foreach (var snap in Directory.GetFiles(sessionDir, "*.json")
-                     .OrderByDescending(File.GetLastWriteTimeUtc)
-                     .ThenByDescending(Path.GetFileName, nameComparer))
+        var snapshots = Directory.GetFiles(sessionDir, "*.json")
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ThenByDescending(Path.GetFileName, nameComparer)
+            .ToList();
+        ct.ThrowIfCancellationRequested();
+        foreach (var snap in snapshots)
         {
             ct.ThrowIfCancellationRequested();
             if (printed >= maxFiles)
