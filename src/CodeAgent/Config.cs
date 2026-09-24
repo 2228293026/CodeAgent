@@ -212,6 +212,18 @@ public sealed class AgentConfig
                 cfg.Providers[key] ??= new ProviderOptions();
             cfg.ReadOnlyDirs.RemoveAll(string.IsNullOrWhiteSpace);
             cfg.Modes.RemoveAll(m => m is null);
+            foreach (var provider in cfg.Providers.Values)
+            {
+                provider.Type ??= "openai";
+                provider.BaseUrl ??= "";
+                provider.Model ??= "";
+            }
+            foreach (var mode in cfg.Modes)
+            {
+                mode.Name ??= "";
+                mode.Description ??= "";
+                mode.SystemPrompt ??= AgentConfig.DefaultSystemPrompt;
+            }
             cfg.Provider ??= "openai";
             cfg.Shell ??= "";
             cfg.SessionDir ??= ".codeagent/sessions";

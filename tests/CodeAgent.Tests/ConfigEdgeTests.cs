@@ -77,6 +77,26 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal("custom", config.Modes[0].Name);
     }
 
+    [Fact]
+    public void Load_NullNestedConfigFields_UseNestedDefaults()
+    {
+        var path = WriteJson("""
+        {
+          "providers": { "p": { "type": null, "baseUrl": null, "model": null } },
+          "modes": [{ "name": null, "description": null, "systemPrompt": null }]
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.Equal("openai", config.Providers["p"].Type);
+        Assert.Equal("", config.Providers["p"].BaseUrl);
+        Assert.Equal("", config.Providers["p"].Model);
+        Assert.Equal("", config.Modes[0].Name);
+        Assert.Equal("", config.Modes[0].Description);
+        Assert.Equal(AgentConfig.DefaultSystemPrompt, config.Modes[0].SystemPrompt);
+    }
+
     // ===== ProviderOptions 默认值 =====
 
     [Fact]
