@@ -294,6 +294,7 @@ public sealed class ReadFileTool : ITool
             var mimeType = SkipDirs.GetMimeType(full);
             output += $"\n[stats] {lineCount} 行，{words} 词，{text.Length} 字符，{bytes:N0} 字节，MIME: {mimeType}";
         }
+        ct.ThrowIfCancellationRequested();
         return output;
     }
 }

@@ -27,7 +27,7 @@ public class FileToolsTests : IDisposable
     };
 
     [Fact]
-    public async Task ReadFile_CanceledToken_StopsBeforeReading()
+    public async Task ReadFile_CanceledToken_StopsBeforeReadingOrFormatting()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
