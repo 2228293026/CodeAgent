@@ -115,7 +115,17 @@ public sealed partial class Agent
             sb.AppendLine("---");
             sb.AppendLine();
         }
-        File.WriteAllText(file, sb.ToString());
+        var tmp = SkipDirs.TempPathFor(file);
+        try
+        {
+            File.WriteAllText(tmp, sb.ToString());
+            File.Move(tmp, file, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
         return file;
     }
 

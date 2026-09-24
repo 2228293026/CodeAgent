@@ -375,6 +375,7 @@ public class AgentSessionTests : IDisposable
         Assert.True(File.Exists(file));
         Assert.StartsWith(exportDir, Path.GetFullPath(file));
         Assert.Contains("CodeAgent 会话", File.ReadAllText(file));
+        Assert.Empty(Directory.GetFiles(exportDir, "*.tmp"));
     }
 
     [Fact]
