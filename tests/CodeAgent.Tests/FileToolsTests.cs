@@ -1850,7 +1850,7 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task EditFile_CanceledToken_StopsBeforeSideEffects()
+    public async Task EditFile_CanceledToken_StopsBeforeMatchingOrSideEffects()
     {
         File.WriteAllText(Path.Combine(_dir, "canceled.txt"), "old");
         using var cts = new CancellationTokenSource();

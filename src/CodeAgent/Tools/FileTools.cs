@@ -679,7 +679,9 @@ public sealed class EditFileTool : ITool
             throw new ToolException(
                 $"未找到 old_string（必须逐字精确匹配，包括缩进与换行）。old_string 为:\n---\n{oldString}\n---{hint}");
         }
+        ct.ThrowIfCancellationRequested();
         int count = TextUtil.CountOccurrences(workText, workOld, cmp);
+        ct.ThrowIfCancellationRequested();
         if (count > 1 && !replaceAll && !allowMultiple)
             throw new ToolException($"old_string 出现 {count} 次（非唯一匹配）。如需替换全部请设置 replace_all=true；如需允许多处匹配请设置 allow_multiple=true。");
 
@@ -696,6 +698,7 @@ public sealed class EditFileTool : ITool
                 int start = 0;
                 while (true)
                 {
+                    ct.ThrowIfCancellationRequested();
                     var idx = result.IndexOf(workOld, start, cmp);
                     if (idx < 0) break;
                     result = result.Remove(idx, workOld.Length).Insert(idx, workNew);
@@ -704,7 +707,9 @@ public sealed class EditFileTool : ITool
             }
             else
             {
+                ct.ThrowIfCancellationRequested();
                 result = workText.Replace(workOld, workNew);
+                ct.ThrowIfCancellationRequested();
             }
         }
         else
@@ -715,6 +720,7 @@ public sealed class EditFileTool : ITool
             result = workText.Remove(firstIdx, workOld.Length).Insert(firstIdx, workNew);
             replacedCount = 1; // allow_multiple 只替换第一处
         }
+        ct.ThrowIfCancellationRequested();
         if (normalized && text.Contains("\r\n"))
         {
             // 归一化路径的落盘前收尾：先把替换片段可能带入的 CRLF 压平，再统一按文件的
@@ -728,6 +734,7 @@ public sealed class EditFileTool : ITool
         // 编码必须在写盘「之前」探测：写盘后再探测拿到的是新文件的编码，
         // 撤销会把旧文本按新编码写回（GBK 文件被 UTF-8 化后撤销回来就成了乱码）
         var originalEncoding = TextUtil.DetectFileEncoding(full);
+        ct.ThrowIfCancellationRequested();
 
         // 生成 unified diff（show_diff 时附加到返回结果）
         string? diff = null;
