@@ -79,19 +79,29 @@ public sealed class EditableLine
             start = Cursor - 1;
         }
         _text.Remove(start, count);
+        if (start < Cursor)
+            Cursor -= count;
         return true;
     }
 
     public void MoveLeft()
     {
         if (Cursor > 0)
+        {
             Cursor--;
+            if (Cursor > 0 && char.IsLowSurrogate(_text[Cursor]) && char.IsHighSurrogate(_text[Cursor - 1]))
+                Cursor--; // 代理对作为单个码点移动
+        }
     }
 
     public void MoveRight()
     {
         if (Cursor < _text.Length)
+        {
             Cursor++;
+            if (Cursor < _text.Length && char.IsHighSurrogate(_text[Cursor - 1]) && char.IsLowSurrogate(_text[Cursor]))
+                Cursor++; // 代理对作为单个码点移动
+        }
     }
 
     /// <summary>光标左移一个单词：跳过左侧空白，再跳过一个连续非空白段（Ctrl+←）。</summary>

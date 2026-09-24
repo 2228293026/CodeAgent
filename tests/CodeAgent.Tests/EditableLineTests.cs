@@ -103,10 +103,10 @@ public class EditableLineTests
         // "a😀b" 的 UTF-16 码元序列：a(0) \uD83D(1) \uDE00(2) b(3)
         line.End();
         line.MoveLeft(); // 光标在 b 前（位置 3）
-        line.MoveLeft(); // 光标落在 😀 的低代理 \uDE00 上（位置 2）
+        line.MoveLeft(); // 代理对整体向左移动，光标在 😀 前（位置 1）
         Assert.True(line.Delete());
         Assert.Equal("ab", line.Text);
-        Assert.Equal(2, line.Cursor);
+        Assert.Equal(1, line.Cursor);
     }
 
     [Fact]
@@ -118,10 +118,9 @@ public class EditableLineTests
         // "a😀b" 的 UTF-16 码元序列：a(0) \uD83D(1) \uDE00(2) b(3)
         line.End();
         line.MoveLeft(); // 光标在 b 前（位置 3）
-        line.MoveLeft(); // 光标落在 😀 的两代理之间（位置 2）
         Assert.True(line.Backspace());
         Assert.Equal("ab", line.Text);
-        Assert.Equal(0, line.Cursor);
+        Assert.Equal(1, line.Cursor);
     }
 
     [Fact]
@@ -568,15 +567,15 @@ public class WordNavTests
     }
 
     [Fact]
-    public void MoveWordLeft_FromBetweenSurrogates_StopsAtEmojiStart()
+    public void MoveWordLeft_FromBeforeEmoji_StopsAtPreviousWord()
     {
-        // "a😀b"：光标在 2（高低代理之间），Ctrl+← 应停在 emoji 开头（1）
+        // "a😀b"：光标在 emoji 开头前（1），Ctrl+← 应移到行首
         var line = new EditableLine();
         line.SetInitial("a😀b");
         line.Home();
-        line.MoveRight(); line.MoveRight(); // cursor=2
+        line.MoveRight(); // cursor=1
         line.MoveWordLeft();
-        Assert.Equal(1, line.Cursor);
+        Assert.Equal(0, line.Cursor);
         Assert.Equal("a😀b", line.Text);
     }
 
@@ -587,20 +586,7 @@ public class WordNavTests
         var line = new EditableLine();
         line.SetInitial("a😀b");
         line.Home();
-        line.MoveRight(); line.MoveRight(); line.MoveRight(); // cursor=3
-        Assert.True(line.DeleteWordBackward());
-        Assert.Equal("ab", line.Text);
-        Assert.Equal(1, line.Cursor);
-    }
-
-    [Fact]
-    public void DeleteWordBackward_FromBetweenSurrogates_DeletesWholePair()
-    {
-        // "a😀b"：光标在 2（高低代理之间），Ctrl+Backspace 应删除整对代理
-        var line = new EditableLine();
-        line.SetInitial("a😀b");
-        line.Home();
-        line.MoveRight(); line.MoveRight(); // cursor=2
+        line.MoveRight(); line.MoveRight(); // cursor=3
         Assert.True(line.DeleteWordBackward());
         Assert.Equal("ab", line.Text);
         Assert.Equal(1, line.Cursor);
@@ -620,15 +606,15 @@ public class WordNavTests
     }
 
     [Fact]
-    public void DeleteWordForward_FromOnLowSurrogate_DeletesWholePairAndAfter()
+    public void DeleteWordForward_FromAfterEmoji_DeletesFollowingWord()
     {
-        // "a😀b"：光标在 2（低代理上），Ctrl+Delete 应删除整对代理 + b
+        // "a😀b"：光标在 3（emoji 与 b 之间），Ctrl+Delete 应删除 b
         var line = new EditableLine();
         line.SetInitial("a😀b");
         line.Home();
-        line.MoveRight(); line.MoveRight(); // cursor=2
+        line.MoveRight(); line.MoveRight(); // cursor=3
         Assert.True(line.DeleteWordForward());
-        Assert.Equal("a", line.Text);
-        Assert.Equal(2, line.Cursor); // DeleteWordForward 不移动光标
+        Assert.Equal("a😀", line.Text);
+        Assert.Equal(3, line.Cursor); // DeleteWordForward 不移动光标
     }
 }
