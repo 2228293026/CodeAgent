@@ -910,7 +910,13 @@ public sealed class ListDirectoryTool : ITool
             var indent = new string(' ', level * 2);
             try
             {
-                foreach (var d in OrderEntries(Directory.EnumerateDirectories(dir), sortBy, reverse))
+                // 先过滤越界目录，再排序/读取元数据，避免外部链接参与排序时泄漏属性。
+                var directories = Directory.EnumerateDirectories(dir).Where(d =>
+                {
+                    try { ctx.Workspace.ResolveRead(d); return true; }
+                    catch (ToolException) { return false; }
+                });
+                foreach (var d in OrderEntries(directories, sortBy, reverse))
                 {
                     ct.ThrowIfCancellationRequested();
                     if (emitted >= maxItems)
@@ -920,8 +926,6 @@ public sealed class ListDirectoryTool : ITool
                         continue; // 跳过隐藏目录
                     if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
                         continue;
-                    try { ctx.Workspace.ResolveRead(d); }
-                    catch (ToolException) { continue; } // 链接目标越出沙箱：跳过整个目录
                     if (!filesOnly)
                     {
                         // skip_empty_dirs=true:跳过没有文件的目录（递归检查）
