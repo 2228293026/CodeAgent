@@ -647,10 +647,12 @@ public sealed class GrepTool : ITool
         {
             // 确定性输出：先收集再排序（枚举顺序跨平台不定），与 glob 保持一致
             var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue, includeIgnored).ToList();
+            ct.ThrowIfCancellationRequested();
             var nameComparer = OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase
                 : StringComparer.Ordinal;
             files.Sort(nameComparer);
+            ct.ThrowIfCancellationRequested();
             string? lastRel = null;
             foreach (var file in files)
             {
