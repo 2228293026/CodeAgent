@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CodeAgent;
@@ -153,6 +154,27 @@ public class AgentSessionEdgeTests : IDisposable
 
         Assert.Equal([valid], logs);
         Assert.False(Program.IsReadableNonEmptyFile(missing));
+    }
+
+    [Fact]
+    public void RecentSessionLogs_DoesNotFollowLinkedFiles()
+    {
+        var outside = Path.Combine(_dir, "outside.jsonl");
+        File.WriteAllText(outside, "{\"role\":\"user\",\"content\":\"external secret\"}\n");
+        var link = Path.Combine(SessionDir, "linked.jsonl");
+        try { File.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var logs = Program.RecentSessionLogs(new AgentConfig { SessionDir = SessionDir });
+        Assert.DoesNotContain(link, logs);
+        Assert.False(Program.IsReadableNonEmptyFile(link));
+
+        var snapshotLink = Path.Combine(SessionDir, "linked.json");
+        try { File.CreateSymbolicLink(snapshotLink, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        Assert.DoesNotContain("linked", Program.SavedSessions(SessionDir).Select(s => s.Name));
     }
 
     [Fact]

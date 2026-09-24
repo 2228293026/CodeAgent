@@ -498,7 +498,11 @@ internal static class Program
 
     internal static bool IsReadableNonEmptyFile(string path)
     {
-        try { return new FileInfo(path).Length > 0; }
+        try
+        {
+            var fi = new FileInfo(path);
+            return fi.LinkTarget is null && fi.Length > 0;
+        }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
     }
@@ -729,6 +733,7 @@ internal static class Program
                 ? StringComparer.OrdinalIgnoreCase
                 : StringComparer.Ordinal;
             return Directory.GetFiles(sessionDir, "*.json")
+                .Where(IsReadableNonEmptyFile)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .ThenByDescending(Path.GetFileName, nameComparer)
                 .Select(f => (Path.GetFileNameWithoutExtension(f),
