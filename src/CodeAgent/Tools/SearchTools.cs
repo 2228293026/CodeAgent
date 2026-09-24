@@ -111,10 +111,18 @@ public sealed class GlobTool : ITool
         {
             var fullPaths = results.Select(r => Path.Combine(start, r.Replace('/', Path.DirectorySeparatorChar))).ToList();
             var tuples = results.Select((r, i) => (r, i)).ToList();
-            if (sortBy == "size")
-                tuples.Sort((a, b) => new FileInfo(fullPaths[b.i]).Length.CompareTo(new FileInfo(fullPaths[a.i]).Length));
-            else
-                tuples.Sort((a, b) => File.GetLastWriteTimeUtc(fullPaths[b.i]).CompareTo(File.GetLastWriteTimeUtc(fullPaths[a.i])));
+            var nameComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+            tuples.Sort((a, b) =>
+            {
+                var primary = sortBy == "size"
+                    ? new FileInfo(fullPaths[b.i]).Length.CompareTo(new FileInfo(fullPaths[a.i]).Length)
+                    : File.GetLastWriteTimeUtc(fullPaths[b.i]).CompareTo(File.GetLastWriteTimeUtc(fullPaths[a.i]));
+                return primary != 0
+                    ? primary
+                    : nameComparer.Compare(Path.GetFileName(a.r), Path.GetFileName(b.r));
+            });
             results = tuples.Select(t => t.r).ToList();
             if (reverse)
                 results.Reverse();
