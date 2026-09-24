@@ -140,6 +140,24 @@ public class ProviderFactoryTests
     }
 
     [Fact]
+    public void Create_FindsProviderKeyCaseInsensitively()
+    {
+        var config = new AgentConfig
+        {
+            Provider = "CUSTOM",
+            Providers = new Dictionary<string, ProviderOptions>
+            {
+                ["custom"] = new ProviderOptions { Type = "openai", ApiKey = "test-key", Model = "existing" },
+            },
+        };
+
+        ProviderFactory.Create(config);
+
+        Assert.Equal("existing", config.Providers["custom"].Model);
+        Assert.DoesNotContain("CUSTOM", config.Providers.Keys);
+    }
+
+    [Fact]
     public void Create_KeepsExplicitValues()
     {
         var config = new AgentConfig

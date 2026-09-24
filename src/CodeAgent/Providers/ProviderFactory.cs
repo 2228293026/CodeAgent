@@ -11,6 +11,18 @@ public static class ProviderFactory
         var name = string.IsNullOrWhiteSpace(config.Provider) ? "openai" : config.Provider.Trim();
         if (!config.Providers.TryGetValue(name, out var opts) || opts is null)
         {
+            foreach (var pair in config.Providers)
+            {
+                if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    name = pair.Key;
+                    opts = pair.Value;
+                    break;
+                }
+            }
+        }
+        if (opts is null)
+        {
             opts = new ProviderOptions();
             config.Providers[name] = opts;
         }
