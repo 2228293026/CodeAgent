@@ -920,6 +920,8 @@ public sealed class ListDirectoryTool : ITool
                         continue; // 跳过隐藏目录
                     if (SkipDirs.IsSkipped(name) || (ignoreSet is not null && ignoreSet.Contains(name)))
                         continue;
+                    try { ctx.Workspace.ResolveRead(d); }
+                    catch (ToolException) { continue; } // 链接目标越出沙箱：跳过整个目录
                     if (!filesOnly)
                     {
                         // skip_empty_dirs=true:跳过没有文件的目录（递归检查）
