@@ -70,6 +70,18 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void ReadSessionLogFile_CanceledToken_PropagatesCancellation()
+    {
+        var path = Path.Combine(_sessionDir, "cancel-read.jsonl");
+        File.WriteAllText(path, """{"role":"user","content":"needle"}""");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            AgentClass.ReadSessionLogFile(path, cts.Token));
+    }
+
+    [Fact]
     public void SearchSessionLog_CanceledToken_PrecedesMissingFileOpen()
     {
         using var cts = new CancellationTokenSource();
@@ -561,10 +573,12 @@ public class AgentSessionTests : IDisposable
             """);
         var msgs = AgentClass.ReadSessionLogFile(path);
         var asst = msgs.Single(m => m.Role == MessageRole.Assistant);
-        Assert.Single(asst.ToolCalls);
-        Assert.Equal("tc-1", asst.ToolCalls[0].Id);
-        Assert.Equal("read_file", asst.ToolCalls[0].Name);
-        Assert.Equal("{\"path\":\"a.cs\"}", asst.ToolCalls[0].ArgumentsJson);
+        var toolCalls = asst.ToolCalls!;
+        Assert.NotNull(toolCalls);
+        Assert.Single(toolCalls);
+        Assert.Equal("tc-1", toolCalls[0].Id);
+        Assert.Equal("read_file", toolCalls[0].Name);
+        Assert.Equal("{\"path\":\"a.cs\"}", toolCalls[0].ArgumentsJson);
 
         var tool = msgs.Single(m => m.Role == MessageRole.Tool);
         Assert.Equal("tc-1", tool.ToolCallId);

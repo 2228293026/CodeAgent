@@ -154,17 +154,21 @@ public sealed partial class Agent
     /// 开头的 system 若为日志旧值，会由随后的 SetMode 换成当前模式提示。</summary>
     /// <summary>解析会话日志文件为消息列表（不改当前对话）；IO 错误返回已解析部分。
     /// LoadSessionLog 与 /export &lt;编号&gt; 共用。</summary>
-    internal static List<ProviderMessage> ReadSessionLogFile(string path)
+    internal static List<ProviderMessage> ReadSessionLogFile(string path, CancellationToken ct = default)
     {
         var msgs = new List<ProviderMessage>();
         try
         {
-            foreach (var line in ReadLogLines(path))
+            foreach (var line in ReadLogLines(path, ct))
             {
                 var m = ParseLogLine(line);
                 if (m is not null)
                     msgs.Add(m);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (IOException)
         {
