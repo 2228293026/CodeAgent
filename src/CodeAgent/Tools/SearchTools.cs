@@ -223,6 +223,7 @@ public sealed class GrepTool : ITool
 
     public async Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var pattern = ToolArgs.GetString(args, "pattern");
         if (string.IsNullOrWhiteSpace(pattern))
             throw new ToolException("缺少必填参数 pattern");
@@ -322,6 +323,7 @@ public sealed class GrepTool : ITool
 
         void ScanFile(string path, int fileMaxMatches = 0)
         {
+            ct.ThrowIfCancellationRequested();
             if (hits >= max)
                 return;
             var fileMatchCount = 0;
