@@ -365,12 +365,16 @@ public sealed partial class Agent
                     var role = n["role"]?.GetValue<string>() ?? "?";
                     if (role == "user" && content.TrimStart().StartsWith('/'))
                         continue;
-                    foreach (var h in MatchWindow(content, keyword, role, caseSensitive, maxPerMsg: maxHits - hits.Count))
+                    foreach (var h in MatchWindow(content, keyword, role, caseSensitive, maxHits - hits.Count, ct))
                     {
                         hits.Add(h);
                         if (hits.Count >= maxHits)
                             break;
                     }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch
                 {
@@ -412,7 +416,7 @@ public sealed partial class Agent
                 // 与日志搜索同口径：斜杠命令行不算命中
                 if (d.role == "user" && content.TrimStart().StartsWith('/'))
                     continue;
-                foreach (var h in MatchWindow(content, keyword, d.role, caseSensitive, maxPerMsg: maxHits - hits.Count))
+                foreach (var h in MatchWindow(content, keyword, d.role, caseSensitive, maxHits - hits.Count, ct))
                 {
                     hits.Add(h);
                     if (hits.Count >= maxHits)
@@ -432,12 +436,13 @@ public sealed partial class Agent
     }
 
     /// <summary>关键字的命中片段：前后窗口折叠换行，超出部分用省略号标记。日志与快照搜索共用。</summary>
-    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role, bool caseSensitive = false, int maxPerMsg = 3)
+    private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role, bool caseSensitive, int maxPerMsg, CancellationToken ct)
     {
         var cmp = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         int searchFrom = 0, found = 0;
         while (found < maxPerMsg)
         {
+            ct.ThrowIfCancellationRequested();
             var idx = content.IndexOf(keyword, searchFrom, cmp);
             if (idx < 0)
                 yield break;
