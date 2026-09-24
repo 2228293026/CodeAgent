@@ -94,6 +94,7 @@ public sealed class GlobTool : ITool
         }
 
         await Task.Yield();
+        ct.ThrowIfCancellationRequested();
         if (results.Count == 0)
             return capped
                 ? $"(扫描超过 200,000 个文件后中止，未找到匹配 {string.Join(", ", patterns)} 的文件——工作区过大，请缩小 path 或用更精确的 pattern)"

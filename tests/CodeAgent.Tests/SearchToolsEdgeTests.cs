@@ -161,7 +161,7 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
-    public async Task Glob_CanceledToken_StopsBeforeScanning()
+    public async Task Glob_CanceledToken_StopsBeforeScanningOrFormatting()
     {
         using var cts = new CancellationTokenSource();
         cts.Cancel();
