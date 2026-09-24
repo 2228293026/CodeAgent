@@ -813,8 +813,15 @@ internal static class Program
     }
 
     /// <summary>深路径显示截断：超长时保留尾部（工作区名永远可见），前缀省略号。</summary>
-    internal static string TruncatePathHead(string path, int max = 42) =>
-        path.Length <= max ? path : "…" + path[^(max - 1)..];
+    internal static string TruncatePathHead(string path, int max = 42)
+    {
+        if (path.Length <= max)
+            return path;
+        var keep = Math.Max(0, max - 1);
+        if (keep > 0 && char.IsLowSurrogate(path[^keep]) && char.IsHighSurrogate(path[^(keep - 1)]))
+            keep--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
+        return "…" + path[^keep..];
+    }
 
     private static (string Cwd, string? Branch, DateTime At)? _branchCache;
 

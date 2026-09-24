@@ -28,6 +28,18 @@ public class PathDisplayTests
         Assert.Equal(longPath, Program.TruncatePathHead(longPath, longPath.Length));
     }
 
+    [Fact]
+    public void TruncatePathHead_TailBoundary_DoesNotSplitSurrogatePair()
+    {
+        var path = "A" + string.Concat(Enumerable.Repeat("😀", 100)) + "Z";
+        var shown = Program.TruncatePathHead(path, 43);
+        var z = shown.IndexOf('Z');
+        Assert.True(z > 0);
+        var tailStart = shown.LastIndexOf('…') + 1;
+        Assert.False(char.IsLowSurrogate(shown[tailStart]));
+        Assert.True(shown.Length <= 43);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
