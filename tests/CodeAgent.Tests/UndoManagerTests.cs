@@ -145,6 +145,20 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void TryUndo_EditLargeFileFallback_ReplacesOnlyOneOccurrence()
+    {
+        var path = Path.Combine(_dir, "duplicate.txt");
+        File.WriteAllText(path, "new middle new");
+        var um = new UndoManager();
+        um.Push(new UndoEntry { Kind = "edit", Path = path, OldText = "old", NewText = "new" });
+
+        var desc = um.TryUndo();
+
+        Assert.NotNull(desc);
+        Assert.Equal("old middle new", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void TryUndo_EditLargeFileFallback_GbkFile_DoesNotCorruptEncoding()
     {
         // 回归：大文件 edit 撤销用 File.ReadAllText 读当前文件（默认 UTF-8），

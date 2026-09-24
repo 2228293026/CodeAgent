@@ -190,7 +190,13 @@ public sealed class UndoManager
             {
                 // 大文件退化：仅替换 old/new 片段（可能有精度损失，但避免整文件内存开销）
                 var text = TextUtil.ReadTextSmart(e.Path); // 保留 GBK 等旧编码，避免 File.ReadAllText 默认 UTF-8 乱码
-                WriteEntryText(e, text.Replace(e.NewText, e.OldText ?? ""));
+                var replacement = e.NewText;
+                var first = text.IndexOf(replacement, StringComparison.Ordinal);
+                if (first >= 0)
+                {
+                    var restored = text[..first] + (e.OldText ?? "") + text[(first + replacement.Length)..];
+                    WriteEntryText(e, restored);
+                }
             }
         }
     }
