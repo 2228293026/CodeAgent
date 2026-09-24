@@ -18,6 +18,7 @@ public sealed class StopTool : ITool
 
     public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var reason = ToolArgs.GetString(args, "reason");
         ctx.StopRequested = true;
         return Task.FromResult(

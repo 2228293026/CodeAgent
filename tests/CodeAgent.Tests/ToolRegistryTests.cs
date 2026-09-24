@@ -38,6 +38,18 @@ public class ToolRegistryTests : IDisposable
     }
 
     [Fact]
+    public async Task StopTool_CanceledToken_DoesNotRequestStop()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var ctx = MakeContext(_dir);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new StopTool().ExecuteAsync(new JsonObject { ["reason"] = "done" }, ctx, cts.Token));
+        Assert.False(ctx.StopRequested);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_UnknownTool_ThrowsWithAvailableList()
     {
         var registry = ToolRegistry.CreateDefault();
