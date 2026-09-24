@@ -905,7 +905,7 @@ public sealed partial class Agent
                     Role = m.Role,
                     ToolCallId = m.ToolCallId,
                     ToolName = m.ToolName,
-                    Content = m.Content[..keep] + "\n…[历史消息已裁剪]",
+                    Content = TextUtil.SafeCut(m.Content, keep) + "\n…[历史消息已裁剪]",
                     IsError = m.IsError,
                 };
             }
@@ -975,7 +975,7 @@ public sealed partial class Agent
                     _messages[biggest] = new ProviderMessage
                     {
                         Role = _messages[biggest].Role,
-                        Content = big[..keep] + "\n…[历史消息已裁剪]",
+                        Content = TextUtil.SafeCut(big, keep) + "\n…[历史消息已裁剪]",
                         ToolCalls = _messages[biggest].ToolCalls,
                         ToolCallId = _messages[biggest].ToolCallId,
                         ToolName = _messages[biggest].ToolName,

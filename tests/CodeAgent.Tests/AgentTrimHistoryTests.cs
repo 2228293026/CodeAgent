@@ -59,6 +59,26 @@ public class AgentTrimHistoryTests : IDisposable
     }
 
     [Fact]
+    public async Task SingleOversizedEmojiMessage_TruncatesOnCodePointBoundary()
+    {
+        var provider = new FakeProvider
+        {
+            FailSummarization = true,
+            NextResponse = new ProviderResponse { Text = "ok" },
+        };
+        var agent = MakeAgent(provider, maxHistoryChars: 1000);
+        var huge = "x" + string.Concat(Enumerable.Repeat("😀", 500));
+
+        await agent.RunAsync(huge, CancellationToken.None);
+
+        var content = agent.Messages.Single(m => m.Role == MessageRole.User).Content!;
+        var marker = content.IndexOf("\n…[历史消息已裁剪]", StringComparison.Ordinal);
+        Assert.True(marker > 1);
+        Assert.True(char.IsHighSurrogate(content[marker - 2]));
+        Assert.True(char.IsLowSurrogate(content[marker - 1]));
+    }
+
+    [Fact]
     public async Task LongConversation_IsTrimmedToHistoryLimit()
     {
         // 历史超限时应被裁剪：system 保留、总字符量收敛到上限附近
