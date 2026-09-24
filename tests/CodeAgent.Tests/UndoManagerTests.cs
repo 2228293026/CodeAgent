@@ -402,6 +402,25 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void RecordCommandSideEffects_ModifiedEmptyFile_RestoresEmptyContent()
+    {
+        var dir = Path.Combine(_dir, "empty-mod");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "empty.txt");
+        File.WriteAllText(path, "");
+        var before = UndoManager.SnapshotDir(dir);
+        Assert.True(before.Texts.ContainsKey("empty.txt"));
+
+        File.WriteAllText(path, "created by command");
+        var um = new UndoManager();
+        UndoManager.RecordCommandSideEffects(dir, before, um);
+
+        Assert.Equal(1, um.Count);
+        Assert.Contains("已撤销", um.TryUndo());
+        Assert.Equal("", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void SnapshotDir_PreservesCaseDistinctPaths_WhenFileSystemDoes()
     {
         var upper = Path.Combine(_dir, "Case.txt");

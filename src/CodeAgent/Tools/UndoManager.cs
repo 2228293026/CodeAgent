@@ -240,7 +240,7 @@ public sealed class UndoManager
                     var fi = new FileInfo(file);
                     var rel = Path.GetRelativePath(cwd, file).Replace('\\', '/');
                     seen.Add(rel); // 先记录存在：下面的尺寸/读取检查跳过的文件同样不能被误删
-                    if (fi.Length <= 0 || fi.Length > SnapshotMaxFileBytes)
+                    if (fi.Length > SnapshotMaxFileBytes)
                         continue;
                     if (total + fi.Length > SnapshotMaxTotalBytes)
                         break;
