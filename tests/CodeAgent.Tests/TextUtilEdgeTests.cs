@@ -535,6 +535,16 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public void WriteTextPreserveBom_Failure_CleansUpTmp()
+    {
+        var targetDir = Path.Combine(_dir, "target-dir-sync");
+        Directory.CreateDirectory(targetDir);
+
+        Assert.ThrowsAny<Exception>(() => TextUtil.WriteTextPreserveBom(targetDir, "content"));
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
     public async Task WriteTextPreserveBomAsync_CanceledToken_PrecedesFileAccess()
     {
         using var cts = new CancellationTokenSource();

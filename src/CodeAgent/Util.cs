@@ -199,8 +199,16 @@ public static class TextUtil
             keepBom = fs.Read(head) == 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF;
         }
         var tmp = SkipDirs.TempPathFor(path);
-        File.WriteAllText(tmp, content, new System.Text.UTF8Encoding(keepBom));
-        File.Move(tmp, path, overwrite: true);
+        try
+        {
+            File.WriteAllText(tmp, content, new System.Text.UTF8Encoding(keepBom));
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            throw;
+        }
     }
 
     internal static string DecodeSmart(byte[] bytes) // internal：ShellRunner 命令输出解码复用
