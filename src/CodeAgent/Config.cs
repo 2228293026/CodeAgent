@@ -210,6 +210,14 @@ public sealed class AgentConfig
             cfg.Modes ??= new List<AgentModeConfig>();
             foreach (var key in cfg.Providers.Keys.ToList())
                 cfg.Providers[key] ??= new ProviderOptions();
+            var normalizedProviders = new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in cfg.Providers)
+            {
+                var key = pair.Key?.Trim();
+                if (!string.IsNullOrEmpty(key))
+                    normalizedProviders[key] = pair.Value;
+            }
+            cfg.Providers = normalizedProviders;
             cfg.ReadOnlyDirs = cfg.ReadOnlyDirs
                 .Where(d => !string.IsNullOrWhiteSpace(d))
                 .Select(d => d.Trim())

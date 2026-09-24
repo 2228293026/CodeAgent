@@ -121,6 +121,23 @@ public class ConfigEdgeTests : IDisposable
         Assert.Equal(["libs"], config.ReadOnlyDirs);
     }
 
+    [Fact]
+    public void Load_TrimsProviderDictionaryKeys()
+    {
+        var path = WriteJson("""
+        {
+          "provider": " custom ",
+          "providers": { "  custom  ": { "model": "model-x" } }
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.True(config.Providers.ContainsKey("custom"));
+        Assert.Equal("model-x", config.Providers["custom"].Model);
+        Assert.DoesNotContain(config.Warnings, w => w.Contains("provider='custom'"));
+    }
+
     // ===== ProviderOptions 默认值 =====
 
     [Fact]
