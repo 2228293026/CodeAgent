@@ -58,7 +58,7 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
-    public void SearchSessionLog_CanceledToken_PropagatesCancellationBeforeOrDuringMatchWindows()
+    public void SearchSessionLog_CanceledToken_PropagatesBeforeOrDuringParsingOrMatchWindows()
     {
         var path = Path.Combine(_sessionDir, "cancel-search.jsonl");
         File.WriteAllText(path, """{"role":"user","content":"needle"}""");

@@ -371,6 +371,7 @@ public sealed partial class Agent
                 {
                     if (JsonNode.Parse(line) is not JsonObject n)
                         continue;
+                    ct.ThrowIfCancellationRequested();
                     var content = n["content"]?.GetValue<string>();
                     if (content is null)
                         continue;
