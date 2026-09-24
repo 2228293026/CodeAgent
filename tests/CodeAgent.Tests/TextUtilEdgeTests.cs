@@ -402,6 +402,13 @@ public class TextUtilEdgeTests : IDisposable
     }
 
     [Fact]
+    public void TruncateToolOutput_NarrowTailBudget_FallsBackWithoutSplitting()
+    {
+        var s = "A" + string.Concat(Enumerable.Repeat("😀", 100));
+        Assert.Equal(TextUtil.Truncate(s, 2), TextUtil.TruncateToolOutput(s, 2));
+    }
+
+    [Fact]
     public void TruncateToolOutput_TailBoundary_DoesNotSplitSurrogatePair()
     {
         var s = "A" + string.Concat(Enumerable.Repeat("😀", 100)) + "Z";

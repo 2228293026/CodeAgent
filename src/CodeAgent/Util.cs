@@ -301,7 +301,11 @@ public static class TextUtil
         var tail = Math.Max(0, max - head);
         var tailStart = s.Length - tail;
         if (tailStart > 0 && char.IsLowSurrogate(s[tailStart]) && char.IsHighSurrogate(s[tailStart - 1]))
+        {
+            if (tail == 1)
+                return Truncate(s, max); // 只剩一格时无法容纳完整代理对，退回普通截断
             tailStart--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
+        }
         var actualTail = s.Length - tailStart;
         var marker = $"\n…[工具输出过长，已截断：原 {s.Length:N0} 字符，保留头 {head:N0} 与尾 {actualTail:N0}，中间省略]…\n";
         return SafeCut(s, head) + marker + s[tailStart..];
