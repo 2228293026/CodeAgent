@@ -164,6 +164,7 @@ public sealed class ReadFileTool : ITool
                     try { rangeEnc.GetString(encBuf[..end]); }
                     catch (System.Text.DecoderFallbackException) { rangeEnc = System.Text.Encoding.GetEncoding("GB18030"); }
                 }
+                catch (OperationCanceledException) { throw; }
                 catch { rangeEnc = System.Text.Encoding.UTF8; }
             }
         }

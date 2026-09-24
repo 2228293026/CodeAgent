@@ -38,6 +38,18 @@ public class FileToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task ReadFile_ByteRangeCanceledToken_IsNotSwallowedByEncodingProbe()
+    {
+        File.WriteAllText(Path.Combine(_dir, "range.txt"), "content");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ReadFileTool().ExecuteAsync(
+                new JsonObject { ["path"] = "range.txt", ["byte_limit"] = 3 }, MakeContext(_dir), cts.Token));
+    }
+
+    [Fact]
     public async Task ReadFile_TailReadsLastLines()
     {
         // tail 模式：读末尾 N 行（日志排查），行号保持全局编号
