@@ -1129,10 +1129,11 @@ public static class Glob
 public static class DiffUtil
 {
     /// <summary>比较两份文本，返回 unified 风格 diff；无差异时返回空字符串。</summary>
-    public static string Unified(string oldText, string newText, string path)
+    public static string Unified(string oldText, string newText, string path, CancellationToken ct = default)
     {
-        var oldLines = SplitLines(oldText);
-        var newLines = SplitLines(newText);
+        ct.ThrowIfCancellationRequested();
+        var oldLines = SplitLines(oldText, ct);
+        var newLines = SplitLines(newText, ct);
         if (oldLines.SequenceEqual(newLines))
             return "";
 
@@ -1144,7 +1145,10 @@ public static class DiffUtil
             sbNew.AppendLine($"+++ b/{path}");
             sbNew.AppendLine($"@@ -0,0 +1,{newLines.Length} @@");
             for (int i = 0; i < newLines.Length; i++)
+            {
+                ct.ThrowIfCancellationRequested();
                 sbNew.AppendLine("+ " + newLines[i]);
+            }
             return sbNew.ToString().TrimEnd();
         }
         if (newLines.Length == 0 && oldLines.Length > 0)
@@ -1154,7 +1158,10 @@ public static class DiffUtil
             sbDel.AppendLine($"+++ b/{path}");
             sbDel.AppendLine($"@@ -1,{oldLines.Length} +0,0 @@");
             for (int i = 0; i < oldLines.Length; i++)
+            {
+                ct.ThrowIfCancellationRequested();
                 sbDel.AppendLine("- " + oldLines[i]);
+            }
             return sbDel.ToString().TrimEnd();
         }
 
@@ -1175,17 +1182,22 @@ public static class DiffUtil
 
         var dp = new int[n + 1, m + 1];
         for (int i = n - 1; i >= 0; i--)
+        {
+            ct.ThrowIfCancellationRequested();
             for (int j = m - 1; j >= 0; j--)
                 dp[i, j] = oldLines[i] == newLines[j] ? dp[i + 1, j + 1] + 1 : Math.Max(dp[i + 1, j], dp[i, j + 1]);
+        }
 
         var ops = new List<(char Op, string Line)>();
         int x = 0, y = 0;
         while (x < n && y < m)
         {
+            ct.ThrowIfCancellationRequested();
             if (oldLines[x] == newLines[y]) { ops.Add((' ', oldLines[x])); x++; y++; }
             else if (dp[x + 1, y] >= dp[x, y + 1]) { ops.Add(('-', oldLines[x])); x++; }
             else { ops.Add(('+', newLines[y])); y++; }
         }
+        ct.ThrowIfCancellationRequested();
         while (x < n) ops.Add(('-', oldLines[x++]));
         while (y < m) ops.Add(('+', newLines[y++]));
 
@@ -1199,6 +1211,7 @@ public static class DiffUtil
         var inHunk = false;
         for (int i = 0; i < ops.Count; i++)
         {
+            ct.ThrowIfCancellationRequested();
             var (op, line) = ops[i];
             var near = ops.Skip(Math.Max(0, i - ctx)).Take(ctx).Concat(ops.Skip(i + 1).Take(ctx)).Any(o => o.Op != ' ');
             var emit = op != ' ' || near;

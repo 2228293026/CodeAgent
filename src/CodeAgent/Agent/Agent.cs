@@ -582,7 +582,7 @@ public sealed partial class Agent
 
     /// <summary>生成 edit_file 的紧凑 diff 预览文本（无差异返回空串）。
     /// 直接对 old_string/new_string 做行级 diff，配合着色即可一眼看出改了哪里。</summary>
-    internal static string EditPreviewText(JsonObject? args)
+    internal static string EditPreviewText(JsonObject? args, CancellationToken ct = default)
     {
         if (args is null)
             return "";
@@ -590,14 +590,14 @@ public sealed partial class Agent
         var newS = ToolArgs.GetString(args, "new_string");
         if (oldS.Length == 0 && newS.Length == 0)
             return "";
-        return CapDiff(DiffUtil.Unified(oldS, newS, ToolArgs.GetString(args, "path")));
+        return CapDiff(DiffUtil.Unified(oldS, newS, ToolArgs.GetString(args, "path"), ct), ct);
     }
 
     /// <summary>生成 write_file 的预览文本：覆盖已有文件时给出与现有内容的 diff，
     /// 新文件给出规模摘要（+N 行 / 字节）；超大文件跳过 diff。</summary>
     internal static string WritePreviewText(JsonObject? args) => WritePreviewText(args, null);
 
-    internal static string WritePreviewText(JsonObject? args, Workspace? workspace)
+    internal static string WritePreviewText(JsonObject? args, Workspace? workspace, CancellationToken ct = default)
     {
         if (args is null)
             return "";
@@ -614,15 +614,15 @@ public sealed partial class Agent
             return "";
         }
         if (!File.Exists(full))
-            return content.Length == 0 ? "" : $"+ 新文件：{SkipDirs.CountLines(content)} 行 / {Encoding.UTF8.GetByteCount(content):N0} 字节";
+            return content.Length == 0 ? "" : $"+ 新文件：{SkipDirs.CountLines(content, ct)} 行 / {Encoding.UTF8.GetByteCount(content):N0} 字节";
         try
         {
             var fi = new FileInfo(full);
             if (fi.Length > 1_000_000)
                 return $"~ 覆盖现有文件（{fi.Length / 1024 / 1024} MB，过大不预览 diff）";
             var old = TextUtil.ReadTextSmart(full); // GBK 等旧编码文件的 diff 预览不乱码
-            var diff = DiffUtil.Unified(old, content, path);
-            return diff.Length == 0 ? "（内容无差异）" : CapDiff(diff);
+            var diff = DiffUtil.Unified(old, content, path, ct);
+            return diff.Length == 0 ? "（内容无差异）" : CapDiff(diff, ct);
         }
         catch
         {
@@ -631,9 +631,9 @@ public sealed partial class Agent
     }
 
     /// <summary>diff 文本截断：最多 15 行、每行 200 字符，超出提示总行数。</summary>
-    internal static string CapDiff(string diff)
+    internal static string CapDiff(string diff, CancellationToken ct = default)
     {
-        var lines = DiffUtil.SplitLines(diff);
+        var lines = DiffUtil.SplitLines(diff, ct);
         const int maxLines = 15;
         var shown = lines.Take(maxLines).Select(l => TextUtil.TruncateLine(l, 200)).ToList();
         if (lines.Length > maxLines)
@@ -648,11 +648,11 @@ public sealed partial class Agent
     }
 
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
-    private static void ShowFilePreview(string name, JsonObject? args, Workspace workspace)
+    private static void ShowFilePreview(string name, JsonObject? args, Workspace workspace, CancellationToken ct)
     {
         try
         {
-            var text = name == "write_file" ? WritePreviewText(args, workspace) : EditPreviewText(args);
+            var text = name == "write_file" ? WritePreviewText(args, workspace, ct) : EditPreviewText(args, ct);
             if (text.Length == 0)
                 return;
             foreach (var line in DiffUtil.SplitLines(text))
@@ -757,7 +757,7 @@ public sealed partial class Agent
                     JsonObject? previewArgs = null;
                     try { previewArgs = JsonNode.Parse(tc.ArgumentsJson) as JsonObject; }
                     catch { }
-                    ShowFilePreview(tc.Name, previewArgs, _ctx.Workspace);
+                    ShowFilePreview(tc.Name, previewArgs, _ctx.Workspace, ct);
                 }
             }
         }

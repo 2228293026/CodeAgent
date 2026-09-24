@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.Threading;
 using CodeAgent;
 using Xunit;
 
@@ -9,6 +11,16 @@ public class DiffUtilTests
     [Fact]
     public void Unified_Identical_ReturnsEmpty() =>
         Assert.Equal("", DiffUtil.Unified("a\nb\n", "a\nb\n", "f.txt"));
+
+    [Fact]
+    public void Unified_CanceledToken_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            DiffUtil.Unified("old\ntext", "new\ntext", "f.txt", cts.Token));
+    }
 
     [Fact]
     public void Unified_ChangedLine_ShowsMinusAndPlus()
