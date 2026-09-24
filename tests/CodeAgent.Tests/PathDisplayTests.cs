@@ -29,6 +29,13 @@ public class PathDisplayTests
     }
 
     [Fact]
+    public void TruncatePathHead_ZeroWidth_ReturnsEmpty()
+    {
+        Assert.Equal("", Program.TruncatePathHead("some/long/path", 0));
+        Assert.Equal("", Program.TruncatePathHead("some/long/path", -1));
+    }
+
+    [Fact]
     public void TruncatePathHead_TailBoundary_DoesNotSplitSurrogatePair()
     {
         var path = "A" + string.Concat(Enumerable.Repeat("😀", 100)) + "Z";
