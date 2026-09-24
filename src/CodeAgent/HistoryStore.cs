@@ -61,6 +61,8 @@ public sealed class HistoryStore
         {
             if (!File.Exists(_path))
                 return [];
+            if (new FileInfo(_path).LinkTarget is not null)
+                return [];
             var entries = new Queue<string>(MaxEntries);
             foreach (var line in File.ReadLines(_path))
             {
@@ -80,6 +82,13 @@ public sealed class HistoryStore
 
     private void Save()
     {
+        try
+        {
+            if (File.Exists(_path) && new FileInfo(_path).LinkTarget is not null)
+                return;
+        }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
         var tmp = SkipDirs.TempPathFor(_path);
         try
         {

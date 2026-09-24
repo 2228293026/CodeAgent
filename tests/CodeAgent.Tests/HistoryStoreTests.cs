@@ -129,6 +129,23 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void LinkedHistoryFile_IsIgnoredAndNotOverwritten()
+    {
+        var outside = Path.Combine(_dir, "outside-history.txt");
+        File.WriteAllText(outside, "external-secret\n");
+        var link = Path.Combine(_dir, "linked-history.txt");
+        try { File.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var store = new HistoryStore(link);
+        Assert.Empty(store.Entries);
+
+        store.Remember("new-entry");
+        Assert.Equal("external-secret\n", File.ReadAllText(outside));
+    }
+
+    [Fact]
     public void Load_LargeHistoryFile_KeepsBoundedLatestEntries()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
