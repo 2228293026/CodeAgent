@@ -195,6 +195,22 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Glob_NameSort_UsesPlatformCaseSemantics()
+    {
+        File.WriteAllText(PathOf("B.txt"), "x");
+        File.WriteAllText(PathOf("a.txt"), "x");
+
+        var result = await new GlobTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "*.txt" }, MakeContext(_dir), CancellationToken.None);
+        var lower = result.IndexOf("a.txt", StringComparison.Ordinal);
+        var upper = result.IndexOf("B.txt", StringComparison.Ordinal);
+        if (OperatingSystem.IsWindows())
+            Assert.True(lower < upper, $"Windows 名称排序应忽略大小写:\n{result}");
+        else
+            Assert.True(upper < lower, $"大小写敏感文件系统应使用 Ordinal:\n{result}");
+    }
+
+    [Fact]
     public async Task Glob_MaxResults_RespectsCap()
     {
         // max_results 控制返回上限；达到上限时提示可能不完整

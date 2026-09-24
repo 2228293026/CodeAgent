@@ -100,7 +100,10 @@ public sealed class GlobTool : ITool
                 : $"(没有匹配 {string.Join(", ", patterns)} 的文件)";
         if (string.IsNullOrEmpty(sortBy) || sortBy == "name")
         {
-            results.Sort(StringComparer.Ordinal);
+            var nameComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+            results.Sort(nameComparer);
             if (reverse)
                 results.Reverse();
         }
@@ -581,7 +584,10 @@ public sealed class GrepTool : ITool
         {
             // 确定性输出：先收集再排序（枚举顺序跨平台不定），与 glob 保持一致
             var files = SkipDirs.EnumerateFilesPruned(full, depth >= 0 ? depth : int.MaxValue, includeIgnored).ToList();
-            files.Sort(StringComparer.Ordinal);
+            var nameComparer = OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal;
+            files.Sort(nameComparer);
             string? lastRel = null;
             foreach (var file in files)
             {
