@@ -128,6 +128,7 @@ public sealed class GlobTool : ITool
             if (reverse)
                 results.Reverse();
         }
+        ct.ThrowIfCancellationRequested();
         var displayLimit = Math.Min(maxResults, 500); // 单次输出上限 500，防止结果过多撑爆上下文
         var shown = showModified || showSize || showByteCount || showHash || showExtension || showAbsolutePath || showType || showMimeType || showPermissions
             ? string.Join('\n', results.Take(displayLimit).Select(r =>
