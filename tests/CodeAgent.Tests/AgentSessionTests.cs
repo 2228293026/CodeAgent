@@ -70,6 +70,16 @@ public class AgentSessionTests : IDisposable
     }
 
     [Fact]
+    public void SearchSessionLog_CanceledToken_PrecedesMissingFileOpen()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            AgentClass.SearchSessionLog(Path.Combine(_sessionDir, "missing.jsonl"), "needle", ct: cts.Token));
+    }
+
+    [Fact]
     public void SearchSnapshot_CanceledToken_PropagatesCancellation()
     {
         var path = Path.Combine(_sessionDir, "cancel-search.json");

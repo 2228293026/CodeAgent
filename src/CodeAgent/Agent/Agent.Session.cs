@@ -235,6 +235,7 @@ public sealed partial class Agent
     /// StreamWriter 追加持有，File.ReadLines 的 FileShare.Read 会与之共享冲突。</summary>
     private static IEnumerable<string> ReadLogLines(string path, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using var sr = new StreamReader(fs);
         while (true)
