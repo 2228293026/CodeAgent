@@ -71,6 +71,7 @@ public sealed class SessionSearchTool : ITool
             Emit($"快照 {name}", $"/load {name} 可恢复", AgentClass.SearchSnapshot(snap, keyword, caseSensitive, ct: ct));
         }
 
+        ct.ThrowIfCancellationRequested();
         return Task.FromResult(printed == 0
             ? $"(历史会话中没有匹配 \"{keyword}\" 的内容)"
             : $"匹配 {printed} 个会话:\n" + sb.ToString().TrimEnd());
