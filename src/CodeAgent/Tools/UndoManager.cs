@@ -268,10 +268,18 @@ public sealed class UndoManager
         var after = SnapshotDir(cwd);
         var paths = new HashSet<string>(before.Texts.Keys, PathComparer);
         paths.UnionWith(after.Texts.Keys);
+        // Seen 覆盖快照因大小/二进制限制而未记录内容的文件。删除或新建这类文件仍需
+        // 入栈，才能如实报告「无法撤销」或撤销新建；两侧都存在但都未记录内容则无法判断变化，跳过。
+        paths.UnionWith(before.Seen);
+        paths.UnionWith(after.Seen);
         foreach (var rel in paths)
         {
             var had = before.Texts.TryGetValue(rel, out var old);
             var has = after.Texts.TryGetValue(rel, out var cur);
+            var hadSeen = before.Seen.Contains(rel);
+            var hasSeen = after.Seen.Contains(rel);
+            if (!had && !has && hadSeen == hasSeen)
+                continue; // 两侧都只是不可记录的大/二进制文件，无法判断是否变化
             if (had && has && old == cur)
                 continue; // 内容未变
             var full = Path.GetFullPath(Path.Combine(cwd, rel.Replace('/', Path.DirectorySeparatorChar)));

@@ -486,6 +486,25 @@ public class UndoManagerTests : IDisposable
     }
 
     [Fact]
+    public void RecordCommandSideEffects_DeletedLargeFile_ReportsUndoLimitation()
+    {
+        // 超出快照内容上限的既有文件被删除时，不能静默丢失撤销记录：
+        // 应入栈并如实说明无法恢复，而不是让 /undo 看起来什么也没发生。
+        var dir = Path.Combine(_dir, "delete-big");
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "big.txt");
+        File.WriteAllText(path, new string('x', 1_500_000));
+        var before = UndoManager.SnapshotDir(dir);
+        File.Delete(path);
+
+        var um = new UndoManager();
+        UndoManager.RecordCommandSideEffects(dir, before, um);
+
+        Assert.Equal(1, um.Count);
+        Assert.Contains("无法撤销", um.TryUndo());
+    }
+
+    [Fact]
     public void RecordCommandSideEffects_DetectsCreateModifyDelete()
     {
         var dir = Path.Combine(_dir, "work");
