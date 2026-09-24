@@ -29,6 +29,25 @@ public class SkipDirsTests : IDisposable
     }
 
     [Fact]
+    public void EnumerateFilesPruned_FollowSymlinksFalse_SkipsLinkedDirectories()
+    {
+        var target = Path.Combine(_dir, "real");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, "inside.txt"), "x");
+        var link = Path.Combine(_dir, "link");
+        try { Directory.CreateSymbolicLink(link, target); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var files = SkipDirs.EnumerateFilesPruned(_dir, followSymlinks: false)
+            .Select(f => Path.GetRelativePath(_dir, f).Replace('\\', '/'))
+            .ToList();
+
+        Assert.DoesNotContain("link/inside.txt", files);
+        Assert.Contains("real/inside.txt", files);
+    }
+
+    [Fact]
     public void EnumerateFilesPruned_SkipsBuildAndCacheDirs()
     {
         // 布局：src/a.cs、src/deep/b.cs、node_modules/x.cs、bin/y.cs（都应被剪枝跳过）

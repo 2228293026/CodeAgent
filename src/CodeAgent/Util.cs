@@ -565,12 +565,13 @@ public static class SkipDirs
             var (dir, depth) = stack.Pop();
             if (!visited.Add(dir))
                 continue;
-            IEnumerable<string> subDirs;
-            IEnumerable<string> files;
+            List<string> subDirs;
+            List<string> files;
             try
             {
-                subDirs = Directory.EnumerateDirectories(dir);
-                files = Directory.EnumerateFiles(dir);
+                // ToList 让枚举期间的权限/竞态异常也落在 catch 内；直接 foreach 延迟枚举会把异常泄漏给调用方。
+                subDirs = Directory.EnumerateDirectories(dir).ToList();
+                files = Directory.EnumerateFiles(dir).ToList();
             }
             catch (UnauthorizedAccessException) { continue; }
             catch (IOException) { continue; }
