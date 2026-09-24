@@ -128,6 +128,23 @@ public class SearchToolsEdgeTests : IDisposable
     }
 
     [Fact]
+    public async Task Grep_DirectHiddenFile_IsExcludedUnlessShowHidden()
+    {
+        var path = PathOf(".secret.txt");
+        File.WriteAllText(path, "needle");
+        var ctx = MakeContext(_dir);
+
+        var hidden = await new GrepTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle", ["path"] = ".secret.txt" }, ctx, CancellationToken.None);
+        Assert.DoesNotContain(".secret.txt", hidden);
+
+        var shown = await new GrepTool().ExecuteAsync(
+            new JsonObject { ["pattern"] = "needle", ["path"] = ".secret.txt", ["show_hidden"] = true },
+            ctx, CancellationToken.None);
+        Assert.Contains(".secret.txt", shown);
+    }
+
+    [Fact]
     public async Task Glob_NoMatch_ReturnsEmpty()
     {
         // 无匹配时返回空（或提示）

@@ -570,7 +570,8 @@ public sealed class GrepTool : ITool
         await Task.Yield();
         if (File.Exists(full))
         {
-            ScanFile(full, maxMatchesPerFile);
+            if (showHidden || !SkipDirs.IsHidden(full))
+                ScanFile(full, maxMatchesPerFile);
         }
         else if (Directory.Exists(full))
         {
