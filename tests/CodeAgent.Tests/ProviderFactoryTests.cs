@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using CodeAgent;
 using CodeAgent.Providers;
 using Xunit;
@@ -59,6 +60,32 @@ public class ProviderFactoryTests
             Assert.IsType<OpenAiProvider>(provider);
             Assert.True(config.Providers.ContainsKey("custom"));
             Assert.Equal(OpenAiProvider.DefaultBaseUrl, config.Providers["custom"].BaseUrl);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
+        }
+    }
+
+    [Fact]
+    public void Create_NullProviderEntry_ReplacesWithDefaults()
+    {
+        var config = new AgentConfig
+        {
+            Provider = "custom",
+            Providers = new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["custom"] = null!,
+            },
+        };
+        Environment.SetEnvironmentVariable("OPENAI_API_KEY", "test-key");
+        try
+        {
+            var provider = ProviderFactory.Create(config);
+
+            Assert.IsType<OpenAiProvider>(provider);
+            Assert.Equal(OpenAiProvider.DefaultBaseUrl, config.Providers["custom"].BaseUrl);
+            Assert.Equal(OpenAiProvider.DefaultModel, config.Providers["custom"].Model);
         }
         finally
         {

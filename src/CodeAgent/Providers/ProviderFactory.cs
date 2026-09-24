@@ -9,7 +9,7 @@ public static class ProviderFactory
     {
         config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
         var name = string.IsNullOrWhiteSpace(config.Provider) ? "openai" : config.Provider.Trim();
-        if (!config.Providers.TryGetValue(name, out var opts))
+        if (!config.Providers.TryGetValue(name, out var opts) || opts is null)
         {
             opts = new ProviderOptions();
             config.Providers[name] = opts;
