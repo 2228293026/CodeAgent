@@ -384,6 +384,16 @@ public class TextUtilEdgeTests : IDisposable
 
 
     [Fact]
+    public void TruncateHeadTailAndToolOutput_NonPositiveMax_ReturnEmpty()
+    {
+        var s = "some output";
+        Assert.Equal("", TextUtil.TruncateHeadTail(s, 0));
+        Assert.Equal("", TextUtil.TruncateHeadTail(s, -1));
+        Assert.Equal("", TextUtil.TruncateToolOutput(s, 0));
+        Assert.Equal("", TextUtil.TruncateToolOutput(s, -1));
+    }
+
+    [Fact]
     public void TruncateToolOutput_TailBoundary_DoesNotSplitSurrogatePair()
     {
         var s = "A" + string.Concat(Enumerable.Repeat("😀", 100)) + "Z";

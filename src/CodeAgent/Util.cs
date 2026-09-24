@@ -266,6 +266,8 @@ public static class TextUtil
     /// 最关键的报错丢掉）：头部占 2/3、尾部占 1/3，中段以省略标记替代并注明丢弃字符数。</summary>
     public static string TruncateHeadTail(string s, int max)
     {
+        if (max <= 0)
+            return string.Empty;
         if (s.Length <= max)
             return s;
         const string markerFormat = "\n…[中间省略 {0:N0} 字符]…\n";
@@ -287,6 +289,8 @@ public static class TextUtil
     /// </summary>
     public static string TruncateToolOutput(string s, int max)
     {
+        if (max <= 0)
+            return string.Empty;
         if (s.Length <= max)
             return s;
         var head = Math.Max(0, max * 2 / 3);
