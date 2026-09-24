@@ -136,8 +136,15 @@ public sealed class Workspace
             var isLast = i == segments.Length - 1;
             if (!isLast && RealPathDirCache.TryGetValue(next, out var hit) && hit.ExpiresUtc > now)
             {
-                current = hit.Real; // 目录段命中缓存：跳过逐段链接解析
-                continue;
+                bool isLinkNow = false;
+                try { isLinkNow = new DirectoryInfo(next).LinkTarget is not null; }
+                catch (IOException) { isLinkNow = true; }
+                catch (UnauthorizedAccessException) { isLinkNow = true; }
+                if (!isLinkNow)
+                {
+                    current = hit.Real; // 目录段命中缓存：跳过逐段链接解析
+                    continue;
+                }
             }
             string? resolved = null;
             try

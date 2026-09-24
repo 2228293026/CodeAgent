@@ -183,6 +183,36 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public void Resolve_SymlinkSwapAfterDirectoryCache_IsRejected()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "codeagent-cache-ws-" + Guid.NewGuid().ToString("N"));
+        var outside = Path.Combine(Path.GetTempPath(), "codeagent-cache-out-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(outside);
+        try
+        {
+            var cachedDir = Path.Combine(root, "swap");
+            Directory.CreateDirectory(cachedDir);
+            File.WriteAllText(Path.Combine(cachedDir, "inside.txt"), "inside");
+            File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
+            var ws = new Workspace(root);
+            ws.ResolveRead("swap/inside.txt");
+
+            Directory.Delete(cachedDir, true);
+            try { Directory.CreateSymbolicLink(cachedDir, outside); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            Assert.Throws<ToolException>(() => ws.ResolveRead("swap/secret.txt"));
+        }
+        finally
+        {
+            try { Directory.Delete(root, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void Resolve_SymlinkInside_IsAllowed()
     {
         // 符号链接指向工作区内时不应误拦
