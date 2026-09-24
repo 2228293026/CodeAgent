@@ -7,6 +7,7 @@ public static class ProviderFactory
 {
     public static IAgentProvider Create(AgentConfig config)
     {
+        config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
         var name = string.IsNullOrWhiteSpace(config.Provider) ? "openai" : config.Provider.Trim();
         if (!config.Providers.TryGetValue(name, out var opts))
         {

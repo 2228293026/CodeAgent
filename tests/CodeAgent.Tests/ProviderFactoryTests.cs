@@ -48,6 +48,25 @@ public class ProviderFactoryTests
     }
 
     [Fact]
+    public void Create_NullProviderCollection_InitializesDefaults()
+    {
+        var config = new AgentConfig { Provider = "custom", Providers = null! };
+        Environment.SetEnvironmentVariable("OPENAI_API_KEY", "test-key");
+        try
+        {
+            var provider = ProviderFactory.Create(config);
+
+            Assert.IsType<OpenAiProvider>(provider);
+            Assert.True(config.Providers.ContainsKey("custom"));
+            Assert.Equal(OpenAiProvider.DefaultBaseUrl, config.Providers["custom"].BaseUrl);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", null);
+        }
+    }
+
+    [Fact]
     public void Create_UnknownProvider_GetsAddedWithDefaults()
     {
         // 配置里没写 providers 键时：工厂应补一个默认 openai 项而不是抛异常
