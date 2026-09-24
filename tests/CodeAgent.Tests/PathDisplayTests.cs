@@ -33,6 +33,7 @@ public class PathDisplayTests
     {
         Assert.Equal("", Program.TruncatePathHead("some/long/path", 0));
         Assert.Equal("", Program.TruncatePathHead("some/long/path", -1));
+        Assert.Equal("…", Program.TruncatePathHead("some/long/path", 1));
     }
 
     [Fact]

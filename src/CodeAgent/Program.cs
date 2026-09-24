@@ -819,8 +819,10 @@ internal static class Program
             return string.Empty;
         if (path.Length <= max)
             return path;
-        var keep = Math.Max(0, max - 1);
-        if (keep > 0 && char.IsLowSurrogate(path[^keep]) && char.IsHighSurrogate(path[^(keep - 1)]))
+        var keep = max - 1;
+        if (keep == 0)
+            return "…";
+        if (char.IsLowSurrogate(path[^keep]) && char.IsHighSurrogate(path[^(keep - 1)]))
             keep--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
         return "…" + path[^keep..];
     }
