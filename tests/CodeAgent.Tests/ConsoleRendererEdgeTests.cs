@@ -135,6 +135,22 @@ public class ConsoleRendererEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Render_TableTrailingEscapedPipe_IsPreserved()
+    {
+        // 表格可省略末尾外层 |；此时结尾的 \| 是单元格内容，不能当作外层分隔符删掉。
+        var output = Render("| a\\|\n");
+        Assert.Equal("a|", output.Trim());
+    }
+
+    [Fact]
+    public void Render_TablePipe_EscapingUsesBackslashParity()
+    {
+        // 两个连续反斜杠后的 | 是分隔符；仅奇数个反斜杠才转义竖线。
+        var output = Render("| a\\\\| b |\n");
+        Assert.Equal("a\\\\ │ b", output.Trim());
+    }
+
+    [Fact]
     public void Render_UnclosedTableSeparator_DoesNotCrash()
     {
         // 只有分隔行没有数据行：不崩溃（现有回归的补充）

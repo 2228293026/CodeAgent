@@ -347,17 +347,22 @@ public sealed class ConsoleRenderer
 
     private static List<string> SplitCells(string row)
     {
-        var s = row.Trim().TrimStart('|').TrimEnd('|');
-        // \| 是表格内的转义竖线（如 "a \| b"、正则片段 \|regex\|）：不能作为单元格分隔，
-        // 且渲染时应还原为字面 |，否则列数会多、内容被劈开
+        var s = row.Trim();
+        if (s.StartsWith('|'))
+            s = s[1..];
+        // 末尾 | 可选；只有未被反斜杠转义的才是外层分隔符。
+        if (s.EndsWith('|') && !IsEscapedPipe(s, s.Length - 1))
+            s = s[..^1];
+
+        // \| 是表格内的字面竖线；连续反斜杠按奇偶判定：奇数转义，偶数后的 | 仍为分隔符。
         var cells = new List<string>();
         var sb = new StringBuilder();
         for (int i = 0; i < s.Length; i++)
         {
-            if (s[i] == '\\' && i + 1 < s.Length && s[i + 1] == '|')
+            if (s[i] == '|' && IsEscapedPipe(s, i))
             {
+                if (sb.Length > 0 && sb[^1] == '\\') sb.Length--; // 消费一个转义反斜杠
                 sb.Append('|');
-                i++;
             }
             else if (s[i] == '|')
             {
@@ -371,6 +376,14 @@ public sealed class ConsoleRenderer
         }
         cells.Add(sb.ToString().Trim());
         return cells;
+
+        static bool IsEscapedPipe(string text, int pipeIndex)
+        {
+            var backslashes = 0;
+            for (var i = pipeIndex - 1; i >= 0 && text[i] == '\\'; i--)
+                backslashes++;
+            return (backslashes & 1) != 0;
+        }
     }
 
     private static string PadToWidth(string s, int width)
