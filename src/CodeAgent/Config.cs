@@ -234,6 +234,14 @@ public sealed class AgentConfig
                 mode.Name ??= "";
                 mode.Description ??= "";
                 mode.SystemPrompt ??= AgentConfig.DefaultSystemPrompt;
+                if (mode.Tools is not null)
+                {
+                    mode.Tools = mode.Tools
+                        .Where(t => !string.IsNullOrWhiteSpace(t))
+                        .Select(t => t.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
             }
             cfg.Provider = string.IsNullOrWhiteSpace(cfg.Provider) ? "openai" : cfg.Provider.Trim();
             cfg.Shell = cfg.Shell?.Trim() ?? "";

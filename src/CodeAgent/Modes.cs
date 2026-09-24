@@ -72,11 +72,16 @@ public static class Modes
                 continue;
             if (string.IsNullOrWhiteSpace(c.Name))
                 continue;
+            var tools = c.Tools?
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(t => t.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
             list.Add(new AgentMode(
                 c.Name,
                 string.IsNullOrWhiteSpace(c.Description) ? c.Name : c.Description,
                 string.IsNullOrWhiteSpace(c.SystemPrompt) ? AgentConfig.DefaultSystemPrompt : c.SystemPrompt,
-                c.Tools is { Count: > 0 } ? [.. c.Tools] : null));
+                tools is { Length: > 0 } ? tools : null));
         }
         return list;
     }

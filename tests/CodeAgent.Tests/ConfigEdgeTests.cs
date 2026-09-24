@@ -98,6 +98,20 @@ public class ConfigEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Load_NormalizesModeToolEntries()
+    {
+        var path = WriteJson("""
+        {
+          "modes": [{ "name": "custom", "tools": [" read_file ", "read_file", null, "  ", "edit_file"] }]
+        }
+        """);
+
+        var config = AgentConfig.Load(path);
+
+        Assert.Equal(["read_file", "edit_file"], config.Modes[0].Tools);
+    }
+
+    [Fact]
     public void Load_TrimsProviderPathsAndShellNames()
     {
         var path = WriteJson("""
