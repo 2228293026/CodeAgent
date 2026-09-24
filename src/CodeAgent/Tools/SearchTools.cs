@@ -333,6 +333,28 @@ public sealed class GrepTool : ITool
             throw new ToolException("invert 不支持 multiline 模式（跨行反转无意义），请关闭 multiline 或 invert。");
         // 匹配判定（invert 时取反，类似 rg -v）；集中一处，files_only/count_only/普通模式共用
         bool Hit(string s) => invert ? !re.IsMatch(s) : re.IsMatch(s);
+        int CountMatches(string value)
+        {
+            var count = 0;
+            foreach (System.Text.RegularExpressions.Match match in re.Matches(value))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (match.Length > 0)
+                    count++;
+            }
+            return count;
+        }
+        int CountLines(string value)
+        {
+            var count = 0;
+            foreach (var line in DiffUtil.SplitLines(value))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (Hit(line.TrimEnd('\r')))
+                    count++;
+            }
+            return count;
+        }
 
         void ScanFile(string path, int fileMaxMatches = 0)
         {
@@ -477,9 +499,7 @@ public sealed class GrepTool : ITool
                 {
                     // 计数模式（rg -c 风格）：输出 文件:匹配行数；multiline 时按命中次数计。
                     // invert 时统计非匹配行数。hits 以文件为粒度递增，max_results 限制列出的文件数
-                    var n = multiline
-                        ? re.Matches(text).Count(m => m.Length > 0)
-                        : DiffUtil.SplitLines(text).Count(l => Hit(l.TrimEnd('\r')));
+                    var n = multiline ? CountMatches(text) : CountLines(text);
                     if (n > 0)
                     {
                         hits++;
