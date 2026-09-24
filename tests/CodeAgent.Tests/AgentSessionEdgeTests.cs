@@ -178,6 +178,30 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void SessionListings_DoNotFollowLinkedRootDirectory()
+    {
+        var outside = Path.Combine(_dir, "outside-session-root");
+        Directory.CreateDirectory(outside);
+        var link = Path.Combine(_dir, "linked-session-root");
+        try { Directory.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "secret.jsonl"), "{\"role\":\"user\",\"content\":\"external\"}\n");
+            File.WriteAllText(Path.Combine(outside, "secret.json"), "[{\"role\":\"user\",\"content\":\"external\"}]");
+
+            Assert.Empty(Program.RecentSessionLogs(new AgentConfig { SessionDir = link }));
+            Assert.Empty(Program.SavedSessions(link));
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void RecentSessionLogs_EqualTimestamps_UsesDeterministicNameOrder()
     {
         var stamp = DateTime.UtcNow;

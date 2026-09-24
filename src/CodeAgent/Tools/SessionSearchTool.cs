@@ -46,6 +46,13 @@ public sealed class SessionSearchTool : ITool
         var sessionDir = Path.Combine(Environment.CurrentDirectory, ctx.Config.SessionDir);
         if (!Directory.Exists(sessionDir))
             return Task.FromResult("(还没有任何会话记录)");
+        try
+        {
+            if (new DirectoryInfo(sessionDir).LinkTarget is not null)
+                return Task.FromResult("(还没有可搜索的会话记录)");
+        }
+        catch (IOException) { return Task.FromResult("(会话记录目录不可用)"); }
+        catch (UnauthorizedAccessException) { return Task.FromResult("(会话记录目录不可用)"); }
 
         var sb = new StringBuilder();
         var printed = 0;

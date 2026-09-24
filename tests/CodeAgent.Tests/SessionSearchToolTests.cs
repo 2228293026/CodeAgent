@@ -120,6 +120,36 @@ public class SessionSearchToolTests : IDisposable
     }
 
     [Fact]
+    public async Task SessionSearch_DoesNotFollowLinkedSessionRoot()
+    {
+        var outside = Path.Combine(_dir, "outside-search-root");
+        Directory.CreateDirectory(outside);
+        var link = Path.Combine(_dir, "linked-search-root");
+        try { Directory.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "secret.jsonl"), "{\"role\":\"user\",\"content\":\"external-secret\"}\n");
+            var ctx = new AgentContext
+            {
+                Config = new AgentConfig { SessionDir = link },
+                Workspace = new Workspace(_dir),
+            };
+
+            var output = await new SessionSearchTool().ExecuteAsync(
+                new JsonObject { ["keyword"] = "external-secret" }, ctx, CancellationToken.None);
+
+            Assert.Contains("没有可搜索", output);
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task SessionSearch_EmptySessionDir_ReturnsFriendlyMessage()
     {
         var tool = new SessionSearchTool();

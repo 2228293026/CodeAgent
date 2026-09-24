@@ -517,6 +517,8 @@ internal static class Program
             var dir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
             if (!Directory.Exists(dir))
                 return [];
+            if (new DirectoryInfo(dir).LinkTarget is not null)
+                return [];
             // 按最后写入时间排序（同秒滚动的 -2/-3 后缀文件名字典序不可靠）
             var nameComparer = OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase
@@ -746,6 +748,8 @@ internal static class Program
         try
         {
             if (!Directory.Exists(sessionDir))
+                return [];
+            if (new DirectoryInfo(sessionDir).LinkTarget is not null)
                 return [];
             var nameComparer = OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase
