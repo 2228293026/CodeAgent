@@ -456,6 +456,7 @@ public sealed class ToolRegistry
         registry.Register(new GitCompareRefsTool());
         registry.Register(new GitTagInfoTool());
         registry.Register(new GitWorktreeDetailsTool());
+        registry.Register(new GitStashInfoTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
