@@ -1014,6 +1014,38 @@ internal static class Program
     /// 固定段：⏵ 模式 · 模型 · 目录；可丢段（由低到高）：思考强度 → 本回合 token → 上下文 → git 分支。
     /// 全部丢完仍超宽时按显示宽度硬截断（CJK/emoji 占 2 列）。
     /// </summary>
+    /// <summary>路径按显示宽度缩短：保留**末尾**分段（路径最有信息量的是末段），
+    /// 折叠的头部用 …\ 标注。直接按显示宽度硬截会留下「看起来是完整路径的残串」，
+    /// 用户会以为那就是真实目录——这比截断本身更危险。</summary>
+    internal static string ShortenPath(string path, int budget)
+    {
+        if (budget <= 0 || TextUtil.DisplayWidth(path) <= budget)
+            return path;
+        var separator = path.Contains('\\', StringComparison.Ordinal) && !path.Contains('/', StringComparison.Ordinal) ? '\\' : '/';
+        var ellipsis = "…" + separator;
+        var segments = path.Split(separator);
+        var tail = new List<string>();
+        var used = TextUtil.DisplayWidth(ellipsis);
+        for (var i = segments.Length - 1; i >= 0; i--)
+        {
+            var segment = segments[i];
+            if (segment.Length == 0)
+                continue;
+            var w = TextUtil.DisplayWidth(segment) + (tail.Count > 0 ? 1 : 0);
+            if (used + w > budget)
+                break;
+            tail.Insert(0, segment);
+            used += w;
+        }
+        if (tail.Count > 0)
+            return ellipsis + string.Join(separator, tail);
+        // 连最后一段都放不下：截掉最后一段的尾部并加 … 前缀，绝不返回无标记的残串
+        if (budget <= 1)
+            return "…";
+        var last = segments.Length > 0 ? segments[^1] : path;
+        return "…" + InputLine.FitToWidth(last, budget - 1); // 1 列留给前缀 …
+    }
+
     internal static string BuildStatusBar(
         string mode, string model, string cwd, string? branch,
         string turnIn, string turnOut, string ctxText, string thinkText, int width)
@@ -1041,7 +1073,23 @@ internal static class Program
             drops[i]();
             text = Render();
         }
-        return width > 0 ? InputLine.FitToWidth(text, width) : text;
+        if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+        // 可丢段丢完仍超宽：先缩短目录。直接硬截会留下「看起来是完整路径的残串」，
+        // 用户会以为那就是真实目录。模式与模型在行首，缩短目录不会动它们。
+        var head = $"⏵ {mode} · {model} · ";
+        var budget = width - TextUtil.DisplayWidth(head);
+        if (budget > 0)
+        {
+            var shortened = ShortenPath(showBranch ? $"{cwd} ({branch})" : cwd, budget);
+            if (TextUtil.DisplayWidth(shortened) < TextUtil.DisplayWidth(showBranch ? $"{cwd} ({branch})" : cwd))
+            {
+                text = head + shortened;
+                if (TextUtil.DisplayWidth(text) <= width)
+                    return text;
+            }
+        }
+        return InputLine.FitToWidth(text, width);
     }
 
     /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
