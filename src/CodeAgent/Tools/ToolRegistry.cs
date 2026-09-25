@@ -404,6 +404,7 @@ public sealed class ToolRegistry
         registry.Register(new ReplaceInFilesTool());
         registry.Register(new CopyFileTool());
         registry.Register(new MoveFileTool());
+        registry.Register(new DeleteFileTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
