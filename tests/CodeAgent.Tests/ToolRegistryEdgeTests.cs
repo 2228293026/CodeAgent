@@ -216,7 +216,7 @@ public class ToolRegistryEdgeTests
         var reg = ToolRegistry.CreateDefault();
         var names = reg.ToToolSpecs().Select(s => s.Name).OrderBy(x => x, StringComparer.Ordinal).ToList();
         Assert.Equal(
-            new[] { "apply_patch", "bash", "compare_files", "edit_file", "file_info", "glob", "grep", "list_directory", "powershell", "project_stats", "read_file", "read_files", "run_command", "session_search", "stop", "write_file" },
+            new[] { "apply_patch", "bash", "compare_files", "edit_file", "file_info", "glob", "grep", "list_directory", "powershell", "project_stats", "read_file", "read_files", "replace_in_files", "run_command", "session_search", "stop", "write_file" },
             names);
     }
 }

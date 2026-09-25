@@ -20,7 +20,7 @@
 - 🎮 ADOFAI mod 适配：检测到 mod 项目自动注入开发上下文与 moddev / harmony / assetbundle 模式
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
 - ⌨️ 终端 TUI：斜杠命令菜单（过滤/方向键选择/数字执行/→ 填充）、命令历史（↑/↓，持久化、Ctrl+R 反向搜索）、TAB 补全、多行粘贴折叠、Shift+Enter 手动换行、Ctrl+L 清屏、`[模式]` 提示符
-- 🔧 内置 16 个工具：`read_file`（offset/limit/tail）/ `read_files`（批量读取多个文件）/ `compare_files`（文本文件 unified diff）/ `project_stats`（项目文件统计）/ `file_info`（单文件属性统计）/ `write_file` / `edit_file`（换行风格容错：LF↔CRLF 自动归一化匹配）/ `list_directory` / `glob` / `grep`（支持 multiline 跨行匹配）/ `run_command` / `bash` / `powershell` / `apply_patch` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
+- 🔧 内置 17 个工具：`read_file`（offset/limit/tail）/ `read_files`（批量读取多个文件）/ `compare_files`（文本文件 unified diff）/ `project_stats`（项目文件统计）/ `file_info`（单文件属性统计）/ `replace_in_files`（按 glob 批量替换）/ `write_file` / `edit_file`（换行风格容错：LF↔CRLF 自动归一化匹配）/ `list_directory` / `glob` / `grep`（支持 multiline 跨行匹配）/ `run_command` / `bash` / `powershell` / `apply_patch` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
 - 🔁 Anthropic extended thinking 全支持：思考文本 + 签名与加密的 redacted_thinking 块随工具调用轮原样回传（缺失会被 API 400）
 - ↩️ 会话自动落盘：`--continue` 恢复最近会话、`/resume` 按编号恢复历史会话、`/find <关键字>` 跨历史会话搜索、Esc 多级撤回逐轮回退；`--no-session` 本次运行不落盘（隐私任务）
 - 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）、思考强度（`auto` 自动探测模型推理档位并取最高）与**当前 git 分支**；`/compact [重点]` 主动压缩历史（压缩过程显示进度；可附保留重点，如 `/compact 保留接口设计`）
@@ -208,6 +208,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 | `compare_files` | 比较两个文本文件并返回 unified diff；可忽略首尾空白/空行并限制输出行数 |
 | `project_stats` | 统计项目文件数量、大小、扩展名分布；可筛选扩展名、统计行数并列出最大文件 |
 | `file_info` | 查看单文件大小、时间、编码、行数/单词数和可选 SHA256，不输出正文 |
+| `replace_in_files` | 按 glob 在多个文件中精确替换文本，支持 dry-run、忽略大小写、逐文件报告和撤销栈 |
 | `write_file` | 创建/覆盖文件，自动建父目录；缺 `content` 会报错而非写空文件；内容与现状相同则跳过写入 |
 | `edit_file` | 精确文本替换（类似补丁），重复匹配会报错；`replace_all` 可全部替换，old/new 相同或未命中会明确报错，撤销可精确恢复 |
 | `list_directory` | 列出目录树，跳过构建/缓存目录 |
@@ -246,6 +247,7 @@ src/CodeAgent/
 │   ├── CompareFilesTool.cs # compare_files 文本差异比较
 │   ├── ProjectStatsTool.cs # project_stats 项目统计
 │   ├── FileInfoTool.cs     # file_info 单文件属性
+│   ├── ReplaceInFilesTool.cs # replace_in_files 批量替换
 │   ├── SearchTools.cs      # glob / grep
 │   ├── CommandTool.cs      # run_command
 │   └── SessionTools.cs     # stop
