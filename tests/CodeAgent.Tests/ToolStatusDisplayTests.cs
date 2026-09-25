@@ -36,6 +36,54 @@ public class ToolStatusDisplayTests
     }
 
     [Fact]
+    public void FormatToolOutputPreview_TruncatesOnLineBoundary()
+    {
+        // 800 字符预算落在多行文本中间：必须停在整行，不能留半行让人误以为那就是完整的一行
+        var lines = Enumerable.Range(1, 500).Select(i => $"error CS{i:D4}: 某处的说明文字").ToList();
+        var text = string.Join("\n", lines);
+        var preview = AgentClass.FormatToolOutputPreview(text);
+        var body = preview[..preview.IndexOf("…（共", StringComparison.Ordinal)];
+        var kept = body.Split('\n');
+        // 保留的每一行都必须与源文本的整行逐字相同（没有半截行）
+        for (var i = 0; i < kept.Length; i++)
+            Assert.Equal(lines[i], kept[i]);
+        Assert.True(kept.Length < lines.Count, "应当发生了截断");
+    }
+
+    [Fact]
+    public void FormatToolOutputPreview_ReportsLineCounts()
+    {
+        var text = string.Join("\n", Enumerable.Range(1, 500).Select(i => $"error CS{i:D4}: 说明"));
+        var preview = AgentClass.FormatToolOutputPreview(text);
+        Assert.Contains("共 500 行", preview);
+        Assert.Contains("已保留", preview);
+    }
+
+    [Fact]
+    public void FormatToolOutputPreview_NeverSplitsSurrogatePair()
+    {
+        // 预算正好切在 emoji 的高代理项上
+        var text = new string('a', 30) + "\U0001F600" + new string('b', 100);
+        var preview = AgentClass.FormatToolOutputPreview(text, 32);
+        // 预览里不应出现落单的代理项
+        for (var i = 0; i < preview.Length; i++)
+        {
+            if (!char.IsHighSurrogate(preview[i]))
+                continue;
+            Assert.True(i + 1 < preview.Length && char.IsLowSurrogate(preview[i + 1]), "落单的高代理项");
+        }
+    }
+
+    [Fact]
+    public void FormatToolOutputPreview_SingleLongLineStillTruncates()
+    {
+        var text = new string('x', 2000);
+        var preview = AgentClass.FormatToolOutputPreview(text);
+        Assert.Contains("共 1 行", preview);
+        Assert.Contains("已保留 1 行", preview);
+    }
+
+    [Fact]
     public void FormatToolOutputPreview_ShortTextUnchanged()
     {
         Assert.Equal("ok", AgentClass.FormatToolOutputPreview("ok"));
@@ -48,7 +96,9 @@ public class ToolStatusDisplayTests
         var preview = AgentClass.FormatToolOutputPreview(text);
         Assert.True(preview.Length < text.Length);
         Assert.Contains("24,000 字符", preview);
-        Assert.EndsWith("已截断）", preview);
+        // 措辞从"已截断"改为"共 N 行 / 已保留 N 行"：多行输出更需要知道丢了多少行
+        Assert.EndsWith("）", preview);
+        Assert.Contains("已保留 1 行", preview);
     }
 
     [Fact]

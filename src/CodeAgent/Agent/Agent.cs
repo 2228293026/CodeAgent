@@ -726,12 +726,26 @@ public sealed partial class Agent
         return $"{name}({string.Join(" ", kept)}{note})";
     }
 
-    /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。</summary>
+    /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。
+    /// 按**行**边界截断：切在半行上会让人以为那就是完整的一行。
+    /// 注明保留/总行数：5000 行编译输出只说"共 8,000 字符"完全无法判断丢了多少。</summary>
     internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars)
     {
         if (maxChars <= 0)
             return string.Empty;
-        return text.Length <= maxChars ? text : text[..maxChars] + $"…（共 {text.Length:N0} 字符，已截断）";
+        if (text.Length <= maxChars)
+            return text;
+        var kept = text[..maxChars];
+        var lastBreak = kept.LastIndexOf('\n');
+        // 整段都是一行（无换行）时只能硬切，但仍要保证不劈开代理对
+        if (lastBreak > 0)
+            kept = kept[..lastBreak];
+        if (kept.Length > 0 && char.IsHighSurrogate(kept[^1]))
+            kept = kept[..^1];
+        kept = kept.TrimEnd();
+        var totalLines = DiffUtil.CountLines(text);
+        var keptLines = DiffUtil.CountLines(kept);
+        return kept + $"…（共 {totalLines:N0} 行 / {text.Length:N0} 字符，已保留 {keptLines:N0} 行）";
     }
 
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>

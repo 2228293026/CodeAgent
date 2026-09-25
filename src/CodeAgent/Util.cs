@@ -1252,6 +1252,20 @@ public static class Glob
 /// <summary>行级 diff（LCS），输出简化的 unified 风格文本（/diff 用）。</summary>
 public static class DiffUtil
 {
+    /// <summary>文本行数（空串算 0 行；末尾换行不额外计一行）。</summary>
+    public static int CountLines(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 0;
+        var count = 1;
+        foreach (var c in text)
+        {
+            if (c == '\n')
+                count++;
+        }
+        return text.EndsWith('\n') ? count - 1 : count;
+    }
+
     /// <summary>比较两份文本，返回 unified 风格 diff；无差异时返回空字符串。</summary>
     public static string Unified(string oldText, string newText, string path, CancellationToken ct = default)
     {
