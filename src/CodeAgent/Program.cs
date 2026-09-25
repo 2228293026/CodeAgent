@@ -701,12 +701,25 @@ internal static class Program
                 var redactedNote = m.RedactedThinkingData is { Count: > 0 } ? $" +{m.RedactedThinkingData.Count} 加密块" : "";
                 content = (content.Length > 0 ? content + " " : "") + $"[思考 {m.ThinkingText.Length} 字符{redactedNote}]";
             }
-            if (content.Length > 300)
-                content = TextUtil.TruncateLine(content, 300);
-            // 多行内容折叠为一行（工具结果常带换行，否则会打乱逐条列表）
-            content = content.Replace("\r", "").Replace("\n", " ⏎ ");
-            Console.WriteLine(m.IsError ? $"  [{role}] ❗ {content}" : $"  [{role}] {content}"); // 工具错误加标记
+            // 多行内容折叠为一行并按显示宽度截断（FormatHistoryLine 统一口径）
+            Console.WriteLine(FormatHistoryLine(role, content, m.IsError)); // 工具错误加标记
         }
+    }
+
+    /// <summary>历史列表单条内容的目标显示列数（CJK/emoji 占 2 列）。</summary>
+    internal const int HistoryContentColumns = 300;
+
+    /// <summary>
+    /// 历史列表的一行：先把多行内容折叠成单行（工具结果常带换行，否则打乱逐条列表），
+    /// 再按显示宽度截断，最后加角色前缀。
+    /// 旧实现先按字符数截断再折叠换行：300 个汉字实际占 600 列，一行铺满整屏后角色前缀错位；
+    /// 且截断发生在换行折叠之前，折叠后实际长度可能超出预算。
+    /// </summary>
+    internal static string FormatHistoryLine(string role, string content, bool isError, int maxColumns = HistoryContentColumns)
+    {
+        var single = content.Replace("\r", "").Replace("\n", " ⏎ ").Replace("\t", "    ");
+        var text = InputLine.FitToWidth(single, maxColumns);
+        return isError ? $"  [{role}] ❗ {text}" : $"  [{role}] {text}";
     }
 
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
