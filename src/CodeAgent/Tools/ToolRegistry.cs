@@ -478,6 +478,7 @@ public sealed class ToolRegistry
         registry.Register(new HttpUrlAuditReportTool());
         registry.Register(new GitExecutableBitReportTool());
         registry.Register(new JsonSchemaReportTool());
+        registry.Register(new ChangelogReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
