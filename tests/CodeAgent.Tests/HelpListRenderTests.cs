@@ -257,6 +257,71 @@ public class HelpListRenderTests
     }
 
     [Fact]
+    public void FormatPathList_ShortPathStaysOnOneLine()
+    {
+        var lines = Program.FormatPathList(["src/a.cs", "src/b.cs"], 60).Replace("\r\n", "\n").Split('\n');
+        Assert.Equal(2, lines.Length);
+        Assert.Equal("  src/a.cs", lines[0]);
+    }
+
+    [Fact]
+    public void FormatPathList_WrapsWithHangingIndent()
+    {
+        var longPath = "src/CodeAgent/Agent/Deeply/Nested/Namespace/FileName.cs";
+        var rows = Program.FormatPathList([longPath], 30).Replace("\r\n", "\n").Split('\n');
+        Assert.True(rows.Length > 1);
+        Assert.StartsWith("  ", rows[0]);
+        foreach (var row in rows.Skip(1))
+            Assert.StartsWith("    ", row);
+        foreach (var row in rows)
+            Assert.True(TextUtil.DisplayWidth(row) <= 30, $"溢出: {row}");
+        // 折行不得丢字符
+        Assert.Equal(longPath, string.Concat(rows).Replace(" ", string.Empty));
+    }
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(30)]
+    [InlineData(60)]
+    [InlineData(120)]
+    public void FormatPathList_NeverLosesContent(int width)
+    {
+        var paths = new[] { "a.cs", "src/very/deeply/nested/path/with/segments/File.cs", "中文路径/文件.cs" };
+        foreach (var path in paths)
+        {
+            var rows = Program.FormatPathList([path], width).Replace("\r\n", "\n").Split('\n');
+            // 折行只能切分，绝不能丢字符或改动内容
+            Assert.Equal(path, string.Concat(rows.Select(r => r.Trim())));
+            foreach (var row in rows)
+                Assert.True(TextUtil.DisplayWidth(row) <= width, $"宽度 {width} 溢出: {row}");
+        }
+    }
+
+    [Fact]
+    public void FormatPathList_ManyItemsEachStayWithinWidth()
+    {
+        var paths = Enumerable.Range(0, 20).Select(i => $"src/module{i}/Subdirectory/FileName{i}.cs").ToList();
+        foreach (var width in new[] { 20, 40, 80 })
+        {
+            var rows = Program.FormatPathList(paths, width).Replace("\r\n", "\n").Split('\n');
+            foreach (var row in rows)
+                Assert.True(TextUtil.DisplayWidth(row) <= width, $"宽度 {width} 溢出: {row}");
+        }
+    }
+
+    [Fact]
+    public void FormatPathList_UnknownWidthKeepsOneLinePerItem()
+    {
+        var rows = Program.FormatPathList(["a.cs", "b/c/d.cs"], 0).Replace("\r\n", "\n").Split('\n');
+        Assert.Equal(2, rows.Length);
+    }
+
+    [Fact]
+    public void FormatPathList_EmptyInputReturnsEmpty() =>
+        Assert.Equal(string.Empty, Program.FormatPathList(Array.Empty<string>(), 40));
+
+    [Fact]
     public void ReplCommands_AreUniqueAndNonEmpty()
     {
         var commands = Program.ReplCommands.Select(c => c.Command).ToList();

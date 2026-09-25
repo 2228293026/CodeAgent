@@ -1703,6 +1703,7 @@ internal static class Program
                     else
                     {
                         // 数字越界时明确指出范围（静默回退到列表曾让人以为编号生效了）
+                        var resumeEntries = new List<HelpEntry>(logs.Count);
                         if (int.TryParse(rest.Trim(), out _))
                             Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
                         else
@@ -1714,10 +1715,13 @@ internal static class Program
                             var label = Path.GetFileNameWithoutExtension(logs[i]);
                             var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(logs[i]), DateTime.UtcNow);
                             var countText = capped ? $"≥{count} 条" : $"{count} 条"; // 封顶后是下限，不是精确值
-                            Console.WriteLine(preview is null
-                                ? $"  {i + 1}) {label}（{age}，{countText}）"
-                                : $"  {i + 1}) {label} · {age} · {TextUtil.TruncateLine(preview, 50)}（{countText}）");
+                            var detail = preview is null
+                                ? $"{label}（{age}，{countText}）"
+                                : $"{label} · {age} · {TextUtil.TruncateLine(preview, 50)}（{countText}）";
+                            // 编号列对齐 + 说明按宽度折行（与 /models、/tools 同一渲染器）
+                            resumeEntries.Add(new HelpEntry($"{i + 1})", detail));
                         }
+                        Console.WriteLine(FormatHelpList(resumeEntries, ConsoleColumns()));
                     }
                     break;
                 }
@@ -2002,8 +2006,10 @@ internal static class Program
                     else
                     {
                         Console.WriteLine($"本次会话修改过的文件（{paths.Count} 个，最近优先）:");
-                        foreach (var p in paths)
-                            Console.WriteLine($"  {agent.Context.Workspace.ToRelative(p).Replace((char)92, '/')}");
+                        // 单列路径列表：深路径在窄终端硬折行后，续行会顶到行首与首行失去关联
+                        Console.WriteLine(FormatPathList(
+                            paths.Select(p => agent.Context.Workspace.ToRelative(p).Replace('\\', '/')),
+                            ConsoleColumns()));
                     }
                 }
                 break;
@@ -2223,6 +2229,44 @@ internal static class Program
     /// <summary>把命令名裁到给定宽度（width 未知时原样返回）。</summary>
     private static string FitColumn(string command, int width) =>
         width <= 0 ? command : InputLine.FitToWidth(command, Math.Max(1, width - 2));
+
+    /// <summary>单列列表（路径等无空格长词）：每条一行，超宽时按显示宽度折行并**悬挂缩进**，
+    /// 续行对齐到正文起点。终端硬折行会把续行顶到行首，续行与首行看起来毫无关系。
+    /// 宽度不足以容纳任何完整字符时宁可原样输出，也不静默丢内容。</summary>
+    internal static string FormatPathList(IEnumerable<string> items, int width = 0)
+    {
+        var output = new StringBuilder();
+        const string indent = "  ";
+        const string hang = "    ";
+        foreach (var item in items)
+        {
+            if (width <= 0 || TextUtil.DisplayWidth(item) <= width - indent.Length)
+            {
+                output.AppendLine(indent + item);
+                continue;
+            }
+            var head = TextUtil.TakeDisplayWidth(item, width - indent.Length);
+            if (head.Length == 0)
+            {
+                output.AppendLine(indent + item); // 退化：原样输出，不丢内容
+                continue;
+            }
+            output.AppendLine(indent + head);
+            var rest = item[head.Length..];
+            while (rest.Length > 0)
+            {
+                var part = TextUtil.TakeDisplayWidth(rest, width - hang.Length);
+                if (part.Length == 0)
+                {
+                    output.AppendLine(hang + rest);
+                    break;
+                }
+                output.AppendLine(hang + part);
+                rest = rest[part.Length..];
+            }
+        }
+        return output.ToString().TrimEnd();
+    }
 
     /// <summary>REPL 命令清单（结构化，供 /help 按终端宽度渲染）。</summary>
     internal static readonly HelpEntry[] ReplCommands =
