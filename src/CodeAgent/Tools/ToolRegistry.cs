@@ -438,6 +438,7 @@ public sealed class ToolRegistry
         registry.Register(new RestoreBackupTool());
         registry.Register(new FindEmptyFilesTool());
         registry.Register(new FindRecentFilesTool());
+        registry.Register(new FindFileNameConflictsTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
