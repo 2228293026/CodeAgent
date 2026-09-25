@@ -722,9 +722,44 @@ internal static class Program
         return isError ? $"  [{role}] ❗ {text}" : $"  [{role}] {text}";
     }
 
+    /// <summary>回合摘要的可丢段优先级：费用 → 缓存比例 → 思考耗时 → 本回合 token 明细。
+    /// 固定段保留「✓ 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。</summary>
+    internal static string BuildTurnSummary(
+        int rounds, int toolCalls, string elapsed, string tokenText,
+        string thinkText, string cacheText, string costText, int width)
+    {
+        var showTokens = true;
+        var showThink = thinkText.Length > 0;
+        var showCache = cacheText.Length > 0;
+        var showCost = costText.Length > 0;
+
+        string Render() =>
+            "── ✓ 完成 " + $"{rounds} 轮 {toolCalls} 次工具调用 {elapsed} "
+            + (showTokens ? tokenText : "")
+            + (showThink ? thinkText : "")
+            + (showCache ? cacheText : "")
+            + (showCost ? costText : "")
+            + " ──";
+
+        var text = Render();
+        var drops = new Action[]
+        {
+            () => showCost = false,
+            () => showCache = false,
+            () => showThink = false,
+            () => showTokens = false,
+        };
+        for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
+        {
+            drops[i]();
+            text = Render();
+        }
+        return width > 0 ? InputLine.FitToWidth(text, width) : text;
+    }
+
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
     /// token 显示本回合用量（与状态栏、spinner 定格行同口径）；会话累计见 /stats。
-    /// 配置了单价时附本回合费用估算（≈$x.xx）。</summary>
+    /// 配置了单价时附本回合费用估算（≈$x.xx）。窄终端下按优先级丢段，保证仍是一行。</summary>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
@@ -737,9 +772,10 @@ internal static class Program
         if (cost is { } c)
             costText = $" ≈${TextUtil.FormatCost(c)}";
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.WriteLine(
-            $"── ✓ 完成 {agent.TurnRounds} 轮 {agent.TurnToolCalls} 次工具调用 " +
-            $"{TextUtil.FormatElapsed(elapsed)} {agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok{think}{cache}{costText} ──");
+        Console.WriteLine(BuildTurnSummary(
+            agent.TurnRounds, agent.TurnToolCalls, TextUtil.FormatElapsed(elapsed),
+            $"{agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok",
+            think, cache, costText, StatusBarWidth()));
         SafeColor.Reset();
     }
 
