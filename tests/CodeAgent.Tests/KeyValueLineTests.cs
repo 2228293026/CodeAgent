@@ -101,4 +101,50 @@ public class KeyValueLineTests
             colons.Add(ColonColumn(Program.FormatKeyValueLine(key, value, keyWidth, 100)));
         Assert.Single(colons);
     }
+
+    [Fact]
+    public void FormatKeyValueLine_RealConfigShapeKeepsColonColumn()
+    {
+        // /config 的真实形状：ASCII 键与中文键混在同一列
+        var rows = new List<(string, string)>
+        {
+            ("Provider", "openai (openai)"),
+            ("Model", "gpt-5"),
+            ("MaxHistoryChars", "1,200,000"),
+            ("ContextWindow", "200,000（配置）"),
+            ("命令超时", "30s"),
+            ("工具日志", "on"),
+            ("会话目录", ".codeagent/sessions"),
+        };
+        var keyWidth = rows.Max(r => TextUtil.DisplayWidth(r.Item1));
+        var colons = new HashSet<int>();
+        foreach (var (key, value) in rows)
+            colons.Add(ColonColumn(Program.FormatKeyValueLine(key, value, keyWidth, 100)));
+        Assert.Single(colons);
+    }
+
+    [Fact]
+    public void FormatKeyValueLine_RealStatsShapeStaysScannable()
+    {
+        // /stats 拆成键值行后：每项独立成行，80 列下不折行
+        var rows = new List<(string, string)>
+        {
+            ("模型", "gpt-5"),
+            ("请求次数", "12"),
+            ("输入 tokens", "183,204"),
+            ("输出 tokens", "7,431"),
+            ("平均每次", "15,886 tokens"),
+            ("缓存命中", "160,000 tokens"),
+            ("当前上下文", "ctx 183.2K/200K (92%)"),
+            ("会话时长", "1h 23m"),
+            ("累计费用", "≈$0.42"),
+        };
+        var keyWidth = rows.Max(r => TextUtil.DisplayWidth(r.Item1));
+        foreach (var (key, value) in rows)
+        {
+            var line = Program.FormatKeyValueLine(key, value, keyWidth, 80);
+            Assert.True(TextUtil.DisplayWidth(line) <= 80, $"溢出: {line}");
+            Assert.Contains(value, line);
+        }
+    }
 }

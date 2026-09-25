@@ -1476,27 +1476,48 @@ internal static class Program
                 break;
 
             case "/config":
-                var cfgOverride = config.PersistedProvider is not null &&
-                                  !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
-                Console.WriteLine($"Provider : {config.Provider} ({opts.Type}){(cfgOverride ? "（会话级覆盖，不持久化）" : "")}");
-                Console.WriteLine($"Model    : {opts.Model}");
-                Console.WriteLine($"BaseUrl  : {opts.BaseUrl}");
-                Console.WriteLine($"ApiKey   : {(string.IsNullOrEmpty(opts.ApiKey) ? $"env[{opts.ApiKeyEnv ?? "?"}]" : "****")}");
-                // 与状态栏/\/stats 同口径：配置 > 内置表 > 后台探测（探测完成后 /config 能显示 API 元数据值）
-                var effWin = EffectiveContextWindow(config, opts, ctxProbe);
-                var ctxDesc = effWin > 0
-                    ? config.ContextWindow > 0 ? $"{effWin:N0}（配置）"
-                    : KnownContextWindows.TryGet(opts.Model) is { } known && known == effWin ? $"{known:N0}（按模型名自动识别）"
-                    : $"{effWin:N0}（/models 元数据探测）"
-                    : "未知（可配置 contextWindow）";
-                Console.WriteLine($"MaxIter  : {config.MaxToolIterations}  MaxHistoryChars: {config.MaxHistoryChars}  ContextWindow: {ctxDesc}");
-                Console.WriteLine($"AutoCompact: {(config.AutoCompactPercent > 0 ? $"{config.AutoCompactPercent}%（达标自动压缩）" : "off（90% 时仅提示）")}");
-                Console.WriteLine($"Commands : {(config.AllowCommands ? "on" : "off")}  确认: {(config.ConfirmCommands ? "on" : "off")}   Shell: {config.Shell}   超时: {config.CommandTimeoutSeconds}s");
-                Console.WriteLine($"工具日志 : {(config.ShowToolCalls ? "on" : "off")}   流式输出: {(config.StreamOutput ? "on" : "off")}   会话日志: {(config.SaveSessions ? $"on（保留 {config.MaxSessionLogs}）" : "off")}");
-                Console.WriteLine($"界面     : Markdown 渲染 {(config.RenderMarkdown ? "on" : "off")}   菜单 {(config.TuiAnsi ? "ANSI 原地" : "滚动式")}   默认模式 {config.DefaultMode}");
-                Console.WriteLine($"目录     : 会话 {config.SessionDir}   导出 {config.ExportDir}");
-                var roDirs = config.ReadOnlyDirs.Count == 0 ? "" : $"  只读白名单: {string.Join(", ", config.ReadOnlyDirs)}";
-                Console.WriteLine($"Access   : {config.FileAccess}{roDirs}");
+                {
+                    var cfgOverride = config.PersistedProvider is not null &&
+                                      !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
+                    // 与状态栏/\/stats 同口径：配置 > 内置表 > 后台探测（探测完成后 /config 能显示 API 元数据值）
+                    var effWin = EffectiveContextWindow(config, opts, ctxProbe);
+                    var ctxDesc = effWin > 0
+                        ? config.ContextWindow > 0 ? $"{effWin:N0}（配置）"
+                        : KnownContextWindows.TryGet(opts.Model) is { } known && known == effWin ? $"{known:N0}（按模型名自动识别）"
+                        : $"{effWin:N0}（/models 元数据探测）"
+                        : "未知（可配置 contextWindow）";
+                    var roDirs = config.ReadOnlyDirs.Count == 0 ? "" : $"{config.FileAccess}（只读白名单: {string.Join(", ", config.ReadOnlyDirs)}）";
+                    // 一行一项：此前多个设置挤在一行（MaxIter/MaxHistory/ContextWindow 三个一列），
+                    // 且键列手数空格补齐后被中文键（工具日志/界面/目录）撑歪。
+                    var configRows = new List<(string Key, string Value)>
+                    {
+                        ("Provider", $"{config.Provider} ({opts.Type}){(cfgOverride ? "（会话级覆盖，不持久化）" : "")}"),
+                        ("Model", opts.Model),
+                        ("BaseUrl", opts.BaseUrl),
+                        ("ApiKey", string.IsNullOrEmpty(opts.ApiKey) ? $"env[{opts.ApiKeyEnv ?? "?"}]" : "****"),
+                        ("MaxIter", config.MaxToolIterations.ToString("N0")),
+                        ("MaxHistoryChars", $"{config.MaxHistoryChars:N0}"),
+                        ("ContextWindow", ctxDesc),
+                        ("AutoCompact", config.AutoCompactPercent > 0 ? $"{config.AutoCompactPercent}%（达标自动压缩）" : "off（90% 时仅提示）"),
+                        ("命令执行", config.AllowCommands ? "on" : "off"),
+                        ("命令确认", config.ConfirmCommands ? "on" : "off"),
+                        ("Shell", config.Shell),
+                        ("命令超时", $"{config.CommandTimeoutSeconds}s"),
+                        ("工具日志", config.ShowToolCalls ? "on" : "off"),
+                        ("流式输出", config.StreamOutput ? "on" : "off"),
+                        ("会话日志", config.SaveSessions ? $"on（保留 {config.MaxSessionLogs}）" : "off"),
+                        ("Markdown 渲染", config.RenderMarkdown ? "on" : "off"),
+                        ("菜单", config.TuiAnsi ? "ANSI 原地" : "滚动式"),
+                        ("默认模式", config.DefaultMode),
+                        ("会话目录", config.SessionDir),
+                        ("导出目录", config.ExportDir),
+                        ("Access", roDirs),
+                    };
+                    var configKeyWidth = configRows.Max(r => TextUtil.DisplayWidth(r.Key));
+                    var configWidth = ConsoleColumns();
+                    foreach (var (key, value) in configRows)
+                        Console.WriteLine(FormatKeyValueLine(key, value, configKeyWidth, configWidth));
+                }
                 break;
 
             case "/session":
@@ -1876,13 +1897,27 @@ internal static class Program
                     var avg = agent.ProviderCalls > 0
                         ? (agent.TotalInputTokens + agent.TotalOutputTokens) / agent.ProviderCalls
                         : 0;
-                    Console.WriteLine(
-                        $"会话统计: 模型 {opts.Model}，请求 {agent.ProviderCalls} 次，" +
-                        $"输入 {agent.TotalInputTokens:N0} tokens，输出 {agent.TotalOutputTokens:N0} tokens" +
-                        (agent.ProviderCalls > 0 ? $"（平均 {avg:N0}/次）" : "") +
-                        (agent.TotalCachedTokens > 0 ? $"（其中缓存命中 {agent.TotalCachedTokens:N0}）" : "") +
-                        $"，当前上下文 {ctxText}，会话时长 {TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)}" +
-                        (cost is { } c ? $"，累计费用 ≈${TextUtil.FormatCost(c)}" : ""));
+                    // 曾是一整句 100+ 列的中文，80 列终端必折行，扫读时找不到某个数字。
+                    // 拆成键值行后每项独立成行，窄终端也不会把数字甩到行尾。
+                    var statRows = new List<(string Key, string Value)>
+                    {
+                        ("模型", opts.Model),
+                        ("请求次数", $"{agent.ProviderCalls:N0}"),
+                        ("输入 tokens", $"{agent.TotalInputTokens:N0}"),
+                        ("输出 tokens", $"{agent.TotalOutputTokens:N0}"),
+                    };
+                    if (agent.ProviderCalls > 0)
+                        statRows.Add(("平均每次", $"{avg:N0} tokens"));
+                    if (agent.TotalCachedTokens > 0)
+                        statRows.Add(("缓存命中", $"{agent.TotalCachedTokens:N0} tokens"));
+                    statRows.Add(("当前上下文", ctxText));
+                    statRows.Add(("会话时长", TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)));
+                    if (cost is { } c)
+                        statRows.Add(("累计费用", $"≈${TextUtil.FormatCost(c)}"));
+                    var statKeyWidth = statRows.Max(r => TextUtil.DisplayWidth(r.Key));
+                    Console.WriteLine("会话统计:");
+                    foreach (var (key, value) in statRows)
+                        Console.WriteLine(FormatKeyValueLine(key, value, statKeyWidth, ConsoleColumns()));
                 }
                 break;
 
