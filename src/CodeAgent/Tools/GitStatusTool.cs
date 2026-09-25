@@ -61,7 +61,7 @@ public sealed class GitStatusTool : ITool
         return Limit(output.ToString().TrimEnd(), maxOutput);
     }
 
-    private static async Task<GitResult> RunGitAsync(string workingDirectory, IReadOnlyList<string> arguments, CancellationToken ct)
+    internal static async Task<GitResult> RunGitAsync(string workingDirectory, IReadOnlyList<string> arguments, CancellationToken ct)
     {
         var psi = new ProcessStartInfo("git")
         {
@@ -107,5 +107,5 @@ public sealed class GitStatusTool : ITool
         return text[..Math.Max(0, maxChars - marker.Length)] + marker;
     }
 
-    private sealed record GitResult(int ExitCode, string Output, string Error);
+    internal sealed record GitResult(int ExitCode, string Output, string Error);
 }
