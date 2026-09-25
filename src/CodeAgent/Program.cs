@@ -2016,35 +2016,47 @@ internal static class Program
 
             case "/diag":
                 // 终端环境诊断：定位输入卡顿 / 菜单渲染问题
-                Console.WriteLine("终端诊断:");
-                Console.WriteLine($"  IsInputRedirected : {Console.IsInputRedirected}");
-                Console.WriteLine($"  OutputEncoding    : {Console.OutputEncoding.WebName} (CP{W(() => (int)Console.OutputEncoding.CodePage)})");
-                static string W(Func<int> f)
                 {
-                    try { return f().ToString(); }
-                    catch (Exception e) { return $"读取失败: {e.Message}"; }
-                }
-                Console.WriteLine($"  WindowWidth       : {W(() => Console.WindowWidth)}");
-                Console.WriteLine($"  WindowHeight      : {W(() => Console.WindowHeight)}");
-                Console.WriteLine($"  BufferWidth       : {W(() => Console.BufferWidth)}");
-                Console.WriteLine($"  CursorLeft/Top    : {W(() => Console.CursorLeft)}/{W(() => Console.CursorTop)}");
-                Console.WriteLine($"  TuiAnsi           : {config.TuiAnsi}");
-                Console.WriteLine($"  IsOutputRedirected: {Console.IsOutputRedirected}");
-                var wt = Environment.GetEnvironmentVariable("WT_SESSION");
-                var term = Environment.GetEnvironmentVariable("TERM_PROGRAM");
-                Console.WriteLine($"  Terminal          : {(wt is not null ? "Windows Terminal" : term is not null ? term : "未知（conhost 或其他）")}");
-                // 工作区环境补充：git 分支与 .codeagent 目录占用（排查磁盘/隐私时有用）
-                Console.WriteLine($"  Git branch        : {GitInfo.CurrentBranch(Environment.CurrentDirectory) ?? "(非 git 仓库)"}");
-                try
-                {
-                    var caDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
-                    if (Directory.Exists(caDir))
+                    static string W(Func<int> f)
                     {
-                        var bytes = TextUtil.GetDirectorySizeBytes(caDir);
-                        Console.WriteLine($"  .codeagent 大小   : {TextUtil.FormatBytes(bytes)}（会话日志/导出/历史，可整目录删除）");
+                        try { return f().ToString(); }
+                        catch (Exception e) { return $"读取失败: {e.Message}"; }
                     }
+                    var wt = Environment.GetEnvironmentVariable("WT_SESSION");
+                    var term = Environment.GetEnvironmentVariable("TERM_PROGRAM");
+                    // 键列宽度由所有键的显示宽度决定：中文键算 2 列，值再按剩余宽度截断
+                    var diagRows = new (string Key, string Value)[]
+                    {
+                        ("IsInputRedirected", Console.IsInputRedirected.ToString()),
+                        ("OutputEncoding", $"{Console.OutputEncoding.WebName} (CP{W(() => (int)Console.OutputEncoding.CodePage)})"),
+                        ("WindowWidth", W(() => Console.WindowWidth)),
+                        ("WindowHeight", W(() => Console.WindowHeight)),
+                        ("BufferWidth", W(() => Console.BufferWidth)),
+                        ("CursorLeft/Top", $"{W(() => Console.CursorLeft)}/{W(() => Console.CursorTop)}"),
+                        ("TuiAnsi", config.TuiAnsi.ToString()),
+                        ("IsOutputRedirected", Console.IsOutputRedirected.ToString()),
+                        ("Terminal", wt is not null ? "Windows Terminal" : term is not null ? term : "未知（conhost 或其他）"),
+                        ("Git branch", GitInfo.CurrentBranch(Environment.CurrentDirectory) ?? "(非 git 仓库)"),
+                    };
+                    var keyWidth = diagRows.Max(r => TextUtil.DisplayWidth(r.Key));
+                    var diagWidth = ConsoleColumns();
+                    Console.WriteLine("终端诊断:");
+                    foreach (var row in diagRows)
+                        Console.WriteLine(FormatKeyValueLine(row.Key, row.Value, keyWidth, diagWidth));
+                    try
+                    {
+                        var caDir = Path.Combine(Environment.CurrentDirectory, ".codeagent");
+                        if (Directory.Exists(caDir))
+                        {
+                            var bytes = TextUtil.GetDirectorySizeBytes(caDir);
+                            Console.WriteLine(FormatKeyValueLine(
+                                ".codeagent 大小",
+                                $"{TextUtil.FormatBytes(bytes)}（会话日志/导出/历史，可整目录删除）",
+                                keyWidth, diagWidth));
+                        }
+                    }
+                    catch { /* 统计失败不影响诊断输出 */ }
                 }
-                catch { /* 统计失败不影响诊断输出 */ }
                 break;
 
             case "/models":
@@ -2083,7 +2095,7 @@ internal static class Program
                         {
                             var savePath = ConfigSavePath(configPath, config);
                             SaveConfig(config, savePath);
-                            Console.WriteLine($"思考强度已设为: {v}，已保存到 {savePath}");
+                            Console.WriteLine(FormatConfirmLine($"思考强度已设为: {v}，已保存到 {savePath}", ConsoleColumns()));
                         }
                         catch (Exception ex)
                         {
@@ -2224,6 +2236,29 @@ internal static class Program
             output.AppendLine(indent + InputLine.PadToDisplayWidth(entry.Command, commandWidth + gap) + entry.Description);
         }
         return output.ToString().TrimEnd();
+    }
+
+    /// <summary>键值行统一格式：两空格缩进 + 键列按**显示宽度**对齐 + " : " + 值。
+    /// 曾用手数空格对齐，`.codeagent 大小` 这类含中文的键（2 字符占 4 列）
+    /// 和恰好 18 字符的 `IsOutputRedirected` 都会把冒号挤歪，整列失去对齐。
+    /// 值超过剩余宽度时按显示宽度截断（宽度未知则不截断）。</summary>
+    internal static string FormatKeyValueLine(string key, string value, int keyWidth = 0, int width = 0)
+    {
+        const string indent = "  ";
+        const string separator = " : ";
+        var column = keyWidth > 0 ? Math.Max(keyWidth, TextUtil.DisplayWidth(key)) : TextUtil.DisplayWidth(key);
+        if (width <= 0)
+            return indent + InputLine.PadToDisplayWidth(key, column) + separator + value;
+        // 键列本身可能就比终端还宽（IsOutputRedirected = 18 列 + 缩进 + 分隔符 = 24 列）：
+        // 必须裁剪，否则这一行硬折行会把后续整列全部推歪。裁剪后不能再补回 column，
+        // 否则刚截掉的字符又被空格填回来。
+        var keyBudget = width - indent.Length - separator.Length;
+        if (keyBudget <= 0)
+            return InputLine.FitToWidth(indent + key + separator.TrimStart(), Math.Max(1, width));
+        var padded = InputLine.PadToDisplayWidth(InputLine.FitToWidth(key, keyBudget), Math.Min(column, keyBudget));
+        var head = indent + padded + separator;
+        var valueBudget = width - TextUtil.DisplayWidth(head);
+        return valueBudget <= 0 ? head.TrimEnd() : head + InputLine.FitToWidth(value, valueBudget);
     }
 
     /// <summary>把命令名裁到给定宽度（width 未知时原样返回）。</summary>
