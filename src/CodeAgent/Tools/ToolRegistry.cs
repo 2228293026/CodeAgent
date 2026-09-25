@@ -473,6 +473,7 @@ public sealed class ToolRegistry
         registry.Register(new ReadmeSectionReportTool());
         registry.Register(new TodoMarkerReportTool());
         registry.Register(new ReadmeLinkCheckTool());
+        registry.Register(new EnvVarReferenceReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
