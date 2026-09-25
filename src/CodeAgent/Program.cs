@@ -917,9 +917,11 @@ internal static class Program
         SafeColor.Reset();
     }
 
-    /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。</summary>
+    /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。
+    /// 窄终端下按显示宽度裁剪：CJK 路径与长行会撑破终端。</summary>
     internal static void PrintColoredDiff(string diff)
     {
+        var width = ConsoleColumns();
         foreach (var line in DiffUtil.SplitLines(diff))
         {
             if (line.StartsWith("== ", StringComparison.Ordinal))
@@ -932,9 +934,32 @@ internal static class Program
                 SafeColor.Foreground(ConsoleColor.Green);       // 新增
             else if (line.StartsWith('-'))
                 SafeColor.Foreground(ConsoleColor.Red);         // 删除
-            Console.WriteLine(line);
+            Console.WriteLine(FormatDiffLine(line, width));
             SafeColor.Reset();
         }
+    }
+
+    /// <summary>diff 行的显示宽度裁剪。
+    /// 两处特别处理：
+    /// ①`@@` 头尾的 `@@ 上下文标题`（C# 里常是很长的方法签名）是装饰性的，
+    ///   放不下时整段丢掉，**保住行号范围**——行号才是 hunk 的结构信息；
+    /// ②`+`/`-` 内容行必须带 `…` 标记：被截掉的 +行看起来就是"新增了这么多"，
+    ///   用户会以为 diff 本来就这么短。</summary>
+    internal static string FormatDiffLine(string line, int width)
+    {
+        if (width <= 0 || TextUtil.DisplayWidth(line) <= width)
+            return line;
+        if (line.StartsWith("@@", StringComparison.Ordinal))
+        {
+            var end = line.LastIndexOf("@@", StringComparison.Ordinal);
+            if (end > 2)
+            {
+                var bare = line[..(end + 2)];
+                if (TextUtil.DisplayWidth(bare) <= width)
+                    return bare;
+            }
+        }
+        return InputLine.FitToWidth(line, width);
     }
 
     /// <summary>深路径显示截断：超长时保留尾部（工作区名永远可见），前缀省略号。</summary>
