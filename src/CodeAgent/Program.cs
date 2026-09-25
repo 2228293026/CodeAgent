@@ -1113,19 +1113,17 @@ internal static class Program
                 return;
             }
             var marked = false;
+            // 与 /help、/tools、/mode 同一渲染器：编号列按显示宽度对齐（1) 与 100) 原本不齐），
+            // 窄终端下长模型名不再硬折行
+            var modelEntries = new List<HelpEntry>(rows.Count);
             foreach (var (num, m) in rows)
             {
-                var numText = $"{num}) ";
-                if (string.Equals(m, currentModel, StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine($"  {numText}{m}  *");
+                var isCurrent = string.Equals(m, currentModel, StringComparison.OrdinalIgnoreCase);
+                if (isCurrent)
                     marked = true;
-                }
-                else
-                {
-                    Console.WriteLine($"  {numText}{m}");
-                }
+                modelEntries.Add(new HelpEntry($"{num})", m + (isCurrent ? "  *" : string.Empty)));
             }
+            Console.WriteLine(FormatHelpList(modelEntries, ConsoleColumns()));
             Console.WriteLine("  提示: /model <编号> 可直接切换");
             if (marked)
                 Console.WriteLine("  * = 当前配置的模型");

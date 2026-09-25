@@ -223,6 +223,40 @@ public class HelpListRenderTests
     }
 
     [Fact]
+    public void FormatHelpList_ModelNumberColumnAligns()
+    {
+        // /models 的真实形状：编号列 1) … 100) 宽度不同，必须对齐成一列
+        var entries = new[]
+        {
+            new Program.HelpEntry("1)", "gpt-4o"),
+            new Program.HelpEntry("10)", "gpt-4o-mini"),
+            new Program.HelpEntry("100)", "claude-3-5-sonnet-410  *"),
+        };
+        var rows = FormatHelpList(entries, 60).Replace("\r\n", "\n").Split('\n');
+        Assert.Equal(3, rows.Length);
+        var startOfModels = rows.Select(r => r.IndexOf("gpt-4o", StringComparison.Ordinal)
+            is var i && i >= 0 ? i : r.IndexOf("claude", StringComparison.Ordinal)).ToList();
+        Assert.Equal(startOfModels[0], startOfModels[1]);
+        Assert.Equal(startOfModels[1], startOfModels[2]);
+    }
+
+    [Fact]
+    public void FormatHelpList_LongModelNameNeverOverflows()
+    {
+        var entries = new[]
+        {
+            new Program.HelpEntry("1)", "org--very-long-provider-name/deployment-slot-model-2024-08-06-preview"),
+            new Program.HelpEntry("2)", "短名"),
+        };
+        foreach (var width in new[] { 20, 30, 45, 80 })
+        {
+            var rows = FormatHelpList(entries, width).Replace("\r\n", "\n").Split('\n');
+            foreach (var row in rows)
+                Assert.True(TextUtil.DisplayWidth(row) <= width, $"宽度 {width} 溢出: {row}");
+        }
+    }
+
+    [Fact]
     public void ReplCommands_AreUniqueAndNonEmpty()
     {
         var commands = Program.ReplCommands.Select(c => c.Command).ToList();
