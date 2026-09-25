@@ -180,6 +180,9 @@ public sealed class ConsoleRenderer
         var hadNewline = line.EndsWith('\n');
         var content = hadNewline ? line[..^1] : line;
         content = content.TrimEnd('\r');
+        // ATX 标题的闭合序列（## 标题 ##）是 Markdown 语法，不该原样出现在渲染结果里
+        if (HeadingLevel(content) > 0)
+            content = StripClosingHashes(content);
         var color = ResolveLineColor(content);
         var parts = ParseInline(content);
 
@@ -204,10 +207,58 @@ public sealed class ConsoleRenderer
         Console.WriteLine();
     }
 
+    /// <summary>
+    /// ATX 标题级别（CommonMark 规则），非标题返回 0：
+    /// 最多 3 个前导空格（4 个及以上是代码块）；1–6 个 #；其后必须是空格/Tab 或行尾——
+    /// `#Title` 不是标题（无空格），旧实现只看首字符，会把井号开头的普通文本当成标题上色。
+    /// </summary>
+    internal static int HeadingLevel(string line)
+    {
+        var i = 0;
+        var spaces = 0;
+        while (i < line.Length && line[i] == ' ' && spaces < 4)
+        {
+            i++;
+            spaces++;
+        }
+        if (spaces > 3)
+            return 0;
+        var hashes = 0;
+        while (i < line.Length && line[i] == '#' && hashes < 7)
+        {
+            i++;
+            hashes++;
+        }
+        if (hashes == 0 || hashes > 6)
+            return 0;
+        if (i < line.Length && line[i] != ' ' && line[i] != '\t')
+            return 0; // #Title / ###foo：井号后无空格，不是标题
+        return hashes;
+    }
+
+    /// <summary>去掉标题末尾的闭合 # 序列（序列前必须有空格或行首才是闭合标记）：「## 标题 ##」→「## 标题」。</summary>
+    internal static string StripClosingHashes(string line)
+    {
+        var end = line.Length;
+        while (end > 0 && line[end - 1] == '#')
+            end--;
+        if (end == line.Length || end == 0)
+            return line; // 无闭合序列
+        if (line[end - 1] != ' ' && line[end - 1] != '\t')
+            return line; // 闭合标记前必须空白；「a#b#」不算
+        return line[..end].TrimEnd();
+    }
+
     private static ConsoleColor? ResolveLineColor(string content)
     {
-        if (content.StartsWith('#'))
-            return ConsoleColor.Cyan; // 标题
+        var heading = HeadingLevel(content);
+        if (heading > 0)
+            return heading switch // 标题按层级区分色深，一眼看出结构层级
+            {
+                1 => ConsoleColor.Cyan,
+                2 => ConsoleColor.Blue,
+                _ => ConsoleColor.DarkCyan,
+            };
         if (content.StartsWith("---") || content.StartsWith("==="))
             return ConsoleColor.DarkGray; // 分隔线
         if (content.StartsWith('>'))
