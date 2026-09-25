@@ -182,7 +182,7 @@ internal static class Program
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine("已取消配置向导。");
+                Console.WriteLine(FormatCancelLine("已取消配置向导。", ConsoleColumns()));
             }
             catch (Exception ex)
             {
@@ -314,7 +314,7 @@ internal static class Program
                 }
                 var result = await RunTurnAsync(t => agent.RunAsync(task, t));
                 if (IsCancelledTurn(result))
-                    result = "\n⏹ 已取消。"; // 哨兵映射回显示文本（一次性模式没有草稿回填）
+                    result = "\n" + FormatCancelLine("已取消。", ConsoleColumns()); // 哨兵映射回显示文本（一次性模式没有草稿回填）
                 PrintResult(result, agent.StreamedLastRun, prefixNewline: false);
                 agent.Close();
                 return agent.LastTurnFailed ? 1 : 0; // 空回复视为失败，非零退出码供脚本判断
@@ -447,7 +447,7 @@ internal static class Program
                 {
                     // 空回复：红色 ⚠ 明确提示失败
                     SafeColor.Foreground(ConsoleColor.Red);
-                    Console.WriteLine("⚠ " + result);
+                    Console.WriteLine(FormatNoticeLine(result, ConsoleColumns()));
                     SafeColor.Reset();
                 }
                 else
@@ -881,7 +881,7 @@ internal static class Program
         var answer = input.ReadLine()?.Trim();
         if (string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase))
             return true;
-        output.WriteLine($"已取消（保持当前模式）。");
+        output.WriteLine(FormatCancelLine("已取消（保持当前模式）。", ConsoleColumns()));
         return false;
     }
 
@@ -1009,6 +1009,12 @@ internal static class Program
     /// </summary>
     internal static string FormatConfirmLine(string body, int width = 0, string marker = "✔") =>
         FormatNoticeLine(body, width, marker);
+
+    /// <summary>取消提示行：`⏹ 正文`。
+    /// 与 ✔（成功）、⚠（错误）构成三类可一眼分辨的结局标记。
+    /// 此前取消提示散落各处且形态不一（有的带 ⏹、有的什么都不带），
+    /// 用户扫读时无法用统一规则找出「这一轮发生了什么」。</summary>
+    internal static string FormatCancelLine(string body, int width = 0) => FormatNoticeLine(body, width, "⏹");
 
     /// <summary>启动期错误/警告行（写入 stderr）：`⚠ 正文`，与交互期的告警行同一格式。
     /// 启动错误常带完整路径与异常消息，宽度未知时不做猜测性折行，但已知宽度下必须不溢出。</summary>
@@ -1412,7 +1418,7 @@ internal static class Program
                         break;
                     }
                     if (IsCancelledTurn(result))
-                        Console.WriteLine("⏹ 已取消压缩（历史未变动）。");
+                        Console.WriteLine(FormatCancelLine("已取消压缩（历史未变动）。", ConsoleColumns()));
                     else if (result == "SHORT")
                         Console.WriteLine("⚠ 当前对话过短，无需压缩。");
                     else
@@ -1658,7 +1664,7 @@ internal static class Program
                 }
                 catch (OperationCanceledException)
                 {
-                    Console.WriteLine("已取消配置向导。");
+                    Console.WriteLine(FormatCancelLine("已取消配置向导。", ConsoleColumns()));
                     break;
                 }
                 catch (Exception ex)
@@ -1724,7 +1730,7 @@ internal static class Program
                         else if (string.IsNullOrEmpty(pick))
                             Console.WriteLine(agent.Context.Undo.TryUndo());
                         else
-                            Console.WriteLine("已取消。");
+                            Console.WriteLine(FormatCancelLine("已取消。", ConsoleColumns()));
                     }
                 }
                 else
@@ -1766,7 +1772,7 @@ internal static class Program
                         if (agent.SessionExists(rest.Trim()) &&
                             !ConfirmReplace(Console.In, Console.Out, $"会话「{rest.Trim()}」已存在，覆盖？"))
                         {
-                            Console.WriteLine("已取消保存。");
+                            Console.WriteLine(FormatCancelLine("已取消保存。", ConsoleColumns()));
                             break;
                         }
                         agent.SaveSession(rest.Trim());

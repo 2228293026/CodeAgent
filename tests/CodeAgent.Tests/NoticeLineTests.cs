@@ -149,8 +149,42 @@ public class NoticeLineTests
         Assert.True(TextUtil.DisplayWidth(line) <= 50, $"溢出: {line}");
     }
 
+    [Theory]
+    [InlineData("已取消。", 40)]
+    [InlineData("已取消（保持当前模式）。", 24)]
+    [InlineData("已取消压缩（历史未变动）。", 16)]
+    [InlineData("已取消配置向导。", 12)]
+    [InlineData("已取消保存。", 8)]
+    public void FormatCancelLine_NeverExceedsWidth(string body, int width)
+    {
+        var line = Program.FormatCancelLine(body, width);
+        Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出: {line}");
+        Assert.StartsWith("⏹ ", line);
+    }
+
+    [Theory]
+    [InlineData("已取消。")]
+    [InlineData("已取消（保持当前模式）。")]
+    [InlineData("已取消压缩（历史未变动）。")]
+    [InlineData("已取消配置向导。")]
+    [InlineData("已取消保存。")]
+    public void FormatCancelLine_KeepsFullBodyWhenWidthIsUnknown(string body)
+    {
+        var line = Program.FormatCancelLine(body);
+        Assert.Equal($"⏹ {body}", line);
+    }
+
     [Fact]
-    public void FormatConfirmLine_ResumeMarkerIsPreserved()
+    public void FormatCancelLine_MarkerIsDistinctFromOutcomeMarkers()
+    {
+        // ⏹ 取消 / ✔ 成功 / ⚠ 错误 —— 三类结局必须一眼可分
+        Assert.StartsWith("⏹ ", Program.FormatCancelLine("已取消。", 60));
+        Assert.StartsWith("✔ ", Program.FormatConfirmLine("已保存。", 60));
+        Assert.StartsWith("⚠ ", Program.FormatNoticeLine("出错了。", 60));
+    }
+
+    [Fact]
+    public void FormatCancelLine_ResumeMarkerIsPreserved()
     {
         // /resume 用 ↩ 标记恢复，与 ✔ 区分
         var line = Program.FormatConfirmLine("已恢复会话: 20260101-120000.json", 60, "↩");
