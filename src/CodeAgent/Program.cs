@@ -875,7 +875,7 @@ internal static class Program
             _ => mode,
         };
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.WriteLine($"已切换权限: {mode}（{desc}）");
+        Console.WriteLine(FormatConfirmLine($"已切换权限: {mode}（{desc}）", ConsoleColumns()));
         if (showHint)
             Console.WriteLine("  Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定");
         SafeColor.Reset();
@@ -943,6 +943,14 @@ internal static class Program
     /// </summary>
     internal static bool PromptFitsOneRow(string prompt, int windowWidth, int margin = PromptFitMargin) =>
         windowWidth > 0 && TextUtil.DisplayWidth(prompt) + margin <= windowWidth;
+
+    /// <summary>
+    /// 确认行（模式/权限/模型/provider 切换成功）：`✔ 正文`，与工具结果的 `✔` 约定一致。
+    /// 与告警行共用同一宽度预算——切换确认常附带完整保存路径（可很长），
+    /// 折行后 `✔` 会被留在上一行，扫读时看不出「切换到底成功没有」。
+    /// </summary>
+    internal static string FormatConfirmLine(string body, int width = 0, string marker = "✔") =>
+        FormatNoticeLine(body, width, marker);
 
     /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
     internal static int ConsoleColumnsForNotice() => ConsoleColumns();
@@ -1384,7 +1392,7 @@ internal static class Program
                         var savePath = ConfigSavePath(configPath, config);
                         AgentConfig.Save(config, savePath);
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
-                        Console.WriteLine($"已切换 Provider: {hit.Key}，模型 {opts.Model}，已保存到 {savePath}");
+                        Console.WriteLine(FormatConfirmLine($"已切换 Provider: {hit.Key}，模型 {opts.Model}，已保存到 {savePath}", ConsoleColumns()));
                     }
                     catch (Exception ex)
                     {
@@ -1458,7 +1466,7 @@ internal static class Program
                             po.Model = opts.Model;
                         var savePath = ConfigSavePath(configPath, config);
                         SaveConfig(config, savePath);
-                        Console.WriteLine($"已切换模型: {opts.Model}，已保存到 {savePath}");
+                        Console.WriteLine(FormatConfirmLine($"已切换模型: {opts.Model}，已保存到 {savePath}", ConsoleColumns()));
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
                     }
                     catch (Exception ex)
@@ -2130,7 +2138,7 @@ internal static class Program
     {
         try { Console.Title = $"CodeAgent · {mode.Name} · {model}"; } catch { /* 部分终端不支持标题 */ }
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.WriteLine($"已切换模式: {mode.Name} — {mode.Description}");
+        Console.WriteLine(FormatConfirmLine($"已切换模式: {mode.Name} — {mode.Description}", ConsoleColumns()));
         SafeColor.Reset();
     }
     internal static (string cmd, string rest) SplitCommand(string line)

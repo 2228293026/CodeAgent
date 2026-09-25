@@ -65,4 +65,33 @@ public class NoticeLineTests
     {
         Assert.Equal("⚠ ", Program.FormatNoticeLine("", 40));
     }
+
+    [Fact]
+    public void FormatConfirmLine_UsesCheckMarkerByDefault()
+    {
+        Assert.Equal("✔ 已切换模型: gpt-5", Program.FormatConfirmLine("已切换模型: gpt-5", 80));
+    }
+
+    [Fact]
+    public void FormatConfirmLine_KeepsMarkerVisibleWhenSavePathIsLong()
+    {
+        // 切换确认常附带完整保存路径；窄终端下标记必须留在行首
+        var path = @"C:\Users\very\long\username\.codeagent\config\codeagent-config-with-long-name.json";
+        var line = Program.FormatConfirmLine($"已切换模型: gpt-5，已保存到 {path}", 40);
+        Assert.StartsWith("✔ ", line);
+        Assert.True(TextUtil.DisplayWidth(line) <= 40);
+        Assert.Contains("已切换模型", line);
+    }
+
+    [Theory]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(30)]
+    [InlineData(60)]
+    [InlineData(100)]
+    public void FormatConfirmLine_NeverExceedsWidth(int width)
+    {
+        var line = Program.FormatConfirmLine($"已切换 Provider: openai，模型 gpt-5，已保存到 {new string('p', 300)}", width);
+        Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出");
+    }
 }
