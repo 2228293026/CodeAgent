@@ -460,6 +460,7 @@ public sealed class ToolRegistry
         registry.Register(new GitPathDiffTool());
         registry.Register(new GitIndexDiagnosticsTool());
         registry.Register(new LineEndingReportTool());
+        registry.Register(new DirectoryDepthReportTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
