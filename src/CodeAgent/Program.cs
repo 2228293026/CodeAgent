@@ -358,12 +358,9 @@ internal static class Program
         int EffectiveContextWindow() => Program.EffectiveContextWindow(config, opts, ctxProbe);
 
         // 切换块原地覆盖按「提示符占一行」计算：窄终端 + 长模式/模型/目录名会让提示符折行，
-        // 此时退回追加模式，避免错位覆盖（留 8 列余量吸收目录里的 CJK 双宽字符）
-        bool PromptFitsOneRow()
-        {
-            try { return PromptFor(opts, agent).TrimStart('\n').Length < Console.WindowWidth - 8; }
-            catch { return true; }
-        }
+        // 此时退回追加模式，避免错位覆盖（余量列吸收目录里的 CJK 双宽字符）
+        bool PromptFitsOneRow() =>
+            Program.PromptFitsOneRow(PromptFor(opts, agent).TrimStart('\n'), StatusBarWidth());
 
         // 清掉上一会话遗留的输入缓冲（否则新会话一启动就被旧按键触发菜单/命令，显得"诡异"）
         try
@@ -884,7 +881,19 @@ internal static class Program
         return b;
     }
 
-    /// <summary>状态栏可用宽度：取终端宽度；不可用（重定向/无 TTY）返回 0 表示不限。</summary>
+    /// <summary>提示符单行判定必须预留的余量列数（吸收目录名/模型短名里的 CJK 双宽字符与终端边框）。</summary>
+    internal const int PromptFitMargin = 8;
+
+    /// <summary>
+    /// 提示符能否单行放得下（决定切换块能否原地覆盖，而不是追加一行）。
+    /// 按显示宽度而非字符数判断：中文模式名按 1 字符计却占 2 列，用 char 数会误判为放得下，
+    /// 折行后 \x1b[3A 回到的「块顶」算错，切换确认覆盖到历史输出上。
+    /// 宽度未知（0）返回 false：原地覆盖依赖确定的行几何，追加模式才是安全方向。
+    /// </summary>
+    internal static bool PromptFitsOneRow(string prompt, int windowWidth, int margin = PromptFitMargin) =>
+        windowWidth > 0 && TextUtil.DisplayWidth(prompt) + margin <= windowWidth;
+
+    /// <summary>读取终端宽度：0 = 未知（输出重定向或读取失败）。</summary>
     private static int StatusBarWidth()
     {
         if (Console.IsOutputRedirected)
