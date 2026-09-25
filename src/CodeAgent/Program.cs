@@ -960,6 +960,36 @@ internal static class Program
         return b;
     }
 
+    /// <summary>提示符文本：完整形态为 `[模式|模型] 目录&gt; `。
+    /// 超宽时按固定优先级降级：先去掉模型（模式比模型更该一眼看到），再截短目录名，
+    /// **模式永不丢弃**——没有模式的提示符没有意义。width &lt;= 0 时不猜测，保持完整形态。
+    /// </summary>
+    internal static string BuildPromptText(string mode, string model, string dir, int width)
+    {
+        var full = $"[{mode}|{model}] {dir}> ";
+        if (width <= 0)
+            return full;
+        // 正常宽度下为后续输入留出余量，这样 PromptFitsOneRow 仍能原地覆盖切换块；
+        // 极窄宽度下余量会把模式挤没（[模式] 本身就双宽），此时只保证不超宽——
+        // 此时 PromptFitsOneRow 会诚实地返回 false，切换块改走追加模式。
+        var budget = width - PromptFitMargin;
+        if (budget < 4)
+            budget = width;
+        if (TextUtil.DisplayWidth(full) <= budget)
+            return full;
+        var noModel = $"[{mode}] {dir}> ";
+        if (TextUtil.DisplayWidth(noModel) <= budget)
+            return noModel;
+        var head = $"[{mode}]";
+        // "[模式] 目录…> " 里目录可用宽度：扣掉 "[" "]" "…> " 四段
+        var room = budget - TextUtil.DisplayWidth(head) - 4;
+        if (room > 0)
+            return $"{head} {InputLine.FitToWidth(dir, room)}…> ";
+        // 模式名本身（CJK 双宽）就超宽：截短模式但**绝不去掉**——没有模式的提示符没有意义
+        var modeRoom = Math.Max(1, budget - 6); // "[模式…]> " 的固定开销
+        return "[" + InputLine.FitToWidth(mode, modeRoom) + "]…> ";
+    }
+
     /// <summary>提示符单行判定必须预留的余量列数（吸收目录名/模型短名里的 CJK 双宽字符与终端边框）。</summary>
     internal const int PromptFitMargin = 8;
 
@@ -1130,7 +1160,7 @@ internal static class Program
     {
         var model = TextUtil.ShortModelName(opts.Model);
         var dir = new DirectoryInfo(Environment.CurrentDirectory).Name;
-        return $"\n[{agent.CurrentMode.Name}|{model}] {dir}> ";
+        return "\n" + BuildPromptText(agent.CurrentMode.Name, model, dir, ConsoleColumns());
     }
 
     /// <summary>输出最终答复：若已流式打印过则只补换行，否则整体打印。</summary>
