@@ -26,7 +26,9 @@ public sealed class GitIndexDiagnosticsToolTests : IDisposable
         Workspace = new Workspace(_dir),
     };
 
-    private bool TryGit(params string[] args)
+    private bool TryGit(params string[] args) => RunGit("", args).Success;
+
+    private (bool Success, string Output) RunGit(string input, params string[] args)
     {
         try
         {
@@ -34,6 +36,7 @@ public sealed class GitIndexDiagnosticsToolTests : IDisposable
             {
                 WorkingDirectory = _dir,
                 UseShellExecute = false,
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
@@ -42,13 +45,17 @@ public sealed class GitIndexDiagnosticsToolTests : IDisposable
                 psi.ArgumentList.Add(arg);
             using var process = Process.Start(psi);
             if (process is null)
-                return false;
+                return (false, "");
+            process.StandardInput.Write(input);
+            process.StandardInput.Close();
+            var output = process.StandardOutput.ReadToEnd();
+            _ = process.StandardError.ReadToEnd();
             process.WaitForExit();
-            return process.ExitCode == 0;
+            return (process.ExitCode == 0, output);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            return false;
+            return (false, "");
         }
     }
 
@@ -62,13 +69,17 @@ public sealed class GitIndexDiagnosticsToolTests : IDisposable
         File.WriteAllText(file, "base");
         Assert.True(TryGit("add", "."));
         Assert.True(TryGit("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "base"));
+        var baseBlob = RunGit("", "rev-parse", "HEAD:conflict.txt").Output.Trim();
         Assert.True(TryGit("checkout", "-b", "feature"));
         File.WriteAllText(file, "feature");
         Assert.True(TryGit("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-am", "feature"));
+        var featureBlob = RunGit("", "rev-parse", "HEAD:conflict.txt").Output.Trim();
         Assert.True(TryGit("checkout", "main"));
         File.WriteAllText(file, "main");
         Assert.True(TryGit("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-am", "main"));
-        Assert.False(TryGit("-c", "merge.ff=false", "merge", "--no-ff", "--no-commit", "feature"));
+        var mainBlob = RunGit("", "rev-parse", "HEAD:conflict.txt").Output.Trim();
+        var indexInfo = $"100644 {baseBlob} 1\tconflict.txt\n100644 {mainBlob} 2\tconflict.txt\n100644 {featureBlob} 3\tconflict.txt\n";
+        Assert.True(RunGit(indexInfo, "update-index", "--index-info").Success);
         var result = await new GitIndexDiagnosticsTool().ExecuteAsync(new JsonObject(), Context(), CancellationToken.None);
         Assert.Contains("未合并文件", result);
         Assert.Contains("阶段 1", result);
