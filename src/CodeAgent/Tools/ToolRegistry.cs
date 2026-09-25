@@ -432,6 +432,7 @@ public sealed class ToolRegistry
         registry.Register(new RemoveEmptyDirectoryTool());
         registry.Register(new FindStaleFilesTool());
         registry.Register(new DirectorySizeReportTool());
+        registry.Register(new FindUnreadableFilesTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
