@@ -440,6 +440,7 @@ public sealed class ToolRegistry
         registry.Register(new FindRecentFilesTool());
         registry.Register(new FindFileNameConflictsTool());
         registry.Register(new FindLongPathsTool());
+        registry.Register(new GitCheckIgnoreTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
