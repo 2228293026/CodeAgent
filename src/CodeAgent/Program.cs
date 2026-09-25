@@ -1066,6 +1066,12 @@ internal static class Program
     private static void WriteStartupNotice(string body) =>
         Console.Error.WriteLine(FormatNoticeLine(body, ConsoleColumns()));
 
+    /// <summary>普通结果/说明行（无标记）：按显示宽度裁剪。
+    /// /find 这类输出会把**用户输入的关键字**与快照名直接拼进行里，
+    /// 二者长度不受控，没有宽度预算就必然溢出。</summary>
+    internal static string FormatResultLine(string body, int width = 0) =>
+        width <= 0 ? body : InputLine.FitToWidth(body, width);
+
     /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
     internal static int ConsoleColumnsForNotice() => ConsoleColumns();
 
@@ -1920,13 +1926,13 @@ internal static class Program
                     var kw = rest.Trim();
                     if (kw.Length == 0)
                     {
-                        Console.WriteLine("用法: /find <关键字> —— 在历史会话日志里搜索内容（与 /resume 同源，最新在前）");
+                        Console.WriteLine(FormatResultLine("用法: /find <关键字> —— 在历史会话日志里搜索内容（与 /resume 同源，最新在前）", ConsoleColumns()));
                         break;
                     }
                     var logs = ResumableLogs(agent, config);
                     if (logs.Count == 0)
                     {
-                        Console.WriteLine("没有可搜索的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+                        Console.WriteLine(FormatResultLine("没有可搜索的会话记录（先正常对话过一次，或检查 saveSessions 配置）。", ConsoleColumns()));
                         break;
                     }
                     var printed = 0;
@@ -1943,15 +1949,15 @@ internal static class Program
                             continue;
                         var label = Path.GetFileNameWithoutExtension(log);
                         var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
-                        Console.WriteLine($"{label} · {age}（/resume 可恢复）:");
+                        Console.WriteLine(FormatResultLine($"{label} · {age}（/resume 可恢复）:", ConsoleColumns()));
                         foreach (var (role, snippet) in hits)
                             Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns()));
                         printed++;
                     }
                     if (printed == 0)
-                        Console.WriteLine($"历史会话中没有匹配「{kw}」的内容。");
+                        Console.WriteLine(FormatResultLine($"历史会话中没有匹配「{kw}」的内容。", ConsoleColumns()));
                     else if (moreAvailable)
-                        Console.WriteLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）");
+                        Console.WriteLine(FormatResultLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）", ConsoleColumns()));
 
                     // 命名快照（/save 的 .json）也纳入搜索：快照是用户显式保存的，命中价值高
                     var snapshotDir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
@@ -1963,7 +1969,7 @@ internal static class Program
                         var hits = AgentClass.SearchSnapshot(Path.Combine(snapshotDir, name + ".json"), kw);
                         if (hits.Count == 0)
                             continue;
-                        Console.WriteLine($"快照 {name} · {age}（/load {name} 恢复）:");
+                        Console.WriteLine(FormatResultLine($"快照 {name} · {age}（/load {name} 恢复）:", ConsoleColumns()));
                         foreach (var (role, snippet) in hits)
                             Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns()));
                         snapshotPrinted++;

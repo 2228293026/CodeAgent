@@ -12,6 +12,41 @@ namespace CodeAgent.Tests;
 /// </summary>
 public class SearchHitLineTests
 {
+    [Theory]
+    [InlineData(20)]
+    [InlineData(40)]
+    [InlineData(60)]
+    [InlineData(80)]
+    public void FormatResultLine_KeywordBearingLinesFit(int width)
+    {
+        // /find 会把用户输入的关键字与快照名直接拼进行里，长度不受控
+        var bodies = new[]
+        {
+            $"历史会话中没有匹配「{new string('词', 200)}」的内容。",
+            $"快照 {new string('名', 200)} · 3 分钟前（/load {new string('名', 200)} 恢复）:",
+            $"{new string('f', 200)} · 2 小时前（/resume 可恢复）:",
+            "用法: /find <关键字> —— 在历史会话日志里搜索内容（与 /resume 同源，最新在前）",
+            "…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）",
+        };
+        foreach (var body in bodies)
+        {
+            var line = Program.FormatResultLine(body, width);
+            Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出: {line}");
+        }
+    }
+
+    [Fact]
+    public void FormatResultLine_UnknownWidthKeepsFullText()
+    {
+        var body = $"历史会话中没有匹配「{new string('词', 200)}」的内容。";
+        Assert.Equal(body, Program.FormatResultLine(body));
+    }
+
+    [Fact]
+    public void FormatResultLine_ShortTextIsUnchanged()
+    {
+        Assert.Equal("没有可搜索的会话记录。", Program.FormatResultLine("没有可搜索的会话记录。", 80));
+    }
     [Fact]
     public void FormatSearchHitLine_UnknownWidth_KeepsLegacyBehavior()
     {
