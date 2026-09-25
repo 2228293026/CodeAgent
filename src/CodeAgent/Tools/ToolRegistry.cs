@@ -434,6 +434,7 @@ public sealed class ToolRegistry
         registry.Register(new DirectorySizeReportTool());
         registry.Register(new FindUnreadableFilesTool());
         registry.Register(new FindTemporaryFilesTool());
+        registry.Register(new BackupFileTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
