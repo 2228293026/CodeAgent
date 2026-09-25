@@ -494,6 +494,7 @@ public sealed class ToolRegistry
         registry.Register(new EditorConfigReportTool());
         registry.Register(new NuGetReferenceReportTool());
         registry.Register(new TestAssertionReportTool());
+        registry.Register(new DebugLeftoverReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
