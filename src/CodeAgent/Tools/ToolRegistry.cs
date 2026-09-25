@@ -491,6 +491,7 @@ public sealed class ToolRegistry
         registry.Register(new WorkflowHygieneReportTool());
         registry.Register(new DocFreshnessReportTool());
         registry.Register(new GitignoreRuleReportTool());
+        registry.Register(new EditorConfigReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
