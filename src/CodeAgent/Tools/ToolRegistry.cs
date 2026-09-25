@@ -471,6 +471,7 @@ public sealed class ToolRegistry
         registry.Register(new GitLfsReportTool());
         registry.Register(new GitGpgStatusReportTool());
         registry.Register(new ReadmeSectionReportTool());
+        registry.Register(new TodoMarkerReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
