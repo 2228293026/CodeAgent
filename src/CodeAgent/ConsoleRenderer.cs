@@ -215,12 +215,63 @@ public sealed class ConsoleRenderer
         return null;
     }
 
+    /// <summary>代码块内的制表位宽度（终端默认 8，代码缩进按 4 更可读且对齐稳定）。</summary>
+    internal const int CodeTabWidth = 4;
+
+    /// <summary>把一行里的 Tab 展开到 <paramref name="tabWidth"/> 列制表位（按显示列而非字符数推进）。
+    /// 代码里的制表符在终端按 8 列渲染，缩进层级看起来参差；展开后同一层级始终对齐。</summary>
+    internal static string ExpandCodeTabs(string line, int tabWidth = CodeTabWidth)
+    {
+        if (line.IndexOf('\t') < 0)
+            return line;
+        var sb = new StringBuilder();
+        var col = 0;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (c == '\t')
+            {
+                var pad = tabWidth - col % tabWidth;
+                sb.Append(' ', pad);
+                col += pad;
+            }
+            else if (char.IsHighSurrogate(c) && i + 1 < line.Length && char.IsLowSurrogate(line[i + 1]))
+            {
+                sb.Append(c).Append(line[i + 1]); // emoji 占 2 列，整对推进
+                col += 2;
+                i++;
+            }
+            else
+            {
+                sb.Append(c);
+                col += !char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1; // CJK/全角与 DisplayWidth 同口径
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>代码块规整：Tab 展开、去掉行尾空白、CRLF 归一为 LF。
+    /// 行首缩进原样保留（那是代码语义），只清理不可见噪音——行尾空白会让复制粘贴带上脏字符、
+    /// 撑长终端回滚缓冲，行尾 Tab 还会让"选中到行尾"高亮出多余空白。</summary>
+    internal static string NormalizeCodeBlock(string code)
+    {
+        var lines = code.Replace("\r\n", "\n").Split('\n');
+        var sb = new StringBuilder();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i > 0)
+                sb.Append('\n');
+            sb.Append(ExpandCodeTabs(lines[i]).TrimEnd(' '));
+        }
+        return sb.ToString();
+    }
+
     private void EmitCode(string code)
     {
         if (code.Length == 0)
             return;
         SafeColor.Foreground(ConsoleColor.Green);
-        Console.Write(code);
+        Console.Write(NormalizeCodeBlock(code));
         SafeColor.Reset();
     }
 
