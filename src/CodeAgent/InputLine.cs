@@ -36,16 +36,29 @@ public static class BracketedPaste
 /// </summary>
 public static class InputLine
 {
+    /// <summary>多行输入折叠阈值：超过该行数时折叠为「前 N-1 行 + 提示行」。单一口径源，避免各处硬编码 3 漂移。</summary>
+    internal const int FoldThreshold = 3;
+
+    /// <summary>折叠提示行里「末行」预览的最大显示宽度（超出按 CJK 双宽截断）。</summary>
+    internal const int FoldTailPreviewWidth = 40;
+
     /// <summary>
     /// 折叠长文本为「前 threshold-1 行 + 折叠提示行」：行数超过 threshold 时折叠，否则原样。
-    /// 折叠提示行显示总行数（⏷ 共 N 行 ↓ 展开），供多行输入框减少屏幕占用。
+    /// 折叠提示行显示总行数（⏷ 共 N 行 ↓ 展开）并附末行预览：折叠后中间行不可见，
+    /// 此前无法确认「末尾长什么样」，粘贴长段落后只能先展开再看。
     /// </summary>
-    internal static string FoldText(string text, int threshold = 3)
+    internal static string FoldText(string text, int threshold = FoldThreshold)
     {
         var lines = DiffUtil.SplitLines(text);
         if (lines.Length <= threshold)
             return text;
-        return string.Join('\n', lines.Take(threshold - 1)) + "\n⏷ 共 " + lines.Length + " 行 ↓ 展开";
+        var tail = lines[^1].Trim();
+        if (tail.Length == 0 && lines.Length >= 2)
+            tail = lines[^2].Trim(); // 末尾空行：回看一行，避免出现空的「末行: 」
+        var hint = tail.Length == 0
+            ? $"⏷ 共 {lines.Length} 行 ↓ 展开"
+            : $"⏷ 共 {lines.Length} 行 ↓ 展开 · 末行: {FitToWidth(tail, FoldTailPreviewWidth)}";
+        return string.Join('\n', lines.Take(threshold - 1)) + "\n" + hint;
     }
 
     /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。</summary>
@@ -273,16 +286,16 @@ public static class InputLine
         /// <summary>输入块的显示文本：与 ScrollInput 同口径（未展开且 &gt;3 行时折叠）。
         /// 菜单重绘也必须画折叠视图——画原始多行会把块高从 3 行撑回 N 行，与菜单定位的行数口径不符。</summary>
         string DisplayedInputText() =>
-            !inputExpanded && SkipDirs.CountLines(buf.Text) > 3 ? FoldText(InputText()) : InputText();
+            !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold ? FoldText(InputText()) : InputText();
 
         void ScrollInput()
         {
             if (ansiOk)
             {
-                // 折叠显示：行数 > 3 且未展开时，只显示前 2 行 + 折叠提示行（减少屏幕占用）
-                var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > 3;
+                // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
+                var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold;
                 var text = fold ? InputLine.FoldText(InputText()) : InputText();
-                var lines = 1 + CountNewlines(text); // 显示块总行数（折叠时 = 3）
+                var lines = 1 + CountNewlines(text); // 显示块总行数（折叠时 = FoldThreshold）
                 if (lines > 1 || lastInputLines > 1)
                 {
                     // 多行输入（粘贴含换行）：上移到块首后逐行 \x1b[2K 清整行重写。
@@ -1287,7 +1300,7 @@ public static class InputLine
         foreach (var c in text)
             if (c == '\n')
                 raw++;
-        return !expanded && raw + 1 > 3 ? 2 : raw;
+        return !expanded && raw + 1 > FoldThreshold ? FoldThreshold - 1 : raw;
     }
 
     /// <summary>
