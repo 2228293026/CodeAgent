@@ -88,7 +88,7 @@ public class ToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public void CreateDefault_RegistersAllEightyTwoTools()
+    public void CreateDefault_RegistersAllEightyThreeTools()
     {
         // 回归：默认工具集应完整；缺工具会让 Agent 某些能力静默失效
         var registry = ToolRegistry.CreateDefault();
@@ -97,7 +97,7 @@ public class ToolRegistryTests : IDisposable
 
         var expected = new[]
         {
-            "read_file", "read_files", "compare_files", "compare_directories", "project_stats", "directory_size_report", "file_info", "file_infos", "replace_in_files", "copy_file", "copy_files", "move_file", "move_files", "delete_file", "delete_files", "find_duplicates", "find_large_files", "find_stale_files", "find_unreadable_files", "find_temporary_files", "backup_file", "restore_backup", "find_empty_files", "find_recent_files", "find_filename_conflicts", "find_long_paths", "find_empty_directories", "find_symlinks", "checksum_manifest", "encoding_report", "normalize_line_endings", "create_directory", "remove_empty_directory", "git_status", "git_check_ignore", "git_check_attr", "git_ls_files", "git_repository_info", "git_fsck", "git_submodule_status", "git_describe", "git_contributors", "git_file_history", "git_file_stats", "git_object_info", "git_tree_entries", "git_commit_info", "git_compare_refs", "git_tag_info", "file_extension_report", "line_ending_report", "directory_depth_report", "directory_size_breakdown", "project_manifest_report", "test_inventory_report", "ci_workflow_report", "git_ignored_files", "git_path_diff", "git_index_diagnostics", "git_worktree_details", "git_stash_info", "git_diff", "git_log", "git_blame", "git_show", "git_branches", "git_remotes", "git_tags", "git_reflog", "git_worktrees", "git_stashes", "write_file", "edit_file", "list_directory",
+            "read_file", "read_files", "compare_files", "compare_directories", "project_stats", "directory_size_report", "file_info", "file_infos", "replace_in_files", "copy_file", "copy_files", "move_file", "move_files", "delete_file", "delete_files", "find_duplicates", "find_large_files", "find_stale_files", "find_unreadable_files", "find_temporary_files", "backup_file", "restore_backup", "find_empty_files", "find_recent_files", "find_filename_conflicts", "find_long_paths", "find_empty_directories", "find_symlinks", "checksum_manifest", "encoding_report", "normalize_line_endings", "create_directory", "remove_empty_directory", "git_status", "git_check_ignore", "git_check_attr", "git_ls_files", "git_repository_info", "git_fsck", "git_submodule_status", "git_describe", "git_contributors", "git_file_history", "git_file_stats", "git_object_info", "git_tree_entries", "git_commit_info", "git_compare_refs", "git_tag_info", "file_extension_report", "line_ending_report", "directory_depth_report", "directory_size_breakdown", "project_manifest_report", "test_inventory_report", "ci_workflow_report", "license_inventory_report", "git_ignored_files", "git_path_diff", "git_index_diagnostics", "git_worktree_details", "git_stash_info", "git_diff", "git_log", "git_blame", "git_show", "git_branches", "git_remotes", "git_tags", "git_reflog", "git_worktrees", "git_stashes", "write_file", "edit_file", "list_directory",
             "glob", "grep", "run_command", "bash", "powershell",
             "session_search", "stop", "apply_patch",
         };
