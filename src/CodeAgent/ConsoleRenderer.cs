@@ -63,13 +63,41 @@ public sealed class ConsoleRenderer
             else
             {
                 FlushTable();
-                EmitLine(line);
+                EmitContentLine(line);
             }
         }
         else
         {
             FlushTable();
         }
+        FlushPendingBlanks();
+    }
+
+    /// <summary>连续空行最多保留的行数。模型常连发 3–5 个空行：既占屏又把段落节奏切碎。</summary>
+    internal const int MaxBlankRun = 1;
+
+    private int _pendingBlanks;
+
+    /// <summary>内容行输出：空行先暂存，连续空行按 MaxBlankRun 收敛后再随下一行一起输出。
+    /// 暂存而非立即输出是必要的——流式渲染必须等下一行才知道前面是不是"连发空行"。</summary>
+    private void EmitContentLine(string line)
+    {
+        // 入参仍带行尾 \n（EmitLine 自己会剥离），这里按内容判定是否空行
+        if (line.TrimEnd('\n').Length == 0)
+        {
+            _pendingBlanks++;
+            return;
+        }
+        FlushPendingBlanks();
+        EmitLine(line);
+    }
+
+    private void FlushPendingBlanks()
+    {
+        var blanks = Math.Min(_pendingBlanks, MaxBlankRun);
+        for (var i = 0; i < blanks; i++)
+            Console.WriteLine();
+        _pendingBlanks = 0;
     }
 
     private void HandleTextChar(char ch)
@@ -93,6 +121,7 @@ public sealed class ConsoleRenderer
                 }
                 // 围栏开始：先冲刷缓冲中的表格（表格后紧跟代码块时表格应先输出——
                 // EmitLine 不带表格冲刷，漏了会把表格渲染到代码块之后甚至丢失），进入代码模式
+                FlushPendingBlanks();
                 FlushTable();
                 _line.Clear(); // 不输出围栏分隔符本身（``` 是 Markdown 语法，不是内容）
                 _inCode = true;
@@ -137,7 +166,7 @@ public sealed class ConsoleRenderer
                 return;
             }
             FlushTable(); // 表格结束（遇到非表格行）：先输出对齐的表格
-            EmitLine(line);
+            EmitContentLine(line);
         }
         else
         {
