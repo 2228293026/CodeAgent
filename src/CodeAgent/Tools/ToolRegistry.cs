@@ -488,6 +488,7 @@ public sealed class ToolRegistry
         registry.Register(new TestFlakinessReportTool());
         registry.Register(new TargetFrameworkReportTool());
         registry.Register(new SourceCompositionReportTool());
+        registry.Register(new WorkflowHygieneReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
