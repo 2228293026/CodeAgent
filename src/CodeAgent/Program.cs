@@ -278,7 +278,7 @@ internal static class Program
             if (target is null)
                 Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
             else if (agent.LoadSessionLog(target))
-                Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(target)}");
+                Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), "↩"));
             else
                 Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
         }
@@ -468,7 +468,9 @@ internal static class Program
                                 var r = RunTurnAsync(async t =>
                                     await agent.CompactAsync(t) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult();
                                 if (r == "COMPACTED")
-                                    Console.WriteLine($"✔ 上下文已达 {pct}%（autoCompactPercent={config.AutoCompactPercent}），已自动压缩历史。");
+                                    Console.WriteLine(FormatConfirmLine(
+                                        $"上下文已达 {pct}%（autoCompactPercent={config.AutoCompactPercent}），已自动压缩历史。",
+                                        ConsoleColumns()));
                             }
                             catch (Exception ex)
                             {
@@ -1660,7 +1662,7 @@ internal static class Program
                             break;
                         }
                         agent.SaveSession(rest.Trim());
-                        Console.WriteLine($"✔ 已保存会话: {rest.Trim()}");
+                        Console.WriteLine(FormatConfirmLine($"已保存会话: {rest.Trim()}", ConsoleColumns()));
                     }
                     catch (Exception ex)
                     {
@@ -1681,8 +1683,10 @@ internal static class Program
                     else
                     {
                         Console.WriteLine($"已保存的会话（{sessions.Count} 个，新 → 旧）:");
-                        foreach (var (name, age) in sessions)
-                            Console.WriteLine($"  {name}（{age}）");
+                        // 名称列对齐：原本 "  名称（相对时间）" 各行年龄起始位置参差
+                        Console.WriteLine(FormatHelpList(
+                            sessions.Select(s => new HelpEntry(s.Item1, $"（{s.Item2}）")).ToList(),
+                            ConsoleColumns()));
                     }
                 }
                 else
@@ -1690,7 +1694,7 @@ internal static class Program
                     try
                     {
                         agent.LoadSession(rest.Trim());
-                        Console.WriteLine($"✔ 已恢复会话: {rest.Trim()}");
+                        Console.WriteLine(FormatConfirmLine($"已恢复会话: {rest.Trim()}", ConsoleColumns()));
                         PrintConversation(agent, 20); // 显示恢复的最近 20 条（全量打印长会话会刷屏）
                     }
                     catch (Exception ex)
@@ -1715,7 +1719,7 @@ internal static class Program
                     {
                         if (agent.LoadSessionLog(logs[ridx - 1]))
                         {
-                            Console.WriteLine($"↩ 已恢复会话: {Path.GetFileName(logs[ridx - 1])}");
+                            Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(logs[ridx - 1])}", ConsoleColumns(), "↩"));
                             PrintConversation(agent, 20);
                         }
                         else
@@ -1832,7 +1836,7 @@ internal static class Program
                             try
                             {
                                 var exported = agent.ExportSessionLogMarkdown(log);
-                                Console.WriteLine($"✔ {Path.GetFileNameWithoutExtension(log)} → {exported}");
+                                Console.WriteLine(FormatConfirmLine($"{Path.GetFileNameWithoutExtension(log)} → {exported}", ConsoleColumns()));
                                 ok++;
                             }
                             catch (Exception ex)
@@ -1846,7 +1850,7 @@ internal static class Program
                             try
                             {
                                 var exported = agent.ExportMarkdown(name);
-                                Console.WriteLine($"✔ 快照 {name} → {exported}");
+                                Console.WriteLine(FormatConfirmLine($"快照 {name} → {exported}", ConsoleColumns()));
                                 ok++;
                             }
                             catch (Exception ex)
@@ -1876,7 +1880,7 @@ internal static class Program
                     }
                     else
                         file = agent.ExportMarkdown(arg.Length == 0 ? null : arg);
-                    Console.WriteLine($"✔ 已导出: {file}");
+                    Console.WriteLine(FormatConfirmLine($"已导出: {file}", ConsoleColumns()));
                 }
                 catch (Exception ex)
                 {

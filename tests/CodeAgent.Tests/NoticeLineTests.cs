@@ -92,6 +92,37 @@ public class NoticeLineTests
     public void FormatConfirmLine_NeverExceedsWidth(int width)
     {
         var line = Program.FormatConfirmLine($"已切换 Provider: openai，模型 gpt-5，已保存到 {new string('p', 300)}", width);
-        Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出");
+        Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出: {line}");
+    }
+
+    [Fact]
+    public void FormatConfirmLine_SaveLoadExportShapesFit()
+    {
+        // /save、/load、/export 的确认行：会话名与导出路径都可能很长
+        var bodies = new[]
+        {
+            $"已保存会话: {new string('会', 60)}",
+            $"已恢复会话: {new string('a', 200)}",
+            $"{new string('b', 200)} → exports/very/deep/path/session-2026-01-01.md",
+            "上下文已达 92%（autoCompactPercent=90），已自动压缩历史。",
+        };
+        foreach (var body in bodies)
+        {
+            foreach (var width in new[] { 30, 60, 120 })
+            {
+                var line = Program.FormatConfirmLine(body, width);
+                Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出: {line}");
+                Assert.StartsWith("✔ ", line);
+            }
+        }
+    }
+
+    [Fact]
+    public void FormatConfirmLine_ResumeMarkerIsPreserved()
+    {
+        // /resume 用 ↩ 标记恢复，与 ✔ 区分
+        var line = Program.FormatConfirmLine("已恢复会话: 20260101-120000.json", 60, "↩");
+        Assert.StartsWith("↩ ", line);
+        Assert.Contains("20260101-120000.json", line);
     }
 }
