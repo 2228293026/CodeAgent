@@ -1579,7 +1579,7 @@ internal static class Program
                 }
                 else if (rest.Trim().Equals("list", StringComparison.OrdinalIgnoreCase))
                 {
-                    var list = agent.Context.Undo.ListEntries();
+                    var list = agent.Context.Undo.ListEntries(width: ConsoleColumns());
                     Console.WriteLine(list.Length == 0 ? "没有可撤销的操作。" : $"可撤销操作（编号 1 = 最近）:\n{list}");
                 }
                 else if (rest.Trim().Equals("clear", StringComparison.OrdinalIgnoreCase))
@@ -1596,7 +1596,7 @@ internal static class Program
                 }
                 else if (string.IsNullOrWhiteSpace(rest))
                 {
-                    var list = agent.Context.Undo.ListEntries();
+                    var list = agent.Context.Undo.ListEntries(width: ConsoleColumns());
                     if (list.Length == 0)
                     {
                         Console.WriteLine("没有可撤销的操作。");

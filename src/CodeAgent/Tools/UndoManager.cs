@@ -145,24 +145,37 @@ public sealed class UndoManager
     }
 
     /// <summary>列出最近 max 条可撤销操作（编号 1 = 最近），无记录返回空串；
-    /// 超出 max 时提示更早条目数（编号仍从最近计起）。</summary>
-    public string ListEntries(int max = 10)
+    /// 超出 max 时提示更早条目数（编号仍从最近计起）。
+    /// 编号列与说明走 /resume、/models 共用的宽度自适应渲染器，长路径不再硬折行。</summary>
+    public string ListEntries(int max = 10, int width = 0)
+    {
+        var entries = EntryRecords(out var hidden, max);
+        if (entries.Count == 0)
+            return string.Empty;
+        var rendered = Program.FormatHelpList(entries, width);
+        return hidden > 0 ? $"…（更早 {hidden} 条未显示）\n{rendered}" : rendered;
+    }
+
+    /// <summary>可撤销操作的结构化条目（编号从最近计起），供列表渲染与测试使用。</summary>
+    internal List<Program.HelpEntry> EntryRecords(out int hidden, int max = 10)
     {
         lock (_lock)
         {
+            var result = new List<Program.HelpEntry>();
             if (_entries.Count == 0)
-                return "";
-            var sb = new StringBuilder();
+            {
+                hidden = 0;
+                return result;
+            }
             var start = Math.Max(0, _entries.Count - max);
-            if (start > 0)
-                sb.AppendLine($"…（更早 {start} 条未显示）");
+            hidden = start;
             for (int i = _entries.Count - 1; i >= start; i--)
             {
                 var e = _entries[i];
                 var age = TextUtil.RelativeTime(e.Timestamp, DateTime.Now);
-                sb.AppendLine($"  {_entries.Count - i}) {Describe(e, File.Exists(e.Path))}（{age}）");
+                result.Add(new Program.HelpEntry($"{_entries.Count - i})", $"{Describe(e, File.Exists(e.Path))}（{age}）"));
             }
-            return sb.ToString().TrimEnd();
+            return result;
         }
     }
 
