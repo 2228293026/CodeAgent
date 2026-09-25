@@ -505,6 +505,7 @@ public sealed class ToolRegistry
         registry.Register(new InputValidationReportTool());
         registry.Register(new DuplicateCodeReportTool());
         registry.Register(new TestIsolationReportTool());
+        registry.Register(new AsyncCorrectnessReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
