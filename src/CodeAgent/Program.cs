@@ -884,6 +884,49 @@ internal static class Program
         return b;
     }
 
+    /// <summary>状态栏可用宽度：取终端宽度；不可用（重定向/无 TTY）返回 0 表示不限。</summary>
+    private static int StatusBarWidth()
+    {
+        if (Console.IsOutputRedirected)
+            return 0;
+        try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
+    }
+
+    /// <summary>
+    /// 组装状态栏并在窄终端下按优先级丢段，保证输出永远不超过 <paramref name="width"/> 列。
+    /// 固定段：⏵ 模式 · 模型 · 目录；可丢段（由低到高）：思考强度 → 本回合 token → 上下文 → git 分支。
+    /// 全部丢完仍超宽时按显示宽度硬截断（CJK/emoji 占 2 列）。
+    /// </summary>
+    internal static string BuildStatusBar(
+        string mode, string model, string cwd, string? branch,
+        string turnIn, string turnOut, string ctxText, string thinkText, int width)
+    {
+        bool showBranch = !string.IsNullOrEmpty(branch);
+        var showTurn = true;
+        var showCtx = true;
+        var showThink = !string.IsNullOrEmpty(thinkText);
+
+        string Render()
+        {
+            // 目录与分支合成一段：与旧版「cwd (branch)」一致，窄屏省 3 列
+            var location = showBranch ? $"{cwd} ({branch})" : cwd;
+            var parts = new List<string> { $"⏵ {mode} · {model}", location };
+            if (showTurn) parts.Add($"{turnIn} in / {turnOut} out");
+            if (showCtx) parts.Add(ctxText);
+            if (showThink) parts.Add(thinkText);
+            return string.Join(" · ", parts);
+        }
+
+        var text = Render();
+        var drops = new Action[] { () => showThink = false, () => showTurn = false, () => showCtx = false, () => showBranch = false };
+        for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
+        {
+            drops[i]();
+            text = Render();
+        }
+        return width > 0 ? InputLine.FitToWidth(text, width) : text;
+    }
+
     /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
     private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow, ReasoningProbeState? reasoningProbe)
     {
@@ -897,11 +940,11 @@ internal static class Program
             var efforts = t?.IsCompletedSuccessfully == true ? t.Result : null;
             // 探测完成且模型未变：显示实际生效档（无支持 → off，与 /thinking 的说明一致）；
             // 探测中或已换模型（结果作废）：仍只显示 auto
-            think = done ? $" · think:auto→{(efforts is { Count: > 0 } ? efforts[^1] : "off")}" : " · think:auto";
+            think = done ? $"think:auto→{(efforts is { Count: > 0 } ? efforts[^1] : "off")}" : "think:auto";
         }
         else
         {
-            think = thinkingEffort != "off" ? $" · think:{thinkingEffort}" : "";
+            think = thinkingEffort != "off" ? $"think:{thinkingEffort}" : "";
         }
         var ctx = contextWindow > 0
             ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(agent.ContextTokens, contextWindow)}%)"
@@ -909,11 +952,11 @@ internal static class Program
         var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         // git 分支段（非仓库整体省略）：多仓库/多分支工作流下快速确认当前所在位置
         var branch = CachedBranch(Environment.CurrentDirectory);
-        var branchText = branch is null ? "" : $" ({branch})";
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.WriteLine(
-            $"⏵ {agent.CurrentMode.Name} · {opts.Model} · {shownCwd}{branchText} · " +
-            $"{TextUtil.CompactTokenCount(agent.TurnInputTokens)} in / {TextUtil.CompactTokenCount(agent.TurnOutputTokens)} out · {ctx}{think}");
+        Console.WriteLine(BuildStatusBar(
+            agent.CurrentMode.Name, opts.Model, shownCwd, branch,
+            TextUtil.CompactTokenCount(agent.TurnInputTokens), TextUtil.CompactTokenCount(agent.TurnOutputTokens),
+            ctx, think, StatusBarWidth()));
         SafeColor.Reset();
     }
 
