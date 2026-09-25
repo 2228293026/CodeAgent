@@ -454,6 +454,7 @@ public sealed class ToolRegistry
         registry.Register(new GitTreeEntriesTool());
         registry.Register(new GitCommitInfoTool());
         registry.Register(new GitCompareRefsTool());
+        registry.Register(new GitTagInfoTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
