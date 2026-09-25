@@ -360,7 +360,7 @@ internal static class Program
         // 切换块原地覆盖按「提示符占一行」计算：窄终端 + 长模式/模型/目录名会让提示符折行，
         // 此时退回追加模式，避免错位覆盖（余量列吸收目录里的 CJK 双宽字符）
         bool PromptFitsOneRow() =>
-            Program.PromptFitsOneRow(PromptFor(opts, agent).TrimStart('\n'), StatusBarWidth());
+            Program.PromptFitsOneRow(PromptFor(opts, agent).TrimStart('\n'), ConsoleColumns());
 
         // 清掉上一会话遗留的输入缓冲（否则新会话一启动就被旧按键触发菜单/命令，显得"诡异"）
         try
@@ -475,7 +475,9 @@ internal static class Program
                             }
                         }
                         else if (pct >= 90)
-                            Console.WriteLine($"⚠ 上下文已用 {pct}%（{TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)}）：建议 /compact 压缩历史，否则即将自动裁剪最旧对话。");
+                            Console.WriteLine(FormatNoticeLine(
+                                $"上下文已用 {pct}%（{TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)}）：建议 /compact 压缩历史，否则即将自动裁剪最旧对话。",
+                                ConsoleColumns()));
                     }
                 }
             }
@@ -775,7 +777,7 @@ internal static class Program
         Console.WriteLine(BuildTurnSummary(
             agent.TurnRounds, agent.TurnToolCalls, TextUtil.FormatElapsed(elapsed),
             $"{agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok",
-            think, cache, costText, StatusBarWidth()));
+            think, cache, costText, ConsoleColumns()));
         SafeColor.Reset();
     }
 
@@ -942,8 +944,24 @@ internal static class Program
     internal static bool PromptFitsOneRow(string prompt, int windowWidth, int margin = PromptFitMargin) =>
         windowWidth > 0 && TextUtil.DisplayWidth(prompt) + margin <= windowWidth;
 
+    /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
+    internal static int ConsoleColumnsForNotice() => ConsoleColumns();
+
+    /// <summary>
+    /// 告警/错误行统一格式：`⚠ 正文`，窄终端按显示宽度截断**正文**而非整行——
+    /// 标记必须始终留在行首可见：整行截断会让 ⚠ 孤零零留在上一行，扫读时反而找不到告警。
+    /// width &lt;= 0 表示宽度未知，不截断。
+    /// </summary>
+    internal static string FormatNoticeLine(string body, int width = 0, string marker = "⚠")
+    {
+        if (width <= 0)
+            return $"{marker} {body}";
+        var budget = width - TextUtil.DisplayWidth(marker) - 1;
+        return budget <= 0 ? marker : $"{marker} {InputLine.FitToWidth(body, budget)}";
+    }
+
     /// <summary>读取终端宽度：0 = 未知（输出重定向或读取失败）。</summary>
-    private static int StatusBarWidth()
+    private static int ConsoleColumns()
     {
         if (Console.IsOutputRedirected)
             return 0;
@@ -1014,7 +1032,7 @@ internal static class Program
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,
             TextUtil.CompactTokenCount(agent.TurnInputTokens), TextUtil.CompactTokenCount(agent.TurnOutputTokens),
-            ctx, think, StatusBarWidth()));
+            ctx, think, ConsoleColumns()));
         SafeColor.Reset();
     }
 
@@ -1350,7 +1368,8 @@ internal static class Program
                         kv.Key.Equals(wanted, StringComparison.OrdinalIgnoreCase));
                     if (hit.Key is null)
                     {
-                        Console.WriteLine($"⚠ 没有供应商「{wanted}」，可用: {string.Join(", ", config.Providers.Keys)}");
+                        Console.WriteLine(FormatNoticeLine(
+                            $"没有供应商「{wanted}」，可用: {string.Join(", ", config.Providers.Keys)}", ConsoleColumns()));
                         break;
                     }
                     try
@@ -1909,7 +1928,8 @@ internal static class Program
                     var mode = modes.FirstOrDefault(m => m.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase));
                     if (mode is null)
                     {
-                        Console.WriteLine($"⚠ 没有模式「{wanted}」，可用: {string.Join(", ", modes.Select(m => m.Name))}");
+                        Console.WriteLine(FormatNoticeLine(
+                            $"没有模式「{wanted}」，可用: {string.Join(", ", modes.Select(m => m.Name))}", ConsoleColumns()));
                         var near = modes.Where(m => m.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)
                                                     || wanted.Contains(m.Name, StringComparison.OrdinalIgnoreCase))
                                         .Select(m => m.Name).Take(3).ToList();
@@ -2098,7 +2118,8 @@ internal static class Program
                 break;
 
             default:
-                Console.WriteLine($"未知命令: {cmd}（输入 /help 查看命令，Tab 可补全）");
+                Console.WriteLine(FormatNoticeLine(
+                    $"未知命令: {cmd}（输入 /help 查看命令，Tab 可补全）", ConsoleColumns()));
                 break;
         }
         return suppressStatusBar;

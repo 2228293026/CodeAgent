@@ -191,7 +191,9 @@ public sealed partial class Agent
             var known = _tools.ToToolSpecs().Select(t => t.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var unknown = allowed.Where(t => !known.Contains(t)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (unknown.Count > 0 && !Console.IsOutputRedirected)
-                Console.WriteLine($"⚠ 模式 {mode.Name} 引用了未知工具: {string.Join(", ", unknown)}（/tools 查看可用工具）");
+                Console.WriteLine(Program.FormatNoticeLine(
+                    $"模式 {mode.Name} 引用了未知工具: {string.Join(", ", unknown)}（/tools 查看可用工具）",
+                    Program.ConsoleColumnsForNotice()));
         }
     }
     /// <summary>code 模式使用配置的自定义 systemPrompt（会话级注入优先——见 AgentConfig.SessionOnlySystemPrompt）；
