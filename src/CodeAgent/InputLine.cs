@@ -159,6 +159,22 @@ public static class InputLine
         return sb.ToString() + "…";
     }
 
+    /// <summary>按显示宽度补空格到指定列宽（CJK/emoji 按 2 列计）；超宽则按显示宽度截断并补省略号。</summary>
+    internal static string PadToDisplayWidth(string s, int width)
+    {
+        var current = DisplayWidth(s);
+        if (current == width)
+            return s;
+        return current < width ? s + new string(' ', width - current) : FitToWidth(s, width);
+    }
+
+    /// <summary>
+    /// 菜单行文本：命令菜单带 1-9 编号（数字键可执行）；模式菜单无编号（数字键是普通输入）。
+    /// 名称列按显示宽度对齐而非字符数：中文命令名按 1 字符计却占 2 列，用 char 补齐会让描述列整体错位。
+    /// </summary>
+    internal static string FormatMenuLine(string name, string desc, int visibleRow, bool modePicker, int nameWidth = 16) =>
+        (modePicker ? "  " : $"  {visibleRow + 1}) ") + PadToDisplayWidth(name, nameWidth) + " " + desc;
+
     /// <summary>
     /// 光标定位偏移：把终端光标从行尾移到 <paramref name="cursor"/> 处需要左移的列数。
     /// 用显示宽度计算（CJK 占 2 列），避免中文行内编辑时光标错位。
@@ -417,11 +433,9 @@ public static class InputLine
             Console.Write(sb.ToString());
         }
 
-        /// <summary>菜单行文本：命令菜单带 1-9 编号（数字键可执行）；模式菜单无编号（数字键是普通输入）。</summary>
+        /// <summary>菜单行文本：命令菜单带 1-9 编号；模式菜单无编号（数字键是普通输入）。</summary>
         string MenuLineText(int listIndex, int visibleRow) =>
-            modePicker
-                ? $"  {menuItems[listIndex].Name,-16} {menuItems[listIndex].Desc}"
-                : $"  {visibleRow + 1}) {menuItems[listIndex].Name,-16} {menuItems[listIndex].Desc}";
+            FormatMenuLine(menuItems[listIndex].Name, menuItems[listIndex].Desc, visibleRow, modePicker);
 
         // 关闭菜单块（rows 行）：整块删除（DL），输入行上移回到原位，屏幕不留残影
         void EraseMenuAnsi(int rows)
