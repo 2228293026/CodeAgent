@@ -424,6 +424,7 @@ public sealed class ToolRegistry
         registry.Register(new FileInfosTool());
         registry.Register(new CompareDirectoriesTool());
         registry.Register(new FindEmptyDirectoriesTool());
+        registry.Register(new FindSymlinksTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());

@@ -20,7 +20,7 @@
 - 🎮 ADOFAI mod 适配：检测到 mod 项目自动注入开发上下文与 moddev / harmony / assetbundle 模式
 - 🎨 Markdown 渲染：代码块 / 行内代码 / 加粗 / 标题着色（`"renderMarkdown": false` 可关闭）
 - ⌨️ 终端 TUI：斜杠命令菜单（过滤/方向键选择/数字执行/→ 填充）、命令历史（↑/↓，持久化、Ctrl+R 反向搜索）、TAB 补全、多行粘贴折叠、Shift+Enter 手动换行、Ctrl+L 清屏、`[模式]` 提示符
-- 🔧 内置 39 个工具：`read_file`（offset/limit/tail）/ `read_files`（批量读取多个文件）/ `compare_files`（文本文件 unified diff）/ `compare_directories`（目录差异比较）/ `project_stats`（项目文件统计）/ `file_info`（单文件属性统计）/ `file_infos`（批量文件属性统计）/ `replace_in_files`（按 glob 批量替换）/ `copy_file`（安全复制文本文件）/ `copy_files`（批量复制映射）/ `move_file`（安全移动/重命名）/ `move_files`（批量移动映射）/ `delete_file`（安全删除单个文件）/ `delete_files`（批量安全删除）/ `find_duplicates`（重复文件检测）/ `find_large_files`（大文件扫描）/ `find_empty_directories`（空目录扫描）/ `git_status`（只读 Git 状态）/ `git_diff`（只读 Git 差异）/ `git_log`（只读 Git 提交历史）/ `git_blame`（只读逐行来源追踪）/ `git_show`（只读提交详情）/ `git_branches`（只读分支列表）/ `git_remotes`（只读远程地址，自动脱敏）/ `git_tags`（只读标签列表）/ `git_reflog`（只读 HEAD/引用移动记录）/ `git_worktrees`（只读 linked worktree 列表）/ `git_stashes`（只读 stash 列表）/ `write_file` / `edit_file`（换行风格容错：LF↔CRLF 自动归一化匹配）/ `list_directory` / `glob` / `grep`（支持 multiline 跨行匹配）/ `run_command` / `bash` / `powershell` / `apply_patch` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
+- 🔧 内置 40 个工具：`read_file`（offset/limit/tail）/ `read_files`（批量读取多个文件）/ `compare_files`（文本文件 unified diff）/ `compare_directories`（目录差异比较）/ `project_stats`（项目文件统计）/ `file_info`（单文件属性统计）/ `file_infos`（批量文件属性统计）/ `replace_in_files`（按 glob 批量替换）/ `copy_file`（安全复制文本文件）/ `copy_files`（批量复制映射）/ `move_file`（安全移动/重命名）/ `move_files`（批量移动映射）/ `delete_file`（安全删除单个文件）/ `delete_files`（批量安全删除）/ `find_duplicates`（重复文件检测）/ `find_large_files`（大文件扫描）/ `find_empty_directories`（空目录扫描）/ `find_symlinks`（符号链接审计）/ `git_status`（只读 Git 状态）/ `git_diff`（只读 Git 差异）/ `git_log`（只读 Git 提交历史）/ `git_blame`（只读逐行来源追踪）/ `git_show`（只读提交详情）/ `git_branches`（只读分支列表）/ `git_remotes`（只读远程地址，自动脱敏）/ `git_tags`（只读标签列表）/ `git_reflog`（只读 HEAD/引用移动记录）/ `git_worktrees`（只读 linked worktree 列表）/ `git_stashes`（只读 stash 列表）/ `write_file` / `edit_file`（换行风格容错：LF↔CRLF 自动归一化匹配）/ `list_directory` / `glob` / `grep`（支持 multiline 跨行匹配）/ `run_command` / `bash` / `powershell` / `apply_patch` / `stop`（命令类工具自动选用 Git Bash / PowerShell）；`edit_file` / `write_file` 执行前展示彩色 diff 预览
 - 🔁 Anthropic extended thinking 全支持：思考文本 + 签名与加密的 redacted_thinking 块随工具调用轮原样回传（缺失会被 API 400）
 - ↩️ 会话自动落盘：`--continue` 恢复最近会话、`/resume` 按编号恢复历史会话、`/find <关键字>` 跨历史会话搜索、Esc 多级撤回逐轮回退；`--no-session` 本次运行不落盘（隐私任务）
 - 📊 用量可见：状态栏显示本回合 token、当前上下文规模 ctx（含百分比，窗口大小自动识别常见模型）、思考强度（`auto` 自动探测模型推理档位并取最高）与**当前 git 分支**；`/compact [重点]` 主动压缩历史（压缩过程显示进度；可附保留重点，如 `/compact 保留接口设计`）
@@ -229,6 +229,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 | `git_stashes` | 只读查看 Git stash 标识、哈希、日期和说明 |
 | `find_large_files` | 按文件大小扫描并列出项目中的大文件，支持扩展名和数量限制 |
 | `find_empty_directories` | 递归查找空目录，支持深度、结果数量和隐藏目录筛选 |
+| `find_symlinks` | 审计符号链接/junction，显示目标和断链状态且不跟随链接 |
 | `move_files` | 按多个 source/destination 映射批量移动文件，支持单项覆盖、dry-run 和错误汇总 |
 | `delete_files` | 批量安全删除文件，支持 dry-run、missing_ok、备份、错误继续和撤销 |
 | `write_file` | 创建/覆盖文件，自动建父目录；缺 `content` 会报错而非写空文件；内容与现状相同则跳过写入 |
@@ -290,6 +291,7 @@ src/CodeAgent/
 │   ├── GitStashesTool.cs  # git_stashes 只读 stash 列表
 │   ├── FindLargeFilesTool.cs # find_large_files 大文件扫描
 │   ├── FindEmptyDirectoriesTool.cs # find_empty_directories 空目录扫描
+│   ├── FindSymlinksTool.cs       # find_symlinks 符号链接审计
 │   ├── MoveFilesTool.cs    # move_files 批量移动
 │   ├── DeleteFilesTool.cs  # delete_files 批量安全删除
 │   ├── SearchTools.cs      # glob / grep
