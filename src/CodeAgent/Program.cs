@@ -2084,9 +2084,11 @@ internal static class Program
                     if (cost is { } c)
                         statRows.Add(("累计费用", $"≈${TextUtil.FormatCost(c)}"));
                     var statKeyWidth = statRows.Max(r => TextUtil.DisplayWidth(r.Key));
+                    // 数值列右对齐：请求次数/输入/输出 tokens 量级不同，左对齐时位数不在同一列
+                    var statRight = ShouldRightAlignValues(statRows.Select(r => r.Value));
                     Console.WriteLine("会话统计:");
                     foreach (var (key, value) in statRows)
-                        Console.WriteLine(FormatKeyValueLine(key, value, statKeyWidth, ConsoleColumns()));
+                        Console.WriteLine(FormatKeyValueLine(key, value, statKeyWidth, ConsoleColumns(), statRight));
                 }
                 break;
 
@@ -2445,8 +2447,9 @@ internal static class Program
     /// <summary>键值行统一格式：两空格缩进 + 键列按**显示宽度**对齐 + " : " + 值。
     /// 曾用手数空格对齐，`.codeagent 大小` 这类含中文的键（2 字符占 4 列）
     /// 和恰好 18 字符的 `IsOutputRedirected` 都会把冒号挤歪，整列失去对齐。
-    /// 值超过剩余宽度时按显示宽度截断（宽度未知则不截断）。</summary>
-    internal static string FormatKeyValueLine(string key, string value, int keyWidth = 0, int width = 0)
+    /// 值超过剩余宽度时按显示宽度截断（宽度未知则不截断）。
+    /// rightAlignValue：数值列右对齐，让 `128` 与 `1,234,567` 的位数落在同一列、一眼可比大小。</summary>
+    internal static string FormatKeyValueLine(string key, string value, int keyWidth = 0, int width = 0, bool rightAlignValue = false)
     {
         const string indent = "  ";
         const string separator = " : ";
@@ -2462,7 +2465,67 @@ internal static class Program
         var padded = InputLine.PadToDisplayWidth(InputLine.FitToWidth(key, keyBudget), Math.Min(column, keyBudget));
         var head = indent + padded + separator;
         var valueBudget = width - TextUtil.DisplayWidth(head);
-        return valueBudget <= 0 ? head.TrimEnd() : head + InputLine.FitToWidth(value, valueBudget);
+        if (valueBudget <= 0)
+            return head.TrimEnd();
+        var fitted = InputLine.FitToWidth(value, valueBudget);
+        if (!rightAlignValue)
+            return head + fitted;
+        // 右对齐：先补空格再裁。补够 valueBudget 列，超长值仍以裁剪为准（不会溢出）。
+        var pad = valueBudget - TextUtil.DisplayWidth(fitted);
+        return pad > 0 ? head + new string(' ', pad) + fitted : head + fitted;
+    }
+
+    /// <summary>一组键值行的值是否应当右对齐：**全部**值都是「数字（可带千分位/小数）+ 可选单位」才右对齐。
+    /// 只对部分行右对齐会看起来像渲染错位；有一个非数值行就整体左对齐。</summary>
+    internal static bool ShouldRightAlignValues(IEnumerable<string> values)
+    {
+        var any = false;
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+            any = true;
+            if (!IsNumericValue(value))
+                return false;
+        }
+        return any;
+    }
+
+    /// <summary>判断是否为纯数值（允许符号、千分位、小数点、百分号与末尾单位词，如 `1,234 tokens` / `92%`）。</summary>
+    internal static bool IsNumericValue(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 0)
+            return false;
+        var i = 0;
+        if (text[i] is '+' or '-')
+            i++;
+        // 货币/近似前缀在数字之前（≈$1.23、$12、€3）
+        while (i < text.Length && !char.IsAsciiDigit(text[i]) && !char.IsAsciiLetter(text[i]))
+            i++;
+        var digits = 0;
+        var seenDot = false;
+        for (; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (char.IsAsciiDigit(c))
+            {
+                digits++;
+                continue;
+            }
+            if (c == ',' && digits > 0 && !seenDot)
+                continue;
+            if (c == '.' && digits > 0 && !seenDot)
+            {
+                seenDot = true;
+                continue;
+            }
+            break;
+        }
+        if (digits == 0)
+            return false;
+        // 余下必须是单位/百分号/货币前缀这类非数字尾巴（不允许再出现数字）
+        return text[i..].All(c => !char.IsAsciiDigit(c));
     }
 
     /// <summary>会话搜索命中行：`  [角色] 摘要`。摘要按**显示宽度**裁到终端剩余列——

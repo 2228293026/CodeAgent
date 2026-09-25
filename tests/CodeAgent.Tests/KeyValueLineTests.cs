@@ -147,4 +147,57 @@ public class KeyValueLineTests
             Assert.Contains(value, line);
         }
     }
+
+    [Theory]
+    [InlineData("0", true)]
+    [InlineData("128", true)]
+    [InlineData("1,234,567", true)]
+    [InlineData("1.5", true)]
+    [InlineData("-3", true)]
+    [InlineData("1,234 tokens", true)]
+    [InlineData("92%", true)]
+    [InlineData("≈$1.23", true)]
+    [InlineData("gpt-5", false)]
+    [InlineData("1 小时 23 分", false)]
+    [InlineData("ctx 183.2K/200K (92%)", false)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    [InlineData("abc", false)]
+    public void IsNumericValue_RecognizesNumericShapes(string value, bool expected) =>
+        Assert.Equal(expected, Program.IsNumericValue(value));
+
+    [Fact]
+    public void ShouldRightAlignValues_RequiresAllValuesNumeric()
+    {
+        Assert.True(Program.ShouldRightAlignValues(new[] { "128", "1,234,567" }));
+        // 混进一个非数值行就整体左对齐：只对部分行右对齐看起来像渲染错位
+        Assert.False(Program.ShouldRightAlignValues(new[] { "128", "gpt-5" }));
+        Assert.False(Program.ShouldRightAlignValues(Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void FormatKeyValueLine_RightAlignsValuesToSameColumn()
+    {
+        const int width = 40;
+        const int keyWidth = 6;
+        var small = Program.FormatKeyValueLine("a", "128", keyWidth, width, true);
+        var large = Program.FormatKeyValueLine("b", "1,234,567", keyWidth, width, true);
+        Assert.Equal(TextUtil.DisplayWidth(small), TextUtil.DisplayWidth(large));
+        Assert.EndsWith("128", small);
+        Assert.EndsWith("1,234,567", large);
+    }
+
+    [Fact]
+    public void FormatKeyValueLine_RightAlignStillRespectsWidth()
+    {
+        var line = Program.FormatKeyValueLine("输入 tokens", new string('1', 200), 10, 40, true);
+        Assert.True(TextUtil.DisplayWidth(line) <= 40, $"溢出: {line}");
+    }
+
+    [Fact]
+    public void FormatKeyValueLine_LeftAlignIsUnchangedByDefault()
+    {
+        Assert.Equal(Program.FormatKeyValueLine("a", "128", 6, 40), Program.FormatKeyValueLine("a", "128", 6, 40, false));
+        Assert.StartsWith("  a      : 128", Program.FormatKeyValueLine("a", "128", 6, 40));
+    }
 }
