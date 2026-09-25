@@ -469,6 +469,7 @@ public sealed class ToolRegistry
         registry.Register(new GitHookInventoryTool());
         registry.Register(new GitConfigReportTool());
         registry.Register(new GitLfsReportTool());
+        registry.Register(new GitGpgStatusReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
