@@ -466,6 +466,7 @@ public sealed class ToolRegistry
         registry.Register(new SensitiveFileInventoryTool());
         registry.Register(new GitignorePatternReportTool());
         registry.Register(new GitattributesReportTool());
+        registry.Register(new GitHookInventoryTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
