@@ -459,6 +459,7 @@ public sealed class ToolRegistry
         registry.Register(new GitStashInfoTool());
         registry.Register(new ProjectManifestReportTool());
         registry.Register(new TestInventoryReportTool());
+        registry.Register(new CiWorkflowReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
