@@ -763,13 +763,21 @@ internal static class Program
         var showCache = cacheText.Length > 0;
         var showCost = costText.Length > 0;
 
-        string Render() =>
-            "── ✓ 完成 " + $"{rounds} 轮 {toolCalls} 次工具调用 {elapsed} "
-            + (showTokens ? tokenText : "")
-            + (showThink ? thinkText : "")
-            + (showCache ? cacheText : "")
-            + (showCost ? costText : "")
-            + " ──";
+        string Render()
+        {
+            // 每段自身可能带前导空格（" 思考 2.5s"），靠字符串相加分隔会在丢段后留下双空格，
+            // 间隔忽宽忽窄。统一收集成列表再用单空格连接：丢任意一段都不会改变其余段的间距。
+            var parts = new List<string> { $"{rounds} 轮", $"{toolCalls} 次工具调用", elapsed };
+            if (showTokens && tokenText.Length > 0)
+                parts.Add(tokenText.Trim());
+            if (showThink && thinkText.Trim().Length > 0)
+                parts.Add(thinkText.Trim());
+            if (showCache && cacheText.Trim().Length > 0)
+                parts.Add(cacheText.Trim());
+            if (showCost && costText.Trim().Length > 0)
+                parts.Add(costText.Trim());
+            return "── ✓ 完成 " + string.Join(" ", parts) + " ──";
+        }
 
         var text = Render();
         var drops = new Action[]

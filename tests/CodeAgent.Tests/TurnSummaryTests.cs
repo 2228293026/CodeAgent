@@ -85,4 +85,27 @@ public class TurnSummaryTests
     {
         Assert.True(TextUtil.DisplayWidth(Build(width)) <= width, $"宽度 {width} 溢出");
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(45)]
+    [InlineData(60)]
+    [InlineData(70)]
+    [InlineData(85)]
+    [InlineData(90)]
+    [InlineData(120)]
+    public void TurnSummary_HasNoDoubleSpaceAfterAnyDrop(int width)
+    {
+        // 丢段后若留下双空格，整行间隔就忽宽忽窄，一眼看去像渲染坏了
+        var text = Build(width);
+        Assert.DoesNotContain("  ", text.Replace("──", string.Empty));
+    }
+
+    [Fact]
+    public void TurnSummary_SegmentsAreSeparatedByExactlyOneSpace()
+    {
+        // 段内本身含空格（"3 轮"、"1,200 in / 340 out tok"），所以只能整体比对正文
+        var body = Build(90)[("── ✓ 完成 ".Length)..^(" ──".Length)];
+        Assert.Equal("3 轮 5 次工具调用 1.2s 1,200 in / 340 out tok 思考 2.5s 42% cached ≈$0.0123", body);
+    }
 }
