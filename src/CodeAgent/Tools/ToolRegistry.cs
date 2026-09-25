@@ -422,6 +422,7 @@ public sealed class ToolRegistry
         registry.Register(new MoveFilesTool());
         registry.Register(new DeleteFilesTool());
         registry.Register(new FileInfosTool());
+        registry.Register(new CompareDirectoriesTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
