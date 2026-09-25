@@ -88,7 +88,7 @@ public class ToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public void CreateDefault_RegistersAllEighteenTools()
+    public void CreateDefault_RegistersAllNineteenTools()
     {
         // 回归：默认工具集应完整；缺工具会让 Agent 某些能力静默失效
         var registry = ToolRegistry.CreateDefault();
@@ -97,7 +97,7 @@ public class ToolRegistryTests : IDisposable
 
         var expected = new[]
         {
-            "read_file", "read_files", "compare_files", "project_stats", "file_info", "replace_in_files", "copy_file", "write_file", "edit_file", "list_directory",
+            "read_file", "read_files", "compare_files", "project_stats", "file_info", "replace_in_files", "copy_file", "move_file", "write_file", "edit_file", "list_directory",
             "glob", "grep", "run_command", "bash", "powershell",
             "session_search", "stop", "apply_patch",
         };

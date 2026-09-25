@@ -23,6 +23,18 @@ public sealed class UndoEntry
     /// <summary>撤销时按原编码写回（"utf8-bom" | "gb18030" | null=无 BOM UTF-8）：GBK 文件撤销后仍是 GBK。</summary>
     public string? EncodingName { get; init; }
 
+    /// <summary>move 操作的另一条路径（目标路径）。</summary>
+    public string? RelatedPath { get; init; }
+
+    /// <summary>move 目标在操作前是否存在。</summary>
+    public bool RelatedHadFile { get; init; }
+
+    /// <summary>move 目标在操作前的文本内容（用于覆盖后恢复）。</summary>
+    public string? RelatedOldText { get; init; }
+
+    /// <summary>move 目标原编码。</summary>
+    public string? RelatedEncodingName { get; init; }
+
     /// <summary>入栈时间（/undo list 的相对时间展示用；默认即入栈时刻）。</summary>
     public DateTime Timestamp { get; init; } = DateTime.Now;
 }
@@ -68,6 +80,7 @@ public sealed class UndoManager
             return e.Kind switch
             {
                 "write" => $"write {Path.GetFileName(e.Path)}（{(e.HadFile ? "覆盖" : "新建")}）",
+                "move" => $"move {Path.GetFileName(e.Path)} → {Path.GetFileName(e.RelatedPath ?? "")}",
                 "edit" => $"edit {Path.GetFileName(e.Path)}（{(e.OldText?.Length ?? 0)} 字符 → ...）",
                 "cmd" => $"cmd {Path.GetFileName(e.Path)}",
                 _ => $"{e.Kind} {Path.GetFileName(e.Path)}",
@@ -192,7 +205,30 @@ public sealed class UndoManager
 
     private static void Apply(UndoEntry e)
     {
-        if (e.Kind is "write" or "cmd")
+        if (e.Kind == "move")
+        {
+            if (e.RelatedPath is not null)
+            {
+                if (e.RelatedHadFile)
+                {
+                    if (e.RelatedOldText is null)
+                        throw new InvalidOperationException("目标原内容未记录，无法撤销移动");
+                    WriteEntryText(new UndoEntry
+                    {
+                        Kind = "write",
+                        Path = e.RelatedPath,
+                        EncodingName = e.RelatedEncodingName,
+                    }, e.RelatedOldText);
+                }
+                else if (File.Exists(e.RelatedPath))
+                {
+                    File.Delete(e.RelatedPath);
+                }
+            }
+            if (e.HadFile && e.OldText is not null)
+                WriteEntryText(e, e.OldText);
+        }
+        else if (e.Kind is "write" or "cmd")
         {
             // cmd 与 write 的恢复逻辑一致：修改=写回旧内容、新增=删除、删除=重建
             if (e.HadFile && e.OldText is not null)
@@ -222,11 +258,14 @@ public sealed class UndoManager
     }
 
     private static string Describe(UndoEntry e, bool existedBeforeUndo) =>
-        e.Kind == "write"
-            ? $"已撤销 write_file: {Path.GetFileName(e.Path)}（{(e.HadFile ? "恢复原内容" : "删除新建文件")}）"
-            : e.Kind == "cmd"
-                ? $"已撤销命令副作用: {Path.GetFileName(e.Path)}（{DescribeCmdSideEffect(e, existedBeforeUndo)}）"
-                : $"已撤销 edit_file: {Path.GetFileName(e.Path)}";
+        e.Kind switch
+        {
+            "write" => $"已撤销 write_file: {Path.GetFileName(e.Path)}（{(e.HadFile ? "恢复原内容" : "删除新建文件")}）",
+            "move" => $"已撤销 move_file: {Path.GetFileName(e.Path)} → {Path.GetFileName(e.RelatedPath ?? "")}",
+            "cmd" => $"已撤销命令副作用: {Path.GetFileName(e.Path)}（{DescribeCmdSideEffect(e, existedBeforeUndo)}）",
+            "edit" => $"已撤销 edit_file: {Path.GetFileName(e.Path)}",
+            _ => $"已撤销 {e.Kind}: {Path.GetFileName(e.Path)}",
+        };
 
     private static string DescribeCmdSideEffect(UndoEntry e, bool existedBeforeUndo) =>
         !e.HadFile ? "删除新建文件" : existedBeforeUndo ? "恢复原内容" : "重建被删文件";
