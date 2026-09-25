@@ -503,6 +503,7 @@ public sealed class ToolRegistry
         registry.Register(new ConcurrencyRiskReportTool());
         registry.Register(new DeadImplementationReportTool());
         registry.Register(new InputValidationReportTool());
+        registry.Register(new DuplicateCodeReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
