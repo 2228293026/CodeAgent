@@ -399,6 +399,7 @@ public sealed class ToolRegistry
         registry.Register(new ReadFileTool());
         registry.Register(new ReadFilesTool());
         registry.Register(new CompareFilesTool());
+        registry.Register(new ProjectStatsTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
