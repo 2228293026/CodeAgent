@@ -183,6 +183,10 @@ public sealed class ConsoleRenderer
         // ATX 标题的闭合序列（## 标题 ##）是 Markdown 语法，不该原样出现在渲染结果里
         if (HeadingLevel(content) > 0)
             content = StripClosingHashes(content);
+        else if (BlockquoteLevel(content) > 0)
+            content = NormalizeBlockquote(content);
+        else
+            content = NormalizeListMarker(content) ?? content; // 列表标记统一，正文不变
         var color = ResolveLineColor(content);
         var parts = ParseInline(content);
 
@@ -249,6 +253,90 @@ public sealed class ConsoleRenderer
         return line[..end].TrimEnd();
     }
 
+    /// <summary>块引用层级（CommonMark：最多 3 个前导空格，`>` 后可跟一个空格），非引用返回 0。
+    /// 旧实现只看首字符 `>`：`  > 内容`（合法引用，带前导空格）不上色，识别漏判。</summary>
+    internal static int BlockquoteLevel(string line)
+    {
+        var i = 0;
+        var spaces = 0;
+        while (i < line.Length && line[i] == ' ' && spaces < 4)
+        {
+            i++;
+            spaces++;
+        }
+        if (spaces > 3)
+            return 0;
+        var level = 0;
+        while (i < line.Length && line[i] == '>')
+        {
+            level++;
+            i++;
+            if (i < line.Length && line[i] == ' ')
+                i++; // `>` 后至多吞一个空格（`>>x` 是两层引用）
+        }
+        return level;
+    }
+
+    /// <summary>把块引用标记规范为每层「&gt; 」：`&gt;内容` / `  &gt;&gt;  x` → `&gt; &gt; x`，正文原样保留。</summary>
+    internal static string NormalizeBlockquote(string line)
+    {
+        var level = BlockquoteLevel(line);
+        if (level == 0)
+            return line;
+        var i = 0;
+        var spaces = 0;
+        while (i < line.Length && line[i] == ' ' && spaces < 3)
+        {
+            i++;
+            spaces++;
+        }
+        var used = 0;
+        while (i < line.Length && line[i] == '>' && used < level)
+        {
+            i++;
+            used++;
+            if (i < line.Length && line[i] == ' ')
+                i++;
+        }
+        return string.Concat(Enumerable.Repeat("> ", level)) + line[i..];
+    }
+
+    /// <summary>列表标记规范：无序 `- * +` 统一为 `-`，有序 `1)` 统一为 `1.`，标记后恰好一个空格。
+    /// 返回 null 表示不是列表行（保持原样）。</summary>
+    internal static string? NormalizeListMarker(string line)
+    {
+        var indent = 0;
+        while (indent < line.Length && line[indent] == ' ')
+            indent++;
+        if (indent > 3)
+            return null; // 4 个以上空格是代码块，不是列表
+        var rest = line[indent..];
+        if (rest.Length == 0)
+            return null;
+        var markerLen = 0;
+        string marker;
+        if (rest[0] is '-' or '*' or '+')
+        {
+            marker = "-";
+            markerLen = 1;
+        }
+        else
+        {
+            var digits = 0;
+            while (digits < rest.Length && digits < 9 && char.IsAsciiDigit(rest[digits]))
+                digits++;
+            if (digits == 0 || digits + 1 >= rest.Length || (rest[digits] != '.' && rest[digits] != ')'))
+                return null;
+            marker = rest[..digits] + ".";
+            markerLen = digits + 1;
+        }
+        // 标记后必须至少留一个空格或直接到行尾，否则不是列表项（如 "-5 是负数"）
+        var after = rest[markerLen..];
+        if (after.Length > 0 && after[0] != ' ' && after[0] != '\t')
+            return null;
+        return line[..indent] + marker + " " + after.TrimStart(' ', '\t');
+    }
+
     private static ConsoleColor? ResolveLineColor(string content)
     {
         var heading = HeadingLevel(content);
@@ -261,7 +349,7 @@ public sealed class ConsoleRenderer
             };
         if (content.StartsWith("---") || content.StartsWith("==="))
             return ConsoleColor.DarkGray; // 分隔线
-        if (content.StartsWith('>'))
+        if (BlockquoteLevel(content) > 0)
             return ConsoleColor.DarkGray; // 引用
         return null;
     }
