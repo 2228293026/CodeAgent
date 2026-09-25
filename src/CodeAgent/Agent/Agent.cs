@@ -23,6 +23,13 @@ public sealed partial class Agent
 
     public Agent(AgentConfig config, IAgentProvider provider, ToolRegistry tools, string? workingDirectory = null)
     {
+        config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
+        config.ReadOnlyDirs ??= new List<string>();
+        config.Modes ??= new List<AgentModeConfig>();
+        config.SessionDir ??= ".codeagent/sessions";
+        config.ExportDir ??= ".codeagent/exports";
+        if (string.IsNullOrWhiteSpace(config.Provider))
+            config.Provider = "openai";
         _provider = provider;
         _tools = tools;
         _config = config;

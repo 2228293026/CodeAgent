@@ -436,6 +436,31 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void Agent_InitializesNullRuntimeCollectionsAndPaths()
+    {
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            Providers = null!,
+            ReadOnlyDirs = null!,
+            Modes = null!,
+            SessionDir = null!,
+            ExportDir = null!,
+            Provider = null!,
+        };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+        var file = agent.ExportMarkdown(null);
+        Assert.True(File.Exists(file));
+        Assert.NotNull(config.Providers);
+        Assert.NotNull(config.ReadOnlyDirs);
+        Assert.NotNull(config.Modes);
+        Assert.Equal(".codeagent/sessions", config.SessionDir);
+        Assert.Equal(".codeagent/exports", config.ExportDir);
+        Assert.Equal("openai", config.Provider);
+    }
+
+    [Fact]
     public void ExportMarkdown_HandlesNullProviderConfiguration()
     {
         var config = new AgentConfig
