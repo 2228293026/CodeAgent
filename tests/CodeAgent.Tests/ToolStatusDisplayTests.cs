@@ -30,7 +30,9 @@ public class ToolStatusDisplayTests
         var summary = new string('x', 200);
         var line = AgentClass.FormatToolStatusLine(summary, false, TimeSpan.FromSeconds(1), 40);
         Assert.True(TextUtil.DisplayWidth(line) <= 40);
-        Assert.EndsWith("…", line);
+        // 耗时属于固定框架，不该为参数文本让位：旧实现把整行硬截，耗时被吃掉，
+        // 窄屏下反而看不出这步花了多久。现在先丢参数，耗时始终保留。
+        Assert.EndsWith("(1.0s)", line);
     }
 
     [Fact]

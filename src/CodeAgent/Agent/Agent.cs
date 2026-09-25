@@ -552,8 +552,10 @@ public sealed partial class Agent
         }
     }
 
-    /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。</summary>
-    internal static string SummarizeCall(string name, string argsJson)
+    /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。
+    /// maxValueWidth 是**显示列数**（不是字符数）：60 个汉字占 120 列，
+    /// 按字符数截会让单个参数就把行撑成两倍宽。</summary>
+    internal static string SummarizeCall(string name, string argsJson, int maxValueWidth = 60)
     {
         JsonObject? args;
         try
@@ -586,8 +588,9 @@ public sealed partial class Agent
             // 用 ToolArgs 取原始字符串值：JsonNode.ToJsonString() 默认编码器会把中文
             // 转义成 \uXXXX（曾导致工具摘要行显示 docs/项目… 而非 docs/项目介绍）
             var v = ToolArgs.GetString(args, kv.Key);
-            // TruncateLine 代理对安全：v[..60] 会把 emoji 劈成半个码点（终端乱码）
-            v = TextUtil.TruncateLine(v, 60);
+            // 按显示宽度截断（代理对安全）：v[..60] 会把 emoji 劈成半个码点（终端乱码），
+            // 而按字符数截 60 个汉字会占 120 列
+            v = InputLine.FitToWidth(v, maxValueWidth);
             parts.Add($"{kv.Key}={v}");
         }
         return parts.Count == 0 ? name : $"{name}({string.Join(" ", parts)})";
@@ -677,12 +680,50 @@ public sealed partial class Agent
     /// 而成功路径只显示 800 字符——同一工具两种待遇，失败时反而最看不清。</summary>
     internal const int ToolOutputPreviewChars = 800;
 
-    /// <summary>工具结果行：✔/⚠ + 调用摘要 + 耗时；窄终端按显示宽度截断。</summary>
+    /// <summary>工具结果行：✔/⚠ + 调用摘要 + 耗时；窄终端按显示宽度截断。
+    /// 超宽时先**按参数整体丢弃**再截断：直接硬切会把参数劈成半截
+    /// （path=C:\Users\very\lo），那看起来像一个真实路径——比截断本身更危险。</summary>
     internal static string FormatToolStatusLine(string summary, bool isError, TimeSpan elapsed, int width = 0)
     {
         var mark = isError ? "⚠" : "✔";
-        var line = $"  {mark} {summary} ({TextUtil.FormatDuration(elapsed)})";
-        return width > 0 ? InputLine.FitToWidth(line, width) : line;
+        var duration = $" ({TextUtil.FormatDuration(elapsed)})";
+        if (width <= 0)
+            return $"  {mark} {summary}{duration}";
+        var budget = width - TextUtil.DisplayWidth(duration) - TextUtil.DisplayWidth($"  {mark} ");
+        var trimmed = TrimToolSummaryArgs(summary, budget);
+        var line = $"  {mark} {trimmed}{duration}";
+        return line.Length > 0 && TextUtil.DisplayWidth(line) > width
+            ? InputLine.FitToWidth(line, width)
+            : line;
+    }
+
+    /// <summary>摘要超宽时从**右**整体丢弃参数并标注省略个数。
+    /// 只在摘要形如 `name(k=v k2=v2 ...)` 时生效；不是该形态就按显示宽度硬截。</summary>
+    internal static string TrimToolSummaryArgs(string summary, int budget)
+    {
+        if (budget <= 0 || TextUtil.DisplayWidth(summary) <= budget)
+            return summary;
+        var open = summary.IndexOf('(', StringComparison.Ordinal);
+        if (open <= 0 || !summary.EndsWith(')'))
+            return InputLine.FitToWidth(summary, budget);
+        var name = summary[..open];
+        var args = summary[(open + 1)..^1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var kept = new List<string>();
+        var used = TextUtil.DisplayWidth(name) + 2; // "(…)"
+        for (var i = 0; i < args.Length; i++)
+        {
+            var w = TextUtil.DisplayWidth(args[i]) + (kept.Count > 0 ? 1 : 0);
+            var omitted = args.Length - i - 1; // 本段之后的全部
+            if (used + w + TextUtil.DisplayWidth(omitted > 0 ? $" …+{omitted}" : "") > budget)
+                break;
+            kept.Add(args[i]);
+            used += w;
+        }
+        if (kept.Count == 0)
+            return InputLine.FitToWidth(name, budget);
+        var hiddenCount = args.Length - kept.Count;
+        var note = hiddenCount > 0 ? $" …+{hiddenCount}" : "";
+        return $"{name}({string.Join(" ", kept)}{note})";
     }
 
     /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。</summary>
