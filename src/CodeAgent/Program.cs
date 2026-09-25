@@ -1782,7 +1782,7 @@ internal static class Program
                         var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
                         Console.WriteLine($"{label} · {age}（/resume 可恢复）:");
                         foreach (var (role, snippet) in hits)
-                            Console.WriteLine($"  [{role}] {TextUtil.TruncateLine(snippet, 110)}");
+                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns()));
                         printed++;
                     }
                     if (printed == 0)
@@ -1802,7 +1802,7 @@ internal static class Program
                             continue;
                         Console.WriteLine($"快照 {name} · {age}（/load {name} 恢复）:");
                         foreach (var (role, snippet) in hits)
-                            Console.WriteLine($"  [{role}] {TextUtil.TruncateLine(snippet, 110)}");
+                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns()));
                         snapshotPrinted++;
                     }
                 }
@@ -2294,6 +2294,21 @@ internal static class Program
         var head = indent + padded + separator;
         var valueBudget = width - TextUtil.DisplayWidth(head);
         return valueBudget <= 0 ? head.TrimEnd() : head + InputLine.FitToWidth(value, valueBudget);
+    }
+
+    /// <summary>会话搜索命中行：`  [角色] 摘要`。摘要按**显示宽度**裁到终端剩余列——
+    /// 曾写死 110 字符：80 列终端溢出 30 列，而中文摘要在 110 字符（220 列）时就被砍掉一半，
+    /// 宽屏白白浪费。宽度未知时回退到 110 字符，保持原有观感。</summary>
+    internal static string FormatSearchHitLine(string role, string snippet, int width = 0)
+    {
+        const string indent = "  ";
+        var tag = $"[{role}] ";
+        var head = indent + tag;
+        if (width <= 0)
+            return head + TextUtil.TruncateLine(snippet, 110);
+        var budget = width - TextUtil.DisplayWidth(head);
+        // 终端比角色标记还窄时也要裁剪：直接返回完整标记同样会溢出
+        return budget <= 0 ? InputLine.FitToWidth(head.TrimEnd(), Math.Max(1, width)) : head + InputLine.FitToWidth(snippet, budget);
     }
 
     /// <summary>把命令名裁到给定宽度（width 未知时原样返回）。</summary>
