@@ -68,7 +68,7 @@ public sealed class GitIndexDiagnosticsToolTests : IDisposable
         Assert.True(TryGit("checkout", "main"));
         File.WriteAllText(file, "main");
         Assert.True(TryGit("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-am", "main"));
-        Assert.False(TryGit("merge", "feature"));
+        Assert.False(TryGit("-c", "merge.ff=false", "merge", "--no-ff", "--no-commit", "feature"));
         var result = await new GitIndexDiagnosticsTool().ExecuteAsync(new JsonObject(), Context(), CancellationToken.None);
         Assert.Contains("未合并文件", result);
         Assert.Contains("阶段 1", result);
