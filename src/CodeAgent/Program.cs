@@ -122,7 +122,7 @@ internal static class Program
         catch (ArgumentException ex)
         {
             // 参数缺值（如 codeagent -c）应友好提示而非抛堆栈
-            Console.Error.WriteLine($"参数错误: {ex.Message}");
+            WriteStartupNotice($"参数错误: {ex.Message}");
             PrintHelp();
             return 2;
         }
@@ -132,7 +132,7 @@ internal static class Program
         {
             if (!Directory.Exists(cwd))
             {
-                Console.Error.WriteLine($"目录不存在: {cwd}");
+                WriteStartupNotice($"目录不存在: {cwd}");
                 return 2;
             }
             Environment.CurrentDirectory = Path.GetFullPath(cwd);
@@ -160,7 +160,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"配置加载失败: {ex.Message}");
+            WriteStartupNotice($"配置加载失败: {ex.Message}");
             return 2;
         }
 
@@ -168,7 +168,7 @@ internal static class Program
         foreach (var warning in config.Warnings)
         {
             SafeColor.Foreground(ConsoleColor.DarkYellow);
-            Console.WriteLine($"⚠ 配置: {warning}");
+            Console.WriteLine(FormatNoticeLine($"配置: {warning}", ConsoleColumns()));
             SafeColor.Reset();
         }
 
@@ -186,7 +186,7 @@ internal static class Program
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"配置向导失败: {ex.Message}");
+                WriteStartupNotice($"配置向导失败: {ex.Message}");
                 return 2;
             }
             return 0;
@@ -230,7 +230,7 @@ internal static class Program
         // 在创建 Provider 前先校验名字，给出可用列表
         if (config.Providers.Count > 0 && !config.Providers.ContainsKey(config.Provider)) // 空配置走默认，不误伤
         {
-            Console.Error.WriteLine($"未知 provider「{config.Provider}」（可用: {string.Join(", ", config.Providers.Keys)}）");
+            WriteStartupNotice($"未知 provider「{config.Provider}」（可用: {string.Join(", ", config.Providers.Keys)}）");
             return 2;
         }
 
@@ -254,7 +254,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Provider 初始化失败: {ex.Message}");
+            WriteStartupNotice($"Provider 初始化失败: {ex.Message}");
             return 2;
         }
 
@@ -308,7 +308,7 @@ internal static class Program
                 // 会被归一化掉导致 messages 为空数组直接 400），与其等远端报错不如本地明确提示
                 if (string.IsNullOrWhiteSpace(task))
                 {
-                    Console.Error.WriteLine("任务为空：请提供任务描述（codeagent \"任务\"），或直接运行 codeagent 进入交互模式。");
+                    WriteStartupNotice("任务为空：请提供任务描述（codeagent \"任务\"），或直接运行 codeagent 进入交互模式。");
                     agent.Close();
                     return 2;
                 }
@@ -321,13 +321,13 @@ internal static class Program
             }
             catch (ProviderException ex)
             {
-                Console.Error.WriteLine($"⚠ {ex.Message}");
+                WriteStartupNotice(ex.Message);
                 agent.Close();
                 return 1;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"⚠ 发生错误: {ex.GetType().Name}: {ex.Message}");
+                WriteStartupNotice($"发生错误: {ex.GetType().Name}: {ex.Message}");
                 agent.Close();
                 return 1;
             }
@@ -955,6 +955,11 @@ internal static class Program
     internal static string FormatConfirmLine(string body, int width = 0, string marker = "✔") =>
         FormatNoticeLine(body, width, marker);
 
+    /// <summary>启动期错误/警告行（写入 stderr）：`⚠ 正文`，与交互期的告警行同一格式。
+    /// 启动错误常带完整路径与异常消息，宽度未知时不做猜测性折行，但已知宽度下必须不溢出。</summary>
+    private static void WriteStartupNotice(string body) =>
+        Console.Error.WriteLine(FormatNoticeLine(body, ConsoleColumns()));
+
     /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
     internal static int ConsoleColumnsForNotice() => ConsoleColumns();
 
@@ -1555,7 +1560,7 @@ internal static class Program
                 }
                 catch (Exception ex)
                 {
-                    Console.Error.WriteLine($"配置向导失败: {ex.Message}");
+                    WriteStartupNotice($"配置向导失败: {ex.Message}");
                     break;
                 }
                 opts = EnsureSelectedProvider(config);

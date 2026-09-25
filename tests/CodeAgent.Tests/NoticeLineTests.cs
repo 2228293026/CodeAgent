@@ -117,6 +117,38 @@ public class NoticeLineTests
         }
     }
 
+    [Theory]
+    [InlineData(20)]
+    [InlineData(40)]
+    [InlineData(80)]
+    [InlineData(120)]
+    public void FormatNoticeLine_StartupErrorShapesFit(int width)
+    {
+        // 启动期错误常带完整路径与异常消息，此前是裸字符串、没有宽度预算
+        var bodies = new[]
+        {
+            $"参数错误: {new string('x', 300)}",
+            $"目录不存在: {new string('d', 200)}",
+            $"配置加载失败: {new string('e', 250)}",
+            $"未知 provider「{new string('p', 200)}」（可用: a, b, c）",
+            "任务为空：请提供任务描述（codeagent \"任务\"），或直接运行 codeagent 进入交互模式。",
+        };
+        foreach (var body in bodies)
+        {
+            var line = Program.FormatNoticeLine(body, width);
+            Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出: {line}");
+            Assert.StartsWith("⚠ ", line);
+        }
+    }
+
+    [Fact]
+    public void FormatNoticeLine_ConfigWarningShapeFits()
+    {
+        var line = Program.FormatNoticeLine($"配置: {new string('w', 200)} 未被识别（拼写错误？）", 50);
+        Assert.StartsWith("⚠ 配置: ", line);
+        Assert.True(TextUtil.DisplayWidth(line) <= 50, $"溢出: {line}");
+    }
+
     [Fact]
     public void FormatConfirmLine_ResumeMarkerIsPreserved()
     {
