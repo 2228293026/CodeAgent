@@ -88,7 +88,7 @@ public class ToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public void CreateDefault_RegistersAllFiftyTwoTools()
+    public void CreateDefault_RegistersAllFiftyThreeTools()
     {
         // 回归：默认工具集应完整；缺工具会让 Agent 某些能力静默失效
         var registry = ToolRegistry.CreateDefault();
@@ -97,7 +97,7 @@ public class ToolRegistryTests : IDisposable
 
         var expected = new[]
         {
-            "read_file", "read_files", "compare_files", "compare_directories", "project_stats", "directory_size_report", "file_info", "file_infos", "replace_in_files", "copy_file", "copy_files", "move_file", "move_files", "delete_file", "delete_files", "find_duplicates", "find_large_files", "find_stale_files", "find_unreadable_files", "find_temporary_files", "backup_file", "restore_backup", "find_empty_files", "find_empty_directories", "find_symlinks", "checksum_manifest", "encoding_report", "normalize_line_endings", "create_directory", "remove_empty_directory", "git_status", "git_diff", "git_log", "git_blame", "git_show", "git_branches", "git_remotes", "git_tags", "git_reflog", "git_worktrees", "git_stashes", "write_file", "edit_file", "list_directory",
+            "read_file", "read_files", "compare_files", "compare_directories", "project_stats", "directory_size_report", "file_info", "file_infos", "replace_in_files", "copy_file", "copy_files", "move_file", "move_files", "delete_file", "delete_files", "find_duplicates", "find_large_files", "find_stale_files", "find_unreadable_files", "find_temporary_files", "backup_file", "restore_backup", "find_empty_files", "find_recent_files", "find_empty_directories", "find_symlinks", "checksum_manifest", "encoding_report", "normalize_line_endings", "create_directory", "remove_empty_directory", "git_status", "git_diff", "git_log", "git_blame", "git_show", "git_branches", "git_remotes", "git_tags", "git_reflog", "git_worktrees", "git_stashes", "write_file", "edit_file", "list_directory",
             "glob", "grep", "run_command", "bash", "powershell",
             "session_search", "stop", "apply_patch",
         };
