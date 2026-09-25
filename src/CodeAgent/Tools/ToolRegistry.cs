@@ -418,6 +418,7 @@ public sealed class ToolRegistry
         registry.Register(new GitReflogTool());
         registry.Register(new GitWorktreesTool());
         registry.Register(new GitStashesTool());
+        registry.Register(new FindLargeFilesTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
