@@ -414,6 +414,7 @@ public sealed class ToolRegistry
         registry.Register(new GitShowTool());
         registry.Register(new GitBranchesTool());
         registry.Register(new GitRemotesTool());
+        registry.Register(new GitTagsTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
