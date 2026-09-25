@@ -44,6 +44,7 @@ public sealed class ConsoleRenderer
             return;
         _inInlineCode = false; // 流结束时丢弃未闭合的行内代码状态
         _skipCodeIntro = false; // 刷新时重置：避免跨 Append 调用丢弃有效代码内容
+        _tickRun = 0; // 反引号连续计数不能跨消息：否则上一条消息结尾的 ` 会和下一条开头的 ` 凑成围栏/行内代码
         if (_inCode)
         {
             EmitCode(_code.ToString());
@@ -127,6 +128,8 @@ public sealed class ConsoleRenderer
             _line.Append(ch);
             var line = _line.ToString();
             _line.Clear();
+            // 反引号连续计数不能跨行：行尾单个 ` 与下一行行首 ` 不是行内代码对
+            _tickRun = 0;
             if (line.TrimStart().StartsWith('|'))
             {
                 // Markdown 表格行：缓冲，表格结束时统一按列对齐输出
@@ -190,8 +193,11 @@ public sealed class ConsoleRenderer
         var color = ResolveLineColor(content);
         var parts = ParseInline(content);
 
-        // 无任何样式：原样输出（保留换行）
-        if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal))
+        // 无任何样式且没有任何标记被剥离：原样输出（保留换行）。
+        // 必须比较「剥离标记后的纯文本」与原行是否一致：整行就是一个行内代码时，
+        // 解析结果会塌成单个 Normal 段，若只看样式就会误走快速路径，把 ` 标记漏回屏幕。
+        var plain = string.Concat(parts.Select(p => p.text));
+        if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal) && plain == content)
         {
             Console.Write(content + (hadNewline ? "\n" : ""));
             return;
