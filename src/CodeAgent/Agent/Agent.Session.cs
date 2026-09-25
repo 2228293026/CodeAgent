@@ -360,13 +360,18 @@ public sealed partial class Agent
     }
 
     /// <summary>生成不重名的会话日志路径（同一秒内多次滚动时追加 -2/-3 序号）。</summary>
-    private string NewSessionLogPath(string dir)
+    private string NewSessionLogPath(string dir) => NewSessionLogPath(dir, DateTime.Now);
+
+    /// <summary>同 <see cref="NewSessionLogPath(string)"/>，但使用指定时间以便验证路径冲突处理。</summary>
+    internal static string NewSessionLogPath(string dir, DateTime timestamp)
     {
-        var stamp = $"{DateTime.Now:yyyyMMdd-HHmmss}";
-        var path = Path.Combine(dir, stamp + ".jsonl");
-        for (int i = 2; File.Exists(path); i++)
-            path = Path.Combine(dir, $"{stamp}-{i}.jsonl");
-        return path;
+        var stamp = $"{timestamp:yyyyMMdd-HHmmss}";
+        for (int i = 1; ; i++)
+        {
+            var path = Path.Combine(dir, i == 1 ? stamp + ".jsonl" : $"{stamp}-{i}.jsonl");
+            if (new FileInfo(path).LinkTarget is null && !File.Exists(path))
+                return path;
+        }
     }
 
     /// <summary>在会话日志里搜索关键字（忽略大小写）：返回最多 maxHits 条 (角色, 命中片段)。

@@ -309,6 +309,22 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void NewSessionLogPath_SkipsLinkedCandidate()
+    {
+        var timestamp = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        var stamp = timestamp.ToString("yyyyMMdd-HHmmss");
+        var linked = Path.Combine(SessionDir, stamp + ".jsonl");
+        try { File.CreateSymbolicLink(linked, Path.Combine(_dir, "outside-log.jsonl")); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var selected = AgentClass.NewSessionLogPath(SessionDir, timestamp);
+
+        Assert.NotEqual(linked, selected);
+        Assert.Equal(stamp + "-2.jsonl", Path.GetFileName(selected));
+    }
+
+    [Fact]
     public async Task SaveSession_CreatesJsonFile()
     {
         var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "ok" } });
