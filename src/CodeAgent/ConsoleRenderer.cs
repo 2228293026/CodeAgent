@@ -361,6 +361,53 @@ public sealed class ConsoleRenderer
     /// <summary>单元格最大显示宽度，超出截断加省略号（base64/长 URL 等会把其他列挤出终端折行破版）。</summary>
     private const int MaxTableColWidth = 40;
 
+    /// <summary>表格列宽收缩下限：低于此值内容已不可读，宁可让表格换行也不继续削。</summary>
+    internal const int MinTableColWidth = 3;
+
+    /// <summary>表格总宽预算下的收敛：先夹到单列上限，再对最宽的一批列削峰，直到总宽不超过 budget。
+    /// 总宽 = 缩进 2 + Σ列宽 + 3 × (列数-1)（" │ " 分隔）。
+    /// 旧实现只限单列 40 列：宽表在窄终端上仍会整行折行，列对齐彻底看不出对应关系。
+    /// budget &lt;= 0 表示不限（宽度未知或重定向）。</summary>
+    internal static int[] FitColumnWidths(int[] widths, int budget, int indent = 2, int separatorWidth = 3)
+    {
+        var result = (int[])widths.Clone();
+        if (budget <= 0 || result.Length == 0)
+            return result;
+        int Total()
+        {
+            var sum = 0;
+            foreach (var w in result)
+                sum += w;
+            return indent + sum + separatorWidth * (result.Length - 1);
+        }
+        while (Total() > budget)
+        {
+            var max = 0;
+            foreach (var w in result)
+                if (w > max)
+                    max = w;
+            if (max <= MinTableColWidth)
+                break; // 已削到不可读，再削没有意义
+            var peak = 0;
+            foreach (var w in result)
+                if (w == max)
+                    peak++;
+            var cut = Math.Min(max - MinTableColWidth, Math.Max(1, (int)Math.Ceiling((Total() - budget) / (double)peak)));
+            for (var i = 0; i < result.Length; i++)
+                if (result[i] == max)
+                    result[i] -= cut;
+        }
+        return result;
+    }
+
+    /// <summary>表格可用总宽：终端宽度（含缩进）；不可用时返回 0 = 不限。</summary>
+    private static int TableBudget()
+    {
+        if (Console.IsOutputRedirected)
+            return 0;
+        try { return Math.Clamp(Console.WindowWidth, 0, 400); } catch { return 0; }
+    }
+
     /// <summary>Markdown 分隔行单元格：可选冒号 + 至少 3 个 -（---、:---、---:、:---:）。</summary>
     private static readonly System.Text.RegularExpressions.Regex SepRe = new(@"^:?-{3,}:?$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -373,10 +420,12 @@ public sealed class ConsoleRenderer
         var visible = truncated ? _tableBuf.Take(MaxTableRows).ToList() : _tableBuf;
         var rows = visible.Select(SplitCells).ToList();
         var cols = rows.Max(r => r.Count);
-        var widths = new int[cols];
+        var natural = new int[cols];
         foreach (var r in rows)
             for (int i = 0; i < r.Count; i++)
-                widths[i] = Math.Min(MaxTableColWidth, Math.Max(widths[i], DisplayWidth(r[i])));
+                natural[i] = Math.Min(MaxTableColWidth, Math.Max(natural[i], DisplayWidth(r[i])));
+        // 窄终端下收敛总宽（削最宽的一批列），否则宽表整行折行、列对应关系全丢
+        var widths = FitColumnWidths(natural, TableBudget());
         foreach (var r in rows)
         {
             // 分隔行判定需精确：Markdown 分隔行单元格形如 ---、:---、---:、:---:
