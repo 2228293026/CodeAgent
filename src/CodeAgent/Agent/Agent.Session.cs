@@ -95,6 +95,8 @@ public sealed partial class Agent
         Directory.CreateDirectory(dir);
         // name 同样需 sanitize：/export ../evil 曾写入 ExportDir 父目录（路径穿越）
         var file = Path.Combine(dir, safeName + ".md");
+        if (new FileInfo(file).LinkTarget is not null)
+            throw new IOException($"导出文件不能是符号链接: {file}");
 
         var sb = new StringBuilder();
         sb.AppendLine($"# CodeAgent 会话{(title is null ? "" : $"：{title}")}");

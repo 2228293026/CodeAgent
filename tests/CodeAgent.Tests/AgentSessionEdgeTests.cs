@@ -410,6 +410,32 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ExportSessionLogMarkdown_DoesNotOverwriteLinkedOutput()
+    {
+        var outside = Path.Combine(_dir, "outside-export-file.md");
+        File.WriteAllText(outside, "keep me");
+        Directory.CreateDirectory(ExportDir);
+        var linkedOutput = Path.Combine(ExportDir, "fixed.md");
+        try { File.CreateSymbolicLink(linkedOutput, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        try
+        {
+            var log = Path.Combine(SessionDir, "fixed.jsonl");
+            File.WriteAllText(log, """{"role":"user","content":"hello"}""");
+            var agent = MakeAgent(new FakeProvider());
+
+            var ex = Assert.Throws<IOException>(() => agent.ExportSessionLogMarkdown(log));
+            Assert.Contains("符号链接", ex.Message);
+            Assert.Equal("keep me", File.ReadAllText(outside));
+        }
+        finally
+        {
+            try { File.Delete(linkedOutput); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task ExportMarkdown_ContainsRolesAndContent()
     {
         var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "完成" } });
