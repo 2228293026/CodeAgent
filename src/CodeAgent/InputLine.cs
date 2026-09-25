@@ -61,6 +61,29 @@ public static class InputLine
         return string.Join('\n', lines.Take(threshold - 1)) + "\n" + hint;
     }
 
+    /// <summary>反向搜索时查询串的最大显示宽度（超出截断；长查询曾把草稿整段挤出屏幕）。</summary>
+    internal const int SearchQueryDisplayWidth = 24;
+
+    /// <summary>
+    /// 输入行可见文本：普通态、浏览历史态、反向搜索态的统一拼装。
+    /// 搜索无命中时显式提示「未命中」：此前命中与未命中外观完全一致（都只显示 `(搜索)`query``），
+    /// 用户按 Ctrl+R 后无法判断是「没匹配到」还是「还没继续按」。
+    /// </summary>
+    internal static string FormatInputText(
+        string prompt, bool searching, string searchQuery, bool searchHit,
+        int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth)
+    {
+        if (searching)
+        {
+            var query = searchQuery.Length == 0 ? "" : $"`{FitToWidth(searchQuery, queryWidth)}`";
+            var mark = searchQuery.Length == 0 ? "" : searchHit ? " ✔" : " 未命中";
+            return $"{prompt} (搜索){query}{mark} {draft}";
+        }
+        return historyIndex >= 0 && historyIndex < historyCount
+            ? $"{prompt} (历史 {historyIndex + 1}/{historyCount}){draft}"
+            : prompt + draft;
+    }
+
     /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。</summary>
     public static readonly (string Name, string Desc)[] Commands =
     [
@@ -221,13 +244,10 @@ public static class InputLine
         var searchQuery = new StringBuilder();
         var searchFrom = -1;        // 当前命中的 session 下标（-1 = 无命中）
 
-        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」
+        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」；
+        // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
         string InputText() =>
-            searching
-                ? $"{promptPlain} (搜索)`{searchQuery}` {buf.Text}"
-                : idx < session.Count
-                    ? $"{promptPlain} (历史 {idx + 1}/{session.Count}){buf.Text}"
-                    : promptPlain + buf.Text;
+            FormatInputText(promptPlain, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text);
 
         var winW = TryWindowWidth();
         var ansiOk = ShouldUseAnsiInPlace(ansi, Console.IsOutputRedirected, winW);
