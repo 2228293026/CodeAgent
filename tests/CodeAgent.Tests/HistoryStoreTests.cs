@@ -146,6 +146,21 @@ public class HistoryStoreTests : IDisposable
     }
 
     [Fact]
+    public void DanglingLinkedHistoryFile_IsNotCreatedThroughTheLink()
+    {
+        var outside = Path.Combine(_dir, "missing-history-target.txt");
+        var link = Path.Combine(_dir, "dangling-history.txt");
+        try { File.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+
+        var store = new HistoryStore(link);
+        store.Remember("new-entry");
+
+        Assert.False(File.Exists(outside));
+    }
+
+    [Fact]
     public void Load_LargeHistoryFile_KeepsBoundedLatestEntries()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(_file)!);

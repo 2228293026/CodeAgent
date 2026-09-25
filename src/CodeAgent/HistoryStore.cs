@@ -84,7 +84,7 @@ public sealed class HistoryStore
     {
         try
         {
-            if (File.Exists(_path) && new FileInfo(_path).LinkTarget is not null)
+            if (new FileInfo(_path).LinkTarget is not null)
                 return;
         }
         catch (IOException) { return; }
