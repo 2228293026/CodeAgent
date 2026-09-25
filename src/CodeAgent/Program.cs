@@ -1897,17 +1897,23 @@ internal static class Program
 
             case "/providers":
                 Console.WriteLine($"已配置的 Provider（当前: {config.Provider}，-p <名> 或改 provider 切换）:");
-                foreach (var kv in config.Providers)
                 {
-                    var isCurrent = string.Equals(kv.Key, config.Provider, StringComparison.OrdinalIgnoreCase);
-                    // 会话级覆盖（env / -p）指向的目标：标注以免用户误以为已持久化
-                    var sessionOnly = isCurrent && config.PersistedProvider is not null &&
-                                      !string.Equals(kv.Key, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
-                    var cur = isCurrent ? (sessionOnly ? " ←（会话级）" : " ←") : "";
-                    var price = kv.Value.PricePerMillionInput > 0
-                        ? $"  单价: ${kv.Value.PricePerMillionInput:F2}/${kv.Value.PricePerMillionOutput:F2} per M"
-                        : "";
-                    Console.WriteLine($"  {kv.Key} ({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}{price}{cur}");
+                    var providerEntries = new List<HelpEntry>();
+                    foreach (var kv in config.Providers)
+                    {
+                        var isCurrent = string.Equals(kv.Key, config.Provider, StringComparison.OrdinalIgnoreCase);
+                        // 会话级覆盖（env / -p）指向的目标：标注以免用户误以为已持久化
+                        var sessionOnly = isCurrent && config.PersistedProvider is not null &&
+                                          !string.Equals(kv.Key, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
+                        var cur = isCurrent ? (sessionOnly ? " ←（会话级）" : " ←") : "";
+                        var price = kv.Value.PricePerMillionInput > 0
+                            ? $"  单价: ${kv.Value.PricePerMillionInput:F2}/${kv.Value.PricePerMillionOutput:F2} per M"
+                            : "";
+                        // baseUrl 可能很长，统一交给宽度自适应渲染器折行
+                        providerEntries.Add(new HelpEntry(kv.Key,
+                            $"({kv.Value.Type}) 模型: {kv.Value.Model}  baseUrl: {kv.Value.BaseUrl}{price}{cur}"));
+                    }
+                    Console.WriteLine(FormatHelpList(providerEntries, ConsoleColumns()));
                 }
                 break;
 
@@ -2158,10 +2164,15 @@ internal static class Program
         return idx < 0 ? (line.ToLowerInvariant(), "") : (line[..idx].ToLowerInvariant(), line[(idx + 1)..]);
     }
 
-    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 ←。</summary>
+    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 ←。
+    /// 与 /help、/tools 共用同一宽度自适应渲染器——模式说明是中文，窄终端同样需要折行。</summary>
     internal static string ModeListText(AgentConfig config, string currentMode) =>
-        string.Join("\n", Modes.Build(config).Select(m =>
-            $"  {m.Name} — {m.Description}{(m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? "  ←" : "")}"));
+        FormatHelpList(
+            Modes.Build(config)
+                .Select(m => new HelpEntry(m.Name,
+                    m.Description + (m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? "  ←" : string.Empty)))
+                .ToList(),
+            ConsoleColumns());
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
     /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
     internal static bool IsSwitchCommand(string cmd, string rest) =>

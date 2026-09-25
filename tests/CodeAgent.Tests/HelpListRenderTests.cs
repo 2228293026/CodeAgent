@@ -192,6 +192,37 @@ public class HelpListRenderTests
     }
 
     [Fact]
+    public void ModeListText_UsesWidthAwareRendererAndKeepsMarker()
+    {
+        // /mode 列表与 /help、/tools 走同一渲染器：中文说明在窄终端必须折行且不溢出
+        var lines = Program.ModeListText(new AgentConfig(), "plan");
+        var rows = lines.Replace("\r\n", "\n").Split('\n');
+        Assert.Contains(rows, l => l.StartsWith("  plan") && l.EndsWith("←"));
+        foreach (var width in new[] { 30, 50, 80, 120 })
+        {
+            var rendered = Program.FormatHelpList(
+                Program.ReplCommands, width);
+            foreach (var row in rendered.Replace("\r\n", "\n").Split('\n'))
+                Assert.True(TextUtil.DisplayWidth(row) <= width, $"宽度 {width} 溢出: {row}");
+        }
+    }
+
+    [Fact]
+    public void FormatHelpList_ProviderShapeWithLongBaseUrlWraps()
+    {
+        // /providers 的真实形状：名称列 + 含长 URL 的说明
+        var entries = new[]
+        {
+            new Program.HelpEntry("openai", "(openai) 模型: gpt-5  baseUrl: https://api.openai.com/v1"),
+            new Program.HelpEntry("local", "(openai-compatible) 模型: qwen  baseUrl: http://127.0.0.1:11434/v1  ←"),
+        };
+        var lines = FormatHelpList(entries, 40);
+        foreach (var row in lines.Replace("\r\n", "\n").Split('\n'))
+            Assert.True(TextUtil.DisplayWidth(row) <= 40, $"溢出: {row}");
+        Assert.Contains("api.openai.com", lines);
+    }
+
+    [Fact]
     public void ReplCommands_AreUniqueAndNonEmpty()
     {
         var commands = Program.ReplCommands.Select(c => c.Command).ToList();

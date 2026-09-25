@@ -294,12 +294,14 @@ public class PathDisplayTests
     {
         var config = new AgentConfig();
         var text = Program.ModeListText(config, "plan");
-        var lines = text.Split('\n');
-        Assert.Contains(lines, l => l.StartsWith("  code —") && !l.Contains("←"));
-        Assert.Contains(lines, l => l.StartsWith("  plan —") && l.EndsWith("←")); // 当前模式有标记
+        // 渲染器用 AppendLine（平台换行），切分前先归一化
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        // 列表已改为宽度自适应渲染（无固定 — 分隔符），这里断言语义而非排版细节
+        Assert.Contains(lines, l => l.StartsWith("  code") && !l.Contains('←'));
+        Assert.Contains(lines, l => l.StartsWith("  plan") && l.EndsWith("←")); // 当前模式有标记
         // 大小写不敏感匹配当前模式名
         var text2 = Program.ModeListText(config, "PLAN");
-        Assert.Contains(text2.Split('\n'), l => l.StartsWith("  plan —") && l.EndsWith("←"));
+        Assert.Contains(text2.Replace("\r\n", "\n").Split('\n'), l => l.StartsWith("  plan") && l.EndsWith("←"));
     }
 
     [Fact]
