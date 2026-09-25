@@ -27,6 +27,71 @@ public class FileToolsTests : IDisposable
     };
 
     [Fact]
+    public async Task ReadFiles_ReadsMultipleFilesInOrder()
+    {
+        File.WriteAllText(Path.Combine(_dir, "a.txt"), "alpha");
+        File.WriteAllText(Path.Combine(_dir, "b.txt"), "beta");
+
+        var result = await new ReadFilesTool().ExecuteAsync(
+            new JsonObject { ["paths"] = new JsonArray("a.txt", "b.txt") },
+            MakeContext(_dir), CancellationToken.None);
+
+        Assert.Contains("===== a.txt =====", result);
+        Assert.Contains("alpha", result);
+        Assert.Contains("===== b.txt =====", result);
+        Assert.Contains("beta", result);
+        Assert.True(result.IndexOf("a.txt", StringComparison.Ordinal) < result.IndexOf("b.txt", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReadFiles_ContinuesAfterPerFileError()
+    {
+        File.WriteAllText(Path.Combine(_dir, "good.txt"), "still readable");
+
+        var result = await new ReadFilesTool().ExecuteAsync(
+            new JsonObject { ["paths"] = new JsonArray("missing.txt", "good.txt") },
+            MakeContext(_dir), CancellationToken.None);
+
+        Assert.Contains("missing.txt", result);
+        Assert.Contains("读取失败", result);
+        Assert.Contains("still readable", result);
+    }
+
+    [Fact]
+    public async Task ReadFiles_StopsOnErrorWhenRequested()
+    {
+        var ex = await Assert.ThrowsAsync<ToolException>(() => new ReadFilesTool().ExecuteAsync(
+            new JsonObject { ["paths"] = new JsonArray("missing.txt"), ["stop_on_error"] = true },
+            MakeContext(_dir), CancellationToken.None));
+
+        Assert.Contains("missing.txt", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReadFiles_RespectsTotalCharacterLimit()
+    {
+        File.WriteAllText(Path.Combine(_dir, "large.txt"), new string('x', 4000));
+        var result = await new ReadFilesTool().ExecuteAsync(
+            new JsonObject { ["paths"] = new JsonArray("large.txt"), ["max_total_chars"] = 1000 },
+            MakeContext(_dir), CancellationToken.None);
+
+        Assert.Contains("批量读取输出已达到", result);
+        Assert.True(result.Length <= 1100, $"输出超出上限: {result.Length}");
+    }
+
+    [Fact]
+    public async Task ReadFiles_CanceledToken_StopsBeforeDispatch()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new ReadFilesTool().ExecuteAsync(
+                new JsonObject { ["paths"] = new JsonArray("missing.txt") },
+                MakeContext(_dir), cts.Token));
+    }
+
+    [Fact]
     public async Task ReadFile_CanceledToken_StopsBeforeReadingOrFormatting()
     {
         using var cts = new CancellationTokenSource();

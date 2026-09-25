@@ -397,6 +397,7 @@ public sealed class ToolRegistry
     {
         var registry = new ToolRegistry();
         registry.Register(new ReadFileTool());
+        registry.Register(new ReadFilesTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
