@@ -684,6 +684,8 @@ internal static class Program
         }
         else
             Console.WriteLine($"对话历史（{msgs.Count} 条）:");
+        var historyWidth = ConsoleColumns();
+        var rows = new List<(string Role, string Content, bool IsError)>(msgs.Count);
         foreach (var m in msgs)
         {
             var role = m.Role switch
@@ -706,9 +708,13 @@ internal static class Program
                 var redactedNote = m.RedactedThinkingData is { Count: > 0 } ? $" +{m.RedactedThinkingData.Count} 加密块" : "";
                 content = (content.Length > 0 ? content + " " : "") + $"[思考 {m.ThinkingText.Length} 字符{redactedNote}]";
             }
-            // 多行内容折叠为一行并按显示宽度截断（FormatHistoryLine 统一口径）
-            Console.WriteLine(FormatHistoryLine(role, content, m.IsError)); // 工具错误加标记
+            rows.Add((role, content, m.IsError));
         }
+        // 先算全部角色前缀的最宽值再统一渲染：「[用户]」与「[工具read_file]」宽度不同，
+        // 逐行直接打印会让正文起始列逐行跳动，列表就彻底没法扫读了
+        var tagWidth = HistoryTagWidth(rows.Select(r => (r.IsError ? $"[{r.Role}] ❗ " : $"[{r.Role}] ")));
+        foreach (var (role, content, isError) in rows)
+            Console.WriteLine(FormatHistoryLine(role, content, isError, historyWidth, tagWidth));
     }
 
     /// <summary>历史列表单条内容的目标显示列数（CJK/emoji 占 2 列）。</summary>
@@ -719,13 +725,32 @@ internal static class Program
     /// 再按显示宽度截断，最后加角色前缀。
     /// 旧实现先按字符数截断再折叠换行：300 个汉字实际占 600 列，一行铺满整屏后角色前缀错位；
     /// 且截断发生在换行折叠之前，折叠后实际长度可能超出预算。
+    /// maxColumns 是**整行**预算（含角色前缀与缩进）：此前写死 300 列，80 列终端上一行铺满整屏。
+    /// tagWidth &gt; 0 时按显示宽度补齐角色前缀，让各行正文起始列一致——参差的起始列是列表最伤可扫读的地方。
     /// </summary>
-    internal static string FormatHistoryLine(string role, string content, bool isError, int maxColumns = HistoryContentColumns)
+    internal static string FormatHistoryLine(
+        string role, string content, bool isError, int maxColumns = HistoryContentColumns, int tagWidth = 0)
     {
+        const string indent = "  ";
         var single = content.Replace("\r", "").Replace("\n", " ⏎ ").Replace("\t", "    ");
-        var text = InputLine.FitToWidth(single, maxColumns);
-        return isError ? $"  [{role}] ❗ {text}" : $"  [{role}] {text}";
+        var tag = isError ? $"[{role}] ❗ " : $"[{role}] ";
+        // 统一前缀宽度的上限：不能超过终端能给键列的宽度，否则补齐反而把行撑爆
+        var keyBudget = maxColumns - TextUtil.DisplayWidth(indent) - 1;
+        if (tagWidth > 0 && tagWidth <= keyBudget)
+            tag = InputLine.PadToDisplayWidth(tag, tagWidth);
+        else if (TextUtil.DisplayWidth(tag) > Math.Max(1, keyBudget))
+            tag = InputLine.FitToWidth(tag, Math.Max(1, keyBudget));
+        // 预算扣掉缩进与前缀：正文才是可扫读的部分
+        var budget = maxColumns - TextUtil.DisplayWidth(indent) - TextUtil.DisplayWidth(tag);
+        var text = budget <= 0
+            ? InputLine.FitToWidth(single, Math.Max(1, maxColumns - TextUtil.DisplayWidth(indent)))
+            : InputLine.FitToWidth(single, budget);
+        return indent + tag + text;
     }
+
+    /// <summary>历史列表统一角色前缀宽度的计算（各行前缀取最长者，正文起始列因此一致）。</summary>
+    internal static int HistoryTagWidth(IEnumerable<string> tags) =>
+        tags.Select(t => TextUtil.DisplayWidth(t)).DefaultIfEmpty(0).Max();
 
     /// <summary>回合摘要的可丢段优先级：费用 → 缓存比例 → 思考耗时 → 本回合 token 明细。
     /// 固定段保留「✓ 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。</summary>
