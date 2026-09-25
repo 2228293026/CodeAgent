@@ -500,6 +500,7 @@ public sealed class ToolRegistry
         registry.Register(new NamingConventionReportTool());
         registry.Register(new CodeStyleReportTool());
         registry.Register(new CommentQualityReportTool());
+        registry.Register(new ConcurrencyRiskReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
