@@ -90,6 +90,8 @@ public sealed partial class Agent
     {
         ct.ThrowIfCancellationRequested();
         var dir = Path.Combine(Environment.CurrentDirectory, _ctx.Config.ExportDir);
+        if (new DirectoryInfo(dir).LinkTarget is not null)
+            throw new IOException($"导出目录不能是符号链接: {dir}");
         Directory.CreateDirectory(dir);
         // name 同样需 sanitize：/export ../evil 曾写入 ExportDir 父目录（路径穿越）
         var file = Path.Combine(dir, safeName + ".md");

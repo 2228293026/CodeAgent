@@ -380,6 +380,36 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ExportMarkdown_DoesNotWriteThroughLinkedExportRoot()
+    {
+        var outside = Path.Combine(_dir, "outside-export-root");
+        Directory.CreateDirectory(outside);
+        var link = Path.Combine(_dir, "linked-export-root");
+        try { Directory.CreateSymbolicLink(link, outside); }
+        catch (IOException) { return; }
+        catch (UnauthorizedAccessException) { return; }
+        try
+        {
+            var config = new AgentConfig
+            {
+                SaveSessions = false,
+                SessionDir = SessionDir,
+                ExportDir = link,
+            };
+            var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+            var ex = Assert.Throws<IOException>(() => agent.ExportMarkdown(null));
+            Assert.Contains("符号链接", ex.Message);
+            Assert.Empty(Directory.GetFiles(outside));
+        }
+        finally
+        {
+            try { Directory.Delete(link, true); } catch { }
+            try { Directory.Delete(outside, true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task ExportMarkdown_ContainsRolesAndContent()
     {
         var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "完成" } });
