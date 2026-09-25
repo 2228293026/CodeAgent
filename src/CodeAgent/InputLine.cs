@@ -1076,8 +1076,20 @@ public static class InputLine
                     }
                     else if (menuOpen && menuItems.Count > 1)
                     {
-                        // 多个匹配：循环选择
-                        MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
+                        // 多匹配：先把输入补到候选公共前缀（bash 式），补不动时才循环高亮
+                        var typed = NormalizeCommandFilter(buf.Text);
+                        var filled = TabCompletion(menuItems.Select(m => m.Name).ToList(), typed);
+                        if (filled is not null && filled.Length > typed.Length)
+                        {
+                            buf.Replace(filled);
+                            draft = null;
+                            menuIndex = -1;
+                            RefreshMenu(); // 候选集随之收窄，重绘菜单
+                        }
+                        else
+                        {
+                            MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
+                        }
                     }
                     else if (!menuOpen)
                     {
@@ -1280,6 +1292,40 @@ public static class InputLine
     /// 过滤与「数字键视为参数」的完整匹配判定都必须用它，直接用原始文本会漏掉全角输入。</summary>
     internal static string NormalizeCommandFilter(string text) =>
         text.StartsWith('／') ? "/" + text[1..] : text;
+
+    /// <summary>候选集的公共前缀（逐字符比较，长度不超过最短候选；无候选或无公共前缀时返回空串）。</summary>
+    internal static string CommonPrefix(IReadOnlyList<string> candidates)
+    {
+        if (candidates.Count == 0)
+            return string.Empty;
+        var shortest = candidates.MinBy(c => c.Length) ?? string.Empty;
+        var prefix = shortest;
+        foreach (var candidate in candidates)
+        {
+            var i = 0;
+            while (i < prefix.Length && i < candidate.Length && prefix[i] == candidate[i])
+                i++;
+            prefix = prefix[..i];
+            if (prefix.Length == 0)
+                break;
+        }
+        return prefix;
+    }
+
+    /// <summary>
+    /// Tab 补全决策（bash 式）：
+    /// 唯一匹配 → 补全为该命令；多匹配 → 补到候选公共前缀（能推进才补，补不动返回 null，由调用方循环高亮）。
+    /// 旧实现在多匹配时只高亮第 1 项，输入文本原地不动：用户看不出「还能补到哪」，得连按 Tab 试。
+    /// </summary>
+    internal static string? TabCompletion(IReadOnlyList<string> candidates, string typed)
+    {
+        if (candidates.Count == 0)
+            return null;
+        if (candidates.Count == 1)
+            return candidates[0];
+        var prefix = CommonPrefix(candidates);
+        return prefix.Length > typed.Length ? prefix : null;
+    }
 
     /// <summary>
     /// 数字键 1-9 在命令菜单中对应的列表下标。
