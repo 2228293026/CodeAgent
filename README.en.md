@@ -18,7 +18,7 @@ An LLM-powered coding assistant CLI written in C# (.NET 10). Like Claude Code / 
 - 🎮 ADOFAI mod detection: mod projects get dev context and moddev / harmony / assetbundle modes injected automatically
 - 🎨 Markdown rendering: code blocks / inline code / bold / headings colored (`"renderMarkdown": false` to disable)
 - ⌨️ Terminal TUI: slash-command menu (filter / arrow keys / digit-run / fill), command history (arrows, persisted, Ctrl+R reverse search), TAB completion, multi-line paste folding, Shift+Enter manual newline, line-local Home/End, Ctrl+L clear, mode prompt
-- 🔧 20 built-in tools: `read_file` (offset/limit/tail) / `read_files` (batch reads) / `compare_files` (text diff) / `project_stats` (project file metrics) / `file_info` (single-file metadata) / `replace_in_files` (glob-based batch replacement) / `copy_file` (safe text-file copy) / `move_file` (safe move/rename) / `delete_file` (safe single-file deletion) / `find_duplicates` (duplicate-file detection) / `write_file` / `edit_file` (newline-style tolerant: LF↔CRLF normalized matching) / `list_directory` / `glob` / `grep` (multiline cross-line matching) / `run_command` / `bash` / `powershell` / `stop` (command tools auto-pick Git Bash / PowerShell); `edit_file` / `write_file` show a colored diff preview before executing
+- 🔧 21 built-in tools: `read_file` (offset/limit/tail) / `read_files` (batch reads) / `compare_files` (text diff) / `project_stats` (project file metrics) / `file_info` (single-file metadata) / `replace_in_files` (glob-based batch replacement) / `copy_file` (safe text-file copy) / `copy_files` (batch copy mappings) / `move_file` (safe move/rename) / `delete_file` (safe single-file deletion) / `find_duplicates` (duplicate-file detection) / `write_file` / `edit_file` (newline-style tolerant: LF↔CRLF normalized matching) / `list_directory` / `glob` / `grep` (multiline cross-line matching) / `run_command` / `bash` / `powershell` / `stop` (command tools auto-pick Git Bash / PowerShell); `edit_file` / `write_file` show a colored diff preview before executing
 - 💭 Anthropic extended thinking fully supported: thinking text + signature + encrypted redacted_thinking blocks are round-tripped on tool-use turns (missing blocks make the API return 400)
 - ↩️ Sessions auto-saved: `--continue` resumes the latest session, `/resume` restores by number, `/find <keyword>` searches past sessions, Esc rolls back turn by turn; `--no-session` skips logging for one run (privacy)
 - 📊 Usage visibility: status bar shows per-turn tokens, current context size ctx (with percentage; window auto-detected for common models), thinking effort (`auto` probes supported levels and picks the highest) and the **current git branch**; `/compact [focus]` compresses history manually (with progress; ESC cancels; optional focus folded into the summarization prompt)
@@ -192,6 +192,7 @@ Typing `/` opens the command menu (ANSI in-place rendering: arrows move, fill, E
 | `move_file` | Safely move or rename a file with overwrite protection, dry-run, timestamp preservation, and undo records |
 | `delete_file` | Safely delete one file with dry-run, missing_ok, optional `.bak` backup, and undo restoration |
 | `find_duplicates` | Find byte-identical files by size and SHA256, with duplicate groups and reclaimable space |
+| `copy_files` | Copy text files using multiple source/destination mappings, with per-item overwrite, dry-run, and error summaries |
 | `write_file` | Create/overwrite a file, creating parent dirs; missing `content` errors instead of writing empty; identical content skips the write |
 | `edit_file` | Exact text replace (patch-like); ambiguous matches error; `replace_all`; identical old/new errors; undo restores precisely |
 | `list_directory` | Directory tree, skipping build/cache dirs |
@@ -235,6 +236,7 @@ src/CodeAgent/
 │   ├── MoveFileTool.cs     # move_file safe move
 │   ├── DeleteFileTool.cs   # delete_file safe delete
 │   ├── FindDuplicatesTool.cs # find_duplicates duplicate detection
+│   ├── CopyFilesTool.cs   # copy_files batch copy
 │   ├── SearchTools.cs      # glob / grep
 │   ├── CommandTool.cs      # run_command
 │   └── SessionTools.cs     # stop
