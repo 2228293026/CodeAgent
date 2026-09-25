@@ -463,6 +463,7 @@ public sealed class ToolRegistry
         registry.Register(new LicenseInventoryReportTool());
         registry.Register(new DependencyLockfileReportTool());
         registry.Register(new SecretScanReportTool());
+        registry.Register(new SensitiveFileInventoryTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
