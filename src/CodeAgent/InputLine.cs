@@ -105,6 +105,20 @@ public static class InputLine
         try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
     }
 
+    /// <summary>ANSI 原地渲染的最低终端宽度：低于此值退回滚动式，避免换行破坏 ANSI 行号计算。</summary>
+    internal const int AnsiMinWidth = 30;
+
+    /// <summary>
+    /// 是否使用 ANSI 原地渲染。宽度未知（0）时保留原地渲染：行号计算不依赖固定宽度，
+    /// 而滚动式会丢掉编辑、历史和补全体验；只有明确过窄或输出被重定向才降级。
+    /// </summary>
+    internal static bool ShouldUseAnsiInPlace(bool requested, bool outputRedirected, int windowWidth) =>
+        requested && !outputRedirected && (windowWidth <= 0 || windowWidth >= AnsiMinWidth);
+
+    /// <summary>输入行可用宽度预算：窗口宽度减 4 列余量，下限 10；宽度未知返回 0（表示不截断）。</summary>
+    internal static int FitBudget(int windowWidth) =>
+        windowWidth > 0 ? Math.Max(10, windowWidth - 4) : 0;
+
     /// <summary>显示宽度：CJK/全角字符按 2 列计算（与 ConsoleRenderer 一致）；emoji 等代理对按 2 列。</summary>
     private static int DisplayWidth(string s) => TextUtil.DisplayWidth(s);
 
@@ -187,10 +201,11 @@ public static class InputLine
                     : promptPlain + buf.Text;
 
         var winW = TryWindowWidth();
-        var ansiOk = ansi && winW >= 30; // 宽度未知或太窄时退回滚动式，避免换行破坏 ANSI 行号计算
+        var ansiOk = ShouldUseAnsiInPlace(ansi, Console.IsOutputRedirected, winW);
         if (ansiOk)
             BracketedPaste.Enable(); // 粘贴边界标记（详见 BracketedPaste 注释）；重定向/窄终端不启用
-        string Fit(string s) => FitToWidth(s, Math.Max(10, winW - 4));
+        var fitBudget = FitBudget(winW);
+        string Fit(string s) => fitBudget > 0 ? FitToWidth(s, fitBudget) : s;
 
         var menuOpen = false;
         var modePicker = false;
