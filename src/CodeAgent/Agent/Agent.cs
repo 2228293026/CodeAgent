@@ -670,6 +670,27 @@ public sealed partial class Agent
         return string.Join('\n', lines);
     }
 
+    /// <summary>工具输出预览的字符预算（成功与失败共用）。
+    /// 失败路径此前完全没有上限：一条 24,000 字符的编译错误会整屏刷掉对话与输入行，
+    /// 而成功路径只显示 800 字符——同一工具两种待遇，失败时反而最看不清。</summary>
+    internal const int ToolOutputPreviewChars = 800;
+
+    /// <summary>工具结果行：✔/⚠ + 调用摘要 + 耗时；窄终端按显示宽度截断。</summary>
+    internal static string FormatToolStatusLine(string summary, bool isError, TimeSpan elapsed, int width = 0)
+    {
+        var mark = isError ? "⚠" : "✔";
+        var line = $"  {mark} {summary} ({TextUtil.FormatDuration(elapsed)})";
+        return width > 0 ? InputLine.FitToWidth(line, width) : line;
+    }
+
+    /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。</summary>
+    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars)
+    {
+        if (maxChars <= 0)
+            return string.Empty;
+        return text.Length <= maxChars ? text : text[..maxChars] + $"…（共 {text.Length:N0} 字符，已截断）";
+    }
+
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
     private static void ShowFilePreview(string name, JsonObject? args, Workspace workspace, CancellationToken ct)
     {
@@ -818,7 +839,7 @@ public sealed partial class Agent
         {
             lock (ConsoleLock)
             {
-                var status = $"  {(isError ? "⚠" : "✔")} {summary} ({TextUtil.FormatDuration(sw.Elapsed)})";
+                var status = FormatToolStatusLine(summary, isError, sw.Elapsed);
                 if (isError)
                 {
                     SafeColor.Foreground(ConsoleColor.Red);
@@ -826,7 +847,9 @@ public sealed partial class Agent
                     if (output.Length > 0)
                     {
                         SafeColor.Foreground(ConsoleColor.Yellow);
-                        Console.WriteLine("      " + output);
+                        // 与成功路径同一预算：失败信息再长也不能整屏刷掉对话
+                        Console.WriteLine("      " + FormatToolOutputPreview(BuildToolOutputPreview(output, ct)));
+                        SafeColor.Reset();
                     }
                     SafeColor.Reset();
                 }
@@ -840,7 +863,7 @@ public sealed partial class Agent
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
                         var preview = BuildToolOutputPreview(output, ct);
-                        Console.WriteLine("      " + TextUtil.Truncate(preview, 800));
+                        Console.WriteLine("      " + FormatToolOutputPreview(preview));
                         SafeColor.Reset();
                     }
                 }
