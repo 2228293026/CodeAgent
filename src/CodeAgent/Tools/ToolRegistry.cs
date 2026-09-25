@@ -480,6 +480,7 @@ public sealed class ToolRegistry
         registry.Register(new JsonSchemaReportTool());
         registry.Register(new ChangelogReportTool());
         registry.Register(new I18nStringReportTool());
+        registry.Register(new GitBranchAgeReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
