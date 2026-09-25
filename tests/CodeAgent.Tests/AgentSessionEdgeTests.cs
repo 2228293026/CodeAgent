@@ -436,6 +436,22 @@ public class AgentSessionEdgeTests : IDisposable
     }
 
     [Fact]
+    public void ExportMarkdown_HandlesNullProviderConfiguration()
+    {
+        var config = new AgentConfig
+        {
+            SaveSessions = false,
+            SessionDir = SessionDir,
+            ExportDir = ExportDir,
+            Providers = null!,
+        };
+        var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
+
+        var file = agent.ExportMarkdown(null);
+        Assert.True(File.Exists(file));
+    }
+
+    [Fact]
     public async Task ExportMarkdown_ContainsRolesAndContent()
     {
         var agent = MakeAgent(new FakeProvider { NextResponse = new ProviderResponse { Text = "完成" } });
