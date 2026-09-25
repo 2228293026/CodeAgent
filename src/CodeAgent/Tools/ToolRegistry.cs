@@ -402,6 +402,7 @@ public sealed class ToolRegistry
         registry.Register(new ProjectStatsTool());
         registry.Register(new FileInfoTool());
         registry.Register(new ReplaceInFilesTool());
+        registry.Register(new CopyFileTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
