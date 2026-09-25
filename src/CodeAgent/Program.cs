@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text;
 using CodeAgent.Providers;
 using CodeAgent.Tools;
 using AgentClass = CodeAgent.Agent.Agent;
@@ -2164,41 +2165,87 @@ internal static class Program
         || cmd == "/mode" && !string.IsNullOrWhiteSpace(rest)
         || cmd == "/access" && rest.Trim().ToLowerInvariant() is "strict" or "whitelist" or "full";
 
+    /// <summary>帮助条目：命令/参数 + 说明。</summary>
+    internal readonly record struct HelpEntry(string Command, string Description);
+
+    /// <summary>说明列至少保留的宽度：低于此值时分列显示反而更难读，改为上下两行。</summary>
+    private const int MinHelpBodyWidth = 24;
+
+    /// <summary>帮助列表渲染。
+    /// 命令列按最长条目自适应；说明放不下时**整体移到下一行并缩进折行**，
+    /// 而不是交给终端硬折行——硬折行会在词中间断开、丢失缩进，续行看起来像另一条内容。
+    /// width &lt;= 0 表示宽度未知，保持单列不猜测折行位置。</summary>
+    internal static string FormatHelpList(IReadOnlyList<HelpEntry> entries, int width = 0)
+    {
+        if (entries.Count == 0)
+            return string.Empty;
+        const string indent = "  ";
+        const int gap = 2;
+        var commandWidth = entries.Max(e => TextUtil.DisplayWidth(e.Command));
+        var useColumns = width <= 0 || width - indent.Length - commandWidth - gap >= MinHelpBodyWidth;
+        var bodyWidth = useColumns ? width - indent.Length - commandWidth - gap : width - indent.Length - 4;
+        var output = new StringBuilder();
+        foreach (var entry in entries)
+        {
+            if (!useColumns)
+            {
+                output.AppendLine(indent + entry.Command);
+                if (entry.Description.Length > 0)
+                    output.AppendLine(indent + "    " + TextUtil.WrapDisplay(entry.Description, bodyWidth));
+                continue;
+            }
+            if (width > 0 && TextUtil.DisplayWidth(entry.Description) > bodyWidth)
+            {
+                output.AppendLine(indent + entry.Command);
+                output.AppendLine(indent + "    " + TextUtil.WrapDisplay(entry.Description, bodyWidth));
+                continue;
+            }
+            output.AppendLine(indent + InputLine.PadToDisplayWidth(entry.Command, commandWidth + gap) + entry.Description);
+        }
+        return output.ToString().TrimEnd();
+    }
+
+    /// <summary>REPL 命令清单（结构化，供 /help 按终端宽度渲染）。</summary>
+    internal static readonly HelpEntry[] ReplCommands =
+    [
+        new("/help", "显示本帮助"),
+        new("/clear", "清空对话历史"),
+        new("/compact [重点]", "压缩对话历史为摘要（重点并入摘要指令；/clear 是彻底清空）"),
+        new("/cls", "清空屏幕（或按 Ctrl+L）"),
+        new("/model [名称|编号]", "查看或切换模型（编号按完整列表）"),
+        new("/provider [名]", "查看或切换供应商（无需重启）"),
+        new("/copy", "复制最近一条助手回复到剪贴板"),
+        new("/prompt", "查看当前生效的系统提示"),
+        new("/files", "列出本次会话修改过的文件"),
+        new("/config", "显示当前配置"),
+        new("/session", "显示会话日志路径"),
+        new("/setup", "运行交互式供应商配置向导"),
+        new("/undo", "撤销最近一次文件修改（write/edit）"),
+        new("/diff [N]", "显示最近一次修改的 diff（N = 倒数第 N 条）"),
+        new("/save <名>", "保存当前会话（命名快照）"),
+        new("/load <名>", "恢复已保存的会话"),
+        new("/export [名/编号/all]", "导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话；all = 全部）"),
+        new("/stats", "显示 token 用量统计"),
+        new("/retry", "重新执行上一条请求"),
+        new("/tools", "列出可用工具"),
+        new("/providers", "显示已配置的 Provider"),
+        new("/models [关键字]", "列出/过滤模型（过滤时编号不变）"),
+        new("/diag", "显示终端环境诊断"),
+        new("/history [N]", "显示对话历史（N = 最近 N 条）"),
+        new("/resume [编号]", "恢复历史会话（--continue 启动时自动恢复最近一次）"),
+        new("/find <关键字>", "在历史会话日志中搜索内容"),
+        new("/thinking", "查看或设置思考强度（off/low/medium/high/auto）"),
+        new("/shell [名称]", "查看或切换命令 shell（cmd/powershell/pwsh/bash/sh，auto=自动检测）"),
+        new("/mode [名称]", "查看或切换工作模式（内置 8 种 + 自定义）"),
+        new("/access [模式]", "查看或切换文件访问权限（strict/whitelist/full，next 循环切换）"),
+        new("/exit, /quit", "退出"),
+    ];
+
     private static void PrintReplHelp()
     {
+        Console.WriteLine("命令:");
+        Console.WriteLine(FormatHelpList(ReplCommands, ConsoleColumns()));
         Console.WriteLine("""
-            命令:
-              /help            显示本帮助
-              /clear           清空对话历史
-              /compact [重点]   压缩对话历史为摘要（重点并入摘要指令；/clear 是彻底清空）
-              /cls             清空屏幕（或按 Ctrl+L）
-              /model [名称|编号] 查看或切换模型（编号按完整列表）
-              /provider [名]   查看或切换供应商（无需重启）
-              /copy            复制最近一条助手回复到剪贴板
-              /prompt          查看当前生效的系统提示
-              /files           列出本次会话修改过的文件
-              /config          显示当前配置
-              /session         显示会话日志路径
-              /setup           运行交互式供应商配置向导
-              /undo            撤销最近一次文件修改（write/edit）
-              /diff [N]        显示最近一次修改的 diff（N = 倒数第 N 条）
-              /save <名>       保存当前会话（命名快照）
-              /load <名>       恢复已保存的会话
-              /export [名/编号/all] 导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话；all = 全部）
-              /stats           显示 token 用量统计
-              /retry           重新执行上一条请求
-              /tools           列出可用工具
-              /providers       显示已配置的 Provider
-              /models [关键字]  列出/过滤模型（过滤时编号不变）
-              /diag            显示终端环境诊断
-              /history [N]      显示对话历史（N = 最近 N 条）
-              /resume [编号]   恢复历史会话（--continue 启动时自动恢复最近一次）
-              /find <关键字>    在历史会话日志中搜索内容
-              /thinking        查看或设置思考强度（off/low/medium/high/auto）
-              /shell [名称]     查看或切换命令 shell（cmd/powershell/pwsh/bash/sh，auto=自动检测）
-              /mode [名称]     查看或切换工作模式（内置 8 种 + 自定义）
-              /access [模式]   查看或切换文件访问权限（strict/whitelist/full，next 循环切换）
-              /exit, /quit     退出
             用法:
               codeagent "帮我给项目写一个 README"  一次性任务（管道输入会附加到任务后：`type bug.log | codeagent "分析"`）
               codeagent                           进入交互模式

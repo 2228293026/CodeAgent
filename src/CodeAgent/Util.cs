@@ -325,6 +325,105 @@ public static class TextUtil
         return s.Length <= max ? s : SafeCut(s, max) + " …";
     }
 
+    /// <summary>按显示宽度取前缀（不加分隔符），供折行硬拆使用。
+    /// 代理对不可拆开：半个代理对会让 UTF-8 输出变成非法序列。</summary>
+    public static string TakeDisplayWidth(string s, int width)
+    {
+        if (width <= 0 || s.Length == 0)
+            return string.Empty;
+        var used = 0;
+        var i = 0;
+        while (i < s.Length)
+        {
+            var step = char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]) ? 2 : 1;
+            var w = DisplayWidth(s.Substring(i, step));
+            if (used + w > width)
+                break;
+            used += w;
+            i += step;
+        }
+        return i == s.Length ? s : s[..i];
+    }
+
+    /// <summary>按显示宽度折行；width &lt;= 0（宽度未知）时原样返回，不做任何猜测性折行。</summary>
+    public static string WrapDisplay(string text, int width, string indent = "")
+    {
+        if (string.IsNullOrEmpty(text) || width <= 0)
+            return text;
+        var output = new List<string>();
+        foreach (var paragraph in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = new StringBuilder();
+            var lineWidth = 0;
+            foreach (var token in TokenizeForWrap(paragraph))
+            {
+                if (token == " " && lineWidth == 0)
+                    continue; // 行首不留空格
+                var rest = token;
+                while (true)
+                {
+                    var tokenWidth = DisplayWidth(rest);
+                    if (lineWidth + tokenWidth <= width)
+                    {
+                        line.Append(rest);
+                        lineWidth += tokenWidth;
+                        break;
+                    }
+                    if (lineWidth > 0)
+                    {
+                        output.Add(line.ToString().TrimEnd());
+                        line.Clear();
+                        lineWidth = 0;
+                        continue; // 让新行重新尝试装下整个 token
+                    }
+                    if (rest == " ")
+                        break; // 行首空格直接丢弃
+                    // token 本身就比整行还宽：按显示宽度硬拆，先填满当前行
+                    var head = TakeDisplayWidth(rest, width);
+                    if (head.Length == 0)
+                        break; // 宽度装不下任何完整字符（如半个全角字），不无限循环
+                    output.Add(head);
+                    rest = rest[head.Length..];
+                }
+            }
+            output.Add(line.ToString().TrimEnd());
+        }
+        return string.Join("\n", output.Select(l => indent + l));
+    }
+
+    /// <summary>折行原子：CJK 单字独立成词（中文排版允许字间断行），ASCII 单词整体不拆，代理对保持完整。</summary>
+    private static IEnumerable<string> TokenizeForWrap(string paragraph)
+    {
+        var token = new StringBuilder();
+        foreach (var ch in paragraph)
+        {
+            if (char.IsWhiteSpace(ch))
+            {
+                if (token.Length > 0)
+                {
+                    yield return token.ToString();
+                    token.Clear();
+                }
+                yield return " ";
+            }
+            else if (!char.IsSurrogate(ch) && ch > 0x2E7F)
+            {
+                if (token.Length > 0)
+                {
+                    yield return token.ToString();
+                    token.Clear();
+                }
+                yield return ch.ToString();
+            }
+            else
+            {
+                token.Append(ch); // 代理对两半都留在这里，由 DisplayWidth 按 2 列计算
+            }
+        }
+        if (token.Length > 0)
+            yield return token.ToString();
+    }
+
     /// <summary>按字符数截断，但不劈开 UTF-16 代理对（emoji 半个码点会显示为乱码）。</summary>
     internal static string SafeCut(string s, int max)
     {
