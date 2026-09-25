@@ -409,6 +409,7 @@ public sealed class ToolRegistry
         registry.Register(new CopyFilesTool());
         registry.Register(new GitStatusTool());
         registry.Register(new GitDiffTool());
+        registry.Register(new GitLogTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
