@@ -1887,8 +1887,12 @@ internal static class Program
             case "/tools":
                 var modeTools = agent.ToolsForMode();
                 Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}，共 {modeTools.Count} 个）:");
-                foreach (var t in modeTools.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
-                    Console.WriteLine($"  {t.Name} — {t.Description}");
+                // 与 /help 同一渲染器：工具名对齐成列，说明按终端宽度折行。
+                // 此前每行硬拼接，110 个工具的长说明在窄终端会从词中间断开。
+                Console.WriteLine(FormatHelpList(
+                    modeTools.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(t => new HelpEntry(t.Name, t.Description)).ToList(),
+                    ConsoleColumns()));
                 break;
 
             case "/providers":
@@ -2189,14 +2193,16 @@ internal static class Program
         {
             if (!useColumns)
             {
-                output.AppendLine(indent + entry.Command);
+                // 命令名本身可能比终端还宽（dependency_lockfile_report = 25 列）：
+                // 必须截断，否则这一行会硬折行，把整列表的网格结构打散。
+                output.AppendLine(indent + FitColumn(entry.Command, width));
                 if (entry.Description.Length > 0)
                     output.AppendLine(indent + "    " + TextUtil.WrapDisplay(entry.Description, bodyWidth));
                 continue;
             }
             if (width > 0 && TextUtil.DisplayWidth(entry.Description) > bodyWidth)
             {
-                output.AppendLine(indent + entry.Command);
+                output.AppendLine(indent + FitColumn(entry.Command, width));
                 output.AppendLine(indent + "    " + TextUtil.WrapDisplay(entry.Description, bodyWidth));
                 continue;
             }
@@ -2204,6 +2210,10 @@ internal static class Program
         }
         return output.ToString().TrimEnd();
     }
+
+    /// <summary>把命令名裁到给定宽度（width 未知时原样返回）。</summary>
+    private static string FitColumn(string command, int width) =>
+        width <= 0 ? command : InputLine.FitToWidth(command, Math.Max(1, width - 2));
 
     /// <summary>REPL 命令清单（结构化，供 /help 按终端宽度渲染）。</summary>
     internal static readonly HelpEntry[] ReplCommands =

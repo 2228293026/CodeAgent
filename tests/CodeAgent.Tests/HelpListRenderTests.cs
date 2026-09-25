@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using CodeAgent;
+using CodeAgent.Tools;
 using Xunit;
 
 namespace CodeAgent.Tests;
@@ -132,6 +133,63 @@ public class HelpListRenderTests
     [Fact]
     public void FormatHelpList_EmptyInputReturnsEmpty() =>
         Assert.Equal(string.Empty, FormatHelpList(Array.Empty<Program.HelpEntry>(), 80));
+
+    [Fact]
+    public void FormatHelpList_HandlesLongToolNames()
+    {
+        // /tools 的真实形状：工具名很长，说明是中文
+        var entries = new[]
+        {
+            new Program.HelpEntry("git_executable_bit_report", "只读检查已跟踪文件的可执行位设置"),
+            new Program.HelpEntry("read_file", "读取文件内容并按显示宽度编号"),
+        };
+        var lines = FormatHelpList(entries, 80);
+        Assert.Contains("git_executable_bit_report", lines);
+        Assert.Contains("只读检查已跟踪文件的可执行位设置", lines);
+    }
+
+    private static List<Program.HelpEntry> RealToolEntries() =>
+        ToolRegistry.CreateDefault().ToToolSpecs()
+            .Select(t => new Program.HelpEntry(t.Name, t.Description))
+            .OrderBy(e => e.Command, StringComparer.Ordinal)
+            .ToList();
+
+    [Theory]
+    [InlineData(24)]
+    [InlineData(40)]
+    [InlineData(60)]
+    [InlineData(80)]
+    [InlineData(100)]
+    [InlineData(140)]
+    public void FormatToolList_RealRegistryShapeNeverOverflows(int width)
+    {
+        // 用真实工具名/说明形状压测：长名 + 中文说明
+        var lines = FormatHelpList(RealToolEntries(), width);
+        Assert.NotEmpty(lines);
+        foreach (var row in lines.Replace("\r\n", "\n").Split('\n'))
+            Assert.True(TextUtil.DisplayWidth(row) <= width, $"宽度 {width} 溢出: {row}");
+    }
+
+    [Fact]
+    public void FormatToolList_KeepsEveryToolNamePresent()
+    {
+        var specs = ToolRegistry.CreateDefault().ToToolSpecs();
+        var lines = FormatHelpList(
+            specs.Select(t => new Program.HelpEntry(t.Name, t.Description)).ToList(), 40);
+        foreach (var spec in specs)
+            Assert.Contains(spec.Name, lines);
+    }
+
+    [Fact]
+    public void FormatHelpList_TruncatesCommandNarrowerThanName()
+    {
+        // 命令名比终端还宽时必须截断，否则该行硬折行会打散整列表的网格
+        var entries = new[] { new Program.HelpEntry("dependency_lockfile_report", "只读检查依赖锁文件") };
+        var lines = FormatHelpList(entries, 24);
+        foreach (var row in lines.Replace("\r\n", "\n").Split('\n'))
+            Assert.True(TextUtil.DisplayWidth(row) <= 24, $"溢出: {row}");
+        Assert.Contains("…", lines);
+    }
 
     [Fact]
     public void ReplCommands_AreUniqueAndNonEmpty()
