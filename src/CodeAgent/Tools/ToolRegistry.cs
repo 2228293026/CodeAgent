@@ -445,6 +445,7 @@ public sealed class ToolRegistry
         registry.Register(new GitLsFilesTool());
         registry.Register(new GitRepositoryInfoTool());
         registry.Register(new GitFsckTool());
+        registry.Register(new GitSubmoduleStatusTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
