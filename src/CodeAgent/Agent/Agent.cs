@@ -26,6 +26,10 @@ public sealed partial class Agent
         config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
         config.ReadOnlyDirs ??= new List<string>();
         config.Modes ??= new List<AgentModeConfig>();
+        config.Modes.RemoveAll(m => m is null);
+        foreach (var key in config.Providers.Keys.ToList())
+            config.Providers[key] ??= new ProviderOptions();
+        config.FileAccess ??= "strict";
         config.SessionDir ??= ".codeagent/sessions";
         config.ExportDir ??= ".codeagent/exports";
         if (string.IsNullOrWhiteSpace(config.Provider))

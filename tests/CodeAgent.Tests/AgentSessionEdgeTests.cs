@@ -441,12 +441,13 @@ public class AgentSessionEdgeTests : IDisposable
         var config = new AgentConfig
         {
             SaveSessions = false,
-            Providers = null!,
+            Providers = new(StringComparer.OrdinalIgnoreCase) { ["null"] = null! },
             ReadOnlyDirs = null!,
-            Modes = null!,
+            Modes = [null!],
             SessionDir = null!,
             ExportDir = null!,
             Provider = null!,
+            FileAccess = null!,
         };
         var agent = new AgentClass(config, new FakeProvider(), ToolRegistry.CreateDefault());
 
@@ -455,9 +456,12 @@ public class AgentSessionEdgeTests : IDisposable
         Assert.NotNull(config.Providers);
         Assert.NotNull(config.ReadOnlyDirs);
         Assert.NotNull(config.Modes);
+        Assert.Empty(config.Modes);
+        Assert.NotNull(config.Providers["null"]);
         Assert.Equal(".codeagent/sessions", config.SessionDir);
         Assert.Equal(".codeagent/exports", config.ExportDir);
         Assert.Equal("openai", config.Provider);
+        Assert.Equal("strict", config.FileAccess);
     }
 
     [Fact]
