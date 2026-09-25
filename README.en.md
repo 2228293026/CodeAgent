@@ -18,7 +18,7 @@ An LLM-powered coding assistant CLI written in C# (.NET 10). Like Claude Code / 
 - 🎮 ADOFAI mod detection: mod projects get dev context and moddev / harmony / assetbundle modes injected automatically
 - 🎨 Markdown rendering: code blocks / inline code / bold / headings colored (`"renderMarkdown": false` to disable)
 - ⌨️ Terminal TUI: slash-command menu (filter / arrow keys / digit-run / fill), command history (arrows, persisted, Ctrl+R reverse search), TAB completion, multi-line paste folding, Shift+Enter manual newline, line-local Home/End, Ctrl+L clear, mode prompt
-- 🔧 27 built-in tools: `read_file` (offset/limit/tail) / `read_files` (batch reads) / `compare_files` (text diff) / `project_stats` (project file metrics) / `file_info` (single-file metadata) / `replace_in_files` (glob-based batch replacement) / `copy_file` (safe text-file copy) / `copy_files` (batch copy mappings) / `move_file` (safe move/rename) / `delete_file` (safe single-file deletion) / `find_duplicates` (duplicate-file detection) / `git_status` (read-only Git status) / `git_diff` (read-only Git diff) / `git_log` (read-only Git history) / `git_blame` (read-only line provenance) / `git_show` (read-only commit details) / `git_branches` (read-only branch list) / `write_file` / `edit_file` (newline-style tolerant: LF↔CRLF normalized matching) / `list_directory` / `glob` / `grep` (multiline cross-line matching) / `run_command` / `bash` / `powershell` / `stop` (command tools auto-pick Git Bash / PowerShell); `edit_file` / `write_file` show a colored diff preview before executing
+- 🔧 28 built-in tools: `read_file` (offset/limit/tail) / `read_files` (batch reads) / `compare_files` (text diff) / `project_stats` (project file metrics) / `file_info` (single-file metadata) / `replace_in_files` (glob-based batch replacement) / `copy_file` (safe text-file copy) / `copy_files` (batch copy mappings) / `move_file` (safe move/rename) / `delete_file` (safe single-file deletion) / `find_duplicates` (duplicate-file detection) / `git_status` (read-only Git status) / `git_diff` (read-only Git diff) / `git_log` (read-only Git history) / `git_blame` (read-only line provenance) / `git_show` (read-only commit details) / `git_branches` (read-only branch list) / `git_remotes` (read-only remote URLs with credential redaction) / `write_file` / `edit_file` (newline-style tolerant: LF↔CRLF normalized matching) / `list_directory` / `glob` / `grep` (multiline cross-line matching) / `run_command` / `bash` / `powershell` / `stop` (command tools auto-pick Git Bash / PowerShell); `edit_file` / `write_file` show a colored diff preview before executing
 - 💭 Anthropic extended thinking fully supported: thinking text + signature + encrypted redacted_thinking blocks are round-tripped on tool-use turns (missing blocks make the API return 400)
 - ↩️ Sessions auto-saved: `--continue` resumes the latest session, `/resume` restores by number, `/find <keyword>` searches past sessions, Esc rolls back turn by turn; `--no-session` skips logging for one run (privacy)
 - 📊 Usage visibility: status bar shows per-turn tokens, current context size ctx (with percentage; window auto-detected for common models), thinking effort (`auto` probes supported levels and picks the highest) and the **current git branch**; `/compact [focus]` compresses history manually (with progress; ESC cancels; optional focus folded into the summarization prompt)
@@ -199,6 +199,7 @@ Typing `/` opens the command menu (ANSI in-place rendering: arrows move, fill, E
 | `git_blame` | Read-only line provenance with commit, author, date, line ranges, and output limits |
 | `git_show` | Read-only commit author, message, stats, and unified diff with path filtering |
 | `git_branches` | Read-only local/remote branch list with latest commit summaries, patterns, and limits |
+| `git_remotes` | Read-only Git remote fetch/push URLs with credential redaction |
 | `write_file` | Create/overwrite a file, creating parent dirs; missing `content` errors instead of writing empty; identical content skips the write |
 | `edit_file` | Exact text replace (patch-like); ambiguous matches error; `replace_all`; identical old/new errors; undo restores precisely |
 | `list_directory` | Directory tree, skipping build/cache dirs |
@@ -249,6 +250,7 @@ src/CodeAgent/
 │   ├── GitBlameTool.cs    # git_blame read-only line provenance
 │   ├── GitShowTool.cs     # git_show read-only commit details
 │   ├── GitBranchesTool.cs # git_branches read-only branch list
+│   ├── GitRemotesTool.cs  # git_remotes read-only remote URLs
 │   ├── SearchTools.cs      # glob / grep
 │   ├── CommandTool.cs      # run_command
 │   └── SessionTools.cs     # stop
