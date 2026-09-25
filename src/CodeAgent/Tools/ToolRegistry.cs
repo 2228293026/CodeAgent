@@ -428,6 +428,7 @@ public sealed class ToolRegistry
         registry.Register(new ChecksumManifestTool());
         registry.Register(new EncodingReportTool());
         registry.Register(new NormalizeLineEndingsTool());
+        registry.Register(new CreateDirectoryTool());
         registry.Register(new WriteFileTool());
         registry.Register(new EditFileTool());
         registry.Register(new ListDirectoryTool());
