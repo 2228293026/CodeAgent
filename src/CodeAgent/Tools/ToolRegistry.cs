@@ -483,6 +483,7 @@ public sealed class ToolRegistry
         registry.Register(new GitBranchAgeReportTool());
         registry.Register(new GitRepoSizeReportTool());
         registry.Register(new ConfigKeyReportTool());
+        registry.Register(new GitRemoteSyncReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
