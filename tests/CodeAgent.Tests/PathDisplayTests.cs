@@ -69,6 +69,64 @@ public class PathDisplayTests
     }
 
     [Fact]
+    public void TruncatePathHead_CjkPathNeverExceedsDisplayWidth()
+    {
+        // 回归：此前按**字符数**判断，42 个汉字 = 84 列，在 42 列预算下直接翻倍溢出
+        var path = @"C:\用户\很长的用户名\项目\代码代理\源码目录";
+        var shown = Program.TruncatePathHead(path, 42);
+        Assert.True(TextUtil.DisplayWidth(shown) <= 42, $"显示宽度 {TextUtil.DisplayWidth(shown)} 溢出 42 —— {shown}");
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(20)]
+    [InlineData(42)]
+    public void TruncatePathHead_CjkNeverExceedsBudget(int budget)
+    {
+        var path = @"C:\用户\很长的用户名\项目\代码代理\源码目录\更深的一层";
+        var shown = Program.TruncatePathHead(path, budget);
+        Assert.True(TextUtil.DisplayWidth(shown) <= Math.Max(1, budget), $"预算 {budget} 溢出: {shown}");
+    }
+
+    [Fact]
+    public void TruncatePathHead_CjkKeepsWorkspaceNameVisible()
+    {
+        var path = @"C:\用户\很长的用户名\项目\代码代理";
+        var shown = Program.TruncatePathHead(path, 20);
+        Assert.StartsWith("…", shown);
+        Assert.EndsWith("代码代理", shown);
+    }
+
+    [Fact]
+    public void TruncatePathHead_MixedWidthTailIsNotSplit()
+    {
+        // 尾部是 emoji（2 列）时，不能只留下半个码点
+        var path = "很长的中文前缀" + string.Concat(Enumerable.Repeat("😀", 20));
+        foreach (var budget in new[] { 3, 5, 7, 9 })
+        {
+            var shown = Program.TruncatePathHead(path, budget);
+            Assert.True(TextUtil.DisplayWidth(shown) <= Math.Max(1, budget), $"预算 {budget} 溢出: {shown}");
+            for (var i = 0; i < shown.Length; i++)
+            {
+                if (!char.IsHighSurrogate(shown[i]))
+                    continue;
+                Assert.True(i + 1 < shown.Length && char.IsLowSurrogate(shown[i + 1]), "落单的高代理项");
+            }
+        }
+    }
+
+    [Fact]
+    public void TruncatePathHead_CjkPathWithinBudgetIsUnchanged()
+    {
+        // 显示宽度够就不该动它：按字符数会误判成超长而白白截断
+        var path = @"C:\项目\代理";
+        Assert.Equal(path, Program.TruncatePathHead(path, 42));
+    }
+
+    [Fact]
     public void TruncatePathHead_OneSlotEmojiTail_ReturnsOnlyEllipsis()
     {
         Assert.Equal("…", Program.TruncatePathHead("long/path/😀", 2));

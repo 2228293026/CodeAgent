@@ -962,21 +962,33 @@ internal static class Program
         return InputLine.FitToWidth(line, width);
     }
 
-    /// <summary>深路径显示截断：超长时保留尾部（工作区名永远可见），前缀省略号。</summary>
+    /// <summary>深路径显示截断：超长时保留尾部（工作区名永远可见），前缀省略号。
+    /// max 是**显示列数**：按字符数算会让中文路径实际占两倍宽（42 个汉字 = 84 列），
+    /// 正是这个函数要防的溢出。尾部按码点回退，保证不劈开代理对。</summary>
     internal static string TruncatePathHead(string path, int max = 42)
     {
         if (max <= 0)
             return string.Empty;
-        if (path.Length <= max)
+        if (TextUtil.DisplayWidth(path) <= max)
             return path;
-        var keep = max - 1;
-        if (keep == 0)
+        var keep = max - 1; // 1 列给省略号
+        if (keep <= 0)
             return "…";
-        if (keep == 1 && char.IsLowSurrogate(path[^1]) && char.IsHighSurrogate(path[^2]))
-            return "…"; // 省略号已占满宽度，不能只保留代理对低半部
-        if (char.IsLowSurrogate(path[^keep]) && char.IsHighSurrogate(path[^(keep - 1)]))
-            keep--; // 尾部切点落在代理对中间：保留完整 UTF-16 码点
-        return "…" + path[^keep..];
+        var end = path.Length;
+        var used = 0;
+        while (end > 0)
+        {
+            // 低代理项必须连高代理项一起取，否则会截出半个码点
+            var step = char.IsLowSurrogate(path[end - 1]) && end >= 2 && char.IsHighSurrogate(path[end - 2]) ? 2 : 1;
+            var w = TextUtil.DisplayWidth(path.Substring(end - step, step));
+            if (used + w > keep)
+                break;
+            used += w;
+            end -= step;
+        }
+        if (end >= path.Length)
+            return "…";
+        return "…" + path[end..];
     }
 
     private static (string Cwd, string? Branch, DateTime At)? _branchCache;
