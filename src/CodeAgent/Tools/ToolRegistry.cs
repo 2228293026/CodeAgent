@@ -530,6 +530,7 @@ public sealed class ToolRegistry
         registry.Register(new CollectionUsageReportTool());
         registry.Register(new ExpensiveCallReportTool());
         registry.Register(new StateManagementReportTool());
+        registry.Register(new LogHygieneReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
