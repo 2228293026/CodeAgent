@@ -1386,7 +1386,9 @@ internal static class Program
         if (budget <= 0 || TextUtil.DisplayWidth(path) <= budget)
             return path;
         var separator = path.Contains('\\', StringComparison.Ordinal) && !path.Contains('/', StringComparison.Ordinal) ? '\\' : '/';
-        var ellipsis = "…" + separator;
+        // 省略号宽度随 ASCII 变化（1 列 → 3 列），下面所有预算都用实测值，不写死 1
+        var dots = SafeColor.Glyphs.Ellipsis;
+        var ellipsis = dots + separator;
         var segments = path.Split(separator);
         var tail = new List<string>();
         var used = TextUtil.DisplayWidth(ellipsis);
@@ -1404,10 +1406,11 @@ internal static class Program
         if (tail.Count > 0)
             return ellipsis + string.Join(separator, tail);
         // 连最后一段都放不下：截掉最后一段的尾部并加 … 前缀，绝不返回无标记的残串
-        if (budget <= 1)
-            return "…";
+        var dotsWidth = SafeColor.Glyphs.EllipsisWidth;
+        if (budget < dotsWidth)
+            return InputLine.FitToWidth(dots, budget);
         var last = segments.Length > 0 ? segments[^1] : path;
-        return "…" + InputLine.FitToWidth(last, budget - 1); // 1 列留给前缀 …
+        return dots + InputLine.FitToWidth(last, budget - dotsWidth);
     }
 
     /// <summary>

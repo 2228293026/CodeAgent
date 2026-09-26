@@ -121,6 +121,19 @@ public static class SafeColor
         /// <summary>状态栏/历史行首的模式标记。</summary>
         public static string StatusMark => AsciiEnabled ? ">" : "⏵";
 
+        /// <summary>路径前缀省略标记（`…/`）。宽度随 ASCII 变化，
+        /// 所以 ShortenPath 里**必须**用 <see cref="EllipsisWidth"/> 算预算，不能写死 1。</summary>
+        public static string PathPrefix => Ellipsis;
+
+        /// <summary>工具参数占位符（`(…)`）。用完整括号对是为了告诉读者
+        /// 「这里本来有参数」，而不是让 `read_fil…` 那种按字符硬截的碎片出现。
+        /// **宽度不是常数**：`(…)` 3 列、`(...)` 4 列，调用方一律用
+        /// <see cref="TextUtil.DisplayWidth"/> 量，不要写死。</summary>
+        public static string ArgsPlaceholder => AsciiEnabled ? "(...)" : "(…)";
+
+        /// <summary>「还省了 N 个」的提示前缀。同样带空格，宽度随 ASCII 变化。</summary>
+        public static string Omitted => AsciiEnabled ? " ..." : " …";
+
         /// <summary>状态栏各段之间的分隔符（含两侧空格）。
         ///
         /// **必须恰好 3 列**：状态栏的宽度预算是按「每段额外扣 3 列」算的

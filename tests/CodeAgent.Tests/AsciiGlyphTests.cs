@@ -404,6 +404,52 @@ public class AsciiGlyphTests : IDisposable
         Assert.Contains("Glyphs.Ellipsis", body);
     }
 
+    [Fact]
+    public void ShortenPathNeverExceedsItsBudgetInEitherMode()
+    {
+        const string path = @"D:\Projects\CodeAgent\src\CodeAgent\Tools\SomeVeryLongToolName.cs";
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            for (var budget = 1; budget <= path.Length + 4; budget++)
+            {
+                var shortened = Program.ShortenPath(path, budget);
+                Assert.True(TextUtil.DisplayWidth(shortened) <= budget,
+                    $"ascii={ascii} budget={budget} 得到 {TextUtil.DisplayWidth(shortened)} 列: {shortened}");
+            }
+        }
+    }
+
+    [Fact]
+    public void ShortenSummaryNeverExceedsItsBudgetInEitherMode()
+    {
+        const string summary = "read_file(path: string, encoding: string, max_lines: int, start_line: int)";
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            for (var budget = 4; budget <= summary.Length; budget++)
+            {
+                var line = AgentClass.FormatToolStatusLine(summary, false, TimeSpan.Zero, budget);
+                Assert.True(TextUtil.DisplayWidth(line) <= budget,
+                    $"ascii={ascii} budget={budget} 得到 {TextUtil.DisplayWidth(line)} 列: {line}");
+            }
+        }
+    }
+
+    [Fact]
+    public void ArgsPlaceholderIsNeverHardcodedAsThreeColumns()
+    {
+        // 源码级守卫：ShortenSummaryAsWhole 里不得再出现写死的 `budget - 3`。
+        // `(…)` 是 3 列而 ASCII 的 `(...)` 是 4 列，写死 3 会让工具状态行超预算 1 列。
+        var source = File.ReadAllText(FindSource(Path.Combine("Agent", "Agent.cs")));
+        var at = source.IndexOf("ShortenSummaryAsWhole(string summary, int budget)", StringComparison.Ordinal);
+        Assert.True(at >= 0, "找不到 ShortenSummaryAsWhole");
+        var body = source[at..];
+        body = body[..body.IndexOf("\n    }", StringComparison.Ordinal)];
+        Assert.DoesNotContain("budget - 3", body);
+        Assert.Contains("Glyphs.ArgsPlaceholder", body);
+    }
+
     private static string FindSource(string name)
     {
         foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
@@ -411,7 +457,7 @@ public class AsciiGlyphTests : IDisposable
             var dir = start;
             for (var i = 0; i < 10 && dir.Length > 1; i++)
             {
-                var candidate = Path.Combine(dir, "src", "CodeAgent", name);
+                var candidate = Path.Combine(dir, "src", "CodeAgent", name.Replace('/', Path.DirectorySeparatorChar));
                 if (File.Exists(candidate) && new FileInfo(candidate).Length > 1000)
                     return candidate;
                 var parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));

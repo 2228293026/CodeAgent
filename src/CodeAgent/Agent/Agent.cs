@@ -788,12 +788,15 @@ public sealed partial class Agent
         var name = summary[..open];
         var args = summary[(open + 1)..^1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var kept = new List<string>();
-        var used = TextUtil.DisplayWidth(name) + 2; // "(…)"
+        // "(…)" 的宽度**不是常数**：ASCII 退回时从 3 列变 4 列。写死 2 会让整个
+        // 摘要超预算 1 列，而摘要超宽会把工具状态行顶到折行。
+        var placeholder = SafeColor.Glyphs.ArgsPlaceholder;
+        var used = TextUtil.DisplayWidth(name) + TextUtil.DisplayWidth(placeholder);
         for (var i = 0; i < args.Length; i++)
         {
             var w = TextUtil.DisplayWidth(args[i]) + (kept.Count > 0 ? 1 : 0);
             var omitted = args.Length - i - 1; // 本段之后的全部
-            if (used + w + TextUtil.DisplayWidth(omitted > 0 ? $" …+{omitted}" : "") > budget)
+            if (used + w + TextUtil.DisplayWidth(omitted > 0 ? SafeColor.Glyphs.Omitted + $"+{omitted}" : "") > budget)
                 break;
             kept.Add(args[i]);
             used += w;
@@ -801,7 +804,7 @@ public sealed partial class Agent
         if (kept.Count == 0)
             return ShortenSummaryAsWhole(summary, budget);
         var hiddenCount = args.Length - kept.Count;
-        var note = hiddenCount > 0 ? $" …+{hiddenCount}" : "";
+        var note = hiddenCount > 0 ? SafeColor.Glyphs.Omitted + $"+{hiddenCount}" : "";
         return $"{name}({string.Join(" ", kept)}{note})";
     }
 
@@ -814,10 +817,12 @@ public sealed partial class Agent
         if (open <= 0 || !summary.EndsWith(')'))
             return InputLine.FitToWidth(summary, budget);
         var name = summary[..open];
-        var room = budget - 3; // "(…)" 占 3 列
+        // 占位符宽度量出来，不写死 3——ASCII 退回时它是 4 列，写死 3 会超预算 1 列
+        var placeholder = SafeColor.Glyphs.ArgsPlaceholder;
+        var room = budget - TextUtil.DisplayWidth(placeholder);
         if (room < 1)
             return InputLine.FitToWidth(name, budget);
-        return $"{ShortenToolName(name, room)}(…)";
+        return $"{ShortenToolName(name, room)}{placeholder}";
     }
 
     /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。
