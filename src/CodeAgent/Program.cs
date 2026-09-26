@@ -2527,10 +2527,26 @@ internal static class Program
         return output.ToString().TrimEnd();
     }
 
+    /// <summary>键列占整行宽度的上限比例：键是**标签**、值是**数据**。
+    /// 窄屏上把 18 列留给 `IsOutputRedirected` 这类键、只换来 7 列数据是本末倒置——
+    /// 用户看得见「是哪个设置」，却看不见「设成了什么」。</summary>
+    internal const double KeyColumnMaxRatio = 0.4;
+
+    /// <summary>键列在给定整行宽度下能占的列数上限（宽度未知返回 0 = 不限）。
+    /// 所有键值行共用同一个 <c>keyWidth</c>，所以收窄是对**整列**等比生效的，
+    /// 冒号列对齐不受影响。</summary>
+    internal static int KeyColumnBudget(int width, int indentWidth = 2, int separatorWidth = 3)
+    {
+        if (width <= 0)
+            return 0;
+        return Math.Max(1, (int)(width * KeyColumnMaxRatio));
+    }
+
     /// <summary>键值行统一格式：两空格缩进 + 键列按**显示宽度**对齐 + " : " + 值。
     /// 曾用手数空格对齐，`.codeagent 大小` 这类含中文的键（2 字符占 4 列）
     /// 和恰好 18 字符的 `IsOutputRedirected` 都会把冒号挤歪，整列失去对齐。
     /// 值超过剩余宽度时按显示宽度截断（宽度未知则不截断）。
+    /// 窄终端下键列还会按 <see cref="KeyColumnMaxRatio"/> 收窄，把宽度让给值。
     /// rightAlignValue：数值列右对齐，让 `128` 与 `1,234,567` 的位数落在同一列、一眼可比大小。</summary>
     internal static string FormatKeyValueLine(string key, string value, int keyWidth = 0, int width = 0, bool rightAlignValue = false)
     {
@@ -2545,7 +2561,10 @@ internal static class Program
         var keyBudget = width - indent.Length - separator.Length;
         if (keyBudget <= 0)
             return InputLine.FitToWidth(indent + key + separator.TrimStart(), Math.Max(1, width));
-        var padded = InputLine.PadToDisplayWidth(InputLine.FitToWidth(key, keyBudget), Math.Min(column, keyBudget));
+        // 标签列不能吃掉整行：键收窄后宽度让给值（整列等比收窄，冒号对齐不变）。
+        // 上限只减不增——窄键（如 `a`）不能被撑到上限。
+        var columnCap = Math.Min(column, Math.Max(1, KeyColumnBudget(width)));
+        var padded = InputLine.PadToDisplayWidth(InputLine.FitToWidth(key, keyBudget), Math.Min(columnCap, keyBudget));
         var head = indent + padded + separator;
         var valueBudget = width - TextUtil.DisplayWidth(head);
         if (valueBudget <= 0)
