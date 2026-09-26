@@ -598,6 +598,7 @@ public sealed class ToolRegistry
         registry.Register(new EnumFlagReportTool());
         registry.Register(new AsyncMisuseReportTool());
         registry.Register(new ApiVersionPinReportTool());
+        registry.Register(new NestedTryReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
