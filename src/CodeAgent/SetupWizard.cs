@@ -75,6 +75,11 @@ public static class SetupWizard
             AgentConfig.Save(config, path);
             output.WriteLine($"\n{SafeColor.Glyphs.Ok} 配置已保存: {path}");
             output.WriteLine($"当前供应商: {name}   模型: {existing.Model}");
+            // 只在**交互式**会话里问。输入被重定向（脚本、CI、测试）时没有人能回答，
+            // 多问一句会把后续答案全部错位地吃掉；而渲染设置事后用 /diag 就能看，
+            // 不值得为此破坏非交互流程。
+            if (!Console.IsInputRedirected)
+                OfferRenderSettings(input, output);
             output.WriteLine("运行 codeagent 即可开始使用。");
             return;
         }
@@ -263,5 +268,55 @@ public static class SetupWizard
                 return n;
             output.WriteLine($"  请输入 1-{max} 之间的数字。");
         }
+    }
+
+    /// <summary>可粘贴到 shell 的渲染设置命令。**只打印、不代改**：
+    /// 向导写的是 codeagent.json，而这三项是**环境变量**——进程内改了对用户
+    /// 下一个终端没用，偷偷写进配置文件又会让"为什么它没生效"更难查。
+    /// 给出可直接抄的一行，用户自己决定要不要执行。</summary>
+    internal const string PowerShellPrefix = "$env:";
+    internal const string CmdPrefix = "set ";
+
+    internal static string EnvCommand(string shell, string key, string value) =>
+        shell.StartsWith("cmd", StringComparison.OrdinalIgnoreCase)
+            ? $"{CmdPrefix}{key}={value}"
+            : $"{PowerShellPrefix}{key}=\"{value}\"";
+
+    /// <summary>渲染设置向导：先报当前状态，再让用户挑一个可粘贴的命令。
+    /// 与 <c>/diag</c> 的渲染环境段同源（<see cref="SafeColor.DescribeEnvironment"/>），
+    /// 避免两处各说各话。</summary>
+    internal static void OfferRenderSettings(TextReader input, TextWriter output)
+    {
+        output.WriteLine("渲染设置（颜色与字符形）:");
+        foreach (var (key, value) in SafeColor.DescribeEnvironment(SafeColor.ReadEnv, Console.IsOutputRedirected))
+        {
+            var trimmed = key.Trim();
+            if (trimmed.Length == 0 || trimmed == "关闭原因")
+                continue;
+            output.WriteLine($"  {trimmed}: {value}");
+        }
+        output.WriteLine();
+        var options = new (string Label, string? Key, string Value)[]
+        {
+            ("保持现状（不设置任何环境变量）", null, ""),
+            ("高对比配色（深色背景）", "CODEAGENT_THEME", "contrast"),
+            ("高对比配色（浅色背景）", "CODEAGENT_THEME", "contrast-light"),
+            ("浅色背景配色", "CODEAGENT_THEME", "light"),
+            ("字符形退回纯 ASCII（老终端/代码页 437 850）", "CODEAGENT_ASCII", "1"),
+        };
+        for (var i = 0; i < options.Length; i++)
+            output.WriteLine($"  {i + 1}) {options[i].Label}");
+        output.WriteLine();
+        var pick = AskChoice(input, output, "选择（直接回车 = 1）", options.Length, 1);
+        output.WriteLine();
+        var chosen = options[pick - 1];
+        if (chosen.Key is null)
+        {
+            output.WriteLine("已保持现有渲染设置。");
+            return;
+        }
+        output.WriteLine("把下面这行粘到你的 shell 里生效（本次会话不会自动改变）：");
+        output.WriteLine($"  PowerShell: {EnvCommand("powershell", chosen.Key, chosen.Value)}");
+        output.WriteLine($"  cmd.exe:    {EnvCommand("cmd", chosen.Key, chosen.Value)}");
     }
 }
