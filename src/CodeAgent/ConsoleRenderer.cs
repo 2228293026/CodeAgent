@@ -857,7 +857,7 @@ public sealed class ConsoleRenderer
     internal static string TableDroppedColsNote(int total, int keep, int width = 0)
     {
         var dots = SafeColor.Glyphs.Ellipsis;
-        var arrow = SafeColor.Glyphs.AsciiEnabled ? "->" : "→";
+        var arrow = SafeColor.Glyphs.Arrow;
         var full = $"{dots}(表格共 {total} 列，终端较窄，仅显示前 {keep} 列)";
         return width > 0 && TextUtil.DisplayWidth(full) > width ? $"{dots}({total} 列 {arrow} {keep} 列)" : full;
     }
@@ -866,7 +866,7 @@ public sealed class ConsoleRenderer
     internal static string TableDroppedRowsNote(int total, int keep, int width = 0)
     {
         var dots = SafeColor.Glyphs.Ellipsis;
-        var arrow = SafeColor.Glyphs.AsciiEnabled ? "->" : "→";
+        var arrow = SafeColor.Glyphs.Arrow;
         var full = $"{dots}(表格共 {total} 行，仅显示前 {keep} 行)";
         return width > 0 && TextUtil.DisplayWidth(full) > width ? $"{dots}({total} 行 {arrow} {keep} 行)" : full;
     }

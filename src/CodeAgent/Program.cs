@@ -24,7 +24,7 @@ internal static class Program
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion?.Split('+')[0] ?? "0.0.0";
 
-    /// <summary>把控制台输出编码设为 UTF-8，让 `── ✓ ⚠ ⏵ …` 这些 UI 字符正确显示。
+    /// <summary>把控制台输出编码设为 UTF-8，让 `── {SafeColor.Glyphs.Ok} ⚠ ⏵ …` 这些 UI 字符正确显示。
     ///
     /// 这一步**绝不能抛**：它发生在 Main 的第一行，抛出去就是「启动即崩」，
     /// 屏幕上什么都看不到、也没有任何提示。而设置编码在若干环境下确实会抛：
@@ -291,7 +291,7 @@ internal static class Program
             if (target is null)
                 Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
             else if (agent.LoadSessionLog(target))
-                Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), "↩"));
+                Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), SafeColor.Glyphs.Retry));
             else
                 Console.WriteLine($"{SafeColor.Glyphs.Warn} 会话日志无法恢复（文件可能损坏）。");
         }
@@ -421,7 +421,7 @@ internal static class Program
                         Console.WriteLine("没有可重试的请求。");
                         continue;
                     }
-                    Console.WriteLine($"↻ 重试上一条请求: {TextUtil.TruncateLine(agent.LastPrompt, 60)}");
+                    Console.WriteLine($"{SafeColor.Glyphs.Retry} 重试上一条请求: {TextUtil.TruncateLine(agent.LastPrompt, 60)}");
                     line = agent.LastPrompt; // 作为普通请求重新执行
                 }
                 else
@@ -437,7 +437,7 @@ internal static class Program
                     if (suppress)
                     {
                         switchBlockActive = true;
-                        // 空行并清整行：覆盖路径下新提示符可能比旧的短（[explain|…]→[doc|…]），清掉行尾残字符
+                        // 空行并清整行：覆盖路径下新提示符可能比旧的短（[explain|…]{SafeColor.Glyphs.Arrow}[doc|…]），清掉行尾残字符
                         Console.Write(ansiOk ? "\r\n\x1b[2K" : "\n");
                         inlinePrompt = PromptFor(opts, agent).TrimStart('\n');
                     }
@@ -766,7 +766,7 @@ internal static class Program
         string role, string content, bool isError, int maxColumns = HistoryContentColumns, int tagWidth = 0)
     {
         const string indent = "  ";
-        var single = content.Replace("\r", "").Replace("\n", " ⏎ ").Replace("\t", "    ");
+        var single = content.Replace("\r", "").Replace("\n", $" {SafeColor.Glyphs.Enter} ").Replace("\t", "    ");
         var tag = isError ? $"[{role}] {SafeColor.Glyphs.Error} " : $"[{role}] ";
         // 统一前缀宽度的上限：不能超过终端能给键列的宽度，否则补齐反而把行撑爆
         var keyBudget = maxColumns - TextUtil.DisplayWidth(indent) - 1;
@@ -790,8 +790,8 @@ internal static class Program
     internal static int HistoryTagWidth(IEnumerable<string> tags) =>
         tags.Select(t => TextUtil.DisplayWidth(t)).DefaultIfEmpty(0).Max();
 
-    /// <summary>回合摘要的可丢段优先级：费用 → 缓存比例 → 思考耗时 → 本回合 token 明细。
-    /// 固定段保留「✓ 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
+    /// <summary>回合摘要的可丢段优先级：费用 {SafeColor.Glyphs.Arrow} 缓存比例 {SafeColor.Glyphs.Arrow} 思考耗时 {SafeColor.Glyphs.Arrow} 本回合 token 明细。
+    /// 固定段保留「{SafeColor.Glyphs.Ok} 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
     /// 可丢段丢完仍超宽时先**脱掉装饰外框**（纯装饰，省 13 列），最后才硬截。</summary>
     internal static string BuildTurnSummary(
         int rounds, int toolCalls, string elapsed, string tokenText,
@@ -829,7 +829,7 @@ internal static class Program
             var body = string.Join(" ", parts);
             // 外框是装饰不是信息：窄屏下先脱框（省 13 列），好过硬截出
             // 「看起来是完整摘要的残串」——用户会以为工具次数/耗时就那么多。
-            return showFrame ? "── ✓ 完成 " + body + " ──" : "✓ " + body;
+            return showFrame ? $"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2} {SafeColor.Glyphs.Ok} 完成 " + body + $" {SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2}" : $"{SafeColor.Glyphs.Ok} " + body;
         }
 
         var text = Render();
@@ -853,9 +853,9 @@ internal static class Program
             showFrame = false;
             text = Render();
         }
-        // 连核心段都放不下时按语义再丢：工具次数 → 耗时 → 轮数。
+        // 连核心段都放不下时按语义再丢：工具次数 {SafeColor.Glyphs.Arrow} 耗时 {SafeColor.Glyphs.Arrow} 轮数。
         // 绝不让 FitToWidth 把 12.3s 切成「12.…」——半个数字看起来像个完整但不同的值，
-        // 比干脆不显示更容易误导。丢到只剩「✓ 完成」后它几乎在任何终端都放得下。
+        // 比干脆不显示更容易误导。丢到只剩「{SafeColor.Glyphs.Ok} 完成」后它几乎在任何终端都放得下。
         var coreDrops = new Action[]
         {
             () => showCalls = false,
@@ -892,7 +892,7 @@ internal static class Program
     }
 
     /// <summary>
-    /// 配置写回路径：-c 显式路径 → 实际加载的来源文件（可能是 ~/.codeagent/config.json）→ 默认当前目录。
+    /// 配置写回路径：-c 显式路径 {SafeColor.Glyphs.Arrow} 实际加载的来源文件（可能是 ~/.codeagent/config.json）{SafeColor.Glyphs.Arrow} 默认当前目录。
     /// 忽略来源文件时，从主目录配置启动的 /model 会把半份配置写进 cwd 的新 codeagent.json，配置被一分为二。
     /// </summary>
     internal static string ConfigSavePath(string? configPath, AgentConfig config) =>
@@ -900,7 +900,7 @@ internal static class Program
         : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
         : "codeagent.json";
 
-    /// <summary>已保存的命名会话（新 → 旧，附相对时间）。/load 无参数列表用。</summary>
+    /// <summary>已保存的命名会话（新 {SafeColor.Glyphs.Arrow} 旧，附相对时间）。/load 无参数列表用。</summary>
     internal static IReadOnlyList<(string Name, string Age)> SavedSessions(string sessionDir)
     {
         try
@@ -1047,7 +1047,7 @@ internal static class Program
     /// ②文件标题/文件头行按**尾部保留**缩短路径：硬截尾部会让人误以为是另一个文件；
     /// ③`+`/`-` 内容行必须带 `…` 标记：被截掉的 +行看起来就是"新增了这么多"，
     ///   用户会以为 diff 本来就这么短。
-    /// ①再窄一档时按 <c>@@ -a,b +c,d @@</c> → <c>@@ -a,b +c,d</c> → <c>@@</c> 逐级退让，
+    /// ①再窄一档时按 <c>@@ -a,b +c,d @@</c> {SafeColor.Glyphs.Arrow} <c>@@ -a,b +c,d</c> {SafeColor.Glyphs.Arrow} <c>@@</c> 逐级退让，
     /// 始终保住 hunk 标记：一旦被裁成 `-12,7…`，行号范围就整个丢了，
     /// 而行号正是这里唯一不可替代的信息。</summary>
     internal static string FormatDiffLine(string line, int width)
@@ -1152,7 +1152,7 @@ internal static class Program
         // 模式名本身（CJK 双宽）就超宽：截短模式但**绝不去掉**——没有模式的提示符没有意义。
         //
         // 这里曾直接 `max(1, budget - 6)` 然后无脑拼 "[模式…]> "，于是两处不对：
-        // ① 固定开销写死 6，ASCII 退回（省略号 1 列 → 3 列）后就不准了；
+        // ① 固定开销写死 6，ASCII 退回（省略号 1 列 {SafeColor.Glyphs.Arrow} 3 列）后就不准了；
         // ② 预算只剩几列时，"至少留 1 列给模式名"这个下限反而让**整体超宽**
         //    （实测 width=12 时提示符 6 列 > 预算 4 列）——而提示符超宽会把整行
         //    输入顶到折行，正是这个函数要避免的事。
@@ -1195,18 +1195,20 @@ internal static class Program
         windowWidth > 0 && TextUtil.DisplayWidth(prompt) + margin <= windowWidth;
 
     /// <summary>
-    /// 确认行（模式/权限/模型/provider 切换成功）：`✔ 正文`，与工具结果的 `✔` 约定一致。
+    /// 确认行（模式/权限/模型/provider 切换成功）：`✔ 正文`，与工具结果的成功标记约定一致。
     /// 与告警行共用同一宽度预算——切换确认常附带完整保存路径（可很长），
-    /// 折行后 `✔` 会被留在上一行，扫读时看不出「切换到底成功没有」。
+    /// 折行后标记会被留在上一行，扫读时看不出「切换到底成功没有」。
+    /// 默认标记是 ✔（<c>OkCheck</c>）而不是 ✓（<c>Ok</c>）——确认行历史上一直用 ✔，
+    /// 收口字形这一轮不应该顺手改掉默认渲染。
     /// </summary>
-    internal static string FormatConfirmLine(string body, int width = 0, string marker = "✔") =>
-        FormatNoticeLine(body, width, marker);
+    internal static string FormatConfirmLine(string body, int width = 0, string? marker = null) =>
+        FormatNoticeLine(body, width, marker ?? SafeColor.Glyphs.OkCheck);
 
-    /// <summary>取消提示行：`⏹ 正文`。
+    /// <summary>取消提示行：`{SafeColor.Glyphs.Stop} 正文`。
     /// 与 ✔（成功）、⚠（错误）构成三类可一眼分辨的结局标记。
     /// 此前取消提示散落各处且形态不一（有的带 ⏹、有的什么都不带），
     /// 用户扫读时无法用统一规则找出「这一轮发生了什么」。</summary>
-    internal static string FormatCancelLine(string body, int width = 0) => FormatNoticeLine(body, width, "⏹");
+    internal static string FormatCancelLine(string body, int width = 0) => FormatNoticeLine(body, width, SafeColor.Glyphs.Stop);
 
     /// <summary>启动期错误/警告行（写入 stderr）：`⚠ 正文`，与交互期的告警行同一格式。
     /// 启动错误常带完整路径与异常消息，宽度未知时不做猜测性折行，但已知宽度下必须不溢出。</summary>
@@ -1375,7 +1377,7 @@ internal static class Program
 
     /// <summary>
     /// 组装状态栏并在窄终端下按优先级丢段，保证输出永远不超过 <paramref name="width"/> 列。
-    /// 固定段：⏵ 模式 · 模型 · 目录；可丢段（由低到高）：思考强度 → 本回合 token → 上下文 → git 分支。
+    /// 固定段：⏵ 模式 · 模型 · 目录；可丢段（由低到高）：思考强度 {SafeColor.Glyphs.Arrow} 本回合 token {SafeColor.Glyphs.Arrow} 上下文 {SafeColor.Glyphs.Arrow} git 分支。
     /// 全部丢完仍超宽时按显示宽度硬截断（CJK/emoji 占 2 列）。
     /// </summary>
     /// <summary>路径按显示宽度缩短：保留**末尾**分段（路径最有信息量的是末段），
@@ -1386,7 +1388,7 @@ internal static class Program
         if (budget <= 0 || TextUtil.DisplayWidth(path) <= budget)
             return path;
         var separator = path.Contains('\\', StringComparison.Ordinal) && !path.Contains('/', StringComparison.Ordinal) ? '\\' : '/';
-        // 省略号宽度随 ASCII 变化（1 列 → 3 列），下面所有预算都用实测值，不写死 1
+        // 省略号宽度随 ASCII 变化（1 列 {SafeColor.Glyphs.Arrow} 3 列），下面所有预算都用实测值，不写死 1
         var dots = SafeColor.Glyphs.Ellipsis;
         var ellipsis = dots + separator;
         var segments = path.Split(separator);
@@ -1415,8 +1417,8 @@ internal static class Program
 
     /// <summary>
     /// 状态栏分段降级顺序。优先级由「现在最需要知道什么」决定：
-    /// 模式/模型在行首（永不丢）→ ctx 百分比（离上限还有多远，最该盯）→ 本回合 token（花了多少）
-    /// → 目录（自带缩_shortening阶梯_，其次）→ 分支/思考档（冷门设置）。
+    /// 模式/模型在行首（永不丢）{SafeColor.Glyphs.Arrow} ctx 百分比（离上限还有多远，最该盯）{SafeColor.Glyphs.Arrow} 本回合 token（花了多少）
+    /// {SafeColor.Glyphs.Arrow} 目录（自带缩_shortening阶梯_，其次）{SafeColor.Glyphs.Arrow} 分支/思考档（冷门设置）。
     /// 此前把 ctx 排在目录缩短**之前**丢，于是长路径场景下最有操作价值的
     /// 「上下文用了多少」先消失，剩下一堆静态信息。
     /// </summary>
@@ -1447,7 +1449,7 @@ internal static class Program
         }
 
         var text = Render();
-        // 第一轮：丢冷门段（思考档 → 分支 → 本回合 token），ctx 保留到最后
+        // 第一轮：丢冷门段（思考档 {SafeColor.Glyphs.Arrow} 分支 {SafeColor.Glyphs.Arrow} 本回合 token），ctx 保留到最后
         var drops = new Action[] { () => showThink = false, () => showBranch = false, () => showTurn = false };
         for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
         {
@@ -1521,9 +1523,9 @@ internal static class Program
             var done = t?.IsCompletedSuccessfully == true
                 && string.Equals(opts.Model, reasoningProbe?.Model, StringComparison.OrdinalIgnoreCase);
             var efforts = t?.IsCompletedSuccessfully == true ? t.Result : null;
-            // 探测完成且模型未变：显示实际生效档（无支持 → off，与 /thinking 的说明一致）；
+            // 探测完成且模型未变：显示实际生效档（无支持 {SafeColor.Glyphs.Arrow} off，与 /thinking 的说明一致）；
             // 探测中或已换模型（结果作废）：仍只显示 auto
-            think = done ? $"think:auto→{(efforts is { Count: > 0 } ? efforts[^1] : "off")}" : "think:auto";
+            think = done ? $"think:auto{SafeColor.Glyphs.Arrow}{(efforts is { Count: > 0 } ? efforts[^1] : "off")}" : "think:auto";
         }
         else
         {
@@ -1714,7 +1716,7 @@ internal static class Program
         }
         catch { /* 平台不支持：忽略 */ }
         var width = ConsoleColumns();
-        Console.WriteLine(InputLine.FitToWidth("── CodeAgent " + new string('─', 37), width));
+        Console.WriteLine(InputLine.FitToWidth($"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2} CodeAgent " + new string(SafeColor.Glyphs.RuleChar, 37), width));
         BannerRow("Version", InformationalVersion);
         var bannerOverride = config.PersistedProvider is not null &&
                              !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
@@ -1732,7 +1734,7 @@ internal static class Program
         if (config.SourceFile is not null)
             BannerRow("配置文件", config.SourceFile);
         Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", width));
-        Console.WriteLine(InputLine.FitToWidth(new string('─', 58), width));
+        Console.WriteLine(InputLine.FitToWidth(new string(SafeColor.Glyphs.RuleChar, 58), width));
     }
     /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
     /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。</summary>
@@ -1824,7 +1826,7 @@ internal static class Program
                     else if (result == "SHORT")
                         Console.WriteLine($"{SafeColor.Glyphs.Warn} 当前对话过短，无需压缩。");
                     else
-                        Console.WriteLine("✔ 历史已压缩。");
+                        Console.WriteLine($"{SafeColor.Glyphs.Ok} 历史已压缩。");
                 }
                 break;
 
@@ -2190,7 +2192,7 @@ internal static class Program
             case "/load":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    // 无参数：列出已保存的命名会话（按保存时间新→旧，附相对时间）
+                    // 无参数：列出已保存的命名会话（按保存时间新{SafeColor.Glyphs.Arrow}旧，附相对时间）
                     var sessions = SavedSessions(Path.Combine(Environment.CurrentDirectory, config.SessionDir));
                     if (sessions.Count == 0)
                     {
@@ -2198,7 +2200,7 @@ internal static class Program
                     }
                     else
                     {
-                        Console.WriteLine($"已保存的会话（{sessions.Count} 个，新 → 旧）:");
+                        Console.WriteLine($"已保存的会话（{sessions.Count} 个，新 {SafeColor.Glyphs.Arrow} 旧）:");
                         // 名称列对齐：原本 "  名称（相对时间）" 各行年龄起始位置参差
                         Console.WriteLine(FormatHelpList(
                             sessions.Select(s => new HelpEntry(s.Item1, $"（{s.Item2}）")).ToList(),
@@ -2235,7 +2237,7 @@ internal static class Program
                     {
                         if (agent.LoadSessionLog(logs[ridx - 1]))
                         {
-                            Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(logs[ridx - 1])}", ConsoleColumns(), "↩"));
+                            Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(logs[ridx - 1])}", ConsoleColumns(), SafeColor.Glyphs.Retry));
                             PrintConversation(agent, 20);
                         }
                         else
@@ -2354,7 +2356,7 @@ internal static class Program
                             try
                             {
                                 var exported = agent.ExportSessionLogMarkdown(log);
-                                Console.WriteLine(FormatConfirmLine($"{Path.GetFileNameWithoutExtension(log)} → {exported}", ConsoleColumns()));
+                                Console.WriteLine(FormatConfirmLine($"{Path.GetFileNameWithoutExtension(log)} {SafeColor.Glyphs.Arrow} {exported}", ConsoleColumns()));
                                 ok++;
                             }
                             catch (Exception ex)
@@ -2368,7 +2370,7 @@ internal static class Program
                             try
                             {
                                 var exported = agent.ExportMarkdown(name);
-                                Console.WriteLine(FormatConfirmLine($"快照 {name} → {exported}", ConsoleColumns()));
+                                Console.WriteLine(FormatConfirmLine($"快照 {name} {SafeColor.Glyphs.Arrow} {exported}", ConsoleColumns()));
                                 ok++;
                             }
                             catch (Exception ex)
@@ -2466,7 +2468,7 @@ internal static class Program
                         // 会话级覆盖（env / -p）指向的目标：标注以免用户误以为已持久化
                         var sessionOnly = isCurrent && config.PersistedProvider is not null &&
                                           !string.Equals(kv.Key, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
-                        var cur = isCurrent ? (sessionOnly ? " ←（会话级）" : " ←") : "";
+                        var cur = isCurrent ? (sessionOnly ? $" {SafeColor.Glyphs.Left}（会话级）" : $" {SafeColor.Glyphs.Left}") : "";
                         var price = kv.Value.PricePerMillionInput > 0
                             ? $"  单价: ${kv.Value.PricePerMillionInput:F2}/${kv.Value.PricePerMillionOutput:F2} per M"
                             : "";
@@ -2640,8 +2642,8 @@ internal static class Program
                         {
                             var efforts = t.Result;
                             Console.WriteLine(efforts is { Count: > 0 }
-                                ? $"当前模型 {opts.Model}: 支持推理参数（可用档位: {string.Join(" / ", efforts)}）→ auto 生效为 {efforts[^1]}"
-                                : $"当前模型 {opts.Model}: 不支持/无法判断推理参数 → auto 生效为 off（不发送）");
+                                ? $"当前模型 {opts.Model}: 支持推理参数（可用档位: {string.Join(" / ", efforts)}）{SafeColor.Glyphs.Arrow} auto 生效为 {efforts[^1]}"
+                                : $"当前模型 {opts.Model}: 不支持/无法判断推理参数 {SafeColor.Glyphs.Arrow} auto 生效为 off（不发送）");
                         }
                         else
                         {
@@ -2790,13 +2792,13 @@ internal static class Program
         return idx < 0 ? (line.ToLowerInvariant(), "") : (line[..idx].ToLowerInvariant(), line[(idx + 1)..]);
     }
 
-    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 ←。
+    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 {SafeColor.Glyphs.Left}。
     /// 与 /help、/tools 共用同一宽度自适应渲染器——模式说明是中文，窄终端同样需要折行。</summary>
     internal static string ModeListText(AgentConfig config, string currentMode) =>
         FormatHelpList(
             Modes.Build(config)
                 .Select(m => new HelpEntry(m.Name,
-                    m.Description + (m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? "  ←" : string.Empty)))
+                    m.Description + (m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? $"  {SafeColor.Glyphs.Left}" : string.Empty)))
                 .ToList(),
             ConsoleColumns());
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
@@ -3096,7 +3098,7 @@ internal static class Program
             快捷键:
               Esc                   撤回最近一轮对话（空输入时；连按逐轮回退）
               Tab                    切换下一个工作模式（/mode next）
-              Shift+Tab              切换文件访问权限模式（strict→whitelist→full）
+              Shift+Tab              切换文件访问权限模式（strict{SafeColor.Glyphs.Arrow}whitelist{SafeColor.Glyphs.Arrow}full）
               Alt+M / Ctrl+Shift+M   模式切换菜单
               Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）
               Alt+D / Ctrl+Shift+D   查看最近修改的 diff（/diff）

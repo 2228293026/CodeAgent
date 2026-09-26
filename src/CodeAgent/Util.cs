@@ -82,9 +82,15 @@ public static class SafeColor
         /// <summary>警告前缀。</summary>
         public static string Warn => AsciiEnabled ? "!" : "⚠";
 
-        /// <summary>成功标记（回合摘要、工具结果）。**必须 1 列**：它参与
-        /// <c>FormatToolStatusLine</c> 的预算扣减，宽度一变，耗时就会被静默切掉。</summary>
-        public static string Ok => AsciiEnabled ? "v" : "✔";
+        /// <summary>成功标记（回合摘要）。Unicode 形态 <c>✓</c>，ASCII 退回 <c>v</c>。
+        ///
+        /// 与 <see cref="OkCheck"/> 分开是有意的：工具状态行历史上用的是 <c>✔</c>、
+        /// 回合摘要用的是 <c>✓</c>，两者形状不同。收口字形的这轮**不应该**顺手改掉
+        /// 默认渲染——那属于行为变更，不属于"补上 ASCII 退路"。</summary>
+        public static string Ok => AsciiEnabled ? "v" : "✓";
+
+        /// <summary>成功标记（工具状态行）。同样必须 1 列，理由见 <see cref="Ok"/>。</summary>
+        public static string OkCheck => AsciiEnabled ? "v" : "✔";
 
         /// <summary>工具调用标记。
         ///
@@ -140,6 +146,37 @@ public static class SafeColor
         /// 后面跟着的状态文字先被挤出屏幕。用单宽的 <c>…</c> 既不占宽，语义也对。</summary>
         public static string Wait => Ellipsis;
 
+        /// <summary>停止/中断标记。技术符号区在老代码页里是乱码。</summary>
+        public static string Stop => AsciiEnabled ? "^C" : "⏹";
+
+        /// <summary>上一步/上一项标记。技术符号区在老代码页里是乱码。</summary>
+        public static string Prev => AsciiEnabled ? "<<" : "⏪";
+
+        /// <summary>下一步/下一项标记。技术符号区在老代码页里是乱码。</summary>
+        public static string Next => AsciiEnabled ? ">>" : "⏭";
+
+        /// <summary>回车键提示。技术符号区在老代码页里是乱码。</summary>
+        public static string Enter => AsciiEnabled ? "Enter" : "⏎";
+
+        /// <summary>Esc 键提示。技术符号区在老代码页里是乱码。</summary>
+        public static string Escape => AsciiEnabled ? "Esc" : "⎋";
+
+        /// <summary>向上箭头（token 增量等）。</summary>
+        public static string Up => AsciiEnabled ? "^" : "↑";
+
+        /// <summary>向左箭头（导航说明）。</summary>
+        public static string Left => AsciiEnabled ? "<-" : "←";
+
+        /// <summary>重试/刷新标记。箭头区在老代码页里是乱码。</summary>
+        public static string Retry => AsciiEnabled ? "v" : "↻";
+
+        /// <summary>规则线（向导分隔）。</summary>
+        public static string Rule2 => AsciiEnabled ? "-" : "─";
+
+        /// <summary>规则线（向导分隔）。<see cref="Rule2"/> 的字符形态，供
+        /// <c>new string(...)</c> 这类需要 <c>char</c> 的调用点使用。</summary>
+        public static char RuleChar => AsciiEnabled ? '-' : '─';
+
         /// <summary>spinner 的一帧。**必须 1 列**：spinner 的清行按上一帧的实测显示宽度走，
         /// 宽度一变就会留下残字。
         /// Unicode 下沿用盲文点字（⠦⠸⠼…，点阵比 <c>|/-o\</c> 更平滑）；
@@ -156,13 +193,18 @@ public static class SafeColor
         public static string SegmentSeparator => AsciiEnabled ? " | " : " · ";
 
         /// <summary>把一段已拼好的 UI 文本里的制表符/符号统一换成 ASCII 等价物。
-        /// 供那些在别处已经拼好整行、无法逐处替换的场景收口。
+        /// 供那些在别处已经拼好整行、无法逐处替换的场景收口——渲染层里
+        /// <c>RenderGlyphGuardTests</c> 查到的残留字形都走这里。
         /// 省略号换成长 3 的 <c>...</c>，与 <see cref="Ellipsis"/> 保持一致——
         /// 调用方仍须把结果喂给 <c>TextUtil.DisplayWidth</c>，不能按 1 列算。</summary>
         public static string Substitute(string text) => !AsciiEnabled ? text : text
             .Replace('│', '|').Replace('▌', '|').Replace('─', '-').Replace('▸', '>')
-            .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v').Replace('❗', '!')
-            .Replace('⚠', '!').Replace('→', '-').Replace('…', '.')
+            .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v').Replace('✓', 'v')
+            .Replace('❗', '!').Replace('⚠', '!').Replace('⏵', '>').Replace('◆', '*')
+            .Replace('→', '-').Replace('←', '-').Replace('↑', '^').Replace('↩', 'v')
+            .Replace("⏎", "Enter").Replace("⎋", "Esc")
+            .Replace('⏹', '#').Replace('⏭', '>').Replace('⏮', '<').Replace('⏪', '<')
+            .Replace('…', '.')
             .Replace("..", "...");
     }
 

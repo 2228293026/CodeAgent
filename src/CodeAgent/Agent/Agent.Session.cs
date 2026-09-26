@@ -200,7 +200,7 @@ public sealed partial class Agent
         }
         catch (IOException)
         {
-            // 读取中断：返回已解析部分（LoadSessionLog 视为空 → false）
+            // 读取中断：返回已解析部分（LoadSessionLog 视为空 {SafeColor.Glyphs.Arrow} false）
         }
         catch (UnauthorizedAccessException)
         {
@@ -307,7 +307,7 @@ public sealed partial class Agent
         }
     }
 
-    /// <summary>会话日志摘要（/resume 列表用）：首条用户消息预览（多行折叠为 ⏎）+ 消息条数。
+    /// <summary>会话日志摘要（/resume 列表用）：首条用户消息预览（多行折叠为 {SafeColor.Glyphs.Enter}）+ 消息条数。
     /// 文件名只是时间戳，看不出哪个会话是哪段对话——首条用户输入才是可辨识的标题。
     /// 流式读取且行数封顶 5000：超大日志不做完整解析，避免列表卡顿；Capped=true 表示
     /// 条数只是下限（实际更多），显示层应标「≥」而不是当成精确值。</summary>
@@ -336,7 +336,7 @@ public sealed partial class Agent
                     if (n?["role"]?.GetValue<string>() == "user" &&
                         n["content"]?.GetValue<string>() is { Length: > 0 } c &&
                         !c.TrimStart().StartsWith('/'))
-                        preview = c.Replace("\r", "").Replace("\n", " ⏎ ").Trim();
+                        preview = c.Replace("\r", "").Replace("\n", $" {SafeColor.Glyphs.Enter} ").Trim();
                 }
                 catch (OperationCanceledException)
                 {
@@ -483,7 +483,7 @@ public sealed partial class Agent
                 yield break;
             var start = Math.Max(0, idx - 40);
             var len = Math.Min(content.Length - start, keyword.Length + 80);
-            var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", " ⏎ ");
+            var snippet = content.Substring(start, len).Replace("\r", "").Replace("\n", $" {SafeColor.Glyphs.Enter} ");
             yield return (role, (start > 0 ? "…" : "") + snippet + (start + len < content.Length ? "…" : ""));
             searchFrom = idx + keyword.Length;
             found++;

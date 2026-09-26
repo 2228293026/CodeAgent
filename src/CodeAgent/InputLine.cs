@@ -485,7 +485,7 @@ public static class InputLine
 
         string Header() => modePicker
             ? "  Modes (up/down select, Enter switch, Esc close):"
-            : "  Commands (1-9 run, up/down select, → fill, Enter run, Esc close):";
+            : $"  Commands (1-9 run, up/down select, {SafeColor.Glyphs.Arrow} fill, {SafeColor.Glyphs.Enter} run, {SafeColor.Glyphs.Escape} close):";
 
         int CountNewlines(string s)
         {
@@ -779,7 +779,7 @@ public static class InputLine
             menuIndex = newIndex;
             var sb = new StringBuilder();
             sb.AppendLine();
-            sb.AppendLine(Fit($"  → {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
+            sb.AppendLine(Fit($"  {SafeColor.Glyphs.Arrow} {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
             sb.Append(InputText());
             Console.Write(sb.ToString());
         }

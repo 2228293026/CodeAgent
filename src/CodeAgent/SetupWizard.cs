@@ -49,7 +49,7 @@ public static class SetupWizard
             .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        output.WriteLine("── CodeAgent 供应商配置向导 ──────────────");
+        output.WriteLine($"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2} CodeAgent 供应商配置向导 {new string(SafeColor.Glyphs.RuleChar, 14)}");
         output.WriteLine($"将更新配置文件: {path}\n");
         output.WriteLine("请选择供应商:");
         for (int i = 0; i < Presets.Length; i++)
@@ -172,7 +172,7 @@ public static class SetupWizard
                      || (opts.ApiKeyEnv is { Length: > 0 } && Environment.GetEnvironmentVariable(opts.ApiKeyEnv) is { Length: > 0 });
         if (!hasKey && providerName is not ("ollama" or "hitmargin"))
         {
-            output.WriteLine($"\n⏭ 跳过连接测试（{opts.ApiKeyEnv ?? "API Key"} 未设置）");
+            output.WriteLine($"\n{SafeColor.Glyphs.Next} 跳过连接测试（{opts.ApiKeyEnv ?? "API Key"} 未设置）");
             return;
         }
         // 免费服务（ollama / hitmargin）不校验鉴权：若调用方未预填占位 Key，补一个以免后续 Provider 初始化报错
