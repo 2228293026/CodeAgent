@@ -759,6 +759,11 @@ public sealed class ConsoleRenderer
         var budget = TableBudget();
         var keep = MaxReadableColumns(natural, budget);
         var droppedCols = cols - keep;
+        // 原始列数必须在这里留下：下面 `cols = keep` 会把它覆盖掉，
+        // 而截断提示要报的是**总数**。用覆盖后的值会打印成
+        // 「表格共 4 列，仅显示前 4 列」——等于告诉用户一列都没丢，
+        // 比不给提示更糟。
+        var totalCols = cols;
         if (droppedCols > 0)
         {
             natural = natural.Take(keep).ToArray();
@@ -779,11 +784,35 @@ public sealed class ConsoleRenderer
             }
             Console.WriteLine("  " + string.Join(" │ ", cells));
         }
+        // 截断提示本身也要受宽度约束：解释截断的那一行**溢出**终端比不解释更糟。
+        // budget <= 0 表示宽度未知，此时不做猜测性裁剪（既有约定）。
+        var noteWidth = budget - 2;
         if (droppedCols > 0)
-            Console.WriteLine($"  …(表格共 {cols} 列，终端较窄，仅显示前 {keep} 列)");
+            Console.WriteLine("  " + Note(TableDroppedColsNote(totalCols, keep, noteWidth), noteWidth));
         if (truncated)
-            Console.WriteLine($"  …(表格共 {_tableBuf.Count} 行，仅显示前 {MaxTableRows} 行)");
+            Console.WriteLine("  " + Note(TableDroppedRowsNote(_tableBuf.Count, MaxTableRows, noteWidth), noteWidth));
         _tableBuf.Clear();
+    }
+
+    /// <summary>把提示压进预算：宽度未知时原样返回（不猜测折行位置）。</summary>
+    private static string Note(string note, int width) =>
+        width > 0 ? InputLine.FitToWidth(note, width) : note;
+
+    /// <summary>裁列提示：报**总数**而不是保留数。此前 `cols` 已被改写成 `keep`，
+    /// 于是输出「表格共 4 列，仅显示前 4 列」——谎报一列都没丢，比不给提示更糟。
+    /// 放不下完整句时改用紧凑的 <c>…(N 列 → M 列)</c>：按**显示宽度**判定，
+    /// 不能按字符数——「仅显示前」三个汉字只占 3 个字符却占 6 列。</summary>
+    internal static string TableDroppedColsNote(int total, int keep, int width = 0)
+    {
+        var full = $"…(表格共 {total} 列，终端较窄，仅显示前 {keep} 列)";
+        return width > 0 && TextUtil.DisplayWidth(full) > width ? $"…({total} 列 → {keep} 列)" : full;
+    }
+
+    /// <summary>裁行提示。与 <see cref="TableDroppedColsNote"/> 同样的宽度判定。</summary>
+    internal static string TableDroppedRowsNote(int total, int keep, int width = 0)
+    {
+        var full = $"…(表格共 {total} 行，仅显示前 {keep} 行)";
+        return width > 0 && TextUtil.DisplayWidth(full) > width ? $"…({total} 行 → {keep} 行)" : full;
     }
 
     private static List<string> SplitCells(string row)
