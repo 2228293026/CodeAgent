@@ -66,7 +66,11 @@ public class StreamingBoundaryTests
         }
         var output = writer.ToString();
         Assert.Contains("var x = 1;", output);
-        Assert.DoesNotContain("cs", output);
+        // 语言标注单独成徽标行（UI Round 61 起），但**不能混进代码正文**：
+        // 断言的是「代码那一行里没有 cs」，不是「整个输出里没有 cs」。
+        var codeLine = System.Linq.Enumerable.First(
+            output.Split('\n'), l => l.Contains("var x = 1;", StringComparison.Ordinal));
+        Assert.DoesNotContain("cs", codeLine);
     }
 
     [Fact]

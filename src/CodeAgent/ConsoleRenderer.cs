@@ -12,6 +12,8 @@ public sealed class ConsoleRenderer
     private bool _inCode;
     private int _tickRun; // 当前连续反引号数
     private bool _inInlineCode; // 是否在行内代码 `` `...` `` 内
+    private readonly System.Text.StringBuilder _codeLang = new(); // 围栏语言标注（```cs 的 cs）
+    private const int MaxCodeLangChars = 24; // 标注本身的长度上限：再长就不是语言名了
     private bool _skipCodeIntro; // 围栏起始行的语言标注（如 ```cs 的 cs）应丢弃
 
     /// <summary>终端列数（0 = 未知）。列表项/块引用按此宽度折行并加悬挂缩进；
@@ -60,10 +62,12 @@ public sealed class ConsoleRenderer
         if (_inCode)
         {
             EmitCode(_code.ToString());
+            _codeLang.Clear(); // 语言标注只属于当前代码块，用完即弃（否则下一块会带上上一块的语言）
             _code.Clear();
         }
         else if (_line.Length > 0)
         {
+            _codeLang.Clear(); // 非代码路径也要清：上一块残留的语言不能漏到下一个代码块
             var line = _line.ToString();
             _line.Clear();
             if (line.TrimStart().StartsWith('|'))
@@ -80,6 +84,7 @@ public sealed class ConsoleRenderer
         }
         else
         {
+            _codeLang.Clear();
             FlushTable();
         }
         FlushPendingBlanks();
@@ -188,11 +193,17 @@ public sealed class ConsoleRenderer
 
     private void HandleCodeChar(char ch)
     {
-        // 围栏起始行（```cs 的 cs）：丢弃直到换行，避免语言标注混入代码内容
+        // 围栏起始行（```cs 的 cs）：取出语言标注后丢弃该行剩余内容，避免它混入代码
         if (_skipCodeIntro)
         {
             if (ch == '\n')
+            {
                 _skipCodeIntro = false;
+                return;
+            }
+            // 语言标注此前被直接丢弃——读者只能靠猜。现在留下来单独成行。
+            if (ch != '\r' && _codeLang.Length < MaxCodeLangChars)
+                _codeLang.Append(ch);
             return;
         }
         if (ch == '\r')
@@ -206,6 +217,8 @@ public sealed class ConsoleRenderer
                 if (_code.Length >= 2)
                     _code.Length -= 2;
                 EmitCode(_code.ToString());
+                _codeLang.Clear(); // 围栏一关就要清：同一次 Append 里可能有多个代码块，
+                                   // 只在 Flush 清会让第二块带上第一块的语言（▌csjson）
                 _code.Clear();
                 _inCode = false;
                 _tickRun = 0;
@@ -527,10 +540,35 @@ public sealed class ConsoleRenderer
             ? string.Empty
             : $"（代码块有 {overlong} 行超过 {width} 列，已折行显示；代码本身未截断）";
 
+    /// <summary>围栏语言徽标：`  ▌cs`（弱化的一行，标出下面这段代码是什么语言）。
+    /// 语言标注此前被直接丢弃，读者只能靠猜。宽度未知或放不下时返回空串——
+    /// 宁可不标，也不能让一行徽标自己折行、把代码块顶歪。</summary>
+    internal static string FormatCodeLangBadge(string lang, int width)
+    {
+        var text = lang.Trim();
+        if (text.Length == 0)
+            return string.Empty;
+        // 标注里不该有空格（`cs extra` 不是语言名）：只取第一段，避免徽标变成整行废话
+        var space = text.IndexOf(' ', StringComparison.Ordinal);
+        if (space > 0)
+            text = text[..space];
+        if (text.Length == 0)
+            return string.Empty;
+        var badge = "  ▌" + InputLine.FitToWidth(text, MaxCodeLangChars);
+        return width > 0 && TextUtil.DisplayWidth(badge) > width ? string.Empty : badge;
+    }
+
     private void EmitCode(string code)
     {
         if (code.Length == 0)
             return;
+        var badge = FormatCodeLangBadge(_codeLang.ToString(), _width);
+        if (badge.Length > 0)
+        {
+            SafeColor.Foreground(ConsoleColor.DarkGray);
+            Console.WriteLine(badge);
+            SafeColor.Reset();
+        }
         var overlong = CountOverlongCodeLines(code, _width);
         SafeColor.Foreground(ConsoleColor.Green);
         Console.Write(NormalizeCodeBlock(code));
