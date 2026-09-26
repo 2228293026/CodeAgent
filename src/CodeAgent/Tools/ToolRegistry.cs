@@ -542,6 +542,7 @@ public sealed class ToolRegistry
         registry.Register(new UsingDirectiveReportTool());
         registry.Register(new DisposablePatternReportTool());
         registry.Register(new StringFormatReportTool());
+        registry.Register(new EnumUsageReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
