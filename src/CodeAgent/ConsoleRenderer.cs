@@ -775,8 +775,21 @@ public sealed class ConsoleRenderer
             return _width;
         if (Console.IsOutputRedirected)
             return 0;
-        try { return Math.Clamp(Console.WindowWidth, 0, 400); } catch { return 0; }
+        int measured;
+        try { measured = Console.WindowWidth; }
+        catch { return 0; }
+        // 终端最小化、拖拽过程中的抖动都会让 WindowWidth 短暂返回 1~2 列。
+        // 此前这里直接拿它当预算，于是每一列都被压到 1~2 字符
+        // （`a │ b │ c`）——正是 MinPlausibleColumns 当初要防的那种退化。
+        // 现在沿用同一套「测量值 + 上一次好值」的解析。
+        var resolved = Program.ResolveColumns(measured, _lastGoodWidth);
+        if (resolved >= Program.MinPlausibleColumns)
+            _lastGoodWidth = resolved;
+        return resolved;
     }
+
+    /// <summary>上一次可信的表格预算（用于终端宽度读数抖动时沿用）。</summary>
+    private int _lastGoodWidth;
 
     /// <summary>Markdown 分隔行单元格：可选冒号 + 至少 3 个 -（---、:---、---:、:---:）。</summary>
     private static readonly System.Text.RegularExpressions.Regex SepRe = new(@"^:?-{3,}:?$", System.Text.RegularExpressions.RegexOptions.Compiled);
