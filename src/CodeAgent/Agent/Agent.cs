@@ -708,9 +708,40 @@ public sealed partial class Agent
     /// 续行顶到行首会让预览块「逃出」它所属的 ✔/⚠ 工具状态行。</summary>
     internal const string ToolPreviewIndent = "      ";
 
+    /// <summary>
+    /// 工具名按**下划线边界**缩短：`read_file` → `read_…`。
+    /// 直接按显示宽度硬截会得到 `read_fi…` —— 那看起来像一个真实存在的工具名，
+    /// 用户照着去 /help 里找却根本找不到（比截断本身更危险）。
+    /// 连第一个下划线段都放不下时才硬截（短名如 `ls` 属于这种情况）。
+    /// </summary>
+    internal static string ShortenToolName(string name, int budget)
+    {
+        if (budget <= 0)
+            return string.Empty;
+        if (TextUtil.DisplayWidth(name) <= budget)
+            return name;
+        var parts = name.Split('_');
+        var kept = new List<string>();
+        var used = 0;
+        foreach (var part in parts)
+        {
+            // "…" 占 1 列；分隔符 "_" 在每个保留段之后
+            var w = TextUtil.DisplayWidth(part) + (kept.Count > 0 ? 1 : 0);
+            if (used + w + 1 > budget)
+                break;
+            kept.Add(part);
+            used += w;
+        }
+        if (kept.Count > 0)
+            return string.Join("_", kept) + "…";
+        // 单段名（无下划线）或首段就超宽：只能硬截
+        return InputLine.FitToWidth(name, budget);
+    }
+
     /// <summary>工具结果行：✔/⚠ + 调用摘要 + 耗时；窄终端按显示宽度截断。
     /// 超宽时先**按参数整体丢弃**再截断：直接硬切会把参数劈成半截
-    /// （path=C:\Users\very\lo），那看起来像一个真实路径——比截断本身更危险。</summary>
+    /// （path=C:\Users\very\lo），那看起来像一个真实路径——比截断本身更危险。
+    /// 连工具名都放不下时按**下划线边界**缩短，不产出「像真名的残串」。</summary>
     internal static string FormatToolStatusLine(string summary, bool isError, TimeSpan elapsed, int width = 0)
     {
         var mark = isError ? "⚠" : "✔";
@@ -733,7 +764,7 @@ public sealed partial class Agent
             return summary;
         var open = summary.IndexOf('(', StringComparison.Ordinal);
         if (open <= 0 || !summary.EndsWith(')'))
-            return InputLine.FitToWidth(summary, budget);
+            return ShortenSummaryAsWhole(summary, budget);
         var name = summary[..open];
         var args = summary[(open + 1)..^1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var kept = new List<string>();
@@ -748,10 +779,25 @@ public sealed partial class Agent
             used += w;
         }
         if (kept.Count == 0)
-            return InputLine.FitToWidth(name, budget);
+            return ShortenSummaryAsWhole(summary, budget);
         var hiddenCount = args.Length - kept.Count;
         var note = hiddenCount > 0 ? $" …+{hiddenCount}" : "";
         return $"{name}({string.Join(" ", kept)}{note})";
+    }
+
+    /// <summary>一个参数都放不下时的退路：丢掉整个参数列表，工具名按下划线边界缩短。
+    /// 保留 `(…)` 让读者知道「这里本来有参数」而不是以为工具就是这么调用的。
+    /// 先给名字缩短、**再**补占位符——顺序反了就会退化成按字符硬截的 `read_fil…`。</summary>
+    private static string ShortenSummaryAsWhole(string summary, int budget)
+    {
+        var open = summary.IndexOf('(', StringComparison.Ordinal);
+        if (open <= 0 || !summary.EndsWith(')'))
+            return InputLine.FitToWidth(summary, budget);
+        var name = summary[..open];
+        var room = budget - 3; // "(…)" 占 3 列
+        if (room < 1)
+            return InputLine.FitToWidth(name, budget);
+        return $"{ShortenToolName(name, room)}(…)";
     }
 
     /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。
