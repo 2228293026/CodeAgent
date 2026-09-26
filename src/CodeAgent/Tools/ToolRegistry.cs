@@ -582,6 +582,7 @@ public sealed class ToolRegistry
         registry.Register(new SilentCatchReportTool());
         registry.Register(new InterfaceContractReportTool());
         registry.Register(new TestabilityReportTool());
+        registry.Register(new LockMisuseReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
