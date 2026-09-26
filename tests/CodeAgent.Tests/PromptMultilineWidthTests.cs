@@ -63,6 +63,51 @@ public sealed class PromptMultilineWidthTests
     }
 
     [Fact]
+    public void RedrawText_NeverContainsTheFrameTop()
+    {
+        // 回归（用户现场报上来）：重绘文本只允许含**提示符最后一行**。
+        // 带上边框 = 每次按键把边框再打一遍 → 屏幕一行行往下堆。
+        var framed = Program.BuildInputFrameTop(Prompt, Program.InputModeHint("high"), 80);
+        var tail = LastLine(framed);
+
+        // 模拟一次重绘：InputLine 用 promptTail 调 FormatInputText
+        var redraw = InputLine.FormatInputText(tail, false, "", false, -1, 0, "ls", 24, 76, null, colored: false);
+
+        Assert.DoesNotContain("◈ high", redraw); // 边框/提示不得混进重绘文本
+        Assert.DoesNotContain('\n', redraw);      // 重绘文本必须单行
+        Assert.Equal(tail + "ls", redraw);
+    }
+
+    [Fact]
+    public void RedrawText_IsExactlyOneRowTall()
+    {
+        // 重绘是「\r\x1b[2K + text」：清行只作用一行，text 多一行就多漏一行。
+        var framed = Program.BuildInputFrameTop(Prompt, Program.InputModeHint("high"), 80);
+        for (var i = 0; i < 20; i++)
+        {
+            var text = InputLine.FormatInputText(LastLine(framed), false, "", false, -1, 0, new string('x', i), 24, 76, null, colored: false);
+            Assert.Single(text.Split('\n'));
+        }
+    }
+
+    [Fact]
+    public void FrameTop_OnlyTheFirstDrawCarriesIt()
+    {
+        // 首绘打 2 行（边框 + 提示符），之后每次重绘只打 1 行——总行数才稳定。
+        var framed = Program.BuildInputFrameTop(Prompt, Program.InputModeHint("high"), 80);
+        Assert.Equal(2, framed.Split('\n').Length);
+
+        var tail = LastLine(framed);
+        var total = framed.Split('\n').Length; // 首绘
+        for (var i = 0; i < 5; i++)
+        {
+            var text = InputLine.FormatInputText(tail, false, "", false, -1, 0, new string('y', i), 24, 76, null, colored: false);
+            total += text.Split('\n').Length; // 每次重绘
+        }
+        Assert.Equal(7, total); // 2 + 5×1：按键再多，输入块高度也不变
+    }
+
+    [Fact]
     public void FrameTopLine_ItselfFitsTheTerminal()
     {
         // 边框行必须自己就放得下——它被折行的话，后面全乱

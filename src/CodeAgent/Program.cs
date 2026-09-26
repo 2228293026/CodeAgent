@@ -422,6 +422,13 @@ internal static class Program
             line = InputLine.NormalizeCommandFilter(line);
             if (line.Length == 0)
                 continue;
+            // bash 模式：!命令 直接跑 shell，不经过模型。
+            // 放在斜杠命令**之前**：它和 /xxx 互斥，先判谁都不会互相吞掉。
+            if (Program.TryParseBangCommand(line, out var bangCommand))
+            {
+                await RunBangCommandAsync(bangCommand, config, Environment.CurrentDirectory);
+                continue;
+            }
             if (line.StartsWith('/'))
             {
                 if (line.Equals("/retry", StringComparison.OrdinalIgnoreCase))
@@ -1452,11 +1459,92 @@ internal static class Program
     /// 既看不出存到哪儿，又不如不显示。</summary>
     internal const int MinSavedPathWidth = 6;
 
+    /// <summary>bash 模式前缀：<c>!命令</c> 直接跑 shell，不经过模型（学自 Claude Code）。
+    /// 用户想确认一个文件存在、跑个 git status 时，绕模型一圈既慢又烧 token。</summary>
+    internal const char BangPrefix = '!';
+
+    /// <summary>
+    /// 判定一行输入是不是 bash 模式命令。
+    /// 单独一个 <c>!</c>（后面没有内容）**不算**命令——那多半是想打叹号，
+    /// 按命令处理会得到一个空命令和一句莫名其妙的错误。
+    /// </summary>
+    internal static bool TryParseBangCommand(string line, out string command)
+    {
+        command = string.Empty;
+        var t = line.TrimStart();
+        if (t.Length < 2 || t[0] != BangPrefix)
+            return false;
+        command = t[1..].Trim();
+        return command.Length > 0;
+    }
+
+    /// <summary>bash 模式的执行行：<c>! ls -la</c>，命令过长时按宽度收敛。
+    /// 命令被截断时要留省略号——照着半条命令复制粘贴会得到难以定位的错误。</summary>
+    internal static string FormatBangEcho(string command, int width)
+    {
+        var head = $"{BangPrefix} ";
+        if (width <= 0)
+            return head + command;
+        return InputLine.FitToWidth(head + command, width);
+    }
+
+    /// <summary>bash 模式结果的收尾行：成功只给退出码，失败额外点明退出码。
+    /// 命令没报错时不加任何装饰——输出本身就是结论。</summary>
+    internal static string FormatBangResult(int exitCode, int width)
+    {
+        var text = exitCode == 0
+            ? $"{SafeColor.Glyphs.Ok} 退出码 0"
+            : $"{SafeColor.Glyphs.Error} 退出码 {exitCode}";
+        if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+        return InputLine.FitToWidth(text, width);
+    }
+
     /// <summary>普通结果/说明行（无标记）：按显示宽度裁剪。
     /// /find 这类输出会把**用户输入的关键字**与快照名直接拼进行里，
     /// 二者长度不受控，没有宽度预算就必然溢出。</summary>
     internal static string FormatResultLine(string body, int width = 0) =>
         width <= 0 ? body : InputLine.FitToWidth(body, width);
+
+    /// <summary>bash 模式：执行一条 shell 命令并直接打印输出，**不经过模型**。
+    ///
+    /// 确认文件在不在、跑个 git status 这类事，绕模型一圈既慢又烧 token。
+    /// shell 与超时沿用 /shell 和配置，保证与 <c>run_command</c> 工具是同一套行为；
+    /// ESC 中断复用 <see cref="RunTurnAsync"/>，和回合内是同一套按键监视。
+    /// </summary>
+    private static async Task RunBangCommandAsync(string command, AgentConfig config, string cwd)
+    {
+        var cols = ConsoleColumns();
+        using var scope = SafeColor.Scope(SafeColor.Muted);
+        Console.WriteLine(FormatBangEcho(command, cols));
+        scope.Dispose();
+        try
+        {
+            var shell = string.IsNullOrWhiteSpace(config.Shell)
+                ? CodeAgent.Tools.ShellRunner.AutoShell()
+                : config.Shell;
+            var workDir = cwd;
+            var timeout = Math.Clamp(config.CommandTimeoutSeconds, 1, 300);
+            var text = await RunTurnAsync(async t =>
+            {
+                (int exitCode, string output) = await CodeAgent.Tools.ShellRunner
+                    .RunAsync(shell, command, workDir, timeout, t);
+                if (!string.IsNullOrEmpty(output))
+                    Console.WriteLine(output);
+                return FormatBangResult(exitCode, cols);
+            });
+            if (text.Length > 0)
+                Console.WriteLine(text);
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine($"{SafeColor.Glyphs.Stop} 已中断");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{SafeColor.Glyphs.Error} {FormatResultLine(ex.Message, cols)}");
+        }
+    }
 
     /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
     internal static int ConsoleColumnsForNotice() => ConsoleColumns();
@@ -3334,10 +3422,20 @@ internal static class Program
         new("/exit, /quit", "退出"),
     ];
 
+    /// <summary>输入行专用语法（不进 <see cref="ReplCommands"/>，见 PrintReplHelp 的说明）。</summary>
+    internal static readonly HelpEntry[] BangModeHelp =
+    [
+        new("!命令", "直接执行 shell 命令（不经过模型）"),
+    ];
+
     private static void PrintReplHelp()
     {
         Console.WriteLine("命令:");
         Console.WriteLine(FormatHelpList(ReplCommands, ConsoleColumns()));
+        // bash 模式不进 ReplCommands：那份列表同时是 Tab 补全菜单的来源，
+        // 而补全只在输入 / 时弹出，塞一条非 / 开头的条目会污染菜单。
+        Console.WriteLine("输入行:");
+        Console.WriteLine(FormatHelpList(BangModeHelp, ConsoleColumns()));
         Console.WriteLine("""
             用法:
               codeagent "帮我给项目写一个 README"  一次性任务（管道输入会附加到任务后：`type bug.log | codeagent "分析"`）

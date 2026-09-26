@@ -517,8 +517,14 @@ public static class InputLine
 
         // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M）」；
         // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
+        //
+        // 关键：用 **promptTail（提示符最后一行）**，不是 promptPlain（整段）。
+        // 提示符可能占多行（BuildInputFrameTop 的「上边框 + 提示符」），而重绘是
+        // 「\r\x1b[2K + text」——清行只作用一行。带上边框就等于**每次按键都把边框
+        // 再打一遍**，多出来的行往下堆，表现为「敲一个字就多出一行 ◈ high · /thinking」。
+        // 边框属于 chrome，首次绘制一次即可，不该参与重绘。
         string InputText() =>
-            FormatInputText(promptPlain, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
+            FormatInputText(promptTail, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
                 SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk);
 
         var menuOpen = false;
