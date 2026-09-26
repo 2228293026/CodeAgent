@@ -474,7 +474,7 @@ internal static class Program
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"⚠ 自动压缩失败: {ex.Message}");
+                                WriteNotice($"自动压缩失败: {ex.Message}");
                             }
                         }
                         else if (pct >= 90)
@@ -486,11 +486,11 @@ internal static class Program
             }
             catch (ProviderException ex)
             {
-                Console.WriteLine($"\n⚠ {ex.Message}");
+                WriteNotice($"\n{ex.Message}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"\n⚠ 发生错误: {ex.GetType().Name}: {ex.Message}");
+                WriteNotice($"\n发生错误: {ex.GetType().Name}: {ex.Message}");
             }
         }
 
@@ -940,7 +940,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠ 写入配置失败: {ex.Message}");
+            WriteNotice($"写入配置失败: {ex.Message}");
         }
     }
 
@@ -1282,6 +1282,13 @@ internal static class Program
         return $"{marker} {ShortenTrailingPath(body, budget) ?? InputLine.FitToWidth(body, budget)}";
     }
 
+    /// <summary>所有「回显用户输入或异常消息」的通知行的**唯一出口**。
+    /// 这些行的正文长度不受控：<c>rest</c> 是用户敲的任意文本、<c>ex.Message</c>
+    /// 可能带整条文件路径或嵌套异常。直接 <c>Console.WriteLine($"…")</c> 就没有宽度约束，
+    /// 窄终端上会硬折行、把后面的提示符顶走。走这里统一收口。</summary>
+    internal static void WriteNotice(string body, string marker = "⚠") =>
+        Console.WriteLine(FormatNoticeLine(body, ConsoleColumns(), marker));
+
     /// <summary>实测宽度的可信下限：低于此值视为测量失效（终端最小化、拖拽过程中的抖动、
     /// 某些终端在重设尺寸时短暂返回 1~2 列）。此时不能拿它去裁剪——否则每一行
     /// 都会被截成只剩一个省略号，比不裁剪糟得多。</summary>
@@ -1580,7 +1587,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"⚠ 无法获取模型列表: {ex.Message}");
+            WriteNotice($"无法获取模型列表: {ex.Message}");
         }
     }
 
@@ -1746,7 +1753,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"⚠ 压缩失败: {ex.Message}");
+                        WriteNotice($"压缩失败: {ex.Message}");
                         break;
                     }
                     if (IsCancelledTurn(result))
@@ -1801,7 +1808,7 @@ internal static class Program
                     }
                     else
                     {
-                        Console.WriteLine($"无效权限模式: {rest}(可选 strict | whitelist | full)");
+                        WriteNotice($"无效权限模式: {rest}(可选 strict | whitelist | full)");
                     }
                 }
                 else
@@ -1843,7 +1850,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"切换失败: {ex.Message}");
+                        WriteNotice($"切换失败: {ex.Message}");
                     }
                 }
                 break;
@@ -1881,7 +1888,7 @@ internal static class Program
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"获取模型列表失败: {ex.Message}");
+                            WriteNotice($"获取模型列表失败: {ex.Message}");
                             break;
                         }
                     }
@@ -1893,9 +1900,9 @@ internal static class Program
                             if (knownModels.Count > 0 && !knownModels.Contains(modelArg, StringComparer.OrdinalIgnoreCase))
                             {
                                 var near = SuggestModels(knownModels, modelArg);
-                                Console.WriteLine($"⚠ 模型列表中没有「{modelArg}」（共 {knownModels.Count} 个模型）");
+                                WriteNotice($"模型列表中没有「{modelArg}」（共 {knownModels.Count} 个模型）");
                                 if (near.Count > 0)
-                                    Console.WriteLine($"  相近的模型: {string.Join("、", near)}");
+                                    WriteNotice($"  相近的模型: {string.Join("、", near)}");
                                 Console.WriteLine(FormatHintLine("仍将按输入保存；/models [关键字] 可查列表", ConsoleColumns()));
                             }
                         }
@@ -1918,7 +1925,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"切换失败: {ex.Message}");
+                        WriteNotice($"切换失败: {ex.Message}");
                     }
                 }
                 break;
@@ -2112,7 +2119,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"保存失败: {ex.Message}");
+                        WriteNotice($"保存失败: {ex.Message}");
                     }
                 }
                 break;
@@ -2145,7 +2152,7 @@ internal static class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"加载失败: {ex.Message}");
+                        WriteNotice($"加载失败: {ex.Message}");
                     }
                 }
                 break;
@@ -2289,7 +2296,7 @@ internal static class Program
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"⚠ 跳过 {Path.GetFileName(log)}: {ex.Message}");
+                                WriteNotice($"跳过 {Path.GetFileName(log)}: {ex.Message}");
                             }
                         }
                         // 命名快照一并导出
@@ -2303,7 +2310,7 @@ internal static class Program
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"⚠ 跳过快照 {name}: {ex.Message}");
+                                WriteNotice($"跳过快照 {name}: {ex.Message}");
                             }
                         }
                         Console.WriteLine($"共处理 {ok} 个会话。");
@@ -2332,7 +2339,7 @@ internal static class Program
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"导出失败: {ex.Message}");
+                    WriteNotice($"导出失败: {ex.Message}");
                 }
                 break;
 
@@ -2444,7 +2451,7 @@ internal static class Program
                                                     || wanted.Contains(m.Name, StringComparison.OrdinalIgnoreCase))
                                         .Select(m => m.Name).Take(3).ToList();
                         if (near.Count > 0)
-                            Console.WriteLine($"  相近的模式: {string.Join("、", near)}");
+                            WriteNotice($"  相近的模式: {string.Join("、", near)}");
                     }
                     else
                     {
@@ -2588,12 +2595,12 @@ internal static class Program
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"思考强度已设为: {v}（保存配置失败: {ex.Message}）");
+                            WriteNotice($"思考强度已设为: {v}（保存配置失败: {ex.Message}）");
                         }
                     }
                     else
                     {
-                        Console.WriteLine($"无效值: {rest}（可选: off / low / medium / high / auto）");
+                        WriteNotice($"无效值: {rest}（可选: off / low / medium / high / auto）");
                     }
                 }
                 break;
@@ -2624,12 +2631,12 @@ internal static class Program
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"命令 shell 已设为: {v}（保存配置失败: {ex.Message}）");
+                            WriteNotice($"命令 shell 已设为: {v}（保存配置失败: {ex.Message}）");
                         }
                     }
                     else
                     {
-                        Console.WriteLine($"无效值: {rest}（可选: cmd / powershell / pwsh / bash / sh / auto）");
+                        WriteNotice($"无效值: {rest}（可选: cmd / powershell / pwsh / bash / sh / auto）");
                     }
                 }
                 break;
