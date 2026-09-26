@@ -328,4 +328,98 @@ public class AsciiGlyphTests : IDisposable
             Assert.Contains("(42", line);
         }
     }
+
+    [Fact]
+    public void EllipsisWidthIsReportedNotAssumed()
+    {
+        // 省略号在 ASCII 下是 3 列。任何"给省略号预留 N 列"的预算都应读这里。
+        using (new GlyphScope(null))
+            Assert.Equal(1, SafeColor.Glyphs.EllipsisWidth);
+        using (new GlyphScope("1"))
+            Assert.Equal(3, SafeColor.Glyphs.EllipsisWidth);
+    }
+
+    [Fact]
+    public void TruncationNeverExceedsItsBudgetInEitherMode()
+    {
+        // 核心不变式：ASCII 退回把省略号从 1 列变成 3 列，而 FitToWidth 此前**写死**
+        // 只预留 1 列，于是每一条截断结果都超宽 2 列。这类偏差只在窄屏显形。
+        const string cjk = "代码代理正在把这段很长的中文路径名字压缩到可读宽度以内去";
+        const string ascii = "a_very_long_unbroken_identifier_that_cannot_be_break_nicely_at_all";
+        foreach (var asciiMode in new[] { false, true })
+        {
+            using var scope = new GlyphScope(asciiMode ? "1" : null);
+            foreach (var source in new[] { cjk, ascii, "", "短" })
+                foreach (var width in new[] { 1, 2, 3, 4, 5, 8, 12, 20, 40 })
+                {
+                    var fitted = InputLine.FitToWidth(source, width);
+                    Assert.True(TextUtil.DisplayWidth(fitted) <= width,
+                        $"ascii={asciiMode} width={width} 得到 {TextUtil.DisplayWidth(fitted)} 列: {fitted}");
+                }
+        }
+    }
+
+    [Fact]
+    public void PromptNeverExceedsItsBudgetInEitherMode()
+    {
+        // 提示符超宽会把整行输入顶到折行，比截断难看得多。这条在所有宽度上都必须成立。
+        foreach (var asciiMode in new[] { false, true })
+        {
+            using var scope = new GlyphScope(asciiMode ? "1" : null);
+            foreach (var width in new[] { 8, 10, 12, 16, 20, 30, 50, 80 })
+            {
+                var prompt = Program.BuildPromptText("执行模式", "gpt-5-codex", "D:\\Projects\\SomeVeryLongProjectName", width);
+                var budget = width - Program.PromptFitMargin >= 4 ? width - Program.PromptFitMargin : width;
+                Assert.True(TextUtil.DisplayWidth(prompt) <= budget,
+                    $"ascii={asciiMode} width={width}: {TextUtil.DisplayWidth(prompt)} > {budget}");
+            }
+        }
+    }
+
+    [Fact]
+    public void PromptKeepsTheModeBracketOnRealisticWidths()
+    {
+        // 「模式永不丢弃」：现实宽度下必须保住方括号对。
+        // 极窄（预算不足 5 列）时只保证不超宽——那时连 "[…]> " 都放不下，
+        // 硬塞方括号就会超宽，而超宽会把整行输入顶到折行。
+        foreach (var asciiMode in new[] { false, true })
+        {
+            using var scope = new GlyphScope(asciiMode ? "1" : null);
+            foreach (var width in new[] { 20, 30, 50, 80 })
+                Assert.Contains(']', Program.BuildPromptText("执行模式", "gpt-5-codex", "D:\\Projects\\SomeVeryLongProjectName", width));
+        }
+    }
+
+    [Fact]
+    public void PromptOverheadIsMeasuredNotHardcoded()
+    {
+        // 源码级守卫：BuildPromptText 里不得再出现省略号相关的写死常数。
+        // 曾经的 `- 4` 和 `- 6` 在 ASCII 退回（1 列 → 3 列）后会让提示符超预算。
+        var source = File.ReadAllText(FindSource("Program.cs"));
+        var at = source.IndexOf("internal static string BuildPromptText", StringComparison.Ordinal);
+        Assert.True(at >= 0, "找不到 BuildPromptText");
+        var body = source[at..];
+        body = body[..body.IndexOf("PromptFitMargin = 8", StringComparison.Ordinal)];
+        Assert.DoesNotContain("Glyphs.Ellipsis + \"> \"".Replace("Glyphs.Ellipsis", "…"), body);
+        Assert.Contains("Glyphs.Ellipsis", body);
+    }
+
+    private static string FindSource(string name)
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            var dir = start;
+            for (var i = 0; i < 10 && dir.Length > 1; i++)
+            {
+                var candidate = Path.Combine(dir, "src", "CodeAgent", name);
+                if (File.Exists(candidate) && new FileInfo(candidate).Length > 1000)
+                    return candidate;
+                var parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrEmpty(parent) || parent == dir)
+                    break;
+                dir = parent;
+            }
+        }
+        throw new FileNotFoundException($"找不到 src/CodeAgent/{name}");
+    }
 }

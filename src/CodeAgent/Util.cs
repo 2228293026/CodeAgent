@@ -70,8 +70,14 @@ public static class SafeColor
         public static char Rule => AsciiEnabled ? '-' : '─';
 
         /// <summary>省略号。注意 ASCII 版是 3 个字符，会**改变显示宽度**——
-        /// 调用方必须把它喂给 TextUtil.DisplayWidth 计算，不能按 1 列算。</summary>
+        /// 调用方必须把它喂给 TextUtil.DisplayWidth 计算，不能按 1 列算。
+        /// 预算相关处请直接用 <see cref="EllipsisWidth"/>，别再写死 1。</summary>
         public static string Ellipsis => AsciiEnabled ? "..." : "…";
+
+        /// <summary>省略号占的**显示列数**。任何"给省略号预留 N 列"的预算都应读这里，
+        /// 否则 ASCII 退回（1 列 → 3 列）会让每一处截断结果都超宽 2 列。
+        /// 这类偏差只在窄屏上显形：宽屏下根本触发不到截断。</summary>
+        public static int EllipsisWidth => TextUtil.DisplayWidth(Ellipsis);
 
         /// <summary>警告前缀。</summary>
         public static string Warn => AsciiEnabled ? "!" : "⚠";

@@ -135,8 +135,8 @@ public static class InputLine
             prefix = $"{prompt} ({historyIndex + 1}/{historyCount})";
         var avail = windowWidth - DisplayWidth(prefix);
         if (avail < minDraft)
-            // 极窄到连「…」都放不下时只留标记：数字本身就是信息，宁可超宽也不谎报省略
-            return avail >= 1 ? prefix + "…" : prefix;
+            // 极窄到连省略号都放不下时只留标记：数字本身就是信息，宁可超宽也不谎报省略
+            return avail >= SafeColor.Glyphs.EllipsisWidth ? prefix + SafeColor.Glyphs.Ellipsis : prefix;
         return prefix + FitToWidth(draft, avail);
     }
 
@@ -297,6 +297,13 @@ public static class InputLine
         if (DisplayWidth(s) <= maxWidth)
             return s;
         var sb = new StringBuilder();
+        // 省略号自身就放不下时**不要**硬塞：那会让结果比 maxWidth 还宽，
+        // 而"超宽"正是这个函数存在的理由要避免的事（ASCII 退回时省略号 3 列，
+        // 1~2 列的预算下必然放不下）。此时只填内容、不加标记。
+        var dots = SafeColor.Glyphs.Ellipsis;
+        var dotsWidth = SafeColor.Glyphs.EllipsisWidth;
+        var mark = dotsWidth <= maxWidth ? dots : string.Empty;
+        var reserve = mark.Length == 0 ? 0 : dotsWidth;
         int w = 0;
         for (int i = 0; i < s.Length;)
         {
@@ -310,13 +317,15 @@ public static class InputLine
                 i += chars;
                 continue;
             }
-            if (w + cw + 1 > maxWidth)  // +1 预留省略号一列；CWK(2) 塞不下则放弃该字符
+            // 预留的是省略号**实际的显示列数**，不是写死的 1：
+            // ASCII 退回时省略号从 1 列变成 3 列，写死 1 会让每一条截断结果都超宽 2 列。
+            if (w + cw + reserve > maxWidth)  // CWK(2) 塞不下则放弃该字符
                 break;
             sb.Append(s, i, chars);
             w += cw;
             i += chars;
         }
-        return sb.ToString() + "…";
+        return sb.ToString() + mark;
     }
 
     /// <summary>按显示宽度补空格到指定列宽（CJK/emoji 按 2 列计）；超宽则按显示宽度截断并补省略号。</summary>
@@ -351,7 +360,7 @@ public static class InputLine
         var head = num + PadToDisplayWidth(FitToWidth(name, nameBudget), nameBudget) + " ";
         var remain = budget - DisplayWidth(head);
         if (remain < MinMenuDescWidth)
-            return head.TrimEnd() + " …";
+            return head.TrimEnd() + " " + SafeColor.Glyphs.Ellipsis;
         return head + FitToWidth(desc, remain);
     }
 
@@ -755,7 +764,7 @@ public static class InputLine
             {
                 // 与数字键上限一致（1-9 run）：显示前 9 项，超出提示总数
                 var parts = menuItems.Take(9).Select((m, i) => $"{i + 1}) {m.Name}");
-                var more = menuItems.Count > 9 ? $" …(共 {menuItems.Count} 项)" : "";
+                var more = menuItems.Count > 9 ? $" {SafeColor.Glyphs.Ellipsis}(共 {menuItems.Count} 项)" : "";
                 sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
             }
             sb.AppendLine();

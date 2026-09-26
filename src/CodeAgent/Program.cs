@@ -1142,13 +1142,44 @@ internal static class Program
         if (TextUtil.DisplayWidth(noModel) <= budget)
             return noModel;
         var head = $"[{mode}]";
-        // "[模式] 目录…> " 里目录可用宽度：扣掉 "[" "]" "…> " 四段
-        var room = budget - TextUtil.DisplayWidth(head) - 4;
+        // "[模式] 目录…> " 里目录可用宽度。固定开销从**实际拼出来的后缀**量出来，
+        // 不再写死 4 / 6 —— ASCII 退回时省略号从 1 列变 3 列，写死的数会让提示符
+        // 超出预算（而提示符超宽会把整行输入顶到折行）。
+        var tail = $" {SafeColor.Glyphs.Ellipsis}> ";
+        var room = budget - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(tail);
         if (room > 0)
-            return $"{head} {InputLine.FitToWidth(dir, room)}…> ";
-        // 模式名本身（CJK 双宽）就超宽：截短模式但**绝不去掉**——没有模式的提示符没有意义
-        var modeRoom = Math.Max(1, budget - 6); // "[模式…]> " 的固定开销
-        return "[" + InputLine.FitToWidth(mode, modeRoom) + "]…> ";
+            return $"{head} {InputLine.FitToWidth(dir, room)}{SafeColor.Glyphs.Ellipsis}> ";
+        // 模式名本身（CJK 双宽）就超宽：截短模式但**绝不去掉**——没有模式的提示符没有意义。
+        //
+        // 这里曾直接 `max(1, budget - 6)` 然后无脑拼 "[模式…]> "，于是两处不对：
+        // ① 固定开销写死 6，ASCII 退回（省略号 1 列 → 3 列）后就不准了；
+        // ② 预算只剩几列时，"至少留 1 列给模式名"这个下限反而让**整体超宽**
+        //    （实测 width=12 时提示符 6 列 > 预算 4 列）——而提示符超宽会把整行
+        //    输入顶到折行，正是这个函数要避免的事。
+        // 现在改成"先试不截断的形态，放得下就用；放不下才带省略号"，
+        // 截断量与省略号都按实际显示宽度算。
+        var modeTail = "> ";
+        var modePlain = "[" + mode + "]" + modeTail;
+        if (TextUtil.DisplayWidth(modePlain) <= budget)
+            return modePlain;
+        var dotsTail = SafeColor.Glyphs.Ellipsis + modeTail;
+        var room2 = budget - 2 - TextUtil.DisplayWidth(dotsTail);
+        if (room2 > 0)
+            return "[" + InputLine.FitToWidth(mode, room2) + "]" + dotsTail;
+        // 连一个字符都放不下：退到最小形态，优先保住方括号对（模式永不丢弃的契约），
+        // 再退才放弃右括号——每退一步都先确认**放得下**，绝不超宽。
+        // 预算已经小到放不下任何带省略号的形态：逐级退化，每一级都**先确认放得下**。
+        // 宁可信息少，也绝不超宽——超宽会把整行输入顶到折行。
+        var bracketDots = "[" + SafeColor.Glyphs.Ellipsis + "]" + modeTail;
+        if (TextUtil.DisplayWidth(bracketDots) <= budget)
+            return bracketDots;
+        var withoutDots = "[" + SafeColor.Glyphs.Ellipsis + modeTail;
+        if (TextUtil.DisplayWidth(withoutDots) <= budget)
+            return withoutDots;
+        var bare = "[" + modeTail;
+        if (TextUtil.DisplayWidth(bare) <= budget)
+            return bare;
+        return "[";   // 实在只剩 1 列
     }
 
     /// <summary>提示符单行判定必须预留的余量列数（吸收目录名/模型短名里的 CJK 双宽字符与终端边框）。</summary>
