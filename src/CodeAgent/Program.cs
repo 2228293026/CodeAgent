@@ -1187,6 +1187,32 @@ internal static class Program
             : null;
     }
 
+    /// <summary>「某设置已保存」确认行：`<动作>: <值>，已保存到 <路径>`。
+    /// **值是主体**（用户刚改了什么），保存路径是补充：模型名/provider 名可以很长
+    /// （openai/gpt-4.1-2025-04-14），此前整行硬截尾部会把**值本身**切掉，
+    /// 用户看不到自己切到了什么。降级顺序：先丢保存从句，再按尾部保留缩短路径。
+    /// width &lt;= 0 表示宽度未知：原样拼接。</summary>
+    internal static string FormatSettingSavedLine(string action, string value, string savePath, int width = 0)
+    {
+        var head = $"{action}: {value}";
+        if (width <= 0)
+            return $"{head}，已保存到 {savePath}";
+        var clause = "，已保存到 ";
+        var room = width - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(clause);
+        if (room < MinSavedPathWidth)
+        {
+            // 路径一行都放不下：整段丢掉保存从句，只留「动作: 值」
+            if (TextUtil.DisplayWidth(head) > width)
+                return InputLine.FitToWidth(head, width);
+            return head;
+        }
+        return head + clause + ShortenPath(savePath, room);
+    }
+
+    /// <summary>保存路径从句至少要有的列数。低于此值半个路径（`C:\Us…`）
+    /// 既看不出存到哪儿，又不如不显示。</summary>
+    internal const int MinSavedPathWidth = 6;
+
     /// <summary>普通结果/说明行（无标记）：按显示宽度裁剪。
     /// /find 这类输出会把**用户输入的关键字**与快照名直接拼进行里，
     /// 二者长度不受控，没有宽度预算就必然溢出。</summary>
@@ -1798,7 +1824,7 @@ internal static class Program
                         var savePath = ConfigSavePath(configPath, config);
                         AgentConfig.Save(config, savePath);
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
-                        Console.WriteLine(FormatConfirmLine($"已切换 Provider: {hit.Key}，模型 {opts.Model}，已保存到 {savePath}", ConsoleColumns()));
+                        Console.WriteLine(FormatConfirmLine(FormatSettingSavedLine("已切换 Provider", $"{hit.Key}，模型 {opts.Model}", savePath, ConsoleColumns()), ConsoleColumns()));
                     }
                     catch (Exception ex)
                     {
@@ -1872,7 +1898,7 @@ internal static class Program
                             po.Model = opts.Model;
                         var savePath = ConfigSavePath(configPath, config);
                         SaveConfig(config, savePath);
-                        Console.WriteLine(FormatConfirmLine($"已切换模型: {opts.Model}，已保存到 {savePath}", ConsoleColumns()));
+                        Console.WriteLine(FormatConfirmLine(FormatSettingSavedLine("已切换模型", opts.Model, savePath, ConsoleColumns()), ConsoleColumns()));
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
                     }
                     catch (Exception ex)
@@ -2543,7 +2569,7 @@ internal static class Program
                         {
                             var savePath = ConfigSavePath(configPath, config);
                             SaveConfig(config, savePath);
-                            Console.WriteLine(FormatConfirmLine($"思考强度已设为: {v}，已保存到 {savePath}", ConsoleColumns()));
+                            Console.WriteLine(FormatConfirmLine(FormatSettingSavedLine("思考强度已设为", v, savePath, ConsoleColumns()), ConsoleColumns()));
                         }
                         catch (Exception ex)
                         {
@@ -2579,7 +2605,7 @@ internal static class Program
                         {
                             var savePath = ConfigSavePath(configPath, config);
                             SaveConfig(config, savePath);
-                            Console.WriteLine($"命令 shell 已设为: {v}，已保存到 {savePath}");
+                            Console.WriteLine(FormatConfirmLine(FormatSettingSavedLine("命令 shell 已设为", v, savePath, ConsoleColumns()), ConsoleColumns()));
                         }
                         catch (Exception ex)
                         {
