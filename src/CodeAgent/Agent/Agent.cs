@@ -579,6 +579,55 @@ public sealed partial class Agent
         }
     }
 
+    /// <summary>工具名的**动词形态**：<c>read_file</c> → <c>Read</c>、<c>edit_file</c> → <c>Edit</c>。
+    ///
+    /// 此前状态行直接打原始工具名（<c>read_file {"path":"a.cs"}</c>）：snake_case 的
+    /// 内部命名混在面向用户的行里，一眼看不出这是在"读文件"还是在"跑个报告"。
+    /// 动词形态既更像人话，也让工具名从 9 列缩到 4 列——省下的宽度给参数，
+    /// 窄屏下同一个终端能多显示的路径长度直接变多。
+    ///
+    /// 未知工具**不会**被猜：原样返回，只是把首字母大写。
+    /// 猜错动词比显示原始名更糟——那会让人以为在执行另一个操作。
+    /// </summary>
+    internal static string ToolVerb(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return name;
+        var key = name.ToLowerInvariant();
+        foreach (var (from, to) in VerbMap)
+        {
+            if (key == from)
+                return to;
+        }
+        // 前缀相同但后缀不同（read_file / read_binary_file）都归到同一个动词
+        foreach (var (from, to) in VerbMap)
+        {
+            if (from.Length > 0 && key.StartsWith(from, StringComparison.Ordinal) && key.Length <= from.Length + 6)
+                return to;
+        }
+        return char.ToUpperInvariant(name[0]) + name[1..];
+    }
+
+    /// <summary>已确认的动词映射。**只列真正确定等价**的，模糊的一律不列。</summary>
+    internal static readonly (string From, string To)[] VerbMap =
+    {
+        ("read_file", "Read"),
+        ("read", "Read"),
+        ("write_file", "Write"),
+        ("edit_file", "Edit"),
+        ("multi_edit", "Edit"),
+        ("replace_in_file", "Edit"),
+        ("delete_file", "Delete"),
+        ("list_files", "Glob"),
+        ("glob", "Glob"),
+        ("grep", "Grep"),
+        ("search_files", "Glob"),
+        ("web_fetch", "Fetch"),
+        ("run_bash", "Bash"),
+        ("bash", "Bash"),
+        ("execute_bash", "Bash"),
+    };
+
     /// <summary>把工具名与参数压缩为一行展示文本（跳过 content 等大字段）。
     /// maxValueWidth 是**显示列数**（不是字符数）：60 个汉字占 120 列，
     /// 按字符数截会让单个参数就把行撑成两倍宽。</summary>
@@ -594,8 +643,10 @@ public sealed partial class Agent
             args = null;
         }
 
+        // 展示用动词形态；下面的 `name` 语义判断仍用原始工具名
+        var shown = ToolVerb(name);
         if (args is null || args.Count == 0)
-            return name;
+            return shown;
 
         var parts = new List<string>();
         foreach (var kv in args)
@@ -620,7 +671,7 @@ public sealed partial class Agent
             v = InputLine.FitToWidth(v, maxValueWidth);
             parts.Add($"{kv.Key}={v}");
         }
-        return parts.Count == 0 ? name : $"{name}({string.Join(" ", parts)})";
+        return parts.Count == 0 ? shown : $"{shown}({string.Join(" ", parts)})";
     }
 
     /// <summary>生成 edit_file 的紧凑 diff 预览文本（无差异返回空串）。

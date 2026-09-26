@@ -36,8 +36,10 @@ public class ToolStatusArgTests
     [Fact]
     public void SummarizeCall_SmallArgumentSurvivesUntouched()
     {
+        // 工具名用动词形态（Read）而不是内部命名（read_file）——换的是名字，
+        // 这条测试盯的仍然是「小参数不被截断」这件事。
         var summary = AgentClass.SummarizeCall("read_file", "{\"path\":\"docs/a.md\"}", 60);
-        Assert.Equal("read_file(path=docs/a.md)", summary);
+        Assert.Equal("Read(path=docs/a.md)", summary);
     }
 
     [Fact]
