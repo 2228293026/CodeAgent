@@ -581,7 +581,7 @@ public static class InputLine
         if (modePicker)
             return $"  Modes (up/down select, {SafeColor.Glyphs.Enter} switch, {SafeColor.Glyphs.Escape} close):";
         if (mentionActive)
-            return $"  Files (1-9 insert, up/down select, {SafeColor.Glyphs.Arrow} insert, {SafeColor.Glyphs.Enter} next line, {SafeColor.Glyphs.Escape} close):";
+            return $"  Files (1-9 insert, up/down select, {SafeColor.Glyphs.Arrow} insert, {SafeColor.Glyphs.Enter} insert, {SafeColor.Glyphs.Escape} close):";
         return $"  Commands (1-9 run, up/down select, {SafeColor.Glyphs.Arrow} fill, {SafeColor.Glyphs.Enter} run, {SafeColor.Glyphs.Escape} close):";
     }
 
@@ -1346,6 +1346,17 @@ public static class InputLine
                     if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
                     {
                         var sel = menuItems[menuIndex].Name;
+                        // @ 文件菜单：Enter 与 → / 数字键同义，都是**插入**。
+                        // 沿用命令菜单的"提交"会把裸路径当成整条提示发出去，
+                        // 用户敲的"看下这个文件"被整段丢掉。
+                        if (PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert)
+                        {
+                            buf.Replace(ApplyMention(buf.Text, mention.Item1, sel));
+                            draft = null;
+                            CloseMenu();
+                            RedrawInput();
+                            break;
+                        }
                         CloseMenu();
                         Console.WriteLine();
                         var submit = modePicker ? $"/mode {sel}" : sel;
@@ -1443,9 +1454,11 @@ public static class InputLine
                         // → ：把选中的命令填充到输入行（不执行），可继续编辑/加参数；
                         // 无选中时默认填第一项（顶部项即隐式高亮）。Tab 在多匹配时是循环换选，
                         // → 是「就要这个」——补全后关菜单，回车执行或继续输入
+                        // @ 引用只替换 @token 那一段，整行其余内容（"看这个 … 谢谢"）必须留下。
+                        // 与 Enter / 数字键走同一个 PickAction 判定——三处必须一致，
+                        // 少一处就会有一条路径把裸路径当成整条提示提交出去。
                         var picked = menuItems[menuIndex >= 0 ? menuIndex : 0].Name;
-                        // @ 引用只替换 @token 那一段，整行其余内容（"看这个 … 谢谢"）必须留下
-                        buf.Replace(mention.Item1 >= 0
+                        buf.Replace(PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert
                             ? ApplyMention(buf.Text, mention.Item1, picked)
                             : picked);
                         draft = null;
@@ -1587,9 +1600,11 @@ public static class InputLine
                     if (menuOpen && menuItems.Count == 1)
                     {
                         // 唯一匹配：Tab 补全为完整命令（/think + Tab → /thinking）
-                        // @ 引用只替换 @token 那一段
+                        // @ 引用只替换 @token 那一段，与 Enter / → / 数字键同一判定
                         var only = menuItems[0].Name;
-                        buf.Replace(mention.Item1 >= 0 ? ApplyMention(buf.Text, mention.Item1, only) : only);
+                        buf.Replace(PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert
+                            ? ApplyMention(buf.Text, mention.Item1, only)
+                            : only);
                         draft = null;
                         CloseMenu();
                         RedrawInput();
