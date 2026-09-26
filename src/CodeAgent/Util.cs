@@ -92,6 +92,21 @@ public static class SafeColor
         /// <summary>方向箭头（菜单选择、Ctrl+方向键说明）。</summary>
         public static string Arrow => AsciiEnabled ? "->" : "→";
 
+        /// <summary>极窄时的单标记回退（历史行放不下 `[角色]` 时用）。
+        /// 与 <see cref="SegmentSeparator"/> 不同，这里**要的是尽量短**：
+        /// 路径就是"连方括号都放不下"的场合，所以保持 2 列。</summary>
+        public static string NarrowDot => AsciiEnabled ? "- " : "· ";
+
+        /// <summary>状态栏/历史行首的模式标记。</summary>
+        public static string StatusMark => AsciiEnabled ? ">" : "⏵";
+
+        /// <summary>状态栏各段之间的分隔符（含两侧空格）。
+        ///
+        /// **必须恰好 3 列**：状态栏的宽度预算是按「每段额外扣 3 列」算的
+        /// （见 Program.PrintStatusBar 的 othersWidth），换字形时若宽度变了，
+        /// 那套扣减就会与实际行长对不上，缩短路径时永远缩不到位。</summary>
+        public static string SegmentSeparator => AsciiEnabled ? " | " : " · ";
+
         /// <summary>把一段已拼好的 UI 文本里的制表符/符号统一换成 ASCII 等价物。
         /// 供那些在别处已经拼好整行、无法逐处替换的场景收口。
         /// 省略号换成长 3 的 <c>...</c>，与 <see cref="Ellipsis"/> 保持一致——

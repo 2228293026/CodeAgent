@@ -284,7 +284,7 @@ internal static class Program
                 if (resumeIndex <= logs.Count)
                     target = logs[resumeIndex - 1];
                 else
-                    Console.WriteLine($"⚠ --resume 编号超出范围（可用 1-{logs.Count}）。");
+                    Console.WriteLine($"{SafeColor.Glyphs.Warn} --resume 编号超出范围（可用 1-{logs.Count}）。");
             }
             else if (logs.Count > 0)
                 target = logs[0];
@@ -293,13 +293,13 @@ internal static class Program
             else if (agent.LoadSessionLog(target))
                 Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), "↩"));
             else
-                Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
+                Console.WriteLine($"{SafeColor.Glyphs.Warn} 会话日志无法恢复（文件可能损坏）。");
         }
         // 应用工作模式：--mode <名> 会话级覆盖（不落盘），否则用配置的 defaultMode（如 "debug"）
         var modeName = modeOverride ?? config.DefaultMode;
         var mode = Modes.Find(modeName, config);
         if (!string.Equals(mode.Name, modeName.Trim(), StringComparison.OrdinalIgnoreCase))
-            Console.WriteLine($"⚠ 未知模式「{modeName}」，已回退到 {mode.Name}（/mode 查看可用模式）。");
+            Console.WriteLine($"{SafeColor.Glyphs.Warn} 未知模式「{modeName}」，已回退到 {mode.Name}（/mode 查看可用模式）。");
         agent.SetMode(mode);
 
         // 列出可用模型模式
@@ -746,12 +746,12 @@ internal static class Program
         if (TextUtil.DisplayWidth(full) <= budget)
             return full;
         if (budget <= 2)
-            return isError ? "⚠ " : "· "; // 连方括号都放不下
+            return isError ? SafeColor.Glyphs.Warn + " " : SafeColor.Glyphs.NarrowDot; // 连方括号都放不下
         // 预算 = '[' + 角色名 + ']' + 标记 + 分隔空格
         var room = budget - 2 - (mark.Length > 0 ? TextUtil.DisplayWidth(mark) + 1 : 0) - 1;
         if (room >= 1)
             return "[" + InputLine.FitToWidth(role, room) + "]" + (mark.Length > 0 ? " " + mark : string.Empty) + " ";
-        return isError ? "⚠ " : "· ";
+        return isError ? SafeColor.Glyphs.Warn + " " : SafeColor.Glyphs.NarrowDot;
     }
 
     /// <summary>
@@ -959,7 +959,7 @@ internal static class Program
     /// 已处于 full 时再次经过不重复询问。EOF/非 y 一律视为取消（安全默认）。</summary>
     internal static bool ConfirmFullAccess(TextReader input, TextWriter output)
     {
-        output.Write("⚠ 即将完全放开文件沙箱（工作区外可读写，仅限信任场景）。确认? [y/N] ");
+        output.Write($"{SafeColor.Glyphs.Warn} 即将完全放开文件沙箱（工作区外可读写，仅限信任场景）。确认? [y/N] ");
         var answer = input.ReadLine()?.Trim();
         if (string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -970,7 +970,7 @@ internal static class Program
     /// <summary>通用覆盖确认（/save 同名快照等）：只有明确 y 放行，EOF/其他输入取消（安全默认）。</summary>
     internal static bool ConfirmReplace(TextReader input, TextWriter output, string question)
     {
-        output.Write($"⚠ {question} [y/N] ");
+        output.Write($"{SafeColor.Glyphs.Warn} {question} [y/N] ");
         return string.Equals(input.ReadLine()?.Trim(), "y", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1286,21 +1286,22 @@ internal static class Program
     /// 正文末尾是路径时先按尾部保留缩短路径（见 <see cref="ShortenTrailingPath"/>）。
     /// width &lt;= 0 表示宽度未知，不截断。
     /// </summary>
-    internal static string FormatNoticeLine(string body, int width = 0, string marker = "⚠")
+    internal static string FormatNoticeLine(string body, int width = 0, string? marker = null)
     {
+        var mark = marker ?? SafeColor.Glyphs.Warn;
         if (width <= 0)
-            return $"{marker} {body}";
-        var budget = width - TextUtil.DisplayWidth(marker) - 1;
+            return $"{mark} {body}";
+        var budget = width - TextUtil.DisplayWidth(mark) - 1;
         if (budget <= 0)
-            return marker;
-        return $"{marker} {ShortenTrailingPath(body, budget) ?? InputLine.FitToWidth(body, budget)}";
+            return mark;
+        return $"{mark} {ShortenTrailingPath(body, budget) ?? InputLine.FitToWidth(body, budget)}";
     }
 
     /// <summary>所有「回显用户输入或异常消息」的通知行的**唯一出口**。
     /// 这些行的正文长度不受控：<c>rest</c> 是用户敲的任意文本、<c>ex.Message</c>
     /// 可能带整条文件路径或嵌套异常。直接 <c>Console.WriteLine($"…")</c> 就没有宽度约束，
     /// 窄终端上会硬折行、把后面的提示符顶走。走这里统一收口。</summary>
-    internal static void WriteNotice(string body, string marker = "⚠") =>
+    internal static void WriteNotice(string body, string? marker = null) =>
         Console.WriteLine(FormatNoticeLine(body, ConsoleColumns(), marker));
 
     /// <summary>实测宽度的可信下限：低于此值视为测量失效（终端最小化、拖拽过程中的抖动、
@@ -1404,11 +1405,11 @@ internal static class Program
             // 目录与分支合成一段：与旧版「cwd (branch)」一致，窄屏省 3 列
             var path = shownPath.Length > 0 ? shownPath : cwd;
             var location = showBranch ? $"{path} ({branch})" : path;
-            var parts = new List<string> { $"⏵ {mode} · {model}", location };
+            var parts = new List<string> { $"{SafeColor.Glyphs.StatusMark} {mode}{SafeColor.Glyphs.SegmentSeparator}{model}", location };
             if (showTurn) parts.Add($"{turnIn} in / {turnOut} out");
             if (showCtx) parts.Add(ctxText);
             if (showThink) parts.Add(thinkText);
-            return string.Join(" · ", parts);
+            return string.Join(SafeColor.Glyphs.SegmentSeparator, parts);
         }
 
         var text = Render();
@@ -1426,7 +1427,7 @@ internal static class Program
         // 路径预算要扣掉**仍保留的其他段**，否则缩完还是超宽，ctx 白白被牺牲。
         // 路径预算要扣掉**仍保留的其他段**以及它们各自前面的 " · " 分隔符，
         // 否则缩完还是超宽，ctx 白白被牺牲。（head 已含路径前的分隔符，不再重复扣。）
-        var head = $"⏵ {mode} · {model} · ";
+        var head = $"{SafeColor.Glyphs.StatusMark} {mode}{SafeColor.Glyphs.SegmentSeparator}{model}{SafeColor.Glyphs.SegmentSeparator}";
         var others = new List<string>();
         if (showTurn) others.Add($"{turnIn} in / {turnOut} out");
         if (showCtx) others.Add(ctxText);
@@ -1461,7 +1462,7 @@ internal static class Program
         // 也不留半截路径。
         if (width > 0 && shownPath.Length == 0)
         {
-            var minimalHead = $"⏵ {mode} · {model} · ";
+            var minimalHead = $"{SafeColor.Glyphs.StatusMark} {mode}{SafeColor.Glyphs.SegmentSeparator}{model}{SafeColor.Glyphs.SegmentSeparator}";
             var minimalBudget = width - TextUtil.DisplayWidth(minimalHead);
             if (minimalBudget >= MinStatusPathWidth)
             {
@@ -1787,7 +1788,7 @@ internal static class Program
                     if (IsCancelledTurn(result))
                         Console.WriteLine(FormatCancelLine("已取消压缩（历史未变动）。", ConsoleColumns()));
                     else if (result == "SHORT")
-                        Console.WriteLine("⚠ 当前对话过短，无需压缩。");
+                        Console.WriteLine($"{SafeColor.Glyphs.Warn} 当前对话过短，无需压缩。");
                     else
                         Console.WriteLine("✔ 历史已压缩。");
                 }
@@ -2204,14 +2205,14 @@ internal static class Program
                             PrintConversation(agent, 20);
                         }
                         else
-                            Console.WriteLine("⚠ 会话日志无法恢复（文件可能损坏）。");
+                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 会话日志无法恢复（文件可能损坏）。");
                     }
                     else
                     {
                         // 数字越界时明确指出范围（静默回退到列表曾让人以为编号生效了）
                         var resumeEntries = new List<HelpEntry>(logs.Count);
                         if (int.TryParse(rest.Trim(), out _))
-                            Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
+                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
                         else
                             Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
                         for (int i = 0; i < logs.Count; i++)
@@ -2310,7 +2311,7 @@ internal static class Program
                         var logs = ResumableLogs(agent, config);
                         if (logs.Count == 0 && !Directory.Exists(Path.Combine(Environment.CurrentDirectory, config.SessionDir)))
                         {
-                            Console.WriteLine("⚠ 没有历史会话日志可导出。");
+                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 没有历史会话日志可导出。");
                             break;
                         }
                         var ok = 0;
@@ -2351,12 +2352,12 @@ internal static class Program
                         var logs = ResumableLogs(agent, config);
                         if (logs.Count == 0)
                         {
-                            Console.WriteLine("⚠ 没有历史会话日志可导出（先正常对话过一次，或 /save <名> 后 /export <名>）。");
+                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 没有历史会话日志可导出（先正常对话过一次，或 /save <名> 后 /export <名>）。");
                             break;
                         }
                         if (eidx > logs.Count)
                         {
-                            Console.WriteLine($"⚠ 编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。");
+                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。");
                             break;
                         }
                         file = agent.ExportSessionLogMarkdown(logs[eidx - 1]);
@@ -2503,7 +2504,7 @@ internal static class Program
                     var ok = TryCopyToClipboardAsync(lastReply.Content!).GetAwaiter().GetResult(); // HandleCommand 同步上下文
                     Console.WriteLine(ok
                         ? $"已复制最近一条回复（{TextUtil.TruncateLine(lastReply.Content!, 40)}…）到剪贴板。"
-                        : "⚠ 无法访问剪贴板（需要 clip.exe / pbcopy / xclip）。");
+                        : $"{SafeColor.Glyphs.Warn} 无法访问剪贴板（需要 clip.exe / pbcopy / xclip）。");
                 }
                 break;
 

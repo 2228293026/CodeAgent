@@ -234,4 +234,61 @@ public class AsciiGlyphTests : IDisposable
         const string line = "  a │ b";
         Assert.Equal(line, SafeColor.Glyphs.Substitute(line));
     }
+
+    [Fact]
+    public void NarrowDotStaysShorterThanTheSegmentSeparator()
+    {
+        // 极窄回退走的是"连方括号都放不下"的路径，它存在的意义就是**更短**。
+        // 曾经误用了 3 列的 SegmentSeparator，把这条路径撑宽了 1 列。
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            Assert.Equal(2, TextUtil.DisplayWidth(SafeColor.Glyphs.NarrowDot));
+            Assert.True(TextUtil.DisplayWidth(SafeColor.Glyphs.NarrowDot)
+                        < TextUtil.DisplayWidth(SafeColor.Glyphs.SegmentSeparator));
+        }
+    }
+
+    [Fact]
+    public void SegmentSeparatorIsAlwaysThreeColumns()
+    {
+        // 状态栏的宽度预算按「每段额外扣 3 列」算（Program.PrintStatusBar 的
+        // othersWidth）。换了字形若宽度变了，那套扣减就与实际行长对不上，
+        // 缩短路径时永远缩不到位——而且这种偏差只在窄屏上显形。
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            Assert.Equal(3, TextUtil.DisplayWidth(SafeColor.Glyphs.SegmentSeparator));
+        }
+    }
+
+    [Fact]
+    public void StatusBarAndNoticeUseTheFallback()
+    {
+        using var scope = new GlyphScope("1");
+        // 状态栏首段用 ASCII 标记与分隔符
+        var bar = Program.BuildStatusBar("plan", "gpt-5", "/repo", "(main)", "10", "20", "ctx 1%", "think 0%", 100);
+        Assert.Contains('>', bar);
+        Assert.DoesNotContain('⏵', bar);
+        Assert.Contains(" | ", bar);
+        // 通知行用 ASCII 警告标记
+        var notice = Program.FormatNoticeLine("工作区外可读写", 60);
+        Assert.StartsWith("! ", notice);
+        Assert.DoesNotContain('⚠', notice);
+    }
+
+    [Fact]
+    public void StatusBarWidthArithmeticStillHoldsInAsciiMode()
+    {
+        // 状态栏在 ASCII 与 Unicode 下占的列数应当一致：分隔符同为 3 列、模式标记同为 1 列。
+        // 差值不为 0 就说明某个字形的列宽变了，那套「每段扣 3 列」的预算就错了。
+        int unicodeWidth;
+        using (new GlyphScope(null))
+            unicodeWidth = TextUtil.DisplayWidth(Program.BuildStatusBar("plan", "gpt-5", "/repo", "(main)", "10", "20", "ctx 1%", "think 0%", 0));
+        using (new GlyphScope("1"))
+        {
+            var asciiWidth = TextUtil.DisplayWidth(Program.BuildStatusBar("plan", "gpt-5", "/repo", "(main)", "10", "20", "ctx 1%", "think 0%", 0));
+            Assert.Equal(unicodeWidth, asciiWidth);
+        }
+    }
 }

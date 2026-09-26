@@ -289,7 +289,7 @@ public sealed partial class Agent
                 lock (ConsoleLock)
                 {
                     using var scope = SafeColor.Scope(SafeColor.Warning);
-                    Console.WriteLine($"⚠ 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens");
+                    Console.WriteLine($"{SafeColor.Glyphs.Warn} 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens");
                 }
             }
             if (resp.InputTokens is int inTok)
@@ -357,7 +357,7 @@ public sealed partial class Agent
 
         // 达到轮数上限说明任务未完成：标记失败，REPL 显示 ⚠、一次性模式退出码非 0
         LastTurnFailed = true;
-        return "⚠ 达到最大工具调用轮数（MaxToolIterations），任务可能未完成。";
+        return $"{SafeColor.Glyphs.Warn} 达到最大工具调用轮数（MaxToolIterations），任务可能未完成。";
     }
 
     private async Task<ProviderResponse> CallProviderAsync(CancellationToken ct)
@@ -447,7 +447,7 @@ public sealed partial class Agent
                 // 已流式输出过正文或思考内容（暗色）都不重试：重跑会重复打印此前已显示的内容
                 var delay = 2 * (attempt + 1);
                 ClearSpinner();
-                Console.WriteLine($"⚠ 请求失败（{DescribeFailure(ex)}），{delay}s 后重试…");
+                Console.WriteLine($"{SafeColor.Glyphs.Warn} 请求失败（{DescribeFailure(ex)}），{delay}s 后重试…");
                 await Task.Delay(TimeSpan.FromSeconds(delay), ct);
             }
         }
