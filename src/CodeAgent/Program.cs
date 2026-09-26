@@ -721,6 +721,28 @@ internal static class Program
     internal const int HistoryContentColumns = 300;
 
     /// <summary>
+    /// 极窄终端下的角色前缀：宁可把角色名缩成「[用…]」，也不能整段丢掉。
+    /// 丢掉前缀后这一行就成了**无标签正文**，列表里再也分不清哪条是用户、哪条是助手——
+    /// 逐行可扫读正是历史列表存在的理由。连「[x]」都放不下时才退化成单字符标记。
+    /// </summary>
+    internal static string FitRoleTag(string role, bool isError, int budget)
+    {
+        if (budget <= 0)
+            return string.Empty;
+        var mark = isError ? "❗" : string.Empty;
+        var full = $"[{role}]{(mark.Length > 0 ? " " + mark : string.Empty)} ";
+        if (TextUtil.DisplayWidth(full) <= budget)
+            return full;
+        if (budget <= 2)
+            return isError ? "⚠ " : "· "; // 连方括号都放不下
+        // 预算 = '[' + 角色名 + ']' + 标记 + 分隔空格
+        var room = budget - 2 - (mark.Length > 0 ? TextUtil.DisplayWidth(mark) + 1 : 0) - 1;
+        if (room >= 1)
+            return "[" + InputLine.FitToWidth(role, room) + "]" + (mark.Length > 0 ? " " + mark : string.Empty) + " ";
+        return isError ? "⚠ " : "· ";
+    }
+
+    /// <summary>
     /// 历史列表的一行：先把多行内容折叠成单行（工具结果常带换行，否则打乱逐条列表），
     /// 再按显示宽度截断，最后加角色前缀。
     /// 旧实现先按字符数截断再折叠换行：300 个汉字实际占 600 列，一行铺满整屏后角色前缀错位；
@@ -740,10 +762,14 @@ internal static class Program
             tag = InputLine.PadToDisplayWidth(tag, tagWidth);
         else if (TextUtil.DisplayWidth(tag) > Math.Max(1, keyBudget))
             tag = InputLine.FitToWidth(tag, Math.Max(1, keyBudget));
+        // 角色前缀本身超出预算（极窄终端）：换成可辨识的缩写前缀，而不是整段丢弃——
+        // 丢掉前缀的列表无法区分用户/助手，等于把逐条列表退化成一段无标签正文
+        if (TextUtil.DisplayWidth(tag) > keyBudget)
+            tag = FitRoleTag(role, isError, keyBudget);
         // 预算扣掉缩进与前缀：正文才是可扫读的部分
         var budget = maxColumns - TextUtil.DisplayWidth(indent) - TextUtil.DisplayWidth(tag);
         var text = budget <= 0
-            ? InputLine.FitToWidth(single, Math.Max(1, maxColumns - TextUtil.DisplayWidth(indent)))
+            ? InputLine.FitToWidth(single, Math.Max(1, maxColumns - TextUtil.DisplayWidth(indent) - TextUtil.DisplayWidth(tag)))
             : InputLine.FitToWidth(single, budget);
         return indent + tag + text;
     }
