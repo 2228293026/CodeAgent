@@ -24,6 +24,42 @@ internal static class Program
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion?.Split('+')[0] ?? "0.0.0";
 
+    /// <summary>
+    /// 构建标识：程序集版本里 <c>1.0.0+&lt;commit sha&gt;</c> 的那截 sha（取前 7 位）。
+    ///
+    /// 版本号逐轮不变，光看版本**无法判断跑的是不是最新构建**——反馈 bug 时最费时间的
+    /// 恰恰是「对方还在旧二进制上」。此前 <see cref="InformationalVersion"/> 用
+    /// <c>Split('+')[0]</c> 恰好把这截信息丢掉了，这里把它捡回来。
+    /// 没有 SourceLink / 本地构建时返回空串，调用方据此不显示这一行（不显示假值）。
+    /// </summary>
+    internal static string BuildCommit
+    {
+        get
+        {
+            var full = Assembly.GetEntryAssembly()?
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+            return ShortenCommit(full);
+        }
+    }
+
+    /// <summary>从 <c>1.0.0+&lt;sha&gt;</c> 里取出短 sha；没有则返回空串。
+    /// 纯函数，好测——真实程序集属性在测试进程里未必带 sha，测不到这一段就等于没测。</summary>
+    internal static string ShortenCommit(string? informationalVersion)
+    {
+        if (string.IsNullOrEmpty(informationalVersion))
+            return string.Empty;
+        var plus = informationalVersion.IndexOf('+');
+        if (plus < 0 || plus + 1 >= informationalVersion.Length)
+            return string.Empty;
+        var sha = informationalVersion[(plus + 1)..];
+        // SourceLink 里还可能跟 ".g<hash>" 之类的后缀，只取第一段十六进制
+        var end = sha.IndexOf('.');
+        if (end > 0)
+            sha = sha[..end];
+        return sha.Length > 7 ? sha[..7] : sha;
+    }
+
     /// <summary>把控制台输出编码设为 UTF-8，让 `── {SafeColor.Glyphs.Ok} ⚠ ⏵ …` 这些 UI 字符正确显示。
     ///
     /// 这一步**绝不能抛**：它发生在 Main 的第一行，抛出去就是「启动即崩」，
@@ -2952,6 +2988,8 @@ internal static class Program
                         ("TuiAnsi", config.TuiAnsi.ToString()),
                         ("IsOutputRedirected", Console.IsOutputRedirected.ToString()),
                         ("Terminal", wt is not null ? "Windows Terminal" : term is not null ? term : "未知（conhost 或其他）"),
+                        // 版本号逐轮不变，光看它判断不出跑的是不是最新构建
+                        ("Build commit", BuildCommit.Length > 0 ? BuildCommit : "(未嵌入 sha)"),
                         ("Git branch", GitInfo.CurrentBranch(Environment.CurrentDirectory) ?? "(非 git 仓库)"),
                     })
                         .ToArray();

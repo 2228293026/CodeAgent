@@ -13,6 +13,10 @@
     <Authors>HitMargin</Authors>
     <RepositoryUrl>https://github.com/2228293026/CodeAgent</RepositoryUrl>
     <PackageProjectUrl>https://github.com/2228293026/CodeAgent</PackageProjectUrl>
+    <!-- 把 commit sha 写进 InformationalVersion（形如 0.4.0+852644f）。
+         /diag 的 "Build commit" 读的就是它：版本号逐轮不变，光看版本无法判断
+         跑的是不是最新构建。不显式打开的话这个属性默认不生效，/diag 永远显示未嵌入。 -->
+    <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
