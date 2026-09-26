@@ -522,6 +522,7 @@ public sealed class ToolRegistry
         registry.Register(new ResourceLifecycleReportTool());
         registry.Register(new LocalizationReadinessReportTool());
         registry.Register(new DocumentationSyncReportTool());
+        registry.Register(new InputSanitizationReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
