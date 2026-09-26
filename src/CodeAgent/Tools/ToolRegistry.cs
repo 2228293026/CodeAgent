@@ -593,6 +593,7 @@ public sealed class ToolRegistry
         registry.Register(new TimeZoneReportTool());
         registry.Register(new CollectionEdgeReportTool());
         registry.Register(new ContractEvolutionReportTool());
+        registry.Register(new ConfigRobustnessReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
