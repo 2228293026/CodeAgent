@@ -483,6 +483,34 @@ public static class InputLine
             : 0;
 
     /// <summary>
+    /// 一段文本在给定列宽下占**多少个终端行**——显式换行与自动折行都要算。
+    ///
+    /// \x1b[2K 只清**一行**。此前重绘块行数只数文本里的显式 \n，
+    /// 完全没算终端的自动折行：输入敲过列宽后屏幕已经占了 2 行，
+    /// 重绘却按 1 行处理，第一行被清掉、第二行留着上一帧的残字，
+    /// 光标列也超出行宽。提示符超宽折行和这里是同一个 bug 的两半。
+    ///
+    /// <paramref name="promptWidth"/> 是提示符占的列数——它在**同一行**上，
+    /// 会把后面内容的可用宽度挤掉（10 列提示 + 15 列内容 = 25 列，占 2 行）。
+    /// <paramref name="columns"/> 为 0（宽度未知）时只数显式换行：宁可少算，
+    /// 也不猜一个可能清错行的数。
+    /// </summary>
+    internal static int RenderedRows(string text, int columns, int promptWidth)
+    {
+        var explicitRows = text.TrimEnd('\n').Split('\n');
+        if (columns <= 0)
+            return explicitRows.Length;
+        var rows = 0;
+        foreach (var line in explicitRows)
+        {
+            var w = DisplayWidth(line) + (rows == 0 ? promptWidth : 0);
+            // 恰好等于列宽不折行：终端光标停在最后一列，要再多一个字符才换行
+            rows += w <= columns ? 1 : (w + columns - 1) / columns;
+        }
+        return Math.Max(rows, 1);
+    }
+
+    /// <summary>
     /// ANSI 原地重绘要写出的**完整字节序列**（不含光标定位，那步要读 buf.Cursor）。
     ///
     /// 抽成纯函数是为了能断言「敲一个字符不新增行」这条不变量：用户报上来的现象
@@ -491,9 +519,9 @@ public static class InputLine
     ///
     /// <paramref name="newLastInputLines"/> 是重绘后块的行数，调用方据此更新基线。
     /// </summary>
-    internal static string BuildRedrawAnsi(string text, int lastInputLines, int lastCursorLine, out int newLastInputLines)
+    internal static string BuildRedrawAnsi(string text, int lastInputLines, int lastCursorLine, out int newLastInputLines, int columns = 0, int promptWidth = 0)
     {
-        var lines = 1 + (text.TrimEnd('\n').Split('\n').Length - 1);
+        var lines = RenderedRows(text, columns, promptWidth);
         newLastInputLines = lines;
         // 单行：一行清 + 一行写，**不产生任何 \n**。
         // 边框（chrome）不在 text 里，所以这里的单行判定不会被提示符的多行外观污染。
@@ -659,7 +687,10 @@ public static class InputLine
                 // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
                 var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold;
                 var text = fold ? InputLine.FoldText(InputText()) : InputText();
-                Console.Write(BuildRedrawAnsi(text, lastInputLines, lastCursorLine, out lastInputLines));
+                // 传入真实列宽：文本敲过列宽时终端会自动折行，
+                // 而 \x1b[2K 只清一行——不把折行算进块行数，残字会留在屏幕上
+                Console.Write(BuildRedrawAnsi(
+                    text, lastInputLines, lastCursorLine, out lastInputLines, winW, DisplayWidth(promptTail)));
                 PositionCursor(fold);
                 // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
                 // 折叠时按折叠视图行计），作为下次多行重绘的上移基点
