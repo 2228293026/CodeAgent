@@ -599,6 +599,7 @@ public sealed class ToolRegistry
         registry.Register(new AsyncMisuseReportTool());
         registry.Register(new ApiVersionPinReportTool());
         registry.Register(new NestedTryReportTool());
+        registry.Register(new IteratorYieldReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
