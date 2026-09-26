@@ -511,6 +511,25 @@ public static class InputLine
     }
 
     /// <summary>
+    /// 光标在重绘块内的**行号**（0-based）与块的**总行数**。
+    ///
+    /// 清行数对了折行还不够：<c>PositionCursor</c> 若只数显式 \n，
+    /// 敲到超过列宽时光标所在行算少，上移行数就不对，光标落在错误的行上——
+    /// 屏幕看起来像"光标自己跳走了"。
+    ///
+    /// <paramref name="blockPrefix"/> 是提示符（与内容同在第 0 行），
+    /// 所以传给 <see cref="RenderedRows"/> 的 promptWidth 是 0：它已经在串里了。
+    /// </summary>
+    internal static (int Row, int Rows) CursorRowInBlock(string blockPrefix, string text, int cursor, int columns)
+    {
+        var combined = blockPrefix + text;
+        var rows = RenderedRows(combined, columns, 0);
+        var offset = Math.Clamp(cursor, 0, text.Length) + blockPrefix.Length;
+        var row = RenderedRows(combined[..Math.Clamp(offset, 0, combined.Length)], columns, 0) - 1;
+        return (Math.Clamp(row, 0, Math.Max(0, rows - 1)), rows);
+    }
+
+    /// <summary>
     /// ANSI 原地重绘要写出的**完整字节序列**（不含光标定位，那步要读 buf.Cursor）。
     ///
     /// 抽成纯函数是为了能断言「敲一个字符不新增行」这条不变量：用户报上来的现象
@@ -693,8 +712,9 @@ public static class InputLine
                     text, lastInputLines, lastCursorLine, out lastInputLines, winW, DisplayWidth(promptTail)));
                 PositionCursor(fold);
                 // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
-                // 折叠时按折叠视图行计），作为下次多行重绘的上移基点
-                var rawCursorLine = CountNewlines(buf.Text[..Math.Clamp(buf.Cursor, 0, buf.Text.Length)]);
+                // 折叠时按折叠视图行计），作为下次多行重绘的上移基点。
+                // 与 PositionCursor 同口径：折行也算进去，否则下一次上移的基点是错的。
+                var (rawCursorLine, _) = CursorRowInBlock(promptTail, buf.Text, buf.Cursor, winW);
                 lastCursorLine = fold ? Math.Min(rawCursorLine, 2) : rawCursorLine;
             }
             else
@@ -716,8 +736,9 @@ public static class InputLine
         {
             var cursor = Math.Clamp(buf.Cursor, 0, buf.Text.Length);
             var upTo = buf.Text[..cursor];
-            var cursorLine = CountNewlines(upTo); // 光标所在行（0-based）
-            var totalLines = 1 + CountNewlines(buf.Text);
+            // 行号必须把**终端自动折行**算进去：只数显式 \n 时，敲到超过列宽
+            // 光标所在行算少，上移的行数就不对，光标落到错误的行上。
+            var (cursorLine, totalLines) = CursorRowInBlock(promptTail, buf.Text, cursor, winW);
             if (folded)
             {
                 // 折叠视图：前 2 行 + 折叠行（⏷ 共 N 行）；buf 行 >= 2 都显示在折叠行
