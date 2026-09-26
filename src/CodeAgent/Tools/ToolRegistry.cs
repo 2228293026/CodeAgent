@@ -550,6 +550,7 @@ public sealed class ToolRegistry
         registry.Register(new ExtensionMethodReportTool());
         registry.Register(new RecordMutabilityReportTool());
         registry.Register(new NullableAnnotationReportTool());
+        registry.Register(new GitignoreQualityReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
