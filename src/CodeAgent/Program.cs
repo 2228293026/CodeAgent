@@ -1643,6 +1643,20 @@ internal static class Program
         }
     }
 
+    /// <summary>启动横幅的键列宽度。取最长键 `Workspace` 的 9 列，
+    /// 让所有键（含中文键）的冒号落在同一列。
+    /// 此前是手打空格对齐：`会话日志`（8 列）后补 2 空格落在第 10 列，
+    /// 而 `Version`（7 列）补 2 空格落在第 9 列——**中文键把整列推歪了一格**。
+    /// 这正是 FormatKeyValueLine 当初要解决的问题，横幅却一直没用它。</summary>
+    internal const int BannerKeyWidth = 9;
+
+    /// <summary>横幅里的键值行：统一走 FormatKeyValueLine，按显示宽度收口。
+    /// 启动横幅是最早打印的一屏，baseUrl / 工作区路径 / 会话日志路径都可能很长，
+    /// 此前一律 <c>Console.WriteLine($"…")</c> 没有宽度预算，窄终端上会硬折行
+    /// 把最后那行分隔线顶走。</summary>
+    private static void BannerRow(string key, string value) =>
+        Console.WriteLine(FormatKeyValueLine(key, value, BannerKeyWidth, ConsoleColumns()));
+
     private static void PrintBanner(AgentConfig config, ProviderOptions opts, AgentClass agent)
     {
         try
@@ -1651,25 +1665,26 @@ internal static class Program
             Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}";
         }
         catch { /* 平台不支持：忽略 */ }
-        Console.WriteLine("── CodeAgent ─────────────────────────────────────────────");
-        Console.WriteLine($"  Version  : {InformationalVersion}");
+        var width = ConsoleColumns();
+        Console.WriteLine(InputLine.FitToWidth("── CodeAgent " + new string('─', 37), width));
+        BannerRow("Version", InformationalVersion);
         var bannerOverride = config.PersistedProvider is not null &&
                              !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
-        Console.WriteLine($"  Provider : {config.Provider} ({opts.Type}){(bannerOverride ? "（会话级覆盖）" : "")}");
-        Console.WriteLine($"  Model    : {opts.Model}");
-        Console.WriteLine($"  Mode     : {agent.CurrentMode.Name}");
-        Console.WriteLine($"  Thinking : {config.ThinkingEffort}{(config.ThinkingEffort == "auto" ? "（自动探测模型推理档位，状态栏显示实际生效值）" : "")}");
-        Console.WriteLine($"  BaseUrl  : {opts.BaseUrl}");
-        Console.WriteLine($"  Workspace: {Environment.CurrentDirectory}");
+        BannerRow("Provider", $"{config.Provider} ({opts.Type}){(bannerOverride ? "（会话级覆盖）" : "")}");
+        BannerRow("Model", opts.Model);
+        BannerRow("Mode", agent.CurrentMode.Name);
+        BannerRow("Thinking", $"{config.ThinkingEffort}{(config.ThinkingEffort == "auto" ? "（自动探测模型推理档位，状态栏显示实际生效值）" : "")}");
+        BannerRow("BaseUrl", opts.BaseUrl);
+        BannerRow("Workspace", Environment.CurrentDirectory);
         var bannerBranch = GitInfo.CurrentBranch(Environment.CurrentDirectory);
         if (bannerBranch is not null)
-            Console.WriteLine($"  Git      : {bannerBranch}");
+            BannerRow("Git", bannerBranch);
         if (agent.SessionPath is not null)
-            Console.WriteLine($"  会话日志  : {agent.SessionPath}");
+            BannerRow("会话日志", agent.SessionPath);
         if (config.SourceFile is not null)
-            Console.WriteLine($"  配置文件  : {config.SourceFile}");
-        Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", ConsoleColumns()));
-        Console.WriteLine("──────────────────────────────────────────────────────────");
+            BannerRow("配置文件", config.SourceFile);
+        Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", width));
+        Console.WriteLine(InputLine.FitToWidth(new string('─', 58), width));
     }
     /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
     /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。</summary>
