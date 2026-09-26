@@ -146,6 +146,9 @@ public class ConsoleRendererTests : IDisposable
     [Fact]
     public void Append_LineWithOnlyInlineCode_StripsBackticks()
     {
+        // 固定在「颜色开启」：关掉颜色时行内代码会**保留**反引号（语义不丢），
+        // 那条路径由 InlineStyleWithoutColorTests 单独覆盖。
+        using var colour = ColourTestScope.On();
         // 回归：单独成行的行内代码（`code`）曾走快速路径，反引号未剥离（输出 "`code`"）；
         // 快速路径现在要求全部为 Normal 样式，带样式的单段走样式循环
         var output = Render("`dotnet build`");
@@ -461,6 +464,9 @@ public class ConsoleRendererTests : IDisposable
     [Fact]
     public void Append_InlineCode_StripsBackticks()
     {
+        // 固定在「颜色开启」：关掉颜色时行内代码会**保留**反引号（语义不丢），
+        // 那条路径由 InlineStyleWithoutColorTests 单独覆盖。
+        using var colour = ColourTestScope.On();
         // 流式渲染（Append/HandleTextChar）不支持行内代码：
         // `code` 被原样输出带反引号，与 ParseInline/EmitLine 行为不一致。
         var output = Render("use `code` here");

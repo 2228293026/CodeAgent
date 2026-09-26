@@ -76,6 +76,9 @@ public class StreamingBoundaryTests
     [Fact]
     public void InlineCodeOnSingleLine_StillDetected()
     {
+        // 固定在「颜色开启」：关掉颜色时反引号会**保留**（语义不丢），
+        // 那条路径由 InlineStyleWithoutColorTests 单独覆盖。
+        using var colour = ColourTestScope.On();
         var output = Render("用 `code` 标记\n");
         Assert.Contains("用 code 标记", output);
     }

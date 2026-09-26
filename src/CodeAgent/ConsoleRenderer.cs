@@ -311,6 +311,21 @@ public sealed class ConsoleRenderer
 
     private void EmitStyledParts(List<(string text, InlineStyleToken style)> parts, ConsoleColor? color)
     {
+        // 颜色可用时按颜色区分；**不可用时颜色是唯一的信息载体**，
+        // 于是行内代码与加粗会彻底看不出区别——信息被丢掉了，而不只是样式没了。
+        // 关闭颜色时改为还原 Markdown 标记本身：这是用户当初写的原文，
+        // 不是凭空加的噪声，比「一段代码和一段散文长得一模一样」好得多。
+        if (!SafeColor.Enabled)
+        {
+            foreach (var (text, style) in parts)
+                Console.Write(style switch
+                {
+                    InlineStyleToken.Code => "`" + text + "`",
+                    InlineStyleToken.Bold => "*" + text + "*",
+                    _ => text,
+                });
+            return;
+        }
         foreach (var (text, style) in parts)
         {
             SafeColor.Foreground(style switch
