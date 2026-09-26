@@ -88,6 +88,11 @@ public static class InputLine
     /// <summary>搜索行除查询串外的固定开销列数：`(搜索)` + 两枚反引号 + 命中标记 + 分隔空格。</summary>
     internal const int SearchRowOverhead = 10;
 
+    /// <summary>搜索行必须给**草稿**留出的列数。查询串可以让位，草稿不能丢：
+    /// 用户按 Ctrl+R 是为了看自己正在搜什么，但此时正在编辑的草稿同样不能被顶没。
+    /// 此前查询预算不预留草稿空间，查询串一路吃到行尾，草稿被压成一两个残字符。</summary>
+    internal const int MinSearchDraftWidth = 8;
+
     /// <summary>反向搜索时查询串在该终端宽度下能拿到的列数。
     /// 此前写死 <see cref="SearchQueryDisplayWidth"/>：窄终端上「提示符 + (搜索) + 24 列查询」
     /// 就能把整行占满，草稿被完全挤出屏幕——用户按 Ctrl+R 反而看不到自己在搜什么。
@@ -97,7 +102,7 @@ public static class InputLine
     {
         if (windowWidth <= 0)
             return maxQuery;
-        var avail = windowWidth - promptWidth - SearchRowOverhead;
+        var avail = windowWidth - promptWidth - SearchRowOverhead - MinSearchDraftWidth;
         return avail <= 0 ? 0 : Math.Min(maxQuery, avail);
     }
 
@@ -125,6 +130,23 @@ public static class InputLine
         return prefix + FitToWidth(draft, avail);
     }
 
+    /// <summary>把草稿接到已渲染的前缀后面：按整行预算裁剪，绝不把内容挤出屏幕。
+    /// 此前只有历史浏览态（<see cref="FormatHistoryRow"/>）有预算，
+    /// 搜索态的四个分支与普通态都直接拼 draft——搜索态前面还多了
+    /// 「(搜索) `查询串` ✔/未命中」这一大截前缀，窄屏上必然溢出。
+    /// <b>前缀本身就超宽时仍然保留整段草稿</b>：草稿是用户正在编辑的内容，
+    /// 悄悄删掉它比超宽危险得多（用户会以为输入被清空了），而且此时行宽反正
+    /// 已经超了，删掉草稿也换不回预算。windowWidth &lt;= 0 = 宽度未知，原样拼接。</summary>
+    internal static string DraftTail(string prefix, string draft, int windowWidth)
+    {
+        if (windowWidth <= 0)
+            return prefix + draft;
+        var avail = windowWidth - DisplayWidth(prefix);
+        if (avail <= 0)
+            return prefix + draft; // 前缀已占满：保留草稿，不静默丢弃用户输入
+        return prefix + FitToWidth(draft, avail);
+    }
+
     /// <summary>
     /// 输入行可见文本：普通态、浏览历史态、反向搜索态的统一拼装。
     /// 搜索无命中时显式提示「未命中」：此前命中与未命中外观完全一致（都只显示 `(搜索)`query``），
@@ -138,20 +160,20 @@ public static class InputLine
         if (searching)
         {
             if (searchQuery.Length == 0)
-                return $"{prompt} (搜索) {draft}";
+                return DraftTail($"{prompt} (搜索) ", draft, windowWidth);
             var budget = windowWidth > 0
                 ? SearchQueryBudget(windowWidth, DisplayWidth(prompt), queryWidth)
                 : queryWidth;
             // 放不下查询串时整段省略：只显示「未命中/命中」状态，草稿优先占剩余空间
             if (budget <= 0)
-                return $"{prompt} (搜索) {(searchHit ? "✔" : "未命中")} {draft}";
+                return DraftTail($"{prompt} (搜索) {(searchHit ? "✔" : "未命中")} ", draft, windowWidth);
             var query = $"`{FitToWidth(searchQuery, budget)}`";
             var mark = searchHit ? " ✔" : " 未命中";
-            return $"{prompt} (搜索){query}{mark} {draft}";
+            return DraftTail($"{prompt} (搜索){query}{mark} ", draft, windowWidth);
         }
         return historyIndex >= 0 && historyIndex < historyCount
             ? FormatHistoryRow(prompt, historyIndex, historyCount, draft, windowWidth)
-            : prompt + draft;
+            : DraftTail(prompt, draft, windowWidth);
     }
 
     /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。</summary>

@@ -37,9 +37,17 @@ public class SearchRowWidthTests
     [Fact]
     public void SearchQueryBudget_JustWideEnoughKeepsTheFullBudget()
     {
-        // 恰好放得下（2 + 10 + 24 = 36）时不应裁剪
+        // 恰好放得下（提示符 2 + 开销 10 + 查询 24 + 草稿预留 8 = 44）时不应裁剪
         Assert.Equal(InputLine.SearchQueryDisplayWidth,
-            InputLine.SearchQueryBudget(36, TextUtil.DisplayWidth(Prompt)));
+            InputLine.SearchQueryBudget(44, TextUtil.DisplayWidth(Prompt)));
+    }
+
+    [Fact]
+    public void SearchQueryBudget_ReservesRoomForTheDraft()
+    {
+        // 查询串不再一路吃到行尾：必须给草稿留出 MinSearchDraftWidth 列
+        var budget = InputLine.SearchQueryBudget(36, TextUtil.DisplayWidth(Prompt));
+        Assert.Equal(36 - TextUtil.DisplayWidth(Prompt) - InputLine.SearchRowOverhead - InputLine.MinSearchDraftWidth, budget);
     }
 
     [Fact]
@@ -54,8 +62,15 @@ public class SearchRowWidthTests
         var draft = "这是一段草稿内容";
         var line = InputLine.FormatInputText(Prompt, true, "很长的查询字符串", true, 0, 0, draft,
             InputLine.SearchQueryDisplayWidth, windowWidth: 40);
-        // 关键保证：草稿必须在（整行不会被搜索前缀顶出屏幕）
-        Assert.Contains(draft, line);
+        // 关键保证：草稿必须**可见**——整行不被搜索前缀顶出屏幕，且被裁时带「…」标记。
+        // 这里断言的是「有内容 + 有省略号」，不是「草稿完整」：
+        // 40 列下 提示符(3) + (搜索)(9) + `查询串`(18) + 命中标记(3) 已占 33 列，
+        // 草稿只剩 7 列。旧断言用 Contains(draft) 等于要求一行渲染出 49 列——那正是溢出，
+        // 只因草稿此前不受宽度约束才碰巧通过。
+        Assert.Contains("…", line);
+        Assert.Contains("这是一段", line);
+        Assert.DoesNotContain("草稿内容", line);
+        Assert.True(TextUtil.DisplayWidth(line) <= 40, line);
     }
 
     [Fact]
