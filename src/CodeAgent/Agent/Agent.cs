@@ -704,6 +704,10 @@ public sealed partial class Agent
     /// 而成功路径只显示 800 字符——同一工具两种待遇，失败时反而最看不清。</summary>
     internal const int ToolOutputPreviewChars = 800;
 
+    /// <summary>工具输出预览的缩进：整块缩进而不是只缩首行——命令输出通常是多行的，
+    /// 续行顶到行首会让预览块「逃出」它所属的 ✔/⚠ 工具状态行。</summary>
+    internal const string ToolPreviewIndent = "      ";
+
     /// <summary>工具结果行：✔/⚠ + 调用摘要 + 耗时；窄终端按显示宽度截断。
     /// 超宽时先**按参数整体丢弃**再截断：直接硬切会把参数劈成半截
     /// （path=C:\Users\very\lo），那看起来像一个真实路径——比截断本身更危险。</summary>
@@ -929,7 +933,8 @@ public sealed partial class Agent
                     {
                         SafeColor.Foreground(ConsoleColor.Yellow);
                         // 与成功路径同一预算：失败信息再长也不能整屏刷掉对话
-                        Console.WriteLine("      " + FormatToolOutputPreview(BuildToolOutputPreview(output, ct)));
+                        Console.WriteLine(TextUtil.IndentBlock(
+                            FormatToolOutputPreview(BuildToolOutputPreview(output, ct)), ToolPreviewIndent));
                         SafeColor.Reset();
                     }
                     SafeColor.Reset();
@@ -944,7 +949,7 @@ public sealed partial class Agent
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
                         var preview = BuildToolOutputPreview(output, ct);
-                        Console.WriteLine("      " + FormatToolOutputPreview(preview));
+                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview), ToolPreviewIndent));
                         SafeColor.Reset();
                     }
                 }

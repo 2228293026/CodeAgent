@@ -345,6 +345,23 @@ public static class TextUtil
         return i == s.Length ? s : s[..i];
     }
 
+    /// <summary>给多行文本的**每一行**加前缀缩进。
+    /// 只对整个字符串加一次前缀时只有首行有缩进，续行跑到行首——
+    /// 工具输出预览会因此「逃出」它所属的工具状态行，看起来像顶层输出。
+    /// 空行不加尾随空白（否则复制出来会带一堆无意义空格）。</summary>
+    public static string IndentBlock(string text, string indent)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(indent))
+            return text;
+        var lines = text.Replace("\r\n", "\n").Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].Length > 0)
+                lines[i] = indent + lines[i];
+        }
+        return string.Join("\n", lines);
+    }
+
     /// <summary>按显示宽度折行；width &lt;= 0（宽度未知）时原样返回，不做任何猜测性折行。
     /// **width 是正文预算，indent 是额外加在每行前面的**——最终行宽 = indent 宽度 + width。
     /// 想要「整行不超过 N 列」时必须传 width = N - DisplayWidth(indent)，
