@@ -791,12 +791,21 @@ internal static class Program
         var showCost = costText.Length > 0;
 
         bool showFrame = true;
+        var showCalls = true;
+        var showElapsed = true;
+        var showRounds = true;
 
         string Render()
         {
             // 每段自身可能带前导空格（" 思考 2.5s"），靠字符串相加分隔会在丢段后留下双空格，
             // 间隔忽宽忽窄。统一收集成列表再用单空格连接：丢任意一段都不会改变其余段的间距。
-            var parts = new List<string> { $"{rounds} 轮", $"{toolCalls} 次工具调用", elapsed };
+            var parts = new List<string>();
+            if (showRounds)
+                parts.Add($"{rounds} 轮");
+            if (showCalls)
+                parts.Add($"{toolCalls} 次工具调用");
+            if (showElapsed)
+                parts.Add(elapsed);
             if (showTokens && tokenText.Length > 0)
                 parts.Add(tokenText.Trim());
             if (showThink && thinkText.Trim().Length > 0)
@@ -826,15 +835,27 @@ internal static class Program
         }
         if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
             return text;
-        // 丢完可丢段仍超宽：脱掉装饰外框再来一次
-        if (showFrame)
+        // 丢完可丢段仍超宽：脱掉装饰外框再来一次（外框一次省 13 列，优先于丢数字）
+        if (width > 0 && TextUtil.DisplayWidth(text) > width && showFrame)
         {
             showFrame = false;
             text = Render();
-            if (TextUtil.DisplayWidth(text) <= width)
-                return text;
         }
-        return InputLine.FitToWidth(text, width);
+        // 连核心段都放不下时按语义再丢：工具次数 → 耗时 → 轮数。
+        // 绝不让 FitToWidth 把 12.3s 切成「12.…」——半个数字看起来像个完整但不同的值，
+        // 比干脆不显示更容易误导。丢到只剩「✓ 完成」后它几乎在任何终端都放得下。
+        var coreDrops = new Action[]
+        {
+            () => showCalls = false,
+            () => showElapsed = false,
+            () => showRounds = false,
+        };
+        for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < coreDrops.Length; i++)
+        {
+            coreDrops[i]();
+            text = Render();
+        }
+        return width <= 0 || TextUtil.DisplayWidth(text) <= width ? text : InputLine.FitToWidth(text, width);
     }
 
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
