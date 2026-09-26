@@ -251,6 +251,40 @@ public static class SafeColor
     public static ConsoleColor Danger => IsLight ? ConsoleColor.DarkRed : ConsoleColor.Red;
     public static ConsoleColor Warning => IsLight ? ConsoleColor.DarkYellow : ConsoleColor.Yellow;
     public static ConsoleColor Emphasis => IsLight ? ConsoleColor.Black : ConsoleColor.White;
+
+    /// <summary>颜色**为什么**是关的（空串 = 没被关）。
+    ///
+    /// /diag 只报「颜色关着」没有用：用户更常见的情况是"我明明设了
+    /// <c>CODEAGENT_THEME=contrast</c>，怎么没生效"。把原因一起报出来，
+    /// 答案就自解释了。</summary>
+    internal static string ColorOffReason(Func<string, string?> env, bool redirected)
+    {
+        if (!string.IsNullOrEmpty(env("NO_COLOR")))
+            return "NO_COLOR 已设置";
+        if (string.Equals(env("TERM"), "dumb", StringComparison.OrdinalIgnoreCase))
+            return "TERM=dumb";
+        if (redirected)
+            return "输出已重定向";
+        return "";
+    }
+
+    /// <summary>渲染环境的自述行，供 /diag 使用。返回 (键, 值) 列表，便于逐项断言。</summary>
+    internal static List<(string Key, string Value)> DescribeEnvironment(Func<string, string?> env, bool redirected)
+    {
+        var rawTheme = env("CODEAGENT_THEME");
+        var rawAscii = env("CODEAGENT_ASCII");
+        var theme = ComputeTheme(rawTheme);
+        var ascii = Glyphs.ComputeAscii(env);
+        return new List<(string, string)>
+        {
+            ("Colors", ComputeEnabled(env, redirected) ? "on" : "off"),
+            ("  关闭原因", ColorOffReason(env, redirected)),
+            ("CODEAGENT_THEME", string.IsNullOrEmpty(rawTheme) ? "(未设置)" : rawTheme),
+            ("Theme", theme.ToString()),
+            ("CODEAGENT_ASCII", string.IsNullOrEmpty(rawAscii) ? "(未设置)" : rawAscii),
+            ("AsciiGlyphs", ascii ? "on" : "off"),
+        };
+    }
 }
 
 /// <summary>通用小工具。</summary>

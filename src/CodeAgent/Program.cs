@@ -2583,8 +2583,13 @@ internal static class Program
                     }
                     var wt = Environment.GetEnvironmentVariable("WT_SESSION");
                     var term = Environment.GetEnvironmentVariable("TERM_PROGRAM");
-                    // 键列宽度由所有键的显示宽度决定：中文键算 2 列，值再按剩余宽度截断
-                    var diagRows = new (string Key, string Value)[]
+                    // 渲染环境：用户能直接改的那几个开关此前完全没有出口。
+                    // "我明明设了 CODEAGENT_THEME=contrast，怎么没生效"——这类问题
+                    // 只有把**原始值**和**判定结果**并排报出来才能自解释。
+                    var renderEnv = SafeColor.DescribeEnvironment(SafeColor.ReadEnv, Console.IsOutputRedirected);
+                    var diagRows = renderEnv
+                        .Select(r => (r.Key, r.Value))
+                        .Concat(new (string Key, string Value)[]
                     {
                         ("IsInputRedirected", Console.IsInputRedirected.ToString()),
                         ("OutputEncoding", $"{Console.OutputEncoding.WebName} (CP{W(() => (int)Console.OutputEncoding.CodePage)})"),
@@ -2596,7 +2601,8 @@ internal static class Program
                         ("IsOutputRedirected", Console.IsOutputRedirected.ToString()),
                         ("Terminal", wt is not null ? "Windows Terminal" : term is not null ? term : "未知（conhost 或其他）"),
                         ("Git branch", GitInfo.CurrentBranch(Environment.CurrentDirectory) ?? "(非 git 仓库)"),
-                    };
+                    })
+                        .ToArray();
                     var keyWidth = diagRows.Max(r => TextUtil.DisplayWidth(r.Key));
                     var diagWidth = ConsoleColumns();
                     Console.WriteLine("终端诊断:");
