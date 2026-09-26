@@ -565,6 +565,7 @@ public sealed class ToolRegistry
         registry.Register(new PublicApiSurfaceReportTool());
         registry.Register(new OptionalParamDroppedReportTool());
         registry.Register(new SwitchExhaustivenessReportTool());
+        registry.Register(new LinqQueryReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
