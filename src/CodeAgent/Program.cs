@@ -2745,7 +2745,10 @@ internal static class Program
         var head = indent + padded + separator;
         var valueBudget = width - TextUtil.DisplayWidth(head);
         if (valueBudget <= 0)
-            return head.TrimEnd();
+            // 值放不下时必须标「…」。此前直接甩下一个孤零零的冒号（`  key :`），
+            // 读起来像"值是空的"，而真实情况是"值被终端宽度截掉了"——
+            // 两者含义完全不同，后者更值得警惕（用户可能据此以为配置真的没设）。
+            return InputLine.FitToWidth(head.TrimEnd() + (valueBudget == 0 ? "…" : string.Empty), Math.Max(1, width));
         var fitted = InputLine.FitToWidth(value, valueBudget);
         if (!rightAlignValue)
             return head + fitted;
