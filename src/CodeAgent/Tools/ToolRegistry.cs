@@ -601,6 +601,7 @@ public sealed class ToolRegistry
         registry.Register(new NestedTryReportTool());
         registry.Register(new IteratorYieldReportTool());
         registry.Register(new SwitchFallthroughReportTool());
+        registry.Register(new LinqDeferredReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
