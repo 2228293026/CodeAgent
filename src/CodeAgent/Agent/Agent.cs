@@ -469,6 +469,17 @@ public sealed partial class Agent
     private long _streamTokens; // 当前调用已流式生成的 token 估算（字符数/4）
     private static readonly string[] SpinnerFrames = ["⠦", "⠸", "⠼", "⠴", "⠦", "⠇"];
 
+    /// <summary>最近一帧 spinner 文本的**显示列数**。清行时按它实际占的宽度清，
+    /// 写死 60 会在长标签（如「上下文超限，正在压缩历史… 已用时 1 分 23 秒」）后留下残字。</summary>
+    private int _spinnerLastWidth;
+
+    /// <summary>清掉 spinner 行的控制序列：回到行首 → 填满该行实际宽度 → 再回行首。</summary>
+    internal static string SpinnerClearSequence(int lastWidth)
+    {
+        var columns = Math.Max(1, lastWidth);
+        return "\r" + new string(' ', columns) + "\r";
+    }
+
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
 
@@ -504,9 +515,11 @@ public sealed partial class Agent
                             break;
                         // label 模式（压缩历史等非流式调用）：无 token 可计，显示已进行时长；
                         // 默认模式维持原样（用时 + 本回合 tokens）
-                        Console.Write(label is null
-                            ? $"\r{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens"
-                            : $"\r{f} {label} 已用时 {TextUtil.FormatSessionTime(_spinnerSw.Elapsed)}");
+                        var frame_text = label is null
+                            ? $"{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens"
+                            : $"{f} {label} 已用时 {TextUtil.FormatSessionTime(_spinnerSw.Elapsed)}";
+                        _spinnerLastWidth = TextUtil.DisplayWidth(frame_text);
+                        Console.Write("\r" + frame_text);
                     }
                     await Task.Delay(120, cts.Token);
                 }
@@ -527,7 +540,10 @@ public sealed partial class Agent
         // 流式输出/工具日志从该行继续，输入行保持在上方。
         // 锁内「先取消再清行」：与动画任务的锁互斥，保证清行后不会再有帧写进来
         lock (ConsoleLock)
-            Console.Write("\r" + new string(' ', 60) + "\r");
+        {
+            Console.Write(SpinnerClearSequence(_spinnerLastWidth));
+            _spinnerLastWidth = 0;
+        }
     }
 
     /// <summary>思考结束（首个文本到达）：把 spinner 行定格为「用时 X · ↑ tokens」统计行并换行。
@@ -546,7 +562,8 @@ public sealed partial class Agent
             if (!_reasoningShown)
             {
                 // spinner 动画行还在：先清掉再定格（避免残留帧字符）
-                Console.Write("\r" + new string(' ', 60) + "\r");
+                Console.Write(SpinnerClearSequence(_spinnerLastWidth));
+                _spinnerLastWidth = 0;
             }
             // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
             Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
