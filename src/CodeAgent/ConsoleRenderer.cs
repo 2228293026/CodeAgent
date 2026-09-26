@@ -499,13 +499,43 @@ public sealed class ConsoleRenderer
         return sb.ToString();
     }
 
+    /// <summary>代码块中显示宽度超过终端的行数。
+    /// 代码**不截断**（截断会让用户复制到的是残缺代码，比多占几列糟糕得多），
+    /// 但折行后的续行看起来和下一条语句一模一样，读者分不出「这是一行的后半段」。
+    /// 因此改为整块统计一次，块后用一行弱化提示说明有几行发生了折行。</summary>
+    internal static int CountOverlongCodeLines(string code, int width)
+    {
+        if (width <= 0 || string.IsNullOrEmpty(code))
+            return 0;
+        var count = 0;
+        foreach (var line in code.Replace("\r\n", "\n").Split('\n'))
+        {
+            if (TextUtil.DisplayWidth(ExpandCodeTabs(line)) > width)
+                count++;
+        }
+        return count;
+    }
+
+    /// <summary>代码块折行提示行（无超长行时返回空串）。</summary>
+    internal static string CodeWrapNote(int overlong, int width) =>
+        overlong <= 0
+            ? string.Empty
+            : $"（代码块有 {overlong} 行超过 {width} 列，已折行显示；代码本身未截断）";
+
     private void EmitCode(string code)
     {
         if (code.Length == 0)
             return;
+        var overlong = CountOverlongCodeLines(code, _width);
         SafeColor.Foreground(ConsoleColor.Green);
         Console.Write(NormalizeCodeBlock(code));
         SafeColor.Reset();
+        if (overlong > 0)
+        {
+            SafeColor.Foreground(ConsoleColor.DarkGray);
+            Console.WriteLine(CodeWrapNote(overlong, _width));
+            SafeColor.Reset();
+        }
     }
 
     /// <summary>行内样式（internal 以便测试断言样式序列）。</summary>
