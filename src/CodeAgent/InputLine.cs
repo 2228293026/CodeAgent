@@ -1097,7 +1097,7 @@ public static class InputLine
                 Console.Write(sb.ToString());
             }
 
-            // 过滤变化时单行显示带编号的匹配结果（可直接按数字执行）
+
             void PrintFilterScroll()
             {
                 var sb = new StringBuilder();
@@ -1107,9 +1107,12 @@ public static class InputLine
                 }
                 else
                 {
-                    // 与数字键上限一致（1-9 run）：显示前 9 项，超出提示总数
-                    var parts = menuItems.Take(9).Select((m, i) => $"{i + 1}) {m.Name}");
-                    var more = menuItems.Count > 9 ? $" {SafeColor.Glyphs.Ellipsis}(共 {menuItems.Count} 项)" : "";
+                    // 编号来自 FilterScrollWindow：与 DigitKeySelection 同一个窗口推导
+                    var window = FilterScrollWindow(menuItems, menuOffset);
+                    var parts = window.Select(w => $"{w.Number}) {w.Name}");
+                    var more = menuItems.Count > window.Count
+                        ? $" {SafeColor.Glyphs.Ellipsis}(共 {menuItems.Count} 项)"
+                        : "";
                     sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
                 }
                 sb.AppendLine();
@@ -1947,6 +1950,30 @@ public static class InputLine
             return candidates[0];
         var prefix = CommonPrefix(candidates);
         return prefix.Length > typed.Length ? prefix : null;
+    }
+
+    /// <summary>
+    /// 滚动模式下菜单里**显示的那几项及其编号**。
+    ///
+    /// 编号必须与 <see cref="DigitKeySelection"/> 用同一个窗口推导，否则屏幕上写的
+    /// 「3)」和按下 3 选中的不是同一项——用户按下去的东西和看到的不一样，
+    /// 而且没有任何提示能解释这个偏差。
+    ///
+    /// 滚动模式没有可见窗口的概念（menuShown=0），过去两边各算各的：
+    /// 展示方固定 <c>Take(9)</c> 从 0 开始编号，选取方按 <c>menuOffset + n - 1</c>。
+    /// 今天 menuOffset 恒为 0 所以看不出来，但只要哪天让滚动模式真的滚动，
+    /// 编号就会静默错位。**让两边共用这一个函数，错位就不可能发生。**
+    /// </summary>
+    internal static List<(int Number, string Name)> FilterScrollWindow(
+        IReadOnlyList<(string Name, string Desc)> items, int menuOffset, int max = 9)
+    {
+        var window = new List<(int Number, string Name)>();
+        if (max <= 0)
+            return window;
+        var offset = Math.Clamp(menuOffset, 0, Math.Max(0, items.Count - 1));
+        for (var i = offset; i < items.Count && window.Count < max; i++)
+            window.Add((window.Count + 1, items[i].Name));
+        return window;
     }
 
     /// <summary>
