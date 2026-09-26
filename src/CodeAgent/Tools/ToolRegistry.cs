@@ -561,6 +561,7 @@ public sealed class ToolRegistry
         registry.Register(new LineEndingMixedReportTool());
         registry.Register(new StaleCommentReportTool());
         registry.Register(new StringConcatPerfReportTool());
+        registry.Register(new TestPlaceholderReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
