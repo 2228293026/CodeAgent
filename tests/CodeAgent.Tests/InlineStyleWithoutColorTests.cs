@@ -14,6 +14,7 @@ namespace CodeAgent.Tests;
 /// 信息是被**丢掉**了，而不只是样式没了。
 /// 现在关闭颜色时改为还原 Markdown 标记本身（用户当初写的原文）。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class InlineStyleWithoutColorTests
 {
     private static string Render(string content)

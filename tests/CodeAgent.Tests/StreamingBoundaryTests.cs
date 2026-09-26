@@ -9,6 +9,7 @@ namespace CodeAgent.Tests;
 /// 回归点：行尾单个 ` 与下一行/下一条消息开头的 ` 会凑成 2 或 3，于是
 /// 「``` 围栏」被误开成代码块（后续正文整段被当代码输出），或普通反引号被误判成行内代码。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class StreamingBoundaryTests
 {
     [Fact]

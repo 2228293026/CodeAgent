@@ -9,6 +9,7 @@ namespace CodeAgent.Tests;
 /// 回归点：旧实现只看首字符 `>`，`  > 内容`（合法引用）不上色；
 /// `>内容`、`1)item`、`+   item` 的标记与间距各写各的，同一列表里参差不齐。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class QuoteAndListRenderTests
 {
     [Theory]

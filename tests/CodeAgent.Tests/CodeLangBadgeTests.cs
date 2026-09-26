@@ -12,10 +12,15 @@ namespace CodeAgent.Tests;
 /// 下面这段是什么语言的代码，只能靠猜。而徽标本身也可能放不下：
 /// 窄屏下让一行徽标自己折行，会把整个代码块顶歪，所以放不下时必须整行省略。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class CodeLangBadgeTests
 {
+    /// <summary>捕获渲染输出。显式固定在「颜色开启」：徽标只在颜色路径下出现，
+    /// 关闭颜色时代码块改用 Markdown 围栏（见 CodeBlockWithoutColorTests）。
+    /// `dotnet test` 的输出本就重定向，不写死这个前提就会测到另一条分支。</summary>
     private static string Capture(Action action)
     {
+        using var colour = ColourTestScope.On();
         var original = Console.Out;
         var writer = new StringWriter();
         Console.SetOut(writer);

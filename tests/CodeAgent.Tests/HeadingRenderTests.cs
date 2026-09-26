@@ -9,6 +9,7 @@ namespace CodeAgent.Tests;
 /// 回归点：旧实现只看首字符是否 '#'——`#Title`（无空格）被当标题上色，
 /// 而合法的 `   # 标题`（前导空格）却不上色；闭合序列 `## 标题 ##` 原样漏出到渲染结果。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class HeadingRenderTests
 {
     [Theory]

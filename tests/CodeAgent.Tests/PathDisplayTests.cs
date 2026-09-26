@@ -7,6 +7,7 @@ using Xunit;
 
 namespace CodeAgent.Tests;
 
+[Collection("ConsoleOutput")]
 public class PathDisplayTests
 {
     [Theory]

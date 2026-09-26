@@ -14,6 +14,7 @@ namespace CodeAgent.Tests;
 /// 等于告诉用户**一列都没丢**。一个谎报自己什么都没丢的截断提示，
 /// 比不给提示更糟：用户据此以为看到了全部列。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class TableTruncationNoticeTests
 {
     private static string Capture(Action action)

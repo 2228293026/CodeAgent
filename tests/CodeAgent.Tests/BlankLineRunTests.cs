@@ -9,6 +9,7 @@ namespace CodeAgent.Tests;
 /// 连续空行收敛：模型常连发 3–5 个空行，纯占屏且把段落节奏切碎。
 /// 空行必须暂存——流式渲染要等下一行才知道前面是不是"连发空行"。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class BlankLineRunTests
 {
     private static string Render(string text)

@@ -7,6 +7,7 @@ using static CodeAgent.ConsoleRenderer;
 namespace CodeAgent.Tests;
 
 /// <summary>ConsoleRenderer 行内样式解析与渲染的补充边界测试(在 ConsoleRendererTests 45 个之上)。</summary>
+[Collection("ConsoleOutput")]
 public class ConsoleRendererEdgeTests : IDisposable
 {
     private readonly StringWriter _out = new();

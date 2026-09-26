@@ -584,16 +584,34 @@ public sealed class ConsoleRenderer
     {
         if (code.Length == 0)
             return;
-        var badge = FormatCodeLangBadge(_codeLang.ToString(), _width);
-        if (badge.Length > 0)
+        var lang = _codeLang.ToString();
+        // 没有颜色时代码块只剩一个「▌cs」徽标当边界，代码与散文**完全无法区分**——
+        // 一段输出到底是代码还是段落，读者无从判断。还原 Markdown 围栏（```lang … ```）：
+        // 这是用户当初写下的原文，既标明了语言，也给出了明确的起止。
+        var fence = !SafeColor.Enabled;
+        if (fence)
         {
-            using var badgeScope = SafeColor.Scope(SafeColor.Muted);
-            Console.WriteLine(badge);
+            using var openScope = SafeColor.Scope(SafeColor.Muted);
+            Console.WriteLine("```" + InputLine.FitToWidth(lang, MaxCodeLangChars));
+        }
+        else
+        {
+            var badge = FormatCodeLangBadge(lang, _width);
+            if (badge.Length > 0)
+            {
+                using var badgeScope = SafeColor.Scope(SafeColor.Muted);
+                Console.WriteLine(badge);
+            }
         }
         var overlong = CountOverlongCodeLines(code, _width);
         using (SafeColor.Scope(SafeColor.Success))
         {
             Console.Write(NormalizeCodeBlock(code));
+        }
+        if (fence)
+        {
+            using var closeScope = SafeColor.Scope(SafeColor.Muted);
+            Console.WriteLine("```");
         }
         if (overlong > 0)
         {

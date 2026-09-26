@@ -5,6 +5,7 @@ using Xunit;
 
 namespace CodeAgent.Tests;
 
+[Collection("ConsoleOutput")]
 public class ConsoleRendererTests : IDisposable
 {
     private readonly StringWriter _out = new();
@@ -22,8 +23,17 @@ public class ConsoleRendererTests : IDisposable
         _out.Dispose();
     }
 
+    /// <summary>渲染并捕获输出。
+    ///
+    /// 这里显式固定在「颜色开启」：`dotnet test` 的输出被重定向，<c>SafeColor.Enabled</c>
+    /// 天然为 false，而关闭颜色时行内代码会**保留**反引号、代码块会**保留**围栏
+    /// （语义不丢，见 InlineStyleWithoutColorTests / CodeBlockWithoutColorTests）。
+    /// 不把这个前提写死，本类关于「标记应被剥离」的断言在本地终端和 CI 上
+    /// 跑的会是不同分支——CI 上抓到过一次这样的失败。
+    /// </summary>
     private string Render(string text)
     {
+        using var colour = ColourTestScope.On();
         var r = new CodeAgent.ConsoleRenderer(enabled: true);
         r.Append(text);
         r.Flush();

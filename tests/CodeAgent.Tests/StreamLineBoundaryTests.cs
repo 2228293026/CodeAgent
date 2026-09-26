@@ -10,6 +10,7 @@ namespace CodeAgent.Tests;
 /// 回归点：流式路径此前**无条件**补一个换行——模型最后一段本来就带换行时会多出空行；
 /// 而没带换行时又必须补，否则工具状态行/回合摘要会粘在正文同一行。
 /// </summary>
+[Collection("ConsoleOutput")]
 public class StreamLineBoundaryTests
 {
     private static string Capture(Action action)
