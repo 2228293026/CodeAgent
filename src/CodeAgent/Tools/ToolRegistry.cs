@@ -567,6 +567,7 @@ public sealed class ToolRegistry
         registry.Register(new SwitchExhaustivenessReportTool());
         registry.Register(new LinqQueryReportTool());
         registry.Register(new SwallowedExceptionReportTool());
+        registry.Register(new EqualsGetHashCodeReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
