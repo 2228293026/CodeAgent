@@ -227,10 +227,34 @@ public static class InputLine
     /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
     public const string RecallMarker = "\u001bRECALL";
 
-    /// <summary>读取终端宽度；失败返回 0（未知）。</summary>
+    /// <summary>上一次可信的终端宽度（读数抖动时沿用）。</summary>
+    private static int _lastGoodWidth;
+
+    /// <summary>输入行可接受的最低可信宽度。低于此值的读数视为测量失效
+    /// （终端最小化、拖拽过程中的抖动），沿用上一次的好值而不是当成真的。</summary>
+    internal const int MinPlausibleWidth = 8;
+
+    /// <summary>把一次窗口宽度读数解析成「本轮应使用的宽度」。
+    /// 读数低于 <see cref="MinPlausibleWidth"/> 视为失效：输入行会据此决定
+    /// 是否走 ANSI 原地重绘、按多宽折行 —— 拿到 1~2 列会让整行渲染全面退化。
+    /// 读数正常就用它；都没有时返回 0 = 未知（下游约定：0 表示不裁剪）。</summary>
+    internal static int ResolveWindowWidth(int measured, int lastGood)
+    {
+        if (measured >= MinPlausibleWidth)
+            return Math.Clamp(measured, 0, 300);
+        return lastGood;
+    }
+
+    /// <summary>读取终端宽度；失败或读数不可信时沿用上一次的好值，返回 0 表示未知。</summary>
     private static int TryWindowWidth()
     {
-        try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
+        int measured;
+        try { measured = Console.WindowWidth; }
+        catch { return _lastGoodWidth; }
+        var resolved = ResolveWindowWidth(measured, _lastGoodWidth);
+        if (resolved >= MinPlausibleWidth)
+            _lastGoodWidth = resolved;
+        return resolved;
     }
 
     /// <summary>ANSI 原地渲染的最低终端宽度：低于此值退回滚动式，避免换行破坏 ANSI 行号计算。</summary>
