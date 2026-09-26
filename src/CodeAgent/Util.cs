@@ -195,6 +195,15 @@ public static class SafeColor
         /// <summary>输入框右上角的模式标记（推理档位）。几何图形区在老代码页里是乱码。</summary>
         public static string ModeMark => AsciiEnabled ? "#" : "◈";
 
+        /// <summary>启动横幅的左侧块状封口。区块元素在老代码页里是乱码。</summary>
+        public static string BannerCapLeft => AsciiEnabled ? "+====" : "▐▛███▛█";
+
+        /// <summary>启动横幅的右侧块状封口。</summary>
+        public static string BannerCapRight => AsciiEnabled ? "====+" : "▝▜██████▀";
+
+        /// <summary>启动提示行（已加载了什么、用了什么规则文件）的前导圆点。</summary>
+        public static string NoticeDot => AsciiEnabled ? "*" : "●";
+
         /// <summary>把一段已拼好的 UI 文本里的制表符/符号统一换成 ASCII 等价物。
         /// 供那些在别处已经拼好整行、无法逐处替换的场景收口——渲染层里
         /// <c>RenderGlyphGuardTests</c> 查到的残留字形都走这里。

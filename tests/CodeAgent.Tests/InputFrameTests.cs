@@ -13,6 +13,12 @@ namespace CodeAgent.Tests;
 /// 回归点：此前提示符是**裸露**的一行，上一轮输出与它之间没有任何视觉分界，
 /// 长会话里根本分不清「哪行是我刚打的」「哪行是模型刚说的」。
 /// </summary>
+/// <remarks>
+/// 必须在 <c>ConsoleOutput</c> 集合里：框线与标记取自 <c>SafeColor.Glyphs</c>，
+/// 它读的是**进程级**可替换的 <c>SafeColor.ReadEnv</c>；不串行时会被别的类
+/// 正在跑的 ASCII 作用域污染（单跑全过、全量并行跑挂）。
+/// </remarks>
+[Collection("ConsoleOutput")]
 public class InputFrameTests
 {
     /// <summary>把行按显示宽度拆开，跨平台稳定（不依赖换行符）。</summary>

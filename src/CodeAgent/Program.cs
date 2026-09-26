@@ -1759,6 +1759,60 @@ internal static class Program
     private static void BannerRow(string key, string value) =>
         Console.WriteLine(FormatKeyValueLine(key, value, BannerKeyWidth, ConsoleColumns()));
 
+    /// <summary>启动横幅的**首行**：块状封口包住的产品名，后面跟模型/供应商摘要。
+    ///
+    /// 此前首行只是一条 <c>── CodeAgent ────</c> 规则线，右侧什么都没挂，
+    /// 启动第一屏完全看不出"现在连的是哪个模型、哪个供应商"——那两行藏在下面的键值表里，
+    /// 而键值表第二行就是 Version，扫读时最容易看到的反而是最没用的信息。
+    ///
+    /// 宽度全部实测：封口是 6/8 列的**方块**字符，按 <c>Length</c> 算恰好也对，
+    /// 但 ASCII 退路下是 5/5 列——同一段代码两种模式宽度不同，必须实测。
+    /// 放不下时按固定顺序丢：先丢尾部封口，再丢副标题，**产品名永不丢弃**。
+    /// </summary>
+    internal static string BuildBannerHeadline(string title, string? subtitle, int width)
+    {
+        if (width <= 0)
+            return title;
+        var capL = SafeColor.Glyphs.BannerCapLeft;
+        var capR = SafeColor.Glyphs.BannerCapRight;
+        var capLw = TextUtil.DisplayWidth(capL);
+        var capRw = TextUtil.DisplayWidth(capR);
+        var sub = subtitle ?? string.Empty;
+        // 完整形态：左封口 + 产品名 + 右封口 + 副标题 + 右封口
+        //   capL · sp · title · sp · capR · sp · sub · sp · capR
+        // 固定开销 = 三个封口 + **四个**空格。少算一个封口/空格，整行就会比终端宽十几列，
+        // 在窄屏上把启动横幅顶成两行——这正是这个函数要避免的事。
+        var fullFixed = capLw + 2 * capRw + 4;
+        if (width - fullFixed >= TextUtil.DisplayWidth(title) + TextUtil.DisplayWidth(sub))
+            return $"{capL} {title} {capR} {sub} {capR}";
+        // 丢副标题，只留「左封口 + 产品名 + 右封口」。
+        // **副标题要么完整出现要么完全不出现**：截成 `custom (opena` 这种
+        // 半截供应商名，看起来像一个完整但错误的名字，比不显示更糟。
+        var slim = capLw + 1 + capRw + 1;
+        if (width >= slim)
+        {
+            var titleBudget = width - slim;
+            // 标题至少要有 4 列才值得夹在封口中间：只剩 1~3 列时
+            // `▐▛███▛█ C ▝▜██████▀` 是个**只有装饰没有信息**的首行，
+            // 不如直接给一个截断的产品名——名字比边框有用。
+            if (titleBudget >= 4)
+                return $"{capL} {InputLine.FitToWidth(title, titleBudget)} {capR}";
+        }
+        // 连封口都放不下：只留产品名，截到可用宽度
+        return InputLine.FitToWidth(title, width);
+    }
+
+    /// <summary>启动提示行：<c>● 正文</c>，用于「已加载 AGENTS.md / 规则文件」这类
+    /// 不值得占一整行键值表、但必须让用户知道的事实。</summary>
+    internal static string BuildBannerNotice(string body, int width)
+    {
+        var dot = SafeColor.Glyphs.NoticeDot;
+        var line = $"{dot} {body}";
+        if (width <= 0)
+            return line;
+        return InputLine.FitToWidth(line, width);
+    }
+
     private static void PrintBanner(AgentConfig config, ProviderOptions opts, AgentClass agent)
     {
         try
@@ -1768,7 +1822,9 @@ internal static class Program
         }
         catch { /* 平台不支持：忽略 */ }
         var width = ConsoleColumns();
-        Console.WriteLine(InputLine.FitToWidth($"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2} CodeAgent " + new string(SafeColor.Glyphs.RuleChar, 37), width));
+        // 首行：产品名 + 模型/供应商摘要——启动第一眼就要看到"我在跟谁说话"
+        var providerSummary = $"{TextUtil.ShortModelName(opts.Model)}{SafeColor.Glyphs.SegmentSeparator}{config.Provider} ({opts.Type})";
+        Console.WriteLine(BuildBannerHeadline($"CodeAgent {InformationalVersion}", providerSummary, width));
         BannerRow("Version", InformationalVersion);
         var bannerOverride = config.PersistedProvider is not null &&
                              !string.Equals(config.Provider, config.PersistedProvider, StringComparison.OrdinalIgnoreCase);
@@ -1785,8 +1841,29 @@ internal static class Program
             BannerRow("会话日志", agent.SessionPath);
         if (config.SourceFile is not null)
             BannerRow("配置文件", config.SourceFile);
+        // 规则文件与工作区：值得知道但不值得各占一行键值表
+        var notice = new List<string>();
+        var agentsFile = RuleFile(Environment.CurrentDirectory);
+        if (agentsFile is not null)
+            notice.Add($"已加载 {Path.GetFileName(agentsFile)}: {agentsFile}");
+        if (notice.Count > 0)
+            Console.WriteLine(BuildBannerNotice(string.Join("; ", notice), width));
         Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", width));
         Console.WriteLine(InputLine.FitToWidth(new string(SafeColor.Glyphs.RuleChar, 58), width));
+    }
+
+    /// <summary>向上找规则文件：<c>AGENTS.md</c> 优先，其次 <c>CLAUDE.md</c>、<c>.cursorrules</c>。
+    /// 只在当前目录找，不逐级上溯——启动时明确告诉用户**哪一份**规则在起作用，
+    /// 免得改了上级目录的文件却在当前目录没生效。</summary>
+    internal static string? RuleFile(string dir)
+    {
+        foreach (var name in new[] { "AGENTS.md", "CLAUDE.md", ".cursorrules" })
+        {
+            var path = Path.Combine(dir, name);
+            if (File.Exists(path))
+                return path;
+        }
+        return null;
     }
     /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
     /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。</summary>
