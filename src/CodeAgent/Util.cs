@@ -75,6 +75,32 @@ public static class SafeColor
 
         /// <summary>警告前缀。</summary>
         public static string Warn => AsciiEnabled ? "!" : "⚠";
+
+        /// <summary>输入行折叠块的「已折叠」标记。
+        ///
+        /// **必须保持 1 列**：这串标记的显示宽度会直接从「末行预览」的可用列数里扣，
+        /// 用 `[+]` 这种 3 字符的写法会让 ASCII 模式比 Unicode 模式**少 4 列**预览，
+        /// 在 30 列的窄终端上是 13% 的损失。含义由紧跟的「展开」二字承担。</summary>
+        public static string Fold => AsciiEnabled ? "+" : "⏷";
+
+        /// <summary>输入行折叠块的「展开」提示。同样保持 1 列，理由见 <see cref="Fold"/>。</summary>
+        public static string Unfold => AsciiEnabled ? "v" : "↓";
+
+        /// <summary>命中标记。</summary>
+        public static string Hit => AsciiEnabled ? "v" : "✔";
+
+        /// <summary>方向箭头（菜单选择、Ctrl+方向键说明）。</summary>
+        public static string Arrow => AsciiEnabled ? "->" : "→";
+
+        /// <summary>把一段已拼好的 UI 文本里的制表符/符号统一换成 ASCII 等价物。
+        /// 供那些在别处已经拼好整行、无法逐处替换的场景收口。
+        /// 省略号换成长 3 的 <c>...</c>，与 <see cref="Ellipsis"/> 保持一致——
+        /// 调用方仍须把结果喂给 <c>TextUtil.DisplayWidth</c>，不能按 1 列算。</summary>
+        public static string Substitute(string text) => !AsciiEnabled ? text : text
+            .Replace('│', '|').Replace('▌', '|').Replace('─', '-')
+            .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v')
+            .Replace('⚠', '!').Replace('→', '-').Replace('…', '.')
+            .Replace("..", "...");
     }
 
     public static void Foreground(ConsoleColor c)

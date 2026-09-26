@@ -143,4 +143,95 @@ public class AsciiGlyphTests : IDisposable
         // 放不下时仍然整行省略，不让它自己折行把代码块顶歪
         Assert.Equal("", ConsoleRenderer.FormatCodeLangBadge("cs", 4));
     }
+
+    [Fact]
+    public void FoldHintPrefixMatchesTheLineItMeasures()
+    {
+        // 关键不变式：量前缀宽度用的那段文本，必须与真正拼出来的那一行**逐字相同**。
+        // 此前前缀里写死了 Unicode 符号；一旦前缀也随 ASCII 退回变短，
+        // 量出来的列数就会比实际行长多，末行预览被算少甚至整段被丢掉。
+        using (new GlyphScope(null))
+        {
+            var text = InputLine.FoldText("a\nb\nc\nd\ne\nf", 3, 80);
+            var hint = ConsoleRendererTests.OutputLines(text).Last(l => l.Trim().Length > 0);
+            Assert.StartsWith(InputLine.FoldHintPrefix(6).TrimEnd(), hint);
+            Assert.Equal(InputLine.FoldHintPrefix(6), InputLine.FoldHintPrefix(6).TrimEnd() + " ");
+        }
+        using (new GlyphScope("1"))
+        {
+            var text = InputLine.FoldText("a\nb\nc\nd\ne\nf", 3, 80);
+            var hint = ConsoleRendererTests.OutputLines(text).Last(l => l.Trim().Length > 0);
+            Assert.StartsWith(InputLine.FoldHintPrefix(6).TrimEnd(), hint);
+        }
+    }
+
+    [Fact]
+    public void FoldHintIsAsciiWhenAsked()
+    {
+        using (new GlyphScope("1"))
+        {
+            var text = InputLine.FoldText("a\nb\nc\nd\ne\nf", 3, 80);
+            Assert.DoesNotContain('⏷', text);
+            Assert.DoesNotContain('↓', text);
+            Assert.DoesNotContain('·', text);
+            Assert.Contains("展开", text);
+        }
+        using (new GlyphScope(null))
+            Assert.Contains('⏷', InputLine.FoldText("a\nb\nc\nd\ne\nf", 3, 80));
+    }
+
+    [Fact]
+    public void NarrowTerminalDropsTheTailInsteadOfWrapping()
+    {
+        // 窄到放不下末行预览时，正确行为是**整段丢掉末行**（保持折叠块行高不变，
+        // 否则菜单锚点会错位），而不是让它折行。断言的是"没有末行预览"，
+        // 而不是"整行不超宽"——前缀本身在极窄终端下装不下是既定行为。
+        using var scope = new GlyphScope("1");
+        foreach (var width in new[] { 20, 24, 28, 32, 80, 120 })
+        {
+            var text = InputLine.FoldText("a\nb\nc\nd\ne\nf", 3, width);
+            foreach (var line in ConsoleRendererTests.OutputLines(text))
+            {
+                if (line.Trim().Length == 0) continue;
+                if (TextUtil.DisplayWidth(line) > width)
+                    Assert.DoesNotContain("末行:", line);
+            }
+        }
+    }
+
+    [Fact]
+    public void AsciiPrefixIsNoWiderThanUnicode()
+    {
+        // 前缀宽度直接从「末行预览」的可用列数里扣。ASCII 退回**不能**因此少给几列预览，
+        // 所以等宽的 Unicode 符号必须换成 1 列的 ASCII 写法，而不是 `[+]` 那种 3 字符的。
+        int unicode;
+        using (new GlyphScope(null))
+            unicode = InputLine.FoldHintPrefixWidth(42);
+        using (new GlyphScope("1"))
+        {
+            var ascii = InputLine.FoldHintPrefixWidth(42);
+            Assert.True(ascii > 0);
+            Assert.Equal(unicode, ascii);
+        }
+    }
+
+    [Fact]
+    public void SubstituteReplacesEveryBoxGlyph()
+    {
+        using var scope = new GlyphScope("1");
+        var line = "  a │ b │ c\n  ─────\n  ⚠ 注意 …";
+        var ascii = SafeColor.Glyphs.Substitute(line);
+        foreach (var glyph in new[] { '│', '─', '⚠', '…' })
+            Assert.False(ascii.Contains(glyph), $"还剩 {glyph}: {ascii}");
+        Assert.Contains("a | b | c", ascii);
+        Assert.Contains("! ", ascii);
+    }
+
+    [Fact]
+    public void SubstituteIsIdentityWhenUnicodeIsOn()
+    {
+        using var scope = new GlyphScope(null);
+        const string line = "  a │ b";
+        Assert.Equal(line, SafeColor.Glyphs.Substitute(line));
+    }
 }

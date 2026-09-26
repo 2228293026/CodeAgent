@@ -46,9 +46,17 @@ public static class InputLine
     internal const int MinFoldTailWidth = 8;
 
     /// <summary>折叠提示行固定前缀的显示宽度（不含末行预览）。按显示宽度算——
-    /// 提示文案几乎全是中文，按字符数算会低估近一倍，窄屏下反而更容易折行。</summary>
+    /// 提示文案几乎全是中文，按字符数算会低估近一倍，窄屏下反而更容易折行。
+    /// 前缀**本身**也会随 ASCII 退回变短（⏷ ↓ · 都不是 ASCII），
+    /// 所以必须和真正拼出来的那一行用同一个前缀，否则算出的列数和实际不符。</summary>
+    internal static string FoldHintPrefix(int lineCount)
+    {
+        var head = $"{SafeColor.Glyphs.Fold} 共 {lineCount} 行 {SafeColor.Glyphs.Unfold} 展开";
+        return SafeColor.Glyphs.AsciiEnabled ? $"{head} - 末行: " : $"{head} · 末行: ";
+    }
+
     internal static int FoldHintPrefixWidth(int lineCount) =>
-        TextUtil.DisplayWidth($"⏷ 共 {lineCount} 行 ↓ 展开 · 末行: ");
+        TextUtil.DisplayWidth(FoldHintPrefix(lineCount));
 
     /// <summary>末行预览在该终端宽度下能拿到的列数。
     /// 宽度未知（&lt;= 0）时用固定值（不做猜测性裁剪）；剩余不足 <see cref="MinFoldTailWidth"/> 列时返回 0 ——
@@ -76,9 +84,11 @@ public static class InputLine
         if (tail.Length == 0 && lines.Length >= 2)
             tail = lines[^2].Trim(); // 末尾空行：回看一行，避免出现空的「末行: 」
         var budget = FoldTailBudget(windowWidth, lines.Length);
+        var head = $"{SafeColor.Glyphs.Fold} 共 {lines.Length} 行 {SafeColor.Glyphs.Unfold} 展开";
+        var sep = SafeColor.Glyphs.AsciiEnabled ? " - " : " · ";
         var hint = budget == 0 || tail.Length == 0
-            ? $"⏷ 共 {lines.Length} 行 ↓ 展开"
-            : $"⏷ 共 {lines.Length} 行 ↓ 展开 · 末行: {FitToWidth(tail, budget)}";
+            ? head
+            : $"{head}{sep}末行: {FitToWidth(tail, budget)}";
         return string.Join('\n', lines.Take(threshold - 1)) + "\n" + hint;
     }
 
@@ -166,9 +176,9 @@ public static class InputLine
                 : queryWidth;
             // 放不下查询串时整段省略：只显示「未命中/命中」状态，草稿优先占剩余空间
             if (budget <= 0)
-                return DraftTail($"{prompt} (搜索) {(searchHit ? "✔" : "未命中")} ", draft, windowWidth);
+                return DraftTail($"{prompt} (搜索) {(searchHit ? SafeColor.Glyphs.Hit : "未命中")} ", draft, windowWidth);
             var query = $"`{FitToWidth(searchQuery, budget)}`";
-            var mark = searchHit ? " ✔" : " 未命中";
+            var mark = searchHit ? $" {SafeColor.Glyphs.Hit}" : " 未命中";
             return DraftTail($"{prompt} (搜索){query}{mark} ", draft, windowWidth);
         }
         return historyIndex >= 0 && historyIndex < historyCount
