@@ -535,6 +535,7 @@ public sealed class ToolRegistry
         registry.Register(new LifetimeBoundsReportTool());
         registry.Register(new NumericLiteralReportTool());
         registry.Register(new DeadBranchReportTool());
+        registry.Register(new EventSubscriptionReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
