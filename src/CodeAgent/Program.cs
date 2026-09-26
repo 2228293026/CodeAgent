@@ -1323,6 +1323,10 @@ internal static class Program
     /// 此前把 ctx 排在目录缩短**之前**丢，于是长路径场景下最有操作价值的
     /// 「上下文用了多少」先消失，剩下一堆静态信息。
     /// </summary>
+    /// <summary>状态栏最窄档仍要显示目录时，目录至少要有的列数。
+    /// 低于此值与其显示半截路径，不如整个不显示——半截路径会指向不存在的目录。</summary>
+    internal const int MinStatusPathWidth = 6;
+
     internal static string BuildStatusBar(
         string mode, string model, string cwd, string? branch,
         string turnIn, string turnOut, string ctxText, string thinkText, int width)
@@ -1388,7 +1392,25 @@ internal static class Program
             if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
                 return text;
         }
-        return InputLine.FitToWidth(text, width);
+        // 第四轮：其余段全丢光后仍超宽——再按**保尾部**缩短一次目录。
+        // 此前直接 FitToWidth 截尾部，得到「⏵ plan · gpt-5 · src/CodeAg…」：
+        // 路径最有信息量的是末段，硬截恰好把它切掉，看起来像另一个目录
+        // （与 diff 文件头同一个病，见 ShortenPath）。放不下末段就整个去掉目录，
+        // 也不留半截路径。
+        if (width > 0 && shownPath.Length == 0)
+        {
+            var minimalHead = $"⏵ {mode} · {model} · ";
+            var minimalBudget = width - TextUtil.DisplayWidth(minimalHead);
+            if (minimalBudget >= MinStatusPathWidth)
+            {
+                shownPath = ShortenPath(cwd, minimalBudget);
+                text = Render();
+                if (TextUtil.DisplayWidth(text) <= width)
+                    return text;
+                shownPath = string.Empty; // 缩短后仍超宽：回退，交给硬截兜底
+            }
+        }
+        return width <= 0 || TextUtil.DisplayWidth(text) <= width ? text : InputLine.FitToWidth(text, width);
     }
 
     /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
