@@ -394,8 +394,18 @@ internal static class Program
             if (!skipStatusBar)
                 PrintStatusBar(opts, agent, config.ThinkingEffort, EffectiveContextWindow(), reasoningProbe);
             skipStatusBar = false;
-            var line = InputLine.Read(inlinePrompt ?? PromptFor(opts, agent), modeTuples, config.TuiAnsi, pendingDraft);
+            var cols = ConsoleColumns();
+            // 输入框：上边框（右侧挂推理档位）+ 提示符。原地重绘时只补提示符——
+            // 切换块已经把上边框画过了，再画一次会在屏幕上留下两条线。
+            var framed = inlinePrompt is null;
+            var promptText = inlinePrompt ?? PromptFor(opts, agent);
+            if (framed)
+                promptText = BuildInputFrameTop(promptText, InputModeHint(config.ThinkingEffort), cols);
+            var line = InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft);
             inlinePrompt = null;
+            // 下边框把刚输入的这一行封进框里。EOF 不画：没有用户输入就没有框可封。
+            if (line is not null)
+                Console.WriteLine(BuildInputFrameBottom(cols));
             var couldOverwriteBlock = switchBlockActive;
             switchBlockActive = false; // 默认失效：只有本轮再次切换才重新置位（中间任何输入都会改变块上方布局）
             pendingDraft = null;
@@ -1119,6 +1129,48 @@ internal static class Program
         var b = GitInfo.CurrentBranch(cwd);
         _branchCache = (cwd, b, now);
         return b;
+    }
+
+    /// <summary>输入框右上角的档位提示：`◈ high · /thinking`。
+    /// 用档位**值**而不是 `think:high` 整个 token——这里只有一格宽，
+    /// 带上命令名就把值挤没了，用户看不到自己当前是什么档。
+    /// auto 探到实际档时也照实显示（auto→off 也要看得见）。
+    /// </summary>
+    internal static string InputModeHint(string effort) => string.IsNullOrEmpty(effort)
+        ? string.Empty
+        : $"{SafeColor.Glyphs.ModeMark} {effort}{SafeColor.Glyphs.SegmentSeparator}/thinking";
+
+    /// <summary>输入框上边框 + 提示符。
+    ///
+    /// 此前提示符是**裸露**的一行，上一轮输出与它之间没有任何视觉分界，长会话里
+    /// 根本分不清「哪行是我刚打的」「哪行是模型刚说的」。上边框把输入区框出来，
+    /// 右上角挂推理档位（一眼可见当前档位，不必等状态栏那一行）。
+    ///
+    /// 宽度全部经 <see cref="TextUtil.DisplayWidth"/> 实测：右侧提示是 CJK 时占 2 列，
+    /// 直接按 <c>width - hint.Length</c> 算会把线画超出一列。
+    /// width &lt;= 0（宽度未知）时**只给提示符、不画框**——宁可少一条线，
+    /// 也不能画一条必然越界的线。
+    /// </summary>
+    internal static string BuildInputFrameTop(string prompt, string? rightHint, int width)
+    {
+        if (width <= 0)
+            return prompt;
+        var hint = rightHint ?? string.Empty;
+        var hintWidth = TextUtil.DisplayWidth(hint);
+        // 提示前留 1 列；只留 1 而不是 2——框线左侧不留白（贴左边更满格）。
+        var ruleWidth = width - hintWidth - 1;
+        if (ruleWidth < 4)
+            return InputLine.FitToWidth(prompt, width) + "\n" + new string(SafeColor.Glyphs.RuleChar, Math.Max(1, width));
+        var line = new string(SafeColor.Glyphs.RuleChar, ruleWidth) + " " + hint;
+        return line + "\n" + prompt;
+    }
+
+    /// <summary>输入框下边框。输入提交后打印，把已发出的这行封进框里。</summary>
+    internal static string BuildInputFrameBottom(int width)
+    {
+        if (width <= 0)
+            return string.Empty;
+        return new string(SafeColor.Glyphs.RuleChar, Math.Max(1, width));
     }
 
     /// <summary>提示符文本：完整形态为 `[模式|模型] 目录&gt; `。
