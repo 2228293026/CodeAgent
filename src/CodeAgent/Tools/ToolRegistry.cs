@@ -578,6 +578,7 @@ public sealed class ToolRegistry
         registry.Register(new BooleanParameterReportTool());
         registry.Register(new HardcodedSecretReportTool());
         registry.Register(new PathEscapeReportTool());
+        registry.Register(new DuplicateLogicReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
