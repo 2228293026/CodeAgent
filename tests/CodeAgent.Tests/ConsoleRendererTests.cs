@@ -129,8 +129,11 @@ public class ConsoleRendererTests : IDisposable
     {
         // 前导空白 + ``` 仍是合法围栏（Markdown 允许缩进围栏）
         var output = Render("  ```\ncode\n```");
-        Assert.Contains("code", output);
-        Assert.DoesNotContain("  ```\ncode", output); // 围栏行本身不作为文本输出
+        var lines = OutputLines(output);
+        Assert.Contains("code", lines);
+        // 围栏行本身不作为文本输出。按**行**断言：原先匹配 "  ```\ncode" 这种跨行子串，
+        // 在 Windows 的 \r\n 下永远匹配不到，等于本机根本没验证。
+        Assert.DoesNotContain(lines, l => l.Contains("```", StringComparison.Ordinal));
     }
 
     [Fact]
