@@ -607,6 +607,7 @@ public sealed class ToolRegistry
         registry.Register(new ReadonlyStructReportTool());
         registry.Register(new IntegerOverflowReportTool());
         registry.Register(new DefaultParameterReportTool());
+        registry.Register(new LostUpdateReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
