@@ -1220,13 +1220,43 @@ internal static class Program
         return $"{marker} {ShortenTrailingPath(body, budget) ?? InputLine.FitToWidth(body, budget)}";
     }
 
-    /// <summary>读取终端宽度：0 = 未知（输出重定向或读取失败）。</summary>
+    /// <summary>实测宽度的可信下限：低于此值视为测量失效（终端最小化、拖拽过程中的抖动、
+    /// 某些终端在重设尺寸时短暂返回 1~2 列）。此时不能拿它去裁剪——否则每一行
+    /// 都会被截成只剩一个省略号，比不裁剪糟得多。</summary>
+    internal const int MinPlausibleColumns = 8;
+
+    /// <summary>由「实测宽度」与「上一次的好值」得出本轮应使用的宽度。
+    /// 读不到（0/异常）时**沿用上一次的好值**，而不是退化成 0——
+    /// 宽度 0 的含义是「未知、不截断」，一次测量失败就让后续所有输出无限宽溢出，
+    /// 正是整套宽度预算要防的事。</summary>
+    internal static int ResolveColumns(int measured, int lastGood)
+    {
+        if (measured >= MinPlausibleColumns)
+            return Math.Clamp(measured, 0, 300);
+        return lastGood > 0 ? lastGood : measured;
+    }
+
+    /// <summary>读取终端宽度：0 = 未知（输出重定向或读取失败）。
+    /// 读取失败时沿用上一次成功读到的值，避免单次抖动打回"不截断"。</summary>
     private static int ConsoleColumns()
     {
         if (Console.IsOutputRedirected)
             return 0;
-        try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
+        try
+        {
+            var width = Console.WindowWidth;
+            var resolved = ResolveColumns(width, _lastGoodColumns);
+            if (resolved >= MinPlausibleColumns)
+                _lastGoodColumns = resolved;
+            return resolved;
+        }
+        catch
+        {
+            return _lastGoodColumns;
+        }
     }
+
+    private static int _lastGoodColumns; // 上一次成功读到的可信宽度（跨调用保留）
 
     /// <summary>
     /// 组装状态栏并在窄终端下按优先级丢段，保证输出永远不超过 <paramref name="width"/> 列。
