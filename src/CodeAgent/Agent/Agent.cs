@@ -742,18 +742,36 @@ public sealed partial class Agent
     /// 超宽时先**按参数整体丢弃**再截断：直接硬切会把参数劈成半截
     /// （path=C:\Users\very\lo），那看起来像一个真实路径——比截断本身更危险。
     /// 连工具名都放不下时按**下划线边界**缩短，不产出「像真名的残串」。</summary>
+    /// <summary>工具状态行里摘要至少要有的列数。低于此值说明标记与耗时已占满整行，
+    /// 此时应该丢摘要（工具身份通常在前一行 spinner 里可见）而不是丢耗时。</summary>
+    internal const int MinToolSummaryWidth = 4;
+
+    /// <summary>工具状态行：`  ✔ 摘要 (耗时)`。窄终端优先保住**标记与耗时**。
+    /// 预算为负时此前返回完整摘要，整行超宽后由 <see cref="InputLine.FitToWidth"/> 截尾部，
+    /// 耗时被静默切掉——与上面刻意为耗时预留预算的意图正好相反。</summary>
     internal static string FormatToolStatusLine(string summary, bool isError, TimeSpan elapsed, int width = 0)
     {
         var mark = isError ? "⚠" : "✔";
         var duration = $" ({TextUtil.FormatDuration(elapsed)})";
         if (width <= 0)
             return $"  {mark} {summary}{duration}";
-        var budget = width - TextUtil.DisplayWidth(duration) - TextUtil.DisplayWidth($"  {mark} ");
+        var head = $"  {mark} ";
+        var budget = width - TextUtil.DisplayWidth(duration) - TextUtil.DisplayWidth(head);
+        if (budget < MinToolSummaryWidth)
+        {
+            // 逐级降级：带省略号的完整 → 纯耗时 → 只留标记。
+            // 绝不留下被 FitToWidth 切出的 `(1.…` 这种半个数值——
+            // 它看起来像个完整但不同的耗时，比没有更糟。
+            foreach (var candidate in new[] { head + "…" + duration, head + duration, head })
+            {
+                if (TextUtil.DisplayWidth(candidate) <= width)
+                    return candidate;
+            }
+            return InputLine.FitToWidth(head, width);
+        }
         var trimmed = TrimToolSummaryArgs(summary, budget);
-        var line = $"  {mark} {trimmed}{duration}";
-        return line.Length > 0 && TextUtil.DisplayWidth(line) > width
-            ? InputLine.FitToWidth(line, width)
-            : line;
+        var line = head + trimmed + duration;
+        return TextUtil.DisplayWidth(line) > width ? InputLine.FitToWidth(line, width) : line;
     }
 
     /// <summary>摘要超宽时从**右**整体丢弃参数并标注省略个数。
