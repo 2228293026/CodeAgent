@@ -1032,7 +1032,10 @@ internal static class Program
     ///   放不下时整段丢掉，**保住行号范围**——行号才是 hunk 的结构信息；
     /// ②文件标题/文件头行按**尾部保留**缩短路径：硬截尾部会让人误以为是另一个文件；
     /// ③`+`/`-` 内容行必须带 `…` 标记：被截掉的 +行看起来就是"新增了这么多"，
-    ///   用户会以为 diff 本来就这么短。</summary>
+    ///   用户会以为 diff 本来就这么短。
+    /// ①再窄一档时按 <c>@@ -a,b +c,d @@</c> → <c>@@ -a,b +c,d</c> → <c>@@</c> 逐级退让，
+    /// 始终保住 hunk 标记：一旦被裁成 `-12,7…`，行号范围就整个丢了，
+    /// 而行号正是这里唯一不可替代的信息。</summary>
     internal static string FormatDiffLine(string line, int width)
     {
         if (width <= 0 || TextUtil.DisplayWidth(line) <= width)
@@ -1045,6 +1048,15 @@ internal static class Program
                 var bare = line[..(end + 2)];
                 if (TextUtil.DisplayWidth(bare) <= width)
                     return bare;
+                // 省掉收尾的 " @@"：hunk 头以 @@ 开头已经足够识别。
+                // 必须 TrimEnd：`line[..end]` 末尾那个空格会留下来，
+                // 变成以空格结尾的一行——复制 diff 时会带进无意义的空白。
+                var withoutTail = line[..end].TrimEnd();
+                if (TextUtil.DisplayWidth(withoutTail) <= width)
+                    return withoutTail;
+                // 只剩标记本身才占得下时，宁可只留 @@ 也不裁行号
+                if (width >= 2)
+                    return "@@";
             }
         }
         if (ShortenDiffPathLine(line, width) is { } shortened)
