@@ -968,20 +968,77 @@ public sealed partial class Agent
     private static readonly object ConsoleLock = new();
 
     /// <summary>并行执行一批工具调用；确认模式或同路径写冲突时退化为顺序执行。</summary>
+    /// <summary>工具分组提示行：<c>⏵⏵ 5 次工具调用（Read×3 Grep×2）(3.4s)</c>。
+    ///
+    /// 一轮里连续跑十几次 grep/read 时，逐行状态会把对话刷走，真正重要的
+    /// 模型输出被顶到屏幕外。这行在**整批工具跑完之后**追加一行汇总。
+    ///
+    /// 关键取舍：只**追加**汇总，不隐藏任何单行。单行折叠需要"之后再展开"的
+    /// 交互模型，而这里是流式输出、没法回头——藏起来的内容用户就再也看不到了。
+    /// 汇总只是把"刚才发生了什么"压缩成一行，单行仍逐条在屏上。
+    ///
+    /// 少于 <see cref="ToolGroupMin"/> 次不打印：两行能一眼看完，
+    /// 再加一行汇总只是噪声。
+    /// </summary>
+    internal const int ToolGroupMin = 3;
+
+    internal static string FormatToolGroupLine(IReadOnlyList<(string Verb, bool IsError)> items, TimeSpan total, int width = 0)
+    {
+        if (items.Count == 0)
+            return string.Empty;
+        var errors = items.Count(i => i.IsError);
+        // 次数相同时按**首次出现顺序**（ThenBy First）：并列时保留"实际发生的先后"，
+        // 比按字母排更有信息量——`Bash Edit Read` 说的是做了什么，`Edit` 先于 `Bash` 只是字母序。
+        var counts = items
+            .Select((v, i) => (Verb: v.Verb, Index: i))
+            .GroupBy(x => x.Verb, StringComparer.Ordinal)
+            .Select(g => (Name: g.Key, N: g.Count(), First: g.Min(x => x.Index)))
+            .OrderByDescending(g => g.N)
+            .ThenBy(g => g.First)
+            .Select(g => g.N > 1 ? $"{g.Name}×{g.N}" : g.Name);
+        var head = $"{SafeColor.Glyphs.HintMark}{SafeColor.Glyphs.HintMark} {items.Count} 次工具调用";
+        var detail = $"（{string.Join(" ", counts)}）";
+        if (errors > 0)
+            detail = $"{SafeColor.Glyphs.Warn} {errors} 失败 " + detail;
+        var line = $"{head} {detail} ({TextUtil.FormatDuration(total)})";
+        if (width <= 0)
+            return line;
+        return TextUtil.DisplayWidth(line) <= width ? line : InputLine.FitToWidth(line, width);
+    }
+
     private async Task<List<ProviderMessage>> ExecuteToolCallsAsync(IReadOnlyList<ToolCall> calls, CancellationToken ct)
     {
         var results = new List<ProviderMessage>(calls.Count);
         var conflict = _ctx.Config.ConfirmCommands || DetectWriteConflict(calls, ResolveForConflict);
         // 确认模式下逐个确认命令，输入会串扰，必须顺序执行；同路径写操作并发会互相覆盖，也顺序执行
+        var run = new List<(string Verb, bool IsError)>();
+        var runWatch = Stopwatch.StartNew();
+        void FinishRun()
+        {
+            runWatch.Stop();
+            if (run.Count < ToolGroupMin || !_ctx.Config.ShowToolCalls)
+            {
+                run.Clear();
+                return;
+            }
+            var line = FormatToolGroupLine(run, runWatch.Elapsed);
+            run.Clear();
+            lock (ConsoleLock)
+            {
+                using var scope = SafeColor.Scope(SafeColor.Muted);
+                Console.WriteLine(line);
+            }
+        }
 
         if (conflict || calls.Count <= 1)
         {
             foreach (var tc in calls)
             {
-                results.Add(await ExecuteToolCallAsync(tc, ct));
+                results.Add(await ExecuteToolCallAsync(tc, ct, run));
                 if (_ctx.StopRequested)
                     break;
             }
+            FinishRun();
             return results;
         }
 
@@ -1002,7 +1059,7 @@ public sealed partial class Agent
                         Content = "（stop 已请求，本工具未执行）",
                     };
                 }
-                return await ExecuteToolCallAsync(tc, ct);
+                return await ExecuteToolCallAsync(tc, ct, run);
             }
             finally
             {
@@ -1010,10 +1067,11 @@ public sealed partial class Agent
             }
         });
         results.AddRange(await Task.WhenAll(tasks));
+        FinishRun();
         return results;
     }
 
-    private async Task<ProviderMessage> ExecuteToolCallAsync(ToolCall tc, CancellationToken ct)
+    private async Task<ProviderMessage> ExecuteToolCallAsync(ToolCall tc, CancellationToken ct, List<(string Verb, bool IsError)>? run = null)
     {
         // 模式限制：只读模式下拦截写操作（防御性，正常情况模型看不到这些工具）
         if (CurrentMode.AllowedTools is { } allowed && !allowed.Contains(tc.Name, StringComparer.OrdinalIgnoreCase))
@@ -1079,6 +1137,15 @@ public sealed partial class Agent
         // 头尾保留截断：错误摘要常在输出末尾（dotnet test / build 的失败列表），
         // 纯头部截断会把最关键的部分丢给模型看不到
         output = TextUtil.TruncateToolOutput(output, 24_000);
+
+        // 记入本批汇总（并发路径下 Add 不安全，用锁；这里只读动词与成败，不碰顺序）
+        if (run is { } acc)
+        {
+            lock (acc)
+            {
+                acc.Add((ToolVerb(tc.Name), isError));
+            }
+        }
 
         if (showLog)
         {
