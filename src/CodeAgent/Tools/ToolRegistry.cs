@@ -591,6 +591,7 @@ public sealed class ToolRegistry
         registry.Register(new StateMachineReportTool());
         registry.Register(new ObservabilityGapReportTool());
         registry.Register(new TimeZoneReportTool());
+        registry.Register(new CollectionEdgeReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
