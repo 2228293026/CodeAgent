@@ -450,6 +450,76 @@ public class AsciiGlyphTests : IDisposable
         Assert.Contains("Glyphs.ArgsPlaceholder", body);
     }
 
+    [Fact]
+    public void SpinnerFramesAreOneColumnAndCycle()
+    {
+        // spinner 的清行按 _spinnerLastWidth 的**实测**显示宽度走；一旦某帧宽度不同，
+        // 清行就会留下残字（上一帧比这一帧宽时）或删掉后面的内容。
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            var seen = new List<string>();
+            for (var tick = 0; tick < 12; tick++)
+            {
+                var frame = SafeColor.Glyphs.SpinnerFrame(tick);
+                Assert.Equal(1, TextUtil.DisplayWidth(frame));
+                if (seen.Count == 0 || seen[^1] != frame) seen.Add(frame);
+            }
+            Assert.True(seen.Count >= 3, $"spinner 应当有多帧可轮换，实际 {seen.Count} 帧");
+        }
+    }
+
+    [Fact]
+    public void SpinnerIsPureAsciiInAsciiMode()
+    {
+        using (new GlyphScope("1"))
+        {
+            // 盲文点字（⠦⠸⠼…）在代码页 437/850 的终端里是乱码
+            for (var tick = 0; tick < 8; tick++)
+                Assert.All(SafeColor.Glyphs.SpinnerFrame(tick), c => Assert.True(c < 128, $"非 ASCII 字符: {c}"));
+        }
+        using (new GlyphScope(null))
+            Assert.True(SafeColor.Glyphs.SpinnerFrame(0) != SafeColor.Glyphs.SpinnerFrame(1));
+    }
+
+    [Fact]
+    public void WaitGlyphIsOneColumnInUnicode()
+    {
+        // 回归点：此前用 ⏳，它是 emoji、算 3 列，和 Round 94 的 🔧 同一类问题——
+        // 凭空多吃两列，后面跟着的状态文字先被挤出屏幕。Unicode 形态必须是 1 列。
+        using (new GlyphScope(null))
+            Assert.Equal(1, TextUtil.DisplayWidth(SafeColor.Glyphs.Wait));
+        // ASCII 形态跟随省略号（3 列）——这是既定设计，只需确认两者一致、不各算各的
+        using (new GlyphScope("1"))
+        {
+            Assert.Equal(SafeColor.Glyphs.Ellipsis, SafeColor.Glyphs.Wait);
+            Assert.Equal(SafeColor.Glyphs.EllipsisWidth, TextUtil.DisplayWidth(SafeColor.Glyphs.Wait));
+        }
+    }
+
+    [Fact]
+    public void SetupWizardUsesTheFallbackGlyphs()
+    {
+        // 源码级守卫：配置向导不得再直接写死 ✔/⚠/⏳
+        var code = StripComments(File.ReadAllText(FindSource("SetupWizard.cs")));
+        foreach (var glyph in new[] { "✔", "⚠", "⏳" })
+            Assert.DoesNotContain(glyph, code);
+        Assert.Contains("Glyphs.Ok", code);
+        Assert.Contains("Glyphs.Warn", code);
+        Assert.Contains("Glyphs.Wait", code);
+    }
+
+    [Fact]
+    public void BrailleSpinnerTableLivesOnlyInGlyphs()
+    {
+        // 盲文点字表必须收口到 Glyphs 一处，否则 ASCII 退回永远覆盖不到
+        Assert.DoesNotContain("⠦", StripComments(File.ReadAllText(FindSource(Path.Combine("Agent", "Agent.cs")))));
+        Assert.Contains("⠦", StripComments(File.ReadAllText(FindSource("Util.cs"))));
+    }
+
+    private static string StripComments(string source) =>
+        System.Text.RegularExpressions.Regex.Replace(source, @"(?s)/\*.*?\*/|//[^\n]*", "");
+
     private static string FindSource(string name)
     {
         foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })

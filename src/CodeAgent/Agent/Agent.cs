@@ -471,7 +471,12 @@ public sealed partial class Agent
     private readonly System.Diagnostics.Stopwatch _turnSw = new(); // 本回合累计用时（每轮 RunAsync 重启）
     private bool _reasoningShown; // 本轮是否已开始实时输出思考内容（首段到达时清掉 spinner）
     private long _streamTokens; // 当前调用已流式生成的 token 估算（字符数/4）
-    private static readonly string[] SpinnerFrames = ["⠦", "⠸", "⠼", "⠴", "⠦", "⠇"];
+    /// <summary>spinner 帧。盲文的点字（⠦⠸⠼…）在老式终端和代码页 437/850 里
+    /// 是乱码，ASCII 退回时改用经典的 <c>|/-o\</c> 旋转符——同样是 1 列，
+    /// 所以 <c>_spinnerLastWidth</c> 的清行计算不受影响。
+    /// 走 <see cref="SafeColor.Glyphs.SpinnerFrame"/> 而不是在这里 if，
+    /// 是为了让「ASCII 退回」只有 <see cref="SafeColor.Glyphs"/> 一处知识来源。</summary>
+    private static string SpinnerFrame(int tick) => SafeColor.Glyphs.SpinnerFrame(tick);
 
     /// <summary>最近一帧 spinner 文本的**显示列数**。清行时按它实际占的宽度清，
     /// 写死 60 会在长标签（如「上下文超限，正在压缩历史… 已用时 1 分 23 秒」）后留下残字。</summary>
@@ -506,7 +511,7 @@ public sealed partial class Agent
             {
                 while (!cts.IsCancellationRequested)
                 {
-                    var f = SpinnerFrames[frame++ % SpinnerFrames.Length];
+                    var f = SpinnerFrame(frame++);
                     // 本回合口径：/clear 后新对话从 0 起（会话累计在 /stats），与状态栏/回合摘要一致
                     var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
                     var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();

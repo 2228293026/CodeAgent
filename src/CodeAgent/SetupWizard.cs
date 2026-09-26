@@ -73,7 +73,7 @@ public static class SetupWizard
                 TestConnection(name, existing, output);
 
             AgentConfig.Save(config, path);
-            output.WriteLine($"\n✔ 配置已保存: {path}");
+            output.WriteLine($"\n{SafeColor.Glyphs.Ok} 配置已保存: {path}");
             output.WriteLine($"当前供应商: {name}   模型: {existing.Model}");
             output.WriteLine("运行 codeagent 即可开始使用。");
             return;
@@ -159,7 +159,7 @@ public static class SetupWizard
             TestConnection(p.Name, opts, output);
 
         AgentConfig.Save(config, path);
-        output.WriteLine($"\n✔ 配置已保存: {path}");
+        output.WriteLine($"\n{SafeColor.Glyphs.Ok} 配置已保存: {path}");
         output.WriteLine($"当前供应商: {p.Name}   模型: {opts.Model}");
         output.WriteLine("运行 codeagent 即可开始使用。");
     }
@@ -179,7 +179,7 @@ public static class SetupWizard
         if (providerName is "ollama" or "hitmargin" && string.IsNullOrWhiteSpace(opts.ApiKey))
             opts.ApiKey = providerName == "ollama" ? "ollama" : "dummy";
 
-        output.Write("\n⏳ 测试连接…");
+        output.Write($"\n{SafeColor.Glyphs.Wait} 测试连接{SafeColor.Glyphs.Ellipsis}");
         try
         {
             var probe = new AgentConfig { Provider = providerName };
@@ -189,11 +189,11 @@ public static class SetupWizard
             output.WriteLine();
             if (models.Count == 0)
             {
-                output.WriteLine("⚠ 服务未返回任何模型，请检查 API 地址。");
+                output.WriteLine($"{SafeColor.Glyphs.Warn} 服务未返回任何模型，请检查 API 地址。");
             }
             else if (!models.Contains(opts.Model ?? "", StringComparer.OrdinalIgnoreCase))
             {
-                output.WriteLine($"⚠ 可连接，但模型列表中没有「{opts.Model}」（共 {models.Count} 个模型，可能拼写有误或无权限）。");
+                output.WriteLine($"{SafeColor.Glyphs.Warn} 可连接，但模型列表中没有「{opts.Model}」（共 {models.Count} 个模型，可能拼写有误或无权限）。");
                 // 给出相近候选（与 REPL /model 的拼写提示同款逻辑），少走一趟 /models
                 var family = (opts.Model ?? "").Split('-', '.')[0];
                 var near = string.IsNullOrEmpty(family)
@@ -207,13 +207,13 @@ public static class SetupWizard
             }
             else
             {
-                output.WriteLine($"✔ 连接成功，模型 {opts.Model} 可用（服务共 {models.Count} 个模型）。");
+                output.WriteLine($"{SafeColor.Glyphs.Ok} 连接成功，模型 {opts.Model} 可用（服务共 {models.Count} 个模型）。");
             }
         }
         catch (Exception ex)
         {
             output.WriteLine();
-            output.WriteLine($"⚠ 连接失败: {ex.Message}");
+            output.WriteLine($"{SafeColor.Glyphs.Warn} 连接失败: {ex.Message}");
             output.WriteLine("  配置仍会保存；请检查地址/Key，或稍后用 /models 复查。");
         }
     }
@@ -241,7 +241,7 @@ public static class SetupWizard
             var line = input.ReadLine();
             if (line is null)
             {
-                output.WriteLine("\n⚠ 输入已中断，配置向导取消，未保存任何更改。");
+                output.WriteLine($"\n{SafeColor.Glyphs.Warn} 输入已中断，配置向导取消，未保存任何更改。");
                 throw new OperationCanceledException();
             }
             var value = line.Trim();

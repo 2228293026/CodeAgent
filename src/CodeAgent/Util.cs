@@ -134,6 +134,20 @@ public static class SafeColor
         /// <summary>「还省了 N 个」的提示前缀。同样带空格，宽度随 ASCII 变化。</summary>
         public static string Omitted => AsciiEnabled ? " ..." : " …";
 
+        /// <summary>「正在进行」的标记。**必须 1 列**。
+        /// 此前用的是 <c>⏳</c>，它是 emoji（带 emoji 呈现），<c>TextUtil.DisplayWidth</c>
+        /// 算它是 <b>3 列</b>——和 Round 94 的 <c>🔧</c> 同一类问题：它凭空多吃两列，
+        /// 后面跟着的状态文字先被挤出屏幕。用单宽的 <c>…</c> 既不占宽，语义也对。</summary>
+        public static string Wait => Ellipsis;
+
+        /// <summary>spinner 的一帧。**必须 1 列**：spinner 的清行按上一帧的实测显示宽度走，
+        /// 宽度一变就会留下残字。
+        /// Unicode 下沿用盲文点字（⠦⠸⠼…，点阵比 <c>|/-o\</c> 更平滑）；
+        /// ASCII 退回时改用经典旋转符——盲文在代码页 437/850 的终端里是乱码。</summary>
+        public static string SpinnerFrame(int tick) => AsciiEnabled
+            ? "|/-o\\"[Math.Abs(tick) % 5].ToString()
+            : "⠦⠸⠼⠴⠦⠇"[Math.Abs(tick) % 6].ToString();
+
         /// <summary>状态栏各段之间的分隔符（含两侧空格）。
         ///
         /// **必须恰好 3 列**：状态栏的宽度预算是按「每段额外扣 3 列」算的
