@@ -94,24 +94,48 @@ public class ColorThemeTests
     [Fact]
     public void NoCallSiteHardcodesARawConsoleColor()
     {
-        // 守卫：语义色一旦被绕过（直接写 ConsoleColor.Xxx），主题就失效了
-        var dir = AppContext.BaseDirectory;
-        string? root = null;
-        for (var i = 0; i < 8 && dir.Length > 1 && root is null; i++)
-        {
-            var candidate = Path.Combine(dir, "src", "CodeAgent");
-            if (Directory.Exists(candidate)) root = candidate;
-            else dir = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? dir;
-        }
-        Assert.NotNull(root);
-        foreach (var file in Directory.EnumerateFiles(root!, "*.cs", SearchOption.AllDirectories))
+        // 守卫：语义色一旦被绕过（直接写 ConsoleColor.Xxx），主题就失效了。
+        // 定位源码目录时**校验内容**：光看「目录存在」不够——向上走几层可能撞上
+        // 别处的 src/CodeAgent（测试会往临时目录写 Program.cs），那样这个守卫会
+        // 扫一个空目录、静悄悄地「通过」，比没有守卫更危险。
+        var root = FindSourceRoot();
+        var checkedFiles = 0;
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
         {
             if (Path.GetFileName(file) == "Util.cs")
                 continue; // 调色板定义本身当然要写具体色值
+            checkedFiles++;
             var source = File.ReadAllText(file);
             Assert.False(System.Text.RegularExpressions.Regex.IsMatch(source, @"ConsoleColor\.\w"),
                 $"{Path.GetFileName(file)} 仍在直接写 ConsoleColor，主题切换对它无效");
         }
+        Assert.True(checkedFiles >= 5, $"只扫到 {checkedFiles} 个文件，说明定位到的不是真实源码目录");
+    }
+
+    /// <summary>定位真实的 <c>src/CodeAgent</c>：逐个候选校验里有 Program.cs 且内容完整。</summary>
+    private static string FindSourceRoot()
+    {
+        var tried = new System.Collections.Generic.List<string>();
+        foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            var dir = start;
+            for (var i = 0; i < 10 && dir.Length > 1; i++)
+            {
+                var candidate = Path.Combine(dir, "src", "CodeAgent");
+                if (Directory.Exists(candidate))
+                {
+                    tried.Add(candidate);
+                    var program = Path.Combine(candidate, "Program.cs");
+                    if (File.Exists(program) && new FileInfo(program).Length > 1000)
+                        return candidate;
+                }
+                var parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrEmpty(parent) || parent == dir)
+                    break;
+                dir = parent;
+            }
+        }
+        throw new FileNotFoundException("找不到真实的 src/CodeAgent。走过的路径: " + string.Join(" | ", tried));
     }
 
     [Fact]

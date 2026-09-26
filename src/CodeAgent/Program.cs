@@ -24,9 +24,23 @@ internal static class Program
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
             .InformationalVersion?.Split('+')[0] ?? "0.0.0";
 
+    /// <summary>把控制台输出编码设为 UTF-8，让 `── ✓ ⚠ ⏵ …` 这些 UI 字符正确显示。
+    ///
+    /// 这一步**绝不能抛**：它发生在 Main 的第一行，抛出去就是「启动即崩」，
+    /// 屏幕上什么都看不到、也没有任何提示。而设置编码在若干环境下确实会抛：
+    /// 输出被重定向到已关闭的句柄、精简控制台宿主、部分 CI 的管道。
+    /// 项目里其余的平台接触都有兜底——颜色（SafeColor）、窗口标题（try/catch）、
+    /// 读取终端宽度（ResolveColumns 沿用上一次好值）——唯独这里此前是裸赋值。
+    /// 设不上就用控制台默认编码继续跑：字形可能不对，但用户至少看得见界面。</summary>
+    internal static void ApplyOutputEncoding()
+    {
+        try { Console.OutputEncoding = System.Text.Encoding.UTF8; }
+        catch { /* 用控制台默认编码继续：字形可能不对，但必须看得见 */ }
+    }
+
     private static async Task<int> Main(string[] args)
     {
-        Console.OutputEncoding = System.Text.Encoding.UTF8;
+        ApplyOutputEncoding();
 
         // Ctrl+C：运行中取消本轮；空闲时保持默认退出行为
         Console.CancelKeyPress += (_, e) =>
