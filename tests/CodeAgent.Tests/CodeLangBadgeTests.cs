@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using CodeAgent;
 using Xunit;
 
@@ -87,7 +88,15 @@ public class CodeLangBadgeTests
     {
         var renderer = new ConsoleRenderer(true);
         var output = Capture(() => renderer.Append("```cs\nvar x = 1;\n```\n"));
-        Assert.DoesNotContain("cs\nvar x", output);
+        // 按**行**断言，不匹配 "cs\nvar x" 这种跨行子串：
+        // 它只在 Unix 的 \n 下成立，Windows 的 \r\n 永远匹配不到。
+        var lines = ConsoleRendererTests.OutputLines(output);
+        Assert.Contains("  ▌cs", lines);
+        Assert.Contains("var x = 1;", lines);
+        // 徽标行之后的每一行都不得再出现语言标注（徽标行本身含 cs 是正常的）
+        var badge = Array.FindIndex(lines, l => l.Contains('▌'));
+        Assert.True(badge >= 0, "缺少语言徽标");
+        Assert.DoesNotContain(lines.Skip(badge + 1), l => l.Contains("cs", StringComparison.Ordinal));
     }
 
     [Fact]

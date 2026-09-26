@@ -90,11 +90,21 @@ public class ConsoleRendererTests : IDisposable
     [Fact]
     public void Append_CodeFenceWithLanguageTag_StripsTag()
     {
-        // 回归：```cs 的语言标注曾混入代码内容（渲染出 "cs\nint x = 1;"），现应被丢弃
-        var output = Render("```cs\nint x = 1;\n```");
-        Assert.Contains("int x = 1;", output);
-        Assert.DoesNotContain("cs\nint", output); // 语言标注不应出现在代码内容前
+        // 回归：```cs 的语言标注曾混入代码内容（渲染出 "cs\nint x = 1;"）。
+        // 语言标注现在单独成徽标行（UI Round 61），但**仍不得混进代码内容**。
+        // 必须按**行**断言：直接匹配 "cs\nint" 这种跨行子串只在 Unix 的 \n 下成立，
+        // Windows 的 \r\n 永远匹配不到——本机绿、Linux 红的隐蔽陷阱。
+        var lines = OutputLines(Render("```cs\nint x = 1;\n```"));
+        Assert.Contains("int x = 1;", lines);
+        // 徽标行之后的每一行都不得再出现语言标注（徽标行本身含 cs 是正常的）
+        var badge = Array.FindIndex(lines, l => l.Contains('▌'));
+        Assert.True(badge >= 0, "缺少语言徽标");
+        Assert.DoesNotContain(lines.Skip(badge + 1), l => l.Contains("cs", StringComparison.Ordinal));
     }
+
+    /// <summary>把渲染输出按行拆开并去掉 \r：断言必须逐行做，不能依赖平台的换行符。</summary>
+    internal static string[] OutputLines(string output) =>
+        output.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
 
     [Fact]
     public void Append_CodeFenceWithCrlfLines_StripsCarriageReturns()
