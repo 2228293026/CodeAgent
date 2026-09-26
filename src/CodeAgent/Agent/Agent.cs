@@ -248,11 +248,93 @@ public sealed partial class Agent
     };
 
     /// <summary>执行一轮用户请求，返回模型最终答复文本。</summary>
+    /// <summary>
+    /// 解析提示词里的 <c>@路径</c> 引用（学自 Claude Code），返回去重后的工作区相对路径列表。
+    ///
+    /// 判定规则与 <see cref="InputLine.ParseMention"/> 一致：只有行首或空白之后的 @ 才算数，
+    /// 且路径里不能有空白。**宁可不解析，也不要把 <c>git@host</c> 或时间戳 <c>12:30</c> 当成文件**——
+    /// 解析错一次就会把一个不存在的文件塞进提示词，模型据此给出看似有据的错误答案。
+    /// </summary>
+    internal static List<string> ParseMentionPaths(string prompt)
+    {
+        var found = new List<string>();
+        if (string.IsNullOrEmpty(prompt))
+            return found;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < prompt.Length; i++)
+        {
+            if (prompt[i] != '@')
+                continue;
+            // 必须在行首或空白之后
+            if (i > 0 && prompt[i - 1] != ' ' && prompt[i - 1] != '\t' && prompt[i - 1] != '\n')
+                continue;
+            var end = i + 1;
+            while (end < prompt.Length && prompt[end] != ' ' && prompt[end] != '\t' && prompt[end] != '\n')
+                end++;
+            if (end == i + 1)
+                continue;
+            var path = prompt[(i + 1)..end];
+            // 只接受看起来像路径的（带分隔符或扩展名），避免把 @name 之类当文件
+            if (path.Contains('@') || path.Contains('\''))
+                continue;
+            if (seen.Add(path))
+                found.Add(path);
+            i = end - 1; // 跳过已消费的 token
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// 把 @ 引用展开成给模型看的文件内容块，追加在用户提示之后。
+    ///
+    /// 刻意**保留用户原文里的 @路径 不动**：模型看到 "@src/foo.cs 这个文件" 比看到一段
+    /// 突兀的 XML 更能对上号；内容块是补充，不是替换。
+    ///
+    /// 读不到的文件**列出但不给内容**，不静默吞掉——用户以为文件进去了，实际没有，
+    /// 模型就会凭空编一个"文件里没有"的内容。
+    /// </summary>
+    internal static async Task<string> ExpandMentions(Workspace ws, int maxChars, string prompt, CancellationToken ct)
+    {
+        var paths = ParseMentionPaths(prompt);
+        if (paths.Count == 0)
+            return prompt;
+        var sb = new System.Text.StringBuilder();
+        foreach (var rel in paths)
+        {
+            ct.ThrowIfCancellationRequested();
+            var full = ws.ResolveRead(rel);
+            if (full is null || !File.Exists(full))
+            {
+                sb.Append($"\n\n[未找到文件: {rel}]");
+                continue;
+            }
+            string text;
+            try { text = await CodeAgent.TextUtil.ReadTextSmartAsync(full, ct); }
+            catch (OperationCanceledException) { throw; }
+            catch (IOException) { sb.Append($"\n\n[读取失败: {rel}]"); continue; }
+            catch (UnauthorizedAccessException) { sb.Append($"\n\n[无读取权限: {rel}]"); continue; }
+            if (CodeAgent.SkipDirs.LooksBinary(text))
+            {
+                sb.Append($"\n\n[二进制文件，未展开: {rel}]");
+                continue;
+            }
+            // 单个文件过大时不整份塞进去：半个文件比没有文件更糟（模型会以为看全了）
+            var max = Math.Max(2000, maxChars);
+            if (text.Length > max)
+                text = text[..max] + $"\n…（已截断，原文件 {text.Length} 字符）";
+            sb.Append($"\n\n<file path=\"{rel}\">\n{text}\n</file>");
+        }
+        return sb.Length == 0 ? prompt : prompt + sb;
+    }
+
     public async Task<string> RunAsync(string userPrompt, CancellationToken ct)
     {
         _ctx.StopRequested = false;
         StreamedLastRun = false;
         LastPrompt = userPrompt;
+        // @ 引用在进入历史**之前**展开：历史里存的是用户真正说过的话 + 当时的文件内容，
+        // 事后无法还原（文件可能已被改掉）。
+        var effectivePrompt = await ExpandMentions(_ctx.Workspace, _ctx.Config.MaxHistoryChars / 8, userPrompt, ct);
         _renderer = new ConsoleRenderer(_ctx.Config.RenderMarkdown);
         _renderer.SetWidth(CodeAgent.Program.ConsoleColumnsForNotice());
         TurnRounds = 0;
@@ -264,7 +346,7 @@ public sealed partial class Agent
         LastTurnFailed = false;
         _turnSw.Restart(); // 本回合计时：每轮重启，spinner/定格行显示本轮用时而非整个会话的累计用时
         _turnStarts.Push(_messages.Count); // 记录本轮起点（ESC 多级撤回用）
-        _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = userPrompt });
+        _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = effectivePrompt });
         LogMessage(_messages[^1]);
 
         // MaxToolIterations <= 0 表示不限制（无限循环直到模型给出最终答复或 stop 工具请求结束）
