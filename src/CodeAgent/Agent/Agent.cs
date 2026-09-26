@@ -274,14 +274,35 @@ public sealed partial class Agent
             if (end == i + 1)
                 continue;
             var path = prompt[(i + 1)..end];
-            // 只接受看起来像路径的（带分隔符或扩展名），避免把 @name 之类当文件
-            if (path.Contains('@') || path.Contains('\''))
+            // 只接受**看起来像路径**的 token：带目录分隔符或扩展名。
+            // 散文里的 @TODO / @reviewer / @someone 不是文件——当成文件会在提示词末尾
+            // 塞一句"[未找到文件: TODO]"，那是纯粹噪音，还会稀释真正的错误报告。
+            // 反过来，路径少写一个斜杠（@src/Prog 打成 @srcProg）时它就不像路径了，
+            // 会被静默忽略——这是更轻的错：用户看到"没报错"，而不是"报了个无关的错"。
+            if (!LooksLikePath(path))
                 continue;
             if (seen.Add(path))
                 found.Add(path);
             i = end - 1; // 跳过已消费的 token
         }
         return found;
+    }
+
+    /// <summary>看起来像文件路径：含目录分隔符或扩展名，且不含 @ 与引号。
+    ///
+    /// 刻意与输入行菜单的判定**松紧不同**：
+    /// 输入行那边从第一个字符起就该有候选（用户只打了 <c>@a</c>，等它凑齐扩展名就没意义了），
+    /// 所以那边宽松；这里必须严——宽松的代价是在提示词末尾塞一句无关的"未找到文件"。
+    /// 两边不一致是**有意**的：菜单宽松最多多列几个候选，展开宽松会污染上下文。
+    ///
+    /// 纯函数，好测——这条判定的松紧直接决定提示词末尾会不会出现无关的"未找到文件"。</summary>
+    internal static bool LooksLikePath(string token)
+    {
+        if (string.IsNullOrEmpty(token))
+            return false;
+        if (token.Contains('@') || token.Contains('\'') || token.Contains('"'))
+            return false;
+        return token.Contains('/') || token.Contains('\\') || token.Contains('.');
     }
 
     /// <summary>

@@ -96,6 +96,47 @@ public sealed class MentionExpansionTests : IDisposable
         Assert.Equal(new[] { "a.cs" }, AgentClass.ParseMentionPaths("@a.cs b.cs"));
     }
 
+    // —— 路径形状判定 ——
+
+    [Theory]
+    [InlineData("src/a.cs", true)]      // 目录 + 扩展名
+    [InlineData("a.cs", true)]          // 只有扩展名
+    [InlineData("src/CodeAgent", true)] // 只有目录分隔符
+    [InlineData("TODO", false)]         // 散文标记，不是文件
+    [InlineData("reviewer", false)]
+    [InlineData("someone", false)]
+    [InlineData("", false)]
+    [InlineData("a@b", false)]          // 邮箱残留
+    [InlineData("a'b", false)]          // 引号
+    [InlineData("a\"b", false)]
+    public void LooksLikePath_MatchesIntent(string token, bool expected)
+    {
+        Assert.Equal(expected, AgentClass.LooksLikePath(token));
+    }
+
+    [Fact]
+    public void Parse_IgnoresProseMentions()
+    {
+        // @TODO 是散文标记，不是文件——末尾不该出现"[未找到文件: TODO]"
+        Assert.Empty(AgentClass.ParseMentionPaths("@TODO 这段要改"));
+        Assert.Empty(AgentClass.ParseMentionPaths("发给 @reviewer 看看"));
+    }
+
+    [Fact]
+    public async Task Expand_ProseMentionAddsNoNoise()
+    {
+        var prompt = "@TODO 这段要改";
+        Assert.Equal(prompt, await AgentClass.ExpandMentions(new Workspace(_dir), 20000, prompt, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Expand_TypoPathIsStillReported()
+    {
+        // 形状对了但文件不存在 → **必须**报告，不能因为"判定放宽"就一并静默
+        var text = await AgentClass.ExpandMentions(new Workspace(_dir), 20000, "@src/Nope.cs", CancellationToken.None);
+        Assert.Contains("未找到文件", text);
+    }
+
     // —— 展开 ——
 
     [Fact]
