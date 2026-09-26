@@ -101,11 +101,35 @@ public static class InputLine
         return avail <= 0 ? 0 : Math.Min(maxQuery, avail);
     }
 
+    /// <summary>历史浏览态里草稿的最小可读列数：不足这么多列时整段省略并标「…」。</summary>
+    internal const int MinHistoryDraftWidth = 6;
+
+    /// <summary>历史浏览态的输入行。历史标记与搜索行的优先级**相反**：
+    /// 标记是**导航上下文**（我在第几条、共几条），草稿是**内容**（丢了还能重打）。
+    /// 所以标记必须保留，必要时截断草稿并标「…」——绝不能把草稿整段挤出行外，
+    /// 否则用户以为自己的输入被清空了。宽度未知时原样拼接（不裁剪）。</summary>
+    internal static string FormatHistoryRow(
+        string prompt, int historyIndex, int historyCount, string draft,
+        int windowWidth, int minDraft = MinHistoryDraftWidth)
+    {
+        var prefix = $"{prompt} (历史 {historyIndex + 1}/{historyCount})";
+        if (windowWidth <= 0)
+            return prefix + draft;
+        // 标记本身就超宽时改用紧凑形式（标签可省，位置信息不能省）
+        if (DisplayWidth(prefix) > windowWidth)
+            prefix = $"{prompt} ({historyIndex + 1}/{historyCount})";
+        var avail = windowWidth - DisplayWidth(prefix);
+        if (avail < minDraft)
+            // 极窄到连「…」都放不下时只留标记：数字本身就是信息，宁可超宽也不谎报省略
+            return avail >= 1 ? prefix + "…" : prefix;
+        return prefix + FitToWidth(draft, avail);
+    }
+
     /// <summary>
     /// 输入行可见文本：普通态、浏览历史态、反向搜索态的统一拼装。
     /// 搜索无命中时显式提示「未命中」：此前命中与未命中外观完全一致（都只显示 `(搜索)`query``），
     /// 用户按 Ctrl+R 后无法判断是「没匹配到」还是「还没继续按」。
-    /// <paramref name="windowWidth"/> 传入时按该宽度收敛查询串，避免把草稿挤出屏幕。
+    /// <paramref name="windowWidth"/> 传入时按该宽度收敛查询串/草稿，避免把内容挤出屏幕。
     /// </summary>
     internal static string FormatInputText(
         string prompt, bool searching, string searchQuery, bool searchHit,
@@ -126,7 +150,7 @@ public static class InputLine
             return $"{prompt} (搜索){query}{mark} {draft}";
         }
         return historyIndex >= 0 && historyIndex < historyCount
-            ? $"{prompt} (历史 {historyIndex + 1}/{historyCount}){draft}"
+            ? FormatHistoryRow(prompt, historyIndex, historyCount, draft, windowWidth)
             : prompt + draft;
     }
 
