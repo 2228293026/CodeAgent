@@ -574,6 +574,7 @@ public sealed class ToolRegistry
         registry.Register(new CultureFormatReportTool());
         registry.Register(new ConcurrentMutationReportTool());
         registry.Register(new UndisposedStreamReportTool());
+        registry.Register(new NullAssignmentReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
