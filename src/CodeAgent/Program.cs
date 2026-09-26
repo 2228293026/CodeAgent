@@ -167,7 +167,7 @@ internal static class Program
         // 配置非致命警告（未知配置项 / 枚举回退）：拼写错误此前被静默忽略，用户无从得知「配了不生效」
         foreach (var warning in config.Warnings)
         {
-            SafeColor.Foreground(ConsoleColor.DarkYellow);
+            SafeColor.Foreground(SafeColor.Warning);
             Console.WriteLine(FormatNoticeLine($"配置: {warning}", ConsoleColumns()));
             SafeColor.Reset();
         }
@@ -446,7 +446,7 @@ internal static class Program
                 if (agent.LastTurnFailed)
                 {
                     // 空回复：红色 ⚠ 明确提示失败
-                    SafeColor.Foreground(ConsoleColor.Red);
+                    SafeColor.Foreground(SafeColor.Danger);
                     Console.WriteLine(FormatNoticeLine(result, ConsoleColumns()));
                     SafeColor.Reset();
                 }
@@ -872,7 +872,7 @@ internal static class Program
         string costText = "";
         if (cost is { } c)
             costText = $" ≈${TextUtil.FormatCost(c)}";
-        SafeColor.Foreground(ConsoleColor.DarkGray);
+        SafeColor.Foreground(SafeColor.Muted);
         Console.WriteLine(BuildTurnSummary(
             agent.TurnRounds, agent.TurnToolCalls, TextUtil.FormatElapsed(elapsed),
             $"{agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok",
@@ -973,7 +973,7 @@ internal static class Program
             "full" => "所有文件可读可写（完全放开）",
             _ => mode,
         };
-        SafeColor.Foreground(ConsoleColor.DarkGray);
+        SafeColor.Foreground(SafeColor.Muted);
         Console.WriteLine(FormatConfirmLine(FormatAccessSwitchedLine(mode, desc), ConsoleColumns()));
         if (showHint)
             Console.WriteLine(FormatHintLine("Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定", ConsoleColumns()));
@@ -988,15 +988,15 @@ internal static class Program
         foreach (var line in DiffUtil.SplitLines(diff))
         {
             if (line.StartsWith("== ", StringComparison.Ordinal))
-                SafeColor.Foreground(ConsoleColor.White);       // 文件标题
+                SafeColor.Foreground(SafeColor.Emphasis);       // 文件标题
             else if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
-                SafeColor.Foreground(ConsoleColor.DarkGray);    // 文件头
+                SafeColor.Foreground(SafeColor.Muted);    // 文件头
             else if (line.StartsWith("@@", StringComparison.Ordinal))
-                SafeColor.Foreground(ConsoleColor.Cyan);        // hunk 头
+                SafeColor.Foreground(SafeColor.Accent);        // hunk 头
             else if (line.StartsWith('+'))
-                SafeColor.Foreground(ConsoleColor.Green);       // 新增
+                SafeColor.Foreground(SafeColor.Success);       // 新增
             else if (line.StartsWith('-'))
-                SafeColor.Foreground(ConsoleColor.Red);         // 删除
+                SafeColor.Foreground(SafeColor.Danger);         // 删除
             Console.WriteLine(FormatDiffLine(line, width));
             SafeColor.Reset();
         }
@@ -1486,7 +1486,7 @@ internal static class Program
         var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         // git 分支段（非仓库整体省略）：多仓库/多分支工作流下快速确认当前所在位置
         var branch = CachedBranch(Environment.CurrentDirectory);
-        SafeColor.Foreground(ConsoleColor.DarkGray);
+        SafeColor.Foreground(SafeColor.Muted);
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,
             TextUtil.CompactTokenCount(agent.TurnInputTokens), TextUtil.CompactTokenCount(agent.TurnOutputTokens),
@@ -2721,7 +2721,7 @@ internal static class Program
     private static void PrintModeSwitched(AgentMode mode, string model)
     {
         try { Console.Title = $"CodeAgent · {mode.Name} · {model}"; } catch { /* 部分终端不支持标题 */ }
-        SafeColor.Foreground(ConsoleColor.DarkGray);
+        SafeColor.Foreground(SafeColor.Muted);
         Console.WriteLine(FormatConfirmLine(FormatModeSwitchedLine(mode.Name, mode.Description), ConsoleColumns()));
         SafeColor.Reset();
     }

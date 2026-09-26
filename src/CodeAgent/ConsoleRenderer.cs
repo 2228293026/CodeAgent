@@ -315,9 +315,9 @@ public sealed class ConsoleRenderer
         {
             SafeColor.Foreground(style switch
             {
-                InlineStyleToken.Bold => ConsoleColor.White,
-                InlineStyleToken.Code => ConsoleColor.DarkYellow,
-                _ => color ?? ConsoleColor.Gray,
+                InlineStyleToken.Bold => SafeColor.Emphasis,
+                InlineStyleToken.Code => SafeColor.Warning,
+                _ => color ?? SafeColor.Muted,
             });
             Console.Write(text);
         }
@@ -455,14 +455,14 @@ public sealed class ConsoleRenderer
         if (heading > 0)
             return heading switch // 标题按层级区分色深，一眼看出结构层级
             {
-                1 => ConsoleColor.Cyan,
-                2 => ConsoleColor.Blue,
-                _ => ConsoleColor.DarkCyan,
+                1 => SafeColor.Accent,
+                2 => SafeColor.Link,
+                _ => SafeColor.Accent,
             };
         if (content.StartsWith("---") || content.StartsWith("==="))
-            return ConsoleColor.DarkGray; // 分隔线
+            return SafeColor.Muted; // 分隔线
         if (BlockquoteLevel(content) > 0)
-            return ConsoleColor.DarkGray; // 引用
+            return SafeColor.Muted; // 引用
         return null;
     }
 
@@ -565,17 +565,17 @@ public sealed class ConsoleRenderer
         var badge = FormatCodeLangBadge(_codeLang.ToString(), _width);
         if (badge.Length > 0)
         {
-            SafeColor.Foreground(ConsoleColor.DarkGray);
+            SafeColor.Foreground(SafeColor.Muted);
             Console.WriteLine(badge);
             SafeColor.Reset();
         }
         var overlong = CountOverlongCodeLines(code, _width);
-        SafeColor.Foreground(ConsoleColor.Green);
+        SafeColor.Foreground(SafeColor.Success);
         Console.Write(NormalizeCodeBlock(code));
         SafeColor.Reset();
         if (overlong > 0)
         {
-            SafeColor.Foreground(ConsoleColor.DarkGray);
+            SafeColor.Foreground(SafeColor.Muted);
             Console.WriteLine(CodeWrapNote(overlong, _width));
             SafeColor.Reset();
         }

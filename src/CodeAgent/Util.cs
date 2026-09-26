@@ -55,6 +55,40 @@ public static class SafeColor
         if (!Enabled) return;
         try { Console.ResetColor(); } catch { /* 不支持颜色 */ }
     }
+
+    /// <summary>配色方案。深色是绝大多数终端的默认；浅色用于亮背景终端。</summary>
+    public enum ColorTheme
+    {
+        Dark,
+        Light,
+    }
+
+    /// <summary>配色方案的判定，单独抽出来便于穷举测试。
+    /// .NET 没有可靠的方式读取终端背景亮度，所以这里**不猜**：
+    /// 只认用户显式指定的 <c>CODEAGENT_THEME=light|dark</c>，其余一律深色。</summary>
+    internal static ColorTheme ComputeTheme(string? setting) =>
+        string.Equals(setting, "light", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(setting, "Light", StringComparison.Ordinal) ||
+        setting == "亮色"
+            ? ColorTheme.Light
+            : ColorTheme.Dark;
+
+    /// <summary>当前配色方案。默认深色。</summary>
+    public static ColorTheme Theme => ComputeTheme(ReadEnv("CODEAGENT_THEME"));
+
+    // ── 语义色 ──────────────────────────────────────────────────────────
+    // 调用点一律用语义名，不再直接写 ConsoleColor.Xxx。
+    // 浅色背景下亮色（Blue/Cyan/Green/Yellow/White）会「洗掉」，
+    // 必须换成对应的 Dark* 变体；深色背景反之。这组映射是本项目的可读性底线。
+    /// <summary>次要文本（灰色层级）。**不随主题变化**：DarkGray 在黑底和白底上
+    /// 都是中灰，是 8 色里唯一两边都读得清的。真正会洗掉的是下面的亮色。</summary>
+    public static ConsoleColor Muted => ConsoleColor.DarkGray;
+    public static ConsoleColor Accent => Theme == ColorTheme.Light ? ConsoleColor.DarkCyan : ConsoleColor.Cyan;
+    public static ConsoleColor Link => Theme == ColorTheme.Light ? ConsoleColor.DarkBlue : ConsoleColor.Blue;
+    public static ConsoleColor Success => Theme == ColorTheme.Light ? ConsoleColor.DarkGreen : ConsoleColor.Green;
+    public static ConsoleColor Danger => Theme == ColorTheme.Light ? ConsoleColor.DarkRed : ConsoleColor.Red;
+    public static ConsoleColor Warning => Theme == ColorTheme.Light ? ConsoleColor.DarkYellow : ConsoleColor.Yellow;
+    public static ConsoleColor Emphasis => Theme == ColorTheme.Light ? ConsoleColor.Black : ConsoleColor.White;
 }
 
 /// <summary>通用小工具。</summary>
