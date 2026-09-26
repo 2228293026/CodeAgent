@@ -2632,7 +2632,9 @@ internal static class Program
 
     /// <summary>会话搜索命中行：`  [角色] 摘要`。摘要按**显示宽度**裁到终端剩余列——
     /// 曾写死 110 字符：80 列终端溢出 30 列，而中文摘要在 110 字符（220 列）时就被砍掉一半，
-    /// 宽屏白白浪费。宽度未知时回退到 110 字符，保持原有观感。</summary>
+    /// 宽屏白白浪费。宽度未知时回退到 110 字符，保持原有观感。
+    /// 终端比角色标记还窄时，按 <see cref="FitRoleTag"/> 缩成可辨识的缩写并给摘要留出余量——
+    /// 直接丢掉摘要会得到一列长得一模一样的角色标记，完全看不出命中了什么。</summary>
     internal static string FormatSearchHitLine(string role, string snippet, int width = 0)
     {
         const string indent = "  ";
@@ -2641,8 +2643,16 @@ internal static class Program
         if (width <= 0)
             return head + TextUtil.TruncateLine(snippet, 110);
         var budget = width - TextUtil.DisplayWidth(head);
-        // 终端比角色标记还窄时也要裁剪：直接返回完整标记同样会溢出
-        return budget <= 0 ? InputLine.FitToWidth(head.TrimEnd(), Math.Max(1, width)) : head + InputLine.FitToWidth(snippet, budget);
+        if (budget <= 0)
+        {
+            // 复用历史列表的缩写规则：同一角色在 /history 与搜索结果里长得一样
+            var shortTag = FitRoleTag(role, false, Math.Max(1, width - indent.Length));
+            var snippetBudget = width - indent.Length - TextUtil.DisplayWidth(shortTag);
+            return snippetBudget <= 0
+                ? indent + shortTag.TrimEnd()
+                : indent + shortTag + InputLine.FitToWidth(snippet, snippetBudget);
+        }
+        return head + InputLine.FitToWidth(snippet, budget);
     }
 
     /// <summary>把命令名裁到给定宽度（width 未知时原样返回）。</summary>
