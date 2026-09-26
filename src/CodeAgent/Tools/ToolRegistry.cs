@@ -604,6 +604,7 @@ public sealed class ToolRegistry
         registry.Register(new LinqDeferredReportTool());
         registry.Register(new StringInterpolationReportTool());
         registry.Register(new ArrayBoundsReportTool());
+        registry.Register(new ReadonlyStructReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
