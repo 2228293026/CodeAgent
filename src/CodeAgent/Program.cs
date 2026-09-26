@@ -453,6 +453,25 @@ internal static class Program
                 Console.WriteLine(agent.UndoLastTurn() ?? "没有可撤回的轮次。");
                 continue;
             }
+            if (line == InputLine.ThinkingMarker)
+            {
+                // Ctrl+T：切到下一档思考强度。走 /thinking 的同一条路径（改配置 + 持久化 +
+                // 打印确认行），两处各写一份必然漂移——比如 /thinking 加了新档位这里没跟上。
+                var next = NextThinkingEffort(config.ThinkingEffort);
+                var tSavePath = ConfigSavePath(configPath, config);
+                config.ThinkingEffort = next;
+                try
+                {
+                    SaveConfig(config, tSavePath);
+                    Console.WriteLine(FormatConfirmLine(
+                        FormatSettingSavedLine("思考强度已设为", next, tSavePath, ConsoleColumns()), ConsoleColumns()));
+                }
+                catch (Exception ex)
+                {
+                    WriteNotice($"思考强度已设为: {next}（保存配置失败: {ex.Message}）");
+                }
+                continue;
+            }
             line = line.Trim();
             // 全角斜杠归一化：CJK 输入法打出的 ／model 与 /model 同义（菜单过滤已兼容，这里补上执行路径）
             line = InputLine.NormalizeCommandFilter(line);
@@ -1643,6 +1662,20 @@ internal static class Program
 
     /// <summary>bash 模式前缀：<c>!命令</c> 直接跑 shell，不经过模型（学自 Claude Code）。
     /// 用户想确认一个文件存在、跑个 git status 时，绕模型一圈既慢又烧 token。</summary>
+    /// <summary>思考强度档位，Ctrl+T 与 <c>/thinking</c> 共用同一份顺序。
+    /// 单一来源：两处各写一份数组，迟早会一边加了档位另一边没加。</summary>
+    internal static readonly string[] ThinkingEfforts = ["off", "low", "medium", "high", "auto"];
+
+    /// <summary>Ctrl+T 把思考强度切到下一档（学自 Claude Code）。
+    ///
+    /// 末档回到第一档，<b>不</b>停在末档：用户连按 Ctrl+T 是"越来越用力"的意思，
+    /// 停在末档会让"再按一次没反应"看起来像坏了。当���值不认识时回到第一档而不是保持原样——
+    /// 保持原样会让按键彻底没效果，那比跳档更让人困惑。</summary>
+    internal static string NextThinkingEffort(string? current)
+    {
+        var i = Array.IndexOf(ThinkingEfforts, current ?? string.Empty);
+        return ThinkingEfforts[(i + 1) % ThinkingEfforts.Length];
+    }
     internal const char BangPrefix = '!';
 
     /// <summary>
@@ -3205,7 +3238,9 @@ internal static class Program
                 else
                 {
                     var v = rest.Trim().ToLowerInvariant();
-                    if (v is "off" or "low" or "medium" or "high" or "auto")
+                    // 用 ThinkingEfforts 判合法，而不是另写一份字面量列表：
+                    // 否则 Ctrl+T 切到某个档位、/thinking 却说"无效值"，两边说法不一致
+                    if (ThinkingEfforts.Contains(v))
                     {
                         config.ThinkingEffort = v;
                         // 持久化到配置文件，重启后仍然生效
@@ -3222,7 +3257,7 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice($"无效值: {rest}（可选: off / low / medium / high / auto）");
+                        WriteNotice($"无效值: {rest}（可选: {string.Join(" / ", ThinkingEfforts)}）");
                     }
                 }
                 break;
@@ -3661,6 +3696,7 @@ internal static class Program
             快捷键:
               Esc                   撤回最近一轮对话（空输入时；连按逐轮回退）
               Ctrl+C                清空当前输入行（再按一次退出）
+              Ctrl+T                切换思考强度（off / low / medium / high / auto 循环）
               Tab                    切换下一个工作模式（/mode next）
               Shift+Tab              切换文件访问权限模式（strict{SafeColor.Glyphs.Arrow}whitelist{SafeColor.Glyphs.Arrow}full）
               Alt+M / Ctrl+Shift+M   模式切换菜单

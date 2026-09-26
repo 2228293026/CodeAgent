@@ -247,6 +247,11 @@ public static class InputLine
     /// <summary>ESC 撤回标记：空输入时按 ESC，由 REPL 拦截执行 UndoLastTurn。</summary>
     public const string RecallMarker = "\u001bRECALL";
 
+    /// <summary>Ctrl+T 的返回标记：请求切换思考强度（学自 Claude Code）。
+    /// 与 <see cref="RecallMarker"/> 同一套"输入行把非文本按键回报给调用方"的约定，
+    /// 不用给 Read 加回调参数——那个签名已经有 6 个可选参数了。</summary>
+    public const string ThinkingMarker = "\u001bTHINK";
+
     /// <summary>上一次可信的终端宽度（读数抖动时沿用）。</summary>
     private static int _lastGoodWidth;
 
@@ -1372,6 +1377,10 @@ public static class InputLine
 
                 switch (key.Key)
                 {
+                    // Ctrl+T：切换思考强度（学自 Claude Code）。走 ThinkingMarker 回报给调用方，
+                    // 由 Program 负责改配置并打印确认行——输入行不碰配置。
+                    case ConsoleKey.T when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        return ThinkingMarker;
                     // Ctrl+C：先清当前行，再按才退出（见 CtrlCBehavior）。
                     // 必须在 switch 的最前面：它一旦落到默认分支，就会被当成普通字符插进输入框。
                     case ConsoleKey.C when (key.Modifiers & ConsoleModifiers.Control) != 0:
