@@ -51,15 +51,13 @@ public sealed class PromptMultilineWidthTests
     }
 
     [Fact]
-    public void RedrawBaseline_PrefilledTextAddsToPromptRowsNotReplaces()
+    public void RedrawBaseline_ExcludesTheFrameRow()
     {
-        // 取消回合回填多行草稿：基线在原关系上**平移**提示符占的行数，而不是重写这个关系。
-        // 3 行草稿 = 2 个换行符，基线 = 2（提示符）+ 2 = 4。
-        // 刻意不改成「行数」计数：原实现用的是换行符数，改它会牵动多行重绘的擦除范围。
-        var promptRows = 2;
+        // 取消回合回填多行草稿：基线仍按「重绘块」数，不含边框
+        // 3 行草稿 = 2 个换行符，基线 = 1 + 2 = 3
         var initial = "第一行\n第二行\n第三行";
         Assert.Equal(2, CountNewlines(initial));
-        Assert.Equal(4, promptRows + CountNewlines(initial));
+        Assert.Equal(3, 1 + CountNewlines(initial));
     }
 
     [Fact]
@@ -105,6 +103,36 @@ public sealed class PromptMultilineWidthTests
             total += text.Split('\n').Length; // 每次重绘
         }
         Assert.Equal(7, total); // 2 + 5×1：按键再多，输入块高度也不变
+    }
+
+    [Fact]
+    public void SingleLineInput_StaysOnTheSingleLineRedrawPath()
+    {
+        // 回归：ScrollInput 的分支条件是 `lines > 1 || lastInputLines > 1`。
+        // 边框是 chrome、只画一次，lastInputLines 必须只数「提示符最后一行 + 输入文本各行」。
+        // 一旦把边框那行也数进去，单行输入每次按键都走多行分支、多写一个 \n——
+        // 正是用户报上来的「敲一个字就多出一行」。
+        var framed = Program.BuildInputFrameTop(Prompt, Program.InputModeHint("high"), 80);
+        var tail = LastLine(framed);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var text = InputLine.FormatInputText(tail, false, "", false, -1, 0, new string('x', i), 24, 76, null, colored: false);
+            var lines = 1 + text.Split('\n').Length - 1;         // 本次重绘的块行数
+            const int lastInputLines = 1;                       // 空输入时的基线（边框不计入）
+            Assert.True(lines <= 1, $"i={i} lines={lines}>1：会走多行分支");
+            Assert.False(lines > 1 || lastInputLines > 1, $"i={i} 会走多行分支");
+        }
+    }
+
+    [Fact]
+    public void FrameTop_IsNotPartOfTheRedrawBlock()
+    {
+        // 首绘 2 行（边框 + 提示符），但重绘块恒为 1 行：边框只画一次，不参与重绘
+        var framed = Program.BuildInputFrameTop(Prompt, Program.InputModeHint("high"), 80);
+        Assert.Equal(2, framed.Split('\n').Length);
+        var redraw = InputLine.FormatInputText(LastLine(framed), false, "", false, -1, 0, "", 24, 76, null, colored: false);
+        Assert.Single(redraw.Split('\n'));
     }
 
     [Fact]

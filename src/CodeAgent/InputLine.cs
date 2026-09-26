@@ -541,20 +541,19 @@ public static class InputLine
         var inputExpanded = false;   // 用户是否展开过折叠的多行输入（展开后不再自动折叠）
 
         Console.Write(prompt);
-        // 提示符本身可能占多行（例如 BuildInputFrameTop 返回「上边框 + 提示符」两行）。
-        // 重绘基线必须把提示符已占的行数算进去：此前恒为 1，于是首个按键重绘时
-        // 按「块只有 1 行」上移，实际块有 2 行，光标落在**边框那一行**，
-        // 重写内容把边框覆盖掉、提示被挤到下一行——表现为「敲一个字就换行」。
-        var promptRows = 1 + CountNewlines(promptPlain);
-        lastInputLines = promptRows;
-        lastCursorLine = promptRows - 1; // 光标停在提示符最后一行
+        // 提示符可能占多行（BuildInputFrameTop 返回「上边框 + 提示符」）。但**边框是 chrome，
+        // 不属于重绘块**：它只画一次，之后 InputText() 只重画提示符的最后一行。
+        //   · lastInputLines 必须是「提示符最后一行 + 输入文本各行」的行数，
+        //     绝不能把边框算进去——ScrollInput 里 `lastInputLines > 1` 会走多行分支，
+        //     那样单行输入每次按键都多写一个 \n（正是「敲一个字就多出一行」）。
+        //   · lastCursorLine 是光标在**重绘块内**的行号，第 0 行就是提示符那一行。
         if (!string.IsNullOrEmpty(initial))
         {
             Console.Write(initial); // 预填文本也要显示出来
             // 预填可能多行（取消回合回填的多行草稿）：重绘基线必须按实际行数初始化，
             // 否则首个按键重绘时 lastInputLines=1 / lastCursorLine=0，会在预填块下方再画一份重复块
-            lastInputLines = promptRows + CountNewlines(initial);
-            lastCursorLine = promptRows - 1 + CountNewlines(initial); // 光标停在预填末尾（末行）
+            lastInputLines = 1 + CountNewlines(initial);
+            lastCursorLine = CountNewlines(initial); // 光标停在预填末尾（末行）
         }
         else
         {
