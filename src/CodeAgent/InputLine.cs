@@ -240,27 +240,23 @@ public static class InputLine
             return s;
         var sb = new StringBuilder();
         int w = 0;
-        for (int i = 0; i < s.Length; i++)
+        for (int i = 0; i < s.Length;)
         {
-            char c = s[i];
-            int cw;
-            if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+            // 列数与簇的字符数都取自 TextUtil 的唯一规则：零宽字符算 0 列、
+            // ZWJ emoji 序列整体算 2 列。此前这里内联了一份旧口径，
+            // 与 DisplayWidth 不一致——既提前截断浪费列宽，又会把序列劈成半个代理对。
+            var (cw, chars) = TextUtil.ClusterAt(s, i);
+            if (cw == 0)
             {
-                cw = 2;
-                if (w + cw + 1 > maxWidth)  // +1 预留省略号一列；若 CJK(2) 塞不下则放弃该字符
-                    break;
-                sb.Append(c);
-                sb.Append(s[i + 1]);
-                i++;
+                sb.Append(s, i, chars); // 零宽字符不占列，跟随前面的簇一起保留
+                i += chars;
+                continue;
             }
-            else
-            {
-                cw = !char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1; // 孤立代理按 1 列（与 DisplayWidth 口径一致）
-                if (w + cw + 1 > maxWidth)  // +1 预留省略号一列
-                    break;
-                sb.Append(c);
-            }
+            if (w + cw + 1 > maxWidth)  // +1 预留省略号一列；CWK(2) 塞不下则放弃该字符
+                break;
+            sb.Append(s, i, chars);
             w += cw;
+            i += chars;
         }
         return sb.ToString() + "…";
     }

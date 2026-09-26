@@ -41,20 +41,33 @@ public static class TextUtil
         int w = 0;
         for (int i = 0; i < s.Length; i++)
         {
-            char c = s[i];
-            if (IsZeroWidth(c))
-                continue; // 组合记号/ZWJ/变体选择符：0 列
-            if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
-            {
-                w += 2; // 代理对（emoji）：终端按 2 列显示
-                i = EmojiClusterEnd(s, i); // ZWJ 连接的后续 emoji 与基字符一起算 2 列
-            }
-            else
-            {
-                w += !char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1;
-            }
+            var (width, chars) = ClusterAt(s, i);
+            w += width;
+            i += chars - 1;
         }
         return w;
+    }
+
+    /// <summary>从 <paramref name="start"/> 起取一个显示簇，返回（占用的列数, 消耗的字符数）。
+    /// 截断与测量必须共用这一处规则：此前 InputLine.FitToWidth 自己内联了一份
+    /// 「代理对 2 列 / 其余 &gt;0x2E7F 算 2 列」的旧口径，零宽字符算 1 列、ZWJ 序列算 8 列，
+    /// 与 DisplayWidth 对不上——于是截断比预期更早发生（白白浪费一列），
+    /// 严重时还会把 ZWJ 序列劈成半个代理对，终端渲染成替换方块。</summary>
+    internal static (int Width, int Chars) ClusterAt(string s, int start)
+    {
+        var i = start;
+        // 前导零宽字符：0 列，但字符要消耗掉（否则它们会被当成新簇重复计入）
+        while (i < s.Length && IsZeroWidth(s[i]))
+            i++;
+        if (i >= s.Length)
+            return (0, Math.Max(1, s.Length - start));
+        if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+        {
+            // 代理对：整个 ZWJ 序列算 2 列
+            return (2, EmojiClusterEnd(s, i) + 1 - start);
+        }
+        var c = s[i];
+        return (!char.IsSurrogate(c) && c > 0x2E7F ? 2 : 1, i - start + 1);
     }
 
     /// <summary>零宽字符：组合附加符号、ZWJ/ZWNJ、变体选择符、word joiner。</summary>
