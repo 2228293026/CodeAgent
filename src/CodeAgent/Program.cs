@@ -724,7 +724,7 @@ internal static class Program
         }
         // 先算全部角色前缀的最宽值再统一渲染：「[用户]」与「[工具read_file]」宽度不同，
         // 逐行直接打印会让正文起始列逐行跳动，列表就彻底没法扫读了
-        var tagWidth = HistoryTagWidth(rows.Select(r => (r.IsError ? $"[{r.Role}] ❗ " : $"[{r.Role}] ")));
+        var tagWidth = HistoryTagWidth(rows.Select(r => (r.IsError ? $"[{r.Role}] {SafeColor.Glyphs.Error} " : $"[{r.Role}] ")));
         foreach (var (role, content, isError) in rows)
             Console.WriteLine(FormatHistoryLine(role, content, isError, historyWidth, tagWidth));
     }
@@ -741,7 +741,7 @@ internal static class Program
     {
         if (budget <= 0)
             return string.Empty;
-        var mark = isError ? "❗" : string.Empty;
+        var mark = isError ? SafeColor.Glyphs.Error : string.Empty;
         var full = $"[{role}]{(mark.Length > 0 ? " " + mark : string.Empty)} ";
         if (TextUtil.DisplayWidth(full) <= budget)
             return full;
@@ -767,7 +767,7 @@ internal static class Program
     {
         const string indent = "  ";
         var single = content.Replace("\r", "").Replace("\n", " ⏎ ").Replace("\t", "    ");
-        var tag = isError ? $"[{role}] ❗ " : $"[{role}] ";
+        var tag = isError ? $"[{role}] {SafeColor.Glyphs.Error} " : $"[{role}] ";
         // 统一前缀宽度的上限：不能超过终端能给键列的宽度，否则补齐反而把行撑爆
         var keyBudget = maxColumns - TextUtil.DisplayWidth(indent) - 1;
         if (tagWidth > 0 && tagWidth <= keyBudget)

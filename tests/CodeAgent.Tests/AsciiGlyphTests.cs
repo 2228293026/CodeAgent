@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using CodeAgent;
 using Xunit;
+using AgentClass = CodeAgent.Agent.Agent;
 
 namespace CodeAgent.Tests;
 
@@ -278,17 +279,53 @@ public class AsciiGlyphTests : IDisposable
     }
 
     [Fact]
-    public void StatusBarWidthArithmeticStillHoldsInAsciiMode()
+    public void StatusMarkersAreAlwaysOneColumn()
     {
-        // 状态栏在 ASCII 与 Unicode 下占的列数应当一致：分隔符同为 3 列、模式标记同为 1 列。
-        // 差值不为 0 就说明某个字形的列宽变了，那套「每段扣 3 列」的预算就错了。
-        int unicodeWidth;
-        using (new GlyphScope(null))
-            unicodeWidth = TextUtil.DisplayWidth(Program.BuildStatusBar("plan", "gpt-5", "/repo", "(main)", "10", "20", "ctx 1%", "think 0%", 0));
+        // 这些标记参与 FormatToolStatusLine / BuildHistoryLine 的**宽度预算扣减**：
+        // 宽度一变，耗时或角色名就会被静默切掉，而症状只在窄屏上出现。
+        // Unicode 与 ASCII 两套都必须是 1 列。
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            foreach (var value in new[]
+            {
+                SafeColor.Glyphs.Warn, SafeColor.Glyphs.Ok, SafeColor.Glyphs.Tool,
+                SafeColor.Glyphs.Error, SafeColor.Glyphs.Hit, SafeColor.Glyphs.Fold,
+                SafeColor.Glyphs.Unfold, SafeColor.Glyphs.StatusMark,
+            })
+                Assert.Equal(1, TextUtil.DisplayWidth(value));
+        }
+    }
+
+    [Fact]
+    public void ToolStatusLineUsesTheFallbackAndKeepsItsWidth()
+    {
+        var elapsed = TimeSpan.FromMilliseconds(1234);
+        string asciiLine;
         using (new GlyphScope("1"))
         {
-            var asciiWidth = TextUtil.DisplayWidth(Program.BuildStatusBar("plan", "gpt-5", "/repo", "(main)", "10", "20", "ctx 1%", "think 0%", 0));
-            Assert.Equal(unicodeWidth, asciiWidth);
+            asciiLine = AgentClass.FormatToolStatusLine("read_file", false, elapsed, 80);
+            Assert.StartsWith("  v ", asciiLine);
+            Assert.DoesNotContain('✔', asciiLine);
+        }
+        using (new GlyphScope(null))
+        {
+            var unicode = AgentClass.FormatToolStatusLine("read_file", false, elapsed, 80);
+            Assert.StartsWith("  ✔ ", unicode);
+            // 两种模式必须占同样多的列，否则窄屏下的截断行为会分叉
+            Assert.Equal(TextUtil.DisplayWidth(unicode), TextUtil.DisplayWidth(asciiLine));
+        }
+    }
+
+    [Fact]
+    public void ToolStatusLineKeepsTheDurationInBothModes()
+    {
+        // 标记换成 ASCII 后不得把耗时截掉——这正是 1 列不变式要保住的行为
+        foreach (var ascii in new[] { null, "1" })
+        {
+            using var scope = new GlyphScope(ascii);
+            var line = AgentClass.FormatToolStatusLine("a_very_long_tool_name_for_truncation", false, TimeSpan.FromSeconds(42), 40);
+            Assert.Contains("(42", line);
         }
     }
 }

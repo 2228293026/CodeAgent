@@ -76,6 +76,21 @@ public static class SafeColor
         /// <summary>警告前缀。</summary>
         public static string Warn => AsciiEnabled ? "!" : "⚠";
 
+        /// <summary>成功标记（回合摘要、工具结果）。**必须 1 列**：它参与
+        /// <c>FormatToolStatusLine</c> 的预算扣减，宽度一变，耗时就会被静默切掉。</summary>
+        public static string Ok => AsciiEnabled ? "v" : "✔";
+
+        /// <summary>工具调用标记。
+        ///
+        /// 用 <c>▸</c> 而不是 <c>🔧</c>：后者是 emoji（East Asian Wide），
+        /// <c>TextUtil.DisplayWidth</c> 算它是 **2 列**，比旁边所有标记都宽，
+        /// 于是工具状态行凭空多吃一列，窄屏下先被截掉的是摘要而不是它自己。
+        /// 这里必须 1 列，理由同 <see cref="Ok"/>。</summary>
+        public static string Tool => AsciiEnabled ? ">" : "▸";
+
+        /// <summary>历史行的错误标记。同样必须 1 列，理由见 <see cref="Ok"/>。</summary>
+        public static string Error => AsciiEnabled ? "!" : "❗";
+
         /// <summary>输入行折叠块的「已折叠」标记。
         ///
         /// **必须保持 1 列**：这串标记的显示宽度会直接从「末行预览」的可用列数里扣，
@@ -112,8 +127,8 @@ public static class SafeColor
         /// 省略号换成长 3 的 <c>...</c>，与 <see cref="Ellipsis"/> 保持一致——
         /// 调用方仍须把结果喂给 <c>TextUtil.DisplayWidth</c>，不能按 1 列算。</summary>
         public static string Substitute(string text) => !AsciiEnabled ? text : text
-            .Replace('│', '|').Replace('▌', '|').Replace('─', '-')
-            .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v')
+            .Replace('│', '|').Replace('▌', '|').Replace('─', '-').Replace('▸', '>')
+            .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v').Replace('❗', '!')
             .Replace('⚠', '!').Replace('→', '-').Replace('…', '.')
             .Replace("..", "...");
     }

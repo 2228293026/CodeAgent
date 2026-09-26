@@ -520,7 +520,7 @@ public sealed partial class Agent
                         // label 模式（压缩历史等非流式调用）：无 token 可计，显示已进行时长；
                         // 默认模式维持原样（用时 + 本回合 tokens）
                         var frame_text = label is null
-                            ? $"{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens"
+                            ? $"{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}↑ {tok} tokens"
                             : $"{f} {label} 已用时 {TextUtil.FormatSessionTime(_spinnerSw.Elapsed)}";
                         _spinnerLastWidth = TextUtil.DisplayWidth(frame_text);
                         Console.Write("\r" + frame_text);
@@ -570,7 +570,7 @@ public sealed partial class Agent
                 _spinnerLastWidth = 0;
             }
             // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
-            Console.WriteLine($"✓ 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)} · ↑ {tok} tokens");
+            Console.WriteLine($"{SafeColor.Glyphs.Ok} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}↑ {tok} tokens");
         }
     }
 
@@ -753,7 +753,7 @@ public sealed partial class Agent
     /// 耗时被静默切掉——与上面刻意为耗时预留预算的意图正好相反。</summary>
     internal static string FormatToolStatusLine(string summary, bool isError, TimeSpan elapsed, int width = 0)
     {
-        var mark = isError ? "⚠" : "✔";
+        var mark = isError ? SafeColor.Glyphs.Warn : SafeColor.Glyphs.Ok;
         var duration = $" ({TextUtil.FormatDuration(elapsed)})";
         if (width <= 0)
             return $"  {mark} {summary}{duration}";
@@ -978,7 +978,7 @@ public sealed partial class Agent
             {
                 using (SafeColor.Scope(SafeColor.Muted))
                 {
-                    Console.WriteLine($"  🔧 {summary} …");
+                    Console.WriteLine($"  {SafeColor.Glyphs.Tool} {summary} …");
                 }
                 // edit_file / write_file 附带 diff 预览：执行前就看到改动内容（而非两段截断片段）
                 if (tc.Name is "edit_file" or "write_file")
