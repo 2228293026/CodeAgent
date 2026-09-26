@@ -2608,12 +2608,33 @@ internal static class Program
         return suppressStatusBar;
     }
 
+    /// <summary>模式切换确认行：`已切换模式: 名称 — 说明`。
+    /// 模式**名称**必须完整显示——用户需要确认自己切到了哪个模式；
+    /// 说明是补充，放不下时先截说明，实在放不下再截名称并标「…」。
+    /// 直接交给 FormatConfirmLine 硬截尾部会把名称本身切掉（`已切换模式: pla…`），
+    /// 那等于没告诉用户切到了哪里。width &lt;= 0 表示宽度未知：原样拼接。</summary>
+    internal static string FormatModeSwitchedLine(string name, string description, int width = 0)
+    {
+        var head = $"已切换模式: {name}";
+        if (width <= 0)
+            return $"{head} — {description}";
+        var room = width - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(" — ");
+        if (room >= MinModeDescriptionWidth)
+            return $"{head} — {InputLine.FitToWidth(description, room)}";
+        // 说明一行都放不下：只给名称，宽度不够时名称自己带省略号
+        return InputLine.FitToWidth(head, width);
+    }
+
+    /// <summary>模式说明至少要有的列数。低于此值说明不如只显示名称——
+    /// 半个说明（「自动…」）传达的信息比没有更少，还挤掉了名称。</summary>
+    internal const int MinModeDescriptionWidth = 6;
+
     /// <summary>模式切换的灰色单行确认（Tab / /mode 用；状态栏本轮跳过，避免模式名重复三处）。</summary>
     private static void PrintModeSwitched(AgentMode mode, string model)
     {
         try { Console.Title = $"CodeAgent · {mode.Name} · {model}"; } catch { /* 部分终端不支持标题 */ }
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.WriteLine(FormatConfirmLine($"已切换模式: {mode.Name} — {mode.Description}", ConsoleColumns()));
+        Console.WriteLine(FormatConfirmLine(FormatModeSwitchedLine(mode.Name, mode.Description), ConsoleColumns()));
         SafeColor.Reset();
     }
     internal static (string cmd, string rest) SplitCommand(string line)
