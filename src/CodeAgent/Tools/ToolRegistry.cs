@@ -544,6 +544,7 @@ public sealed class ToolRegistry
         registry.Register(new StringFormatReportTool());
         registry.Register(new EnumUsageReportTool());
         registry.Register(new OperatorOverloadReportTool());
+        registry.Register(new DocCommentReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
