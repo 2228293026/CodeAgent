@@ -33,23 +33,27 @@ public class StatusBarTests
     [Fact]
     public void StatusBar_NarrowDropsThinkFirst()
     {
+        // 降级顺序（见 Program.BuildStatusBar 注释）：冷门段先走（思考档 → 分支 → 本回合 token），
+        // 上下文用量最后才牺牲——它是用户最该盯的动态信息。
         var text = Build(60);
         Assert.DoesNotContain("think:", text);
-        Assert.Contains("(main)", text);
+        Assert.DoesNotContain("(main)", text); // 分支比 token 更冷门，先丢
+        Assert.DoesNotContain(" out", text);
         Assert.Contains("ctx", text);
     }
 
     [Fact]
     public void StatusBar_NarrowerDropsTurnTokensThenCtx()
     {
+        // 缩过目录仍放不下时才丢 ctx；再窄就只剩行首（模式 + 模型）
         var text = Build(34);
         Assert.DoesNotContain("think:", text);
         Assert.DoesNotContain(" out", text);
         Assert.DoesNotContain("ctx", text);
-        Assert.Contains("(main)", text);
+        Assert.Contains("CodeAgent", text);
 
         var shorter = Build(22);
-        Assert.DoesNotContain("(main)", shorter);
+        Assert.DoesNotContain("CodeAgent", shorter);
         Assert.Contains("⏵ code", shorter);
     }
 

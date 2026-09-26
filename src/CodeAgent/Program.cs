@@ -1139,6 +1139,13 @@ internal static class Program
         return "…" + InputLine.FitToWidth(last, budget - 1); // 1 列留给前缀 …
     }
 
+    /// <summary>
+    /// 状态栏分段降级顺序。优先级由「现在最需要知道什么」决定：
+    /// 模式/模型在行首（永不丢）→ ctx 百分比（离上限还有多远，最该盯）→ 本回合 token（花了多少）
+    /// → 目录（自带缩_shortening阶梯_，其次）→ 分支/思考档（冷门设置）。
+    /// 此前把 ctx 排在目录缩短**之前**丢，于是长路径场景下最有操作价值的
+    /// 「上下文用了多少」先消失，剩下一堆静态信息。
+    /// </summary>
     internal static string BuildStatusBar(
         string mode, string model, string cwd, string? branch,
         string turnIn, string turnOut, string ctxText, string thinkText, int width)
@@ -1147,11 +1154,13 @@ internal static class Program
         var showTurn = true;
         var showCtx = true;
         var showThink = !string.IsNullOrEmpty(thinkText);
+        var shownPath = string.Empty;
 
         string Render()
         {
             // 目录与分支合成一段：与旧版「cwd (branch)」一致，窄屏省 3 列
-            var location = showBranch ? $"{cwd} ({branch})" : cwd;
+            var path = shownPath.Length > 0 ? shownPath : cwd;
+            var location = showBranch ? $"{path} ({branch})" : path;
             var parts = new List<string> { $"⏵ {mode} · {model}", location };
             if (showTurn) parts.Add($"{turnIn} in / {turnOut} out");
             if (showCtx) parts.Add(ctxText);
@@ -1160,7 +1169,8 @@ internal static class Program
         }
 
         var text = Render();
-        var drops = new Action[] { () => showThink = false, () => showTurn = false, () => showCtx = false, () => showBranch = false };
+        // 第一轮：丢冷门段（思考档 → 分支 → 本回合 token），ctx 保留到最后
+        var drops = new Action[] { () => showThink = false, () => showBranch = false, () => showTurn = false };
         for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
         {
             drops[i]();
@@ -1168,19 +1178,38 @@ internal static class Program
         }
         if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
             return text;
-        // 可丢段丢完仍超宽：先缩短目录。直接硬截会留下「看起来是完整路径的残串」，
-        // 用户会以为那就是真实目录。模式与模型在行首，缩短目录不会动它们。
+        // 第二轮：缩短目录。必须走 Render 重画整条状态栏——直接拼 head+路径
+        // 会把仍然保留的 ctx/token 段一起丢掉（缩短路径是换内容，不是减段）。
+        // 路径预算要扣掉**仍保留的其他段**，否则缩完还是超宽，ctx 白白被牺牲。
+        // 路径预算要扣掉**仍保留的其他段**以及它们各自前面的 " · " 分隔符，
+        // 否则缩完还是超宽，ctx 白白被牺牲。（head 已含路径前的分隔符，不再重复扣。）
         var head = $"⏵ {mode} · {model} · ";
-        var budget = width - TextUtil.DisplayWidth(head);
-        if (budget > 0)
+        var others = new List<string>();
+        if (showTurn) others.Add($"{turnIn} in / {turnOut} out");
+        if (showCtx) others.Add(ctxText);
+        if (showThink) others.Add(thinkText);
+        var othersWidth = others.Sum(TextUtil.DisplayWidth) + others.Count * 3;
+        var pathBudget = width - TextUtil.DisplayWidth(head) - othersWidth;
+        if (pathBudget > 0)
         {
-            var shortened = ShortenPath(showBranch ? $"{cwd} ({branch})" : cwd, budget);
-            if (TextUtil.DisplayWidth(shortened) < TextUtil.DisplayWidth(showBranch ? $"{cwd} ({branch})" : cwd))
+            var location = showBranch ? $"{cwd} ({branch})" : cwd;
+            var shortened = ShortenPath(location, pathBudget);
+            if (TextUtil.DisplayWidth(shortened) < TextUtil.DisplayWidth(location))
             {
-                text = head + shortened;
+                shownPath = ShortenPath(cwd, pathBudget);
+                text = Render();
                 if (TextUtil.DisplayWidth(text) <= width)
                     return text;
+                shownPath = string.Empty; // 缩短后仍超宽：回退，交给下一轮
             }
+        }
+        // 第三轮：连目录都缩不动了才丢 ctx（上下文用量是最后才牺牲的信息）
+        if (showCtx)
+        {
+            showCtx = false;
+            text = Render();
+            if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+                return text;
         }
         return InputLine.FitToWidth(text, width);
     }
