@@ -165,8 +165,17 @@ public static class InputLine
     /// </summary>
     internal static string FormatInputText(
         string prompt, bool searching, string searchQuery, bool searchHit,
-        int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth, int windowWidth = 0)
+        int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth, int windowWidth = 0,
+        string? placeholder = null, bool colored = true)
     {
+        // 占位提示只在**普通态 + 空输入**时出现；搜索/浏览历史时输入框有别的含义，
+        // 挂一条「试试…」只会误导。
+        if (ShouldShowPlaceholder(draft, searching, historyIndex, historyCount))
+        {
+            var hint = BuildPlaceholder(placeholder, windowWidth, DisplayWidth(prompt), colored);
+            if (hint.Length > 0)
+                return prompt + hint;
+        }
         if (searching)
         {
             if (searchQuery.Length == 0)
@@ -282,6 +291,54 @@ public static class InputLine
     /// <summary>输入行可用宽度预算：窗口宽度减 4 列余量，下限 10；宽度未知返回 0（表示不截断）。</summary>
     internal static int FitBudget(int windowWidth) =>
         windowWidth > 0 ? Math.Max(10, windowWidth - 4) : 0;
+
+    /// <summary>
+    /// 空输入时显示的占位提示（Claude Code 的 <c>❯ Try "how does &lt;filepath&gt; work?"</c> 同款）。
+    /// 用户看不到任何"这里可以做什么"的线索，进去以后面对一个空输入框不知道该说什么。
+    /// 默认值用中文，与本 REPL 其余文案一致。
+    /// </summary>
+    internal const string DefaultPlaceholder = "试试 \"怎么实现 <filepath>\"，或直接描述任务";
+
+    /// <summary>
+    /// 按可用宽度预算拼装占位提示：**装不下就整段不显示**，绝不让它折行。
+    ///
+    /// 占位提示紧跟在提示符后面，折行会把输入块撑成两行，光标定位和多行重绘全部错位
+    /// （见 <c>lastInputLines</c>/<c>PositionCursor</c>）。所以宽度是硬约束，不是"尽量"。
+    ///
+    /// <paramref name="budget"/> 是**已扣过余量的可用宽度**（<see cref="FitBudget"/> 的结果），
+    /// 与 <see cref="FormatInputText"/> 的同名字段同一口径——在这里再减一次余量会白白少 4 列。
+    ///
+    /// 截断时补省略号：提示被截断读起来像"还有更多"，而数值被截断会读成一个
+    /// 完整但错误的值——两者对误导的容忍度不同。
+    /// </summary>
+    internal static string BuildPlaceholder(string? placeholder, int budget, int promptWidth, bool colored)
+    {
+        if (string.IsNullOrEmpty(placeholder))
+            return string.Empty;
+        // 预算未知（0）时不猜，直接不显示——猜错会让窄终端多出一行。
+        if (budget <= 0)
+            return string.Empty;
+        var room = budget - promptWidth;
+        // 至少留 6 列才值得显示：只剩 3~5 列时显示「试试 …」既没信息又会挤掉用户已输入的内容。
+        if (room < 6)
+            return string.Empty;
+        var text = DisplayWidth(placeholder) <= room
+            ? placeholder
+            : FitToWidth(placeholder, room);
+        if (text.Length == 0)
+            return string.Empty;
+        if (!colored || !SafeColor.Enabled)
+            return text;
+        return $"\x1b[90m{text}\x1b[0m";
+    }
+
+    /// <summary>
+    /// 空输入且无菜单/历史/搜索上下文时才显示占位提示。
+    /// 只要用户已经输入了哪怕一个字符（哪怕是空格），立刻消失——残留的提示会让人以为
+    /// 那是自己输入的内容。
+    /// </summary>
+    internal static bool ShouldShowPlaceholder(string draft, bool searching, int historyIndex, int historyCount) =>
+        !searching && draft.Length == 0 && !(historyIndex >= 0 && historyIndex < historyCount);
 
     /// <summary>显示宽度：CJK/全角字符按 2 列计算（与 ConsoleRenderer 一致）；emoji 等代理对按 2 列。</summary>
     private static int DisplayWidth(string s) => TextUtil.DisplayWidth(s);
@@ -413,6 +470,10 @@ public static class InputLine
 
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式，initial 为预填文本（取消回合后回填草稿）。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
+        => Read(prompt, modes, ansi, initial, DefaultPlaceholder);
+
+    /// <summary>读取一行输入。placeholder 为 null/空串时不显示占位提示。</summary>
+    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null)
     {
         if (Console.IsInputRedirected)
         {
@@ -450,11 +511,11 @@ public static class InputLine
                 ? FitMenuLine(name, desc, fitBudget, mode, row, menuNameWidth)
                 : FormatMenuLine(name, desc, row, mode, menuNameWidth);
 
-        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」；
+        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M）」；
         // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
         string InputText() =>
             FormatInputText(promptPlain, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
-                SearchQueryDisplayWidth, fitBudget);
+                SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk);
 
         var menuOpen = false;
         var modePicker = false;
@@ -477,6 +538,14 @@ public static class InputLine
             // 否则首个按键重绘时 lastInputLines=1 / lastCursorLine=0，会在预填块下方再画一份重复块
             lastInputLines = 1 + CountNewlines(initial);
             lastCursorLine = CountNewlines(initial); // 光标停在预填末尾（末行）
+        }
+        else
+        {
+            // 首次进入就显示占位提示：等用户敲第一个键才出现的话，那时已经没意义了。
+            // 首个按键的 RedrawInput 会用 \r\x1b[2K 整行擦掉它，不会残留。
+            var initialHint = BuildPlaceholder(placeholder, fitBudget, DisplayWidth(promptPlain), ansiOk);
+            if (initialHint.Length > 0)
+                Console.Write(initialHint);
         }
 
         // —— 绘制助手（局部函数） ——
