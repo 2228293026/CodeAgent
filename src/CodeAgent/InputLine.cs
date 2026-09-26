@@ -318,6 +318,15 @@ public static class InputLine
         return DisplayWidth(text) - DisplayWidth(text[..cursor]);
     }
 
+    /// <summary>
+    /// 光标右移 n 列的 ANSI 序列。
+    /// **n = 0 必须返回空串**：ECMA-48 规定 CSI 的参数省略或为 0 都按 1 处理，
+    /// 所以 `\x1b[0C` 会把光标**右移 1 列**而不是原地不动。空提示符 + 空内容
+    /// （或整行只有零宽字符）时 col 就是 0，直接拼 `\x1b[{col}C` 必然偏一列。
+    /// n = 1 用一个空格即可（所有终端都认），不必发转义序列。</summary>
+    internal static string CursorForward(int n) =>
+        n <= 0 ? string.Empty : n == 1 ? " " : $"\x1b[{n}C";
+
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式，initial 为预填文本（取消回合后回填草稿）。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
     {
@@ -432,6 +441,7 @@ public static class InputLine
                     var rows = Math.Max(lines, lastInputLines);
                     // lastCursorLine 为 0 时必须省略 CUU：多数终端（xterm/Windows Terminal/conhost）
                     // 把参数 0 按 1 处理，"\x1b[0A" 会真的上移一行，覆盖掉输入块上方的提示符行
+                    // 同一条规则对光标右移（C）同样成立，见 CursorForward。
                     if (lastCursorLine > 0)
                         Console.Write($"\x1b[{lastCursorLine}A");
                     var textLines = DiffUtil.SplitLines(text);
@@ -497,7 +507,7 @@ public static class InputLine
                         // 显示行首是提示符：光标列 = 提示符宽 + 行内内容宽（少算提示符会偏到其左侧）
                         col = DisplayWidth(promptPlain) + DisplayWidth(seg);
                     }
-                    Console.Write($"\x1b[{up}A\r\x1b[{col}C");
+                    Console.Write($"\x1b[{up}A\r{CursorForward(col)}");
                 }
                 // up == 0：光标已在折叠行末尾（重绘后块末尾即折叠行末尾），无需移动
                 return;
@@ -508,7 +518,7 @@ public static class InputLine
                 // 上移不改变列：回到列 1 后右移到光标行的行内偏移。显示行首是提示符
                 // （首行带前缀、其余行各自成行），光标列 = 提示符宽 + 该行到 cursor 的内容宽
                 var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
-                Console.Write($"\x1b[{up2}A\r\x1b[{DisplayWidth(promptPlain) + DisplayWidth(seg)}C");
+                Console.Write($"\x1b[{up2}A\r{CursorForward(DisplayWidth(promptPlain) + DisplayWidth(seg))}");
             }
             else
             {
