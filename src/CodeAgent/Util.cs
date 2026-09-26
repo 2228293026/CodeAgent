@@ -3,21 +3,56 @@ using System.Text.RegularExpressions;
 
 namespace CodeAgent;
 
-/// <summary>安全的颜色输出：终端不支持颜色时静默降级为普通输出（避免绘制/日志崩溃）。</summary>
+/// <summary>安全的颜色输出：终端不支持颜色时静默降级为普通输出（避免绘制/日志崩溃）。
+/// 并遵守三项「不该上色」的信号：
+/// ①<code>NO_COLOR</code> 非空（https://no-color.org 事实标准：任何非空值都应关闭颜色）；
+/// ②<code>TERM=dumb</code>（不支持 ANSI 的终端）；
+/// ③输出被重定向（管道/文件）——此时转义序列会原样写进日志，
+/// 让 <c>grep</c> 到的全是 <c>[32m</c> 这样的噪声。
+/// 此前只有「终端抛异常」这一条降级路径，重定向和 NO_COLOR 都会被忽略。</summary>
 public static class SafeColor
 {
+    /// <summary>环境变量读取的间接层。测试无法真的改进程环境变量，
+    /// 也不该让测试去污染真实环境。</summary>
+    internal static Func<string, string?> ReadEnv = name => Environment.GetEnvironmentVariable(name);
+
+    /// <summary>输出重定向状态的间接层（同上）。</summary>
+    internal static Func<bool> IsRedirected = () => Console.IsOutputRedirected;
+
+    /// <summary>是否输出颜色。默认启用，三项信号任意命中即关闭。</summary>
+    public static bool Enabled => ComputeEnabled(ReadEnv, IsRedirected());
+
+    /// <summary>颜色的判定规则，单独抽出来便于穷举测试。
+    /// <paramref name="noColor"/>：NO_COLOR 的值；<paramref name="term"/>：TERM 的值；
+    /// <paramref name="redirected"/>：输出是否被重定向。</summary>
+    internal static bool ComputeEnabled(string? noColor, string? term, bool redirected)
+    {
+        // NO_COLOR：任何非空值都算关闭（该标准的定义就是「非空即生效」）
+        if (!string.IsNullOrEmpty(noColor))
+            return false;
+        if (string.Equals(term, "dumb", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !redirected;
+    }
+
+    internal static bool ComputeEnabled(Func<string, string?> env, bool redirected) =>
+        ComputeEnabled(env("NO_COLOR"), env("TERM"), redirected);
+
     public static void Foreground(ConsoleColor c)
     {
+        if (!Enabled) return;
         try { Console.ForegroundColor = c; } catch { /* 不支持颜色 */ }
     }
 
     public static void Background(ConsoleColor c)
     {
+        if (!Enabled) return;
         try { Console.BackgroundColor = c; } catch { /* 不支持颜色 */ }
     }
 
     public static void Reset()
     {
+        if (!Enabled) return;
         try { Console.ResetColor(); } catch { /* 不支持颜色 */ }
     }
 }
