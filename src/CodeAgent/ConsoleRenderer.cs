@@ -663,9 +663,34 @@ public sealed class ConsoleRenderer
         return result;
     }
 
-    /// <summary>表格可用总宽：终端宽度（含缩进）；不可用时返回 0 = 不限。</summary>
-    private static int TableBudget()
+    /// <summary>窄屏下最多能完整显示的**前导列数**（宽度未知时返回全部，不做猜测性裁剪）。
+    /// 宽表在窄终端里若只靠压缩列宽，每列都会被压到 1–2 列（`a │ b │ c`），毫无信息量；
+    /// 宁可丢掉末尾的列并在表后说明丢了多少。</summary>
+    internal static int MaxReadableColumns(int[] natural, int budget, int minColWidth = MinTableColWidth, int indent = 2, int separatorWidth = 3)
     {
+        if (natural.Length == 0)
+            return 0;
+        if (budget <= 0)
+            return natural.Length;
+        var keep = 0;
+        var used = indent;
+        for (var i = 0; i < natural.Length; i++)
+        {
+            var w = natural[i] + (i > 0 ? separatorWidth : 0);
+            if (i > 0 && used + w > budget)
+                break;
+            used += w;
+            keep = i + 1;
+        }
+        // 连一列都放不下时至少保留一列，否则表格整个消失
+        return Math.Max(1, keep);
+    }
+
+    /// <summary>表格可用总宽：终端宽度（含缩进）；不可用时返回 0 = 不限。</summary>
+    private int TableBudget()
+    {
+        if (_width > 0)
+            return _width;
         if (Console.IsOutputRedirected)
             return 0;
         try { return Math.Clamp(Console.WindowWidth, 0, 400); } catch { return 0; }
@@ -688,14 +713,22 @@ public sealed class ConsoleRenderer
             for (int i = 0; i < r.Count; i++)
                 natural[i] = Math.Min(MaxTableColWidth, Math.Max(natural[i], DisplayWidth(r[i])));
         // 窄终端下收敛总宽（削最宽的一批列），否则宽表整行折行、列对应关系全丢
-        var widths = FitColumnWidths(natural, TableBudget());
+        var budget = TableBudget();
+        var keep = MaxReadableColumns(natural, budget);
+        var droppedCols = cols - keep;
+        if (droppedCols > 0)
+        {
+            natural = natural.Take(keep).ToArray();
+            cols = keep;
+        }
+        var widths = FitColumnWidths(natural, budget);
         foreach (var r in rows)
         {
             // 分隔行判定需精确：Markdown 分隔行单元格形如 ---、:---、---:、:---:
             // （可选冒号 + 至少 3 个 -），否则单字符数据行（如 - 或 :）会被误判为分隔行而丢失
             var isSep = r.Count > 0 && r.All(c => SepRe.IsMatch(c));
-            var cells = new string[r.Count];
-            for (int i = 0; i < r.Count; i++)
+            var cells = new string[Math.Min(r.Count, cols)];
+            for (int i = 0; i < cells.Length; i++)
             {
                 // 超宽单元格先截断到列宽（FitToWidth 代理对安全并补省略号），再补空格对齐
                 var cell = InputLine.FitToWidth(r[i], widths[i]);
@@ -703,6 +736,8 @@ public sealed class ConsoleRenderer
             }
             Console.WriteLine("  " + string.Join(" │ ", cells));
         }
+        if (droppedCols > 0)
+            Console.WriteLine($"  …(表格共 {cols} 列，终端较窄，仅显示前 {keep} 列)");
         if (truncated)
             Console.WriteLine($"  …(表格共 {_tableBuf.Count} 行，仅显示前 {MaxTableRows} 行)");
         _tableBuf.Clear();
