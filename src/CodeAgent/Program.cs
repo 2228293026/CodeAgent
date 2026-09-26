@@ -981,11 +981,36 @@ internal static class Program
         }
     }
 
+    /// <summary>diff 文件标题/文件头行：把中间/开头的路径按**尾部保留**缩短。
+    /// 硬截尾部（`== src/very/long/Pa…`）会让人以为是另一个文件——路径最有信息量的是末段文件名。
+    /// 形态不识别（既不是 `== p ==` 也不是 `--- p` / `+++ p`）时返回 null，交给调用方按普通行处理。</summary>
+    internal static string? ShortenDiffPathLine(string line, int width)
+    {
+        // `== 路径 ==`（两端都有等号）
+        if (line.StartsWith("== ", StringComparison.Ordinal) && line.EndsWith(" ==", StringComparison.Ordinal))
+        {
+            var path = line[3..^3];
+            var budget = width - 7; // "== " + " ==" 共 7 列
+            return budget >= 1 ? "== " + ShortenPath(path, budget) + " ==" : null;
+        }
+        // `--- 路径` / `+++ 路径`
+        foreach (var marker in new[] { "--- ", "+++ " })
+        {
+            if (!line.StartsWith(marker, StringComparison.Ordinal))
+                continue;
+            var path = line[4..];
+            var budget = width - 4;
+            return budget >= 1 ? marker + ShortenPath(path, budget) : null;
+        }
+        return null;
+    }
+
     /// <summary>diff 行的显示宽度裁剪。
-    /// 两处特别处理：
+    /// 三处特别处理：
     /// ①`@@` 头尾的 `@@ 上下文标题`（C# 里常是很长的方法签名）是装饰性的，
     ///   放不下时整段丢掉，**保住行号范围**——行号才是 hunk 的结构信息；
-    /// ②`+`/`-` 内容行必须带 `…` 标记：被截掉的 +行看起来就是"新增了这么多"，
+    /// ②文件标题/文件头行按**尾部保留**缩短路径：硬截尾部会让人误以为是另一个文件；
+    /// ③`+`/`-` 内容行必须带 `…` 标记：被截掉的 +行看起来就是"新增了这么多"，
     ///   用户会以为 diff 本来就这么短。</summary>
     internal static string FormatDiffLine(string line, int width)
     {
@@ -1001,6 +1026,8 @@ internal static class Program
                     return bare;
             }
         }
+        if (ShortenDiffPathLine(line, width) is { } shortened)
+            return shortened;
         return InputLine.FitToWidth(line, width);
     }
 
