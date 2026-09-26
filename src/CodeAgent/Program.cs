@@ -1434,6 +1434,69 @@ internal static class Program
         windowWidth > 0 && TextUtil.DisplayWidth(prompt) + margin <= windowWidth;
 
     /// <summary>
+    /// <c>/status</c> 面板（学自 Claude Code）：一眼看清"我现在在什么状态"。
+    ///
+    /// 刻意与既有命令分工：
+    ///   · <c>/config</c> 打印**配置项**（键值对照，偏设置）
+    ///   · <c>/stats</c> 打印**累计用量**（token/费用，偏账本）
+    ///   · <c>/diag</c>  打印**终端环境**（列宽/编码/ANSI，偏排障）
+    ///   · <c>/status</c> 打印**当前会话状态**（我在哪、用什么模型、上下文快满了没有）
+    ///
+    /// 复用 <see cref="FormatKeyValueLine"/> 而不是自己拼：那个函数已经处理了
+    /// 按显示宽度对齐与窄屏截断，另写一份必然在某个宽度上漏出去。
+    /// </summary>
+    internal static string FormatStatusPanel(IEnumerable<(string Key, string Value)> rows, int width)
+    {
+        var list = rows.ToList();
+        if (list.Count == 0)
+            return "（无状态信息）";
+        var keyWidth = list.Max(r => TextUtil.DisplayWidth(r.Key));
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("状态:");
+        foreach (var row in list)
+            sb.AppendLine(FormatKeyValueLine(row.Key, row.Value, keyWidth, width));
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>组装 /status 的行。纯函数：给定各项状态返回键值行，好测且不碰 IO。</summary>
+    internal static List<(string Key, string Value)> BuildStatusRows(
+        string mode, string model, string provider, string cwd, string? branch,
+        long contextTokens, int contextWindow, int turns, int toolCalls,
+        TimeSpan sessionTime, string version, string build)
+    {
+        var rows = new List<(string Key, string Value)>
+        {
+            ("模式", mode),
+            ("模型", model),
+        };
+        if (!string.IsNullOrEmpty(provider))
+            rows.Add(("供应商", provider));
+        rows.Add(("工作区", branch is null ? cwd : $"{cwd} ({branch})"));
+        rows.Add(("上下文", contextWindow > 0
+            ? $"{TextUtil.CompactTokenCount(contextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(contextTokens, contextWindow)}%)"
+            : TextUtil.CompactTokenCount(contextTokens)));
+        rows.Add(("会话", $"{turns} 轮{SafeColor.Glyphs.SegmentSeparator}{toolCalls} 次工具调用{SafeColor.Glyphs.SegmentSeparator}{TextUtil.FormatSessionTime(sessionTime)}"));
+        rows.Add(("构建", build.Length > 0 ? $"{version}+{build}" : version));
+        return rows;
+    }
+
+    /// <summary>
+    /// 上下文占用告警：≥ 90% 建议 /compact，≥ autoCompactPercent 标"会自动压缩"。
+    /// /status 里把这层意思直接说出来，用户不必自己去换算百分比。
+    /// </summary>
+    internal static string? FormatContextAdvice(long contextTokens, int contextWindow, int autoCompactPercent)
+    {
+        if (contextWindow <= 0 || contextTokens <= 0)
+            return null;
+        var pct = TextUtil.PercentOf(contextTokens, contextWindow);
+        if (autoCompactPercent > 0 && pct >= autoCompactPercent)
+            return $"上下文已用 {pct}%（超过自动压缩阈值 {autoCompactPercent}%，下一轮将自动压缩）";
+        if (pct >= 90)
+            return $"上下文已用 {pct}%，建议 /compact 压缩历史";
+        return null;
+    }
+
+    /// <summary>
     /// 确认行（模式/权限/模型/provider 切换成功）：`✔ 正文`，与工具结果的成功标记约定一致。
     /// 与告警行共用同一宽度预算——切换确认常附带完整保存路径（可很长），
     /// 折行后标记会被留在上一行，扫读时看不出「切换到底成功没有」。
@@ -2811,6 +2874,22 @@ internal static class Program
                 }
                 break;
 
+            case "/status":
+                {
+                    // 会话状态总览：与 /config（设置）、/stats（账本）、/diag（终端）分工
+                    var sWin = EffectiveContextWindow(config, opts, ctxProbe);
+                    var sRows = BuildStatusRows(
+                        agent.CurrentMode.Name, opts.Model, providerInst?.Name ?? "",
+                        Environment.CurrentDirectory,
+                        GitInfo.CurrentBranch(Environment.CurrentDirectory),
+                        agent.ContextTokens, sWin,
+                        agent.TurnRounds, agent.TurnToolCalls,
+                        SessionStopwatch.Elapsed, InformationalVersion, BuildCommit);
+                    Console.WriteLine(FormatStatusPanel(sRows, ConsoleColumns()));
+                    if (FormatContextAdvice(agent.ContextTokens, sWin, config.AutoCompactPercent) is { } advice)
+                        Console.WriteLine(FormatHintLine(advice, ConsoleColumns()));
+                    return true;
+                }
             case "/stats":
                 {
                     // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
@@ -3467,6 +3546,7 @@ internal static class Program
         new("/load <名>", "恢复已保存的会话"),
         new("/export [名/编号/all]", "导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话；all = 全部）"),
         new("/stats", "显示 token 用量统计"),
+        new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具"),
         new("/providers", "显示已配置的 Provider"),

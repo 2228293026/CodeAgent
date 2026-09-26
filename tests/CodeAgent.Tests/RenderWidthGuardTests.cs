@@ -165,6 +165,17 @@ public sealed class RenderWidthGuardTests
     }
 
     [Fact]
+    public void StatusPanel_NeverExceedsWidth()
+    {
+        var rows = Program.BuildStatusRows("code", "space-bunny-alpha", "kilo",
+            "D:\\Projects\\CodeAgent", "feature/" + new string('长', 60), 348, 200_000,
+            12, 34, TimeSpan.FromSeconds(192), "0.4.0", "281c3ad");
+        foreach (var p in Payloads)
+            foreach (var w in Widths())
+                AssertLinesFit(Program.FormatStatusPanel(rows, w), w, "FormatStatusPanel");
+    }
+
+    [Fact]
     public void ToolAndRendererLines_NeverExceedWidth()
     {
         foreach (var p in Payloads)
