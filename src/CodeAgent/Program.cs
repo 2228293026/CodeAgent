@@ -974,7 +974,7 @@ internal static class Program
             _ => mode,
         };
         SafeColor.Foreground(ConsoleColor.DarkGray);
-        Console.WriteLine(FormatConfirmLine($"已切换权限: {mode}（{desc}）", ConsoleColumns()));
+        Console.WriteLine(FormatConfirmLine(FormatAccessSwitchedLine(mode, desc), ConsoleColumns()));
         if (showHint)
             Console.WriteLine(FormatHintLine("Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定", ConsoleColumns()));
         SafeColor.Reset();
@@ -2649,26 +2649,51 @@ internal static class Program
         return suppressStatusBar;
     }
 
-    /// <summary>模式切换确认行：`已切换模式: 名称 — 说明`。
-    /// 模式**名称**必须完整显示——用户需要确认自己切到了哪个模式；
-    /// 说明是补充，放不下时先截说明，实在放不下再截名称并标「…」。
-    /// 直接交给 FormatConfirmLine 硬截尾部会把名称本身切掉（`已切换模式: pla…`），
-    /// 那等于没告诉用户切到了哪里。width &lt;= 0 表示宽度未知：原样拼接。</summary>
-    internal static string FormatModeSwitchedLine(string name, string description, int width = 0)
+    /// <summary>「某项已切换为某值（说明）」确认行的统一降级。
+    /// **值是主体**（用户刚切到了什么），说明是补充。直接交给 FormatConfirmLine
+    /// 硬截尾部会把值本身切掉（`已切换权限: whi…`）——用户看不到自己切到了哪里。
+    /// 降级顺序：先按剩余列数截说明，说明一行都放不下时**整段丢掉**说明；
+    /// 值本身也超宽才截，并标「…」。width &lt;= 0 表示宽度未知：原样拼接。
+    /// 模式切换（`已切换模式: plan — …`）与权限切换（`已切换权限: whitelist（…）`）
+    /// 共用这一个阶梯，差别只在分隔符——两份几乎一样的实现迟早会只改一个。</summary>
+    internal static string FormatSwitchedWithDetailLine(string action, string value, string detail, string separator, int width = 0, int minDetailWidth = 0)
     {
-        var head = $"已切换模式: {name}";
+        var head = $"{action}: {value}";
         if (width <= 0)
-            return $"{head} — {description}";
-        var room = width - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(" — ");
-        if (room >= MinModeDescriptionWidth)
-            return $"{head} — {InputLine.FitToWidth(description, room)}";
-        // 说明一行都放不下：只给名称，宽度不够时名称自己带省略号
+            return detail.Length > 0 ? head + separator + detail : head;
+        var floor = minDetailWidth > 0 ? minDetailWidth : MinModeDescriptionWidth;
+        var room = width - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(separator);
+        if (room >= floor)
+            return head + separator + InputLine.FitToWidth(detail, room);
+        // 说明一行都放不下：只给值。半个说明（`自动…`）传达的信息比没有更少，
+        // 还白白挤掉值。
         return InputLine.FitToWidth(head, width);
     }
 
     /// <summary>模式说明至少要有的列数。低于此值说明不如只显示名称——
     /// 半个说明（「自动…」）传达的信息比没有更少，还挤掉了名称。</summary>
     internal const int MinModeDescriptionWidth = 6;
+
+    /// <summary>模式切换确认行：`已切换模式: 名称 — 说明`。
+    /// 模式**名称**必须完整显示——用户需要确认自己切到了哪个模式。
+    /// 委托给 <see cref="FormatSwitchedWithDetailLine"/>，与权限切换共用同一套降级阶梯。</summary>
+    internal static string FormatModeSwitchedLine(string name, string description, int width = 0) =>
+        FormatSwitchedWithDetailLine("已切换模式", name, description, " — ", width);
+
+    /// <summary>权限切换确认行：`已切换权限: 模式（说明）`。
+    /// 权限名（strict/whitelist/full）是主体，说明是补充。整行硬截尾部会让**权限名**
+    /// 被切掉（`已切换权限: whi…`）——用户不知道自己切到了哪个权限，而 Shift+Tab
+    /// 正是连着按下去的。全角括号比值更先让位：说明连一列都放不下时整段丢掉括号。</summary>
+    internal static string FormatAccessSwitchedLine(string mode, string description, int width = 0)
+    {
+        if (width <= 0)
+            return $"已切换权限: {mode}（{description}）";
+        // 「（」「）」各占 2 列，先把括号占的列从预算里扣掉
+        var room = width - TextUtil.DisplayWidth("已切换权限: ") - TextUtil.DisplayWidth(mode) - 4;
+        if (room < MinModeDescriptionWidth)
+            return InputLine.FitToWidth($"已切换权限: {mode}", width);
+        return $"已切换权限: {mode}（{InputLine.FitToWidth(description, room)}）";
+    }
 
     /// <summary>模式切换的灰色单行确认（Tab / /mode 用；状态栏本轮跳过，避免模式名重复三处）。</summary>
     private static void PrintModeSwitched(AgentMode mode, string model)
