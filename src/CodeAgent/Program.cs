@@ -1150,9 +1150,39 @@ internal static class Program
     /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
     internal static int ConsoleColumnsForNotice() => ConsoleColumns();
 
+    /// <summary>正文末尾若是路径，就按**尾部保留**缩短那一段（其余文字原样保留）。
+    /// 确认/告警行常以「已保存到 C:\Users\…\会话.json」「已导出: out/report.md」结尾——
+    /// 路径**就是**这句话的重点，硬截尾部等于把「存到哪儿了」整个切掉，
+    /// 留下一句没有落点的「已保存到 C:\…」。宽度不够放下任何路径内容时返回 null。</summary>
+    internal static string? ShortenTrailingPath(string body, int budget)
+    {
+        if (budget <= 0 || body.Length == 0)
+            return null;
+        var parts = body.Split(' ');
+        for (var i = parts.Length - 1; i >= 0; i--)
+        {
+            var token = parts[i];
+            if (token.Length < 6 || (!token.Contains('/') && !token.Contains('\\')))
+                continue;
+            var headWidth = i > 0 ? TextUtil.DisplayWidth(string.Join(" ", parts.Take(i))) + 1 : 0;
+            var pathBudget = budget - headWidth;
+            if (pathBudget < 6)
+                return null; // 放不下任何有意义的路径内容：交给普通截断，别造出假路径
+            var shortened = ShortenPath(token, pathBudget);
+            if (TextUtil.DisplayWidth(shortened) >= TextUtil.DisplayWidth(token))
+                return null; // 本来就放得下
+            var rebuilt = new List<string>(parts.Take(i)) { shortened };
+            for (var j = i + 1; j < parts.Length; j++)
+                rebuilt.Add(parts[j]);
+            return string.Join(" ", rebuilt);
+        }
+        return null;
+    }
+
     /// <summary>
     /// 告警/错误行统一格式：`⚠ 正文`，窄终端按显示宽度截断**正文**而非整行——
     /// 标记必须始终留在行首可见：整行截断会让 ⚠ 孤零零留在上一行，扫读时反而找不到告警。
+    /// 正文末尾是路径时先按尾部保留缩短路径（见 <see cref="ShortenTrailingPath"/>）。
     /// width &lt;= 0 表示宽度未知，不截断。
     /// </summary>
     internal static string FormatNoticeLine(string body, int width = 0, string marker = "⚠")
@@ -1160,7 +1190,9 @@ internal static class Program
         if (width <= 0)
             return $"{marker} {body}";
         var budget = width - TextUtil.DisplayWidth(marker) - 1;
-        return budget <= 0 ? marker : $"{marker} {InputLine.FitToWidth(body, budget)}";
+        if (budget <= 0)
+            return marker;
+        return $"{marker} {ShortenTrailingPath(body, budget) ?? InputLine.FitToWidth(body, budget)}";
     }
 
     /// <summary>读取终端宽度：0 = 未知（输出重定向或读取失败）。</summary>
