@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using CodeAgent;
 using Xunit;
@@ -78,22 +79,40 @@ public class InputLineCommandsTests
     [Fact]
     public void Commands_EveryNameMatchesHandleCommand()
     {
-        // 每个菜单命令都应在 HandleCommand 的 case 或 REPL 特殊处理中有对应逻辑
-        // （间接验证：菜单与实现不脱节）
-        var special = new[] { "/retry" }; // REPL 循环特殊处理
-        var handled = new[]
-        {
-            "/help", "/clear", "/compact", "/cls", "/model", "/provider", "/config", "/session", "/setup",
-            "/undo", "/diff", "/save", "/load", "/resume", "/find", "/history", "/export", "/copy", "/prompt", "/files", "/stats",
-            "/tools", "/providers", "/mode", "/access", "/diag", "/models", "/thinking", "/shell",
-            "/exit", "/quit",
-        };
+        // 此前这里是**硬编码一个 allowed 数组**再断言"菜单命令 ∈ 该数组"——
+        // 那是同义反复：加命令的人顺手把名字加进数组，测试照样过；
+        // 真把 `case "/x"` 删掉，测试也不会响。等于没有检查。
+        //
+        // 现在真的去源码里找：命令名必须以带引号的字面量出现
+        // （`case "/exit" or "/quit"`、`line.Equals("/retry", …)` 都算）。
+        // 匹配到 REPL 循环里的特殊处理，不要求一定在 switch 分支里。
+        var source = System.IO.File.ReadAllText(ProgramSource());
         foreach (var c in InputLine.Commands)
         {
             Assert.True(
-                handled.Contains(c.Name) || special.Contains(c.Name),
-                $"命令 {c.Name} 在 HandleCommand 中无对应处理");
+                source.Contains($"\"{c.Name}\"", StringComparison.Ordinal),
+                $"命令 {c.Name} 在源码中查无此名：菜单能补全，执行时没有对应处理");
         }
+    }
+
+    private static string ProgramSource()
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            var dir = start;
+            for (var i = 0; i < 10 && dir.Length > 1; i++)
+            {
+                var candidate = Path.Combine(dir, "src", "CodeAgent");
+                var f = Path.Combine(candidate, "Program.cs");
+                if (Directory.Exists(candidate) && File.Exists(f) && new FileInfo(f).Length > 1000)
+                    return f;
+                var parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrEmpty(parent) || parent == dir)
+                    break;
+                dir = parent;
+            }
+        }
+        throw new FileNotFoundException("找不到 src/CodeAgent/Program.cs");
     }
 
     [Theory]
