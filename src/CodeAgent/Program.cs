@@ -753,7 +753,8 @@ internal static class Program
         tags.Select(t => TextUtil.DisplayWidth(t)).DefaultIfEmpty(0).Max();
 
     /// <summary>回合摘要的可丢段优先级：费用 → 缓存比例 → 思考耗时 → 本回合 token 明细。
-    /// 固定段保留「✓ 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。</summary>
+    /// 固定段保留「✓ 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
+    /// 可丢段丢完仍超宽时先**脱掉装饰外框**（纯装饰，省 13 列），最后才硬截。</summary>
     internal static string BuildTurnSummary(
         int rounds, int toolCalls, string elapsed, string tokenText,
         string thinkText, string cacheText, string costText, int width)
@@ -762,6 +763,8 @@ internal static class Program
         var showThink = thinkText.Length > 0;
         var showCache = cacheText.Length > 0;
         var showCost = costText.Length > 0;
+
+        bool showFrame = true;
 
         string Render()
         {
@@ -776,7 +779,10 @@ internal static class Program
                 parts.Add(cacheText.Trim());
             if (showCost && costText.Trim().Length > 0)
                 parts.Add(costText.Trim());
-            return "── ✓ 完成 " + string.Join(" ", parts) + " ──";
+            var body = string.Join(" ", parts);
+            // 外框是装饰不是信息：窄屏下先脱框（省 13 列），好过硬截出
+            // 「看起来是完整摘要的残串」——用户会以为工具次数/耗时就那么多。
+            return showFrame ? "── ✓ 完成 " + body + " ──" : "✓ " + body;
         }
 
         var text = Render();
@@ -792,7 +798,17 @@ internal static class Program
             drops[i]();
             text = Render();
         }
-        return width > 0 ? InputLine.FitToWidth(text, width) : text;
+        if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+        // 丢完可丢段仍超宽：脱掉装饰外框再来一次
+        if (showFrame)
+        {
+            showFrame = false;
+            text = Render();
+            if (TextUtil.DisplayWidth(text) <= width)
+                return text;
+        }
+        return InputLine.FitToWidth(text, width);
     }
 
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
