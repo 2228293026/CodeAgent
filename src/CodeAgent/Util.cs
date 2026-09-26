@@ -31,6 +31,10 @@ public static class TextUtil
 
     /// <summary>显示宽度：CJK/全角字符按 2 列计算；emoji 等代理对按 2 列（两个 surrogate 只算一次）。
     /// 孤立代理（半个码点）按 1 列——终端渲染为单宽替换符，按 2 列算会让对齐偏一列。
+    /// **零宽字符按 0 列**：组合附加符号、ZWJ/ZWNJ、变体选择符在终端上不占列。
+    /// 此前每个零宽字符都被当成 1 列，于是「👨‍👩‍👧」算成 6 列（实际 2 列）、
+    /// 「é」（e + 组合尖音符）算成 2 列（实际 1 列）——表格列、状态栏、提示符
+    /// 全部按多算出来的宽度补空格，越排越歪，最终溢出行宽。
     /// 终端对齐/截断共用（InputLine、ConsoleRenderer 曾各自实现一份）。</summary>
     public static int DisplayWidth(string s)
     {
@@ -38,10 +42,12 @@ public static class TextUtil
         for (int i = 0; i < s.Length; i++)
         {
             char c = s[i];
+            if (IsZeroWidth(c))
+                continue; // 组合记号/ZWJ/变体选择符：0 列
             if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
             {
                 w += 2; // 代理对（emoji）：终端按 2 列显示
-                i++;
+                i = EmojiClusterEnd(s, i); // ZWJ 连接的后续 emoji 与基字符一起算 2 列
             }
             else
             {
@@ -49,6 +55,36 @@ public static class TextUtil
             }
         }
         return w;
+    }
+
+    /// <summary>零宽字符：组合附加符号、ZWJ/ZWNJ、变体选择符、word joiner。</summary>
+    internal static bool IsZeroWidth(char c) =>
+        (c >= '̀' && c <= 'ͯ') ||   // 组合附加符号
+        (c >= '᪰' && c <= '᫿') ||
+        (c >= '័' && c <= '៿') ||
+        (c >= '⃐' && c <= '⃿') ||
+        (c >= '︀' && c <= '️') ||   // 变体选择符
+        c == '‌' || c == '‍' ||     // ZWNJ / ZWJ
+        c == '⁠';                          // word joiner
+
+    /// <summary>ZWJ emoji 序列（👨‍👩‍👧、👩‍💻）在终端只占 2 列：
+    /// 返回该序列最后一个字符的下标，让调用方一次跳过整个簇。</summary>
+    private static int EmojiClusterEnd(string s, int i)
+    {
+        var j = i + 2; // 已过代理对
+        while (j < s.Length && (s[j] == '‍' || (s[j] >= '️' && s[j] <= '️')))
+        {
+            var k = j + 1;
+            while (k < s.Length && IsZeroWidth(s[k]))
+                k++;
+            if (k + 1 < s.Length && char.IsHighSurrogate(s[k]) && char.IsLowSurrogate(s[k + 1]))
+            {
+                j = k + 2;
+                continue;
+            }
+            break;
+        }
+        return j - 1;
     }
 
     /// <summary>截断尾部的半个多字节序列：截断点可能切在 UTF-8 多字节序列中间，
