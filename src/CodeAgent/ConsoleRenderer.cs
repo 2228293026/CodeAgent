@@ -289,9 +289,14 @@ public sealed class ConsoleRenderer
             return;
         }
 
-        EmitStyledParts(parts, color);
-        SafeColor.Reset();
-        Console.WriteLine();
+        // 行级作用域：段落自己也会开作用域（见 EmitStyledParts），这里兜住
+        //「段落已输出、还没换行」这段窗口，并保证 EmitStyledParts 抛异常时颜色仍复位
+        // ——此前那个裸 SafeColor.Reset() 恰恰在异常路径上到不了。
+        using (SafeColor.Scope(color ?? SafeColor.Muted))
+        {
+            EmitStyledParts(parts, color);
+            Console.WriteLine();
+        }
     }
 
     /// <summary>输出一行带样式的内容（行内代码 / 标题 / 引用配色）。</summary>
@@ -304,9 +309,11 @@ public sealed class ConsoleRenderer
             Console.Write(content + (hadNewline ? "\n" : ""));
             return;
         }
-        EmitStyledParts(parts, color);
-        SafeColor.Reset();
-        Console.WriteLine();
+        using (SafeColor.Scope(color ?? SafeColor.Muted))
+        {
+            EmitStyledParts(parts, color);
+            Console.WriteLine();
+        }
     }
 
     private void EmitStyledParts(List<(string text, InlineStyleToken style)> parts, ConsoleColor? color)
@@ -328,7 +335,7 @@ public sealed class ConsoleRenderer
         }
         foreach (var (text, style) in parts)
         {
-            SafeColor.Foreground(style switch
+            using var scope = SafeColor.Scope(style switch
             {
                 InlineStyleToken.Bold => SafeColor.Emphasis,
                 InlineStyleToken.Code => SafeColor.Warning,
@@ -580,19 +587,18 @@ public sealed class ConsoleRenderer
         var badge = FormatCodeLangBadge(_codeLang.ToString(), _width);
         if (badge.Length > 0)
         {
-            SafeColor.Foreground(SafeColor.Muted);
+            using var badgeScope = SafeColor.Scope(SafeColor.Muted);
             Console.WriteLine(badge);
-            SafeColor.Reset();
         }
         var overlong = CountOverlongCodeLines(code, _width);
-        SafeColor.Foreground(SafeColor.Success);
-        Console.Write(NormalizeCodeBlock(code));
-        SafeColor.Reset();
+        using (SafeColor.Scope(SafeColor.Success))
+        {
+            Console.Write(NormalizeCodeBlock(code));
+        }
         if (overlong > 0)
         {
-            SafeColor.Foreground(SafeColor.Muted);
+            using var noteScope = SafeColor.Scope(SafeColor.Muted);
             Console.WriteLine(CodeWrapNote(overlong, _width));
-            SafeColor.Reset();
         }
     }
 

@@ -288,9 +288,8 @@ public sealed partial class Agent
                 var truncatedTools = resp.ToolCalls.Count > 0 ? "，工具调用参数可能残缺" : "";
                 lock (ConsoleLock)
                 {
-                    SafeColor.Foreground(SafeColor.Warning);
+                    using var scope = SafeColor.Scope(SafeColor.Warning);
                     Console.WriteLine($"⚠ 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens");
-                    SafeColor.Reset();
                 }
             }
             if (resp.InputTokens is int inTok)
@@ -399,9 +398,8 @@ public sealed partial class Agent
                     _streamTokens += TextUtil.EstimateTokens(reason); // 估算已生成 token（spinner ↑ 显示）
                     lock (ConsoleLock)
                     {
-                        SafeColor.Foreground(SafeColor.Muted);
+                        using var scope = SafeColor.Scope(SafeColor.Muted);
                         Console.Write(reason);
-                        SafeColor.Reset();
                     }
                 }, frag =>
                 {
@@ -978,9 +976,10 @@ public sealed partial class Agent
         {
             lock (ConsoleLock)
             {
-                SafeColor.Foreground(SafeColor.Muted);
-                Console.WriteLine($"  🔧 {summary} …");
-                SafeColor.Reset();
+                using (SafeColor.Scope(SafeColor.Muted))
+                {
+                    Console.WriteLine($"  🔧 {summary} …");
+                }
                 // edit_file / write_file 附带 diff 预览：执行前就看到改动内容（而非两段截断片段）
                 if (tc.Name is "edit_file" or "write_file")
                 {
@@ -1043,16 +1042,16 @@ public sealed partial class Agent
                 }
                 else
                 {
-                    SafeColor.Foreground(SafeColor.Success);
-                    Console.WriteLine(status);
-                    SafeColor.Reset();
+                    using (SafeColor.Scope(SafeColor.Success))
+                    {
+                        Console.WriteLine(status);
+                    }
                     // 命令类工具附带输出预览，方便直接看到构建/测试结果
                     if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
-                        SafeColor.Foreground(SafeColor.Muted);
+                        using var previewScope = SafeColor.Scope(SafeColor.Muted);
                         var preview = BuildToolOutputPreview(output, ct);
                         Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
-                        SafeColor.Reset();
                     }
                 }
             }

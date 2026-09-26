@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using CodeAgent;
 using Xunit;
@@ -87,6 +88,55 @@ public class ColourScopeTests
         var program = File.ReadAllText(FindSource("Program.cs"));
         var pattern = new Regex(@"SafeColor\.Foreground\([^)]*\);(?:(?!SafeColor\.Reset)[^\n]*\n)*?\s*Console\.WriteLine\(Format", RegexOptions.Multiline);
         Assert.False(pattern.IsMatch(program), "Program.cs 仍有 Foreground 与 Reset 之间夹着 Format* 调用的写法");
+    }
+
+    [Fact]
+    public void NoCallSiteUsesTheRawForegroundResetPair()
+    {
+        // 迁移收口的守卫：调色板定义（Util.cs）之外不得再直接写
+        // SafeColor.Foreground / SafeColor.Reset —— 那些写法一旦中间抛异常，
+        // 颜色就会漏到后面所有输出。统一走 SafeColor.Scope。
+        foreach (var file in EnumerateSources())
+        {
+            if (Path.GetFileName(file) == "Util.cs")
+                continue;
+            var source = File.ReadAllText(file);
+            // 去掉注释，免得把说明文字里的方法名也算进来
+            var code = System.Text.RegularExpressions.Regex.Replace(source, @"(?s)/\*.*?\*/|//[^\n]*", "");
+            var foreground = System.Text.RegularExpressions.Regex.Matches(code, @"SafeColor\.Foreground\s*\(").Count;
+            var reset = System.Text.RegularExpressions.Regex.Matches(code, @"SafeColor\.Reset\s*\(").Count;
+            Assert.True(foreground == 0 && reset == 0,
+                $"{Path.GetFileName(file)} 仍有 {foreground} 处 Foreground / {reset} 处 Reset，应改用 SafeColor.Scope");
+        }
+    }
+
+    [Fact]
+    public void TheScopeApiIsActuallyUsed()
+    {
+        var scopes = EnumerateSources()
+            .Where(f => Path.GetFileName(f) != "Util.cs")
+            .Sum(f => System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(f), @"SafeColor\.Scope\s*\(").Count);
+        Assert.True(scopes >= 10, $"SafeColor.Scope 只用了 {scopes} 处，迁移可能没做完");
+    }
+
+    private static string[] EnumerateSources()
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            var dir = start;
+            for (var i = 0; i < 10 && dir.Length > 1; i++)
+            {
+                var candidate = Path.Combine(dir, "src", "CodeAgent");
+                var program = Path.Combine(candidate, "Program.cs");
+                if (Directory.Exists(candidate) && File.Exists(program) && new FileInfo(program).Length > 1000)
+                    return Directory.EnumerateFiles(candidate, "*.cs", SearchOption.AllDirectories).ToArray();
+                var parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrEmpty(parent) || parent == dir)
+                    break;
+                dir = parent;
+            }
+        }
+        throw new FileNotFoundException("找不到 src/CodeAgent");
     }
 
     private static string FindSource(string name)
