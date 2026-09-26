@@ -515,6 +515,7 @@ public sealed class ToolRegistry
         registry.Register(new DependencyVersionReportTool());
         registry.Register(new ErrorHandlingDetailReportTool());
         registry.Register(new ConfigHardeningReportTool());
+        registry.Register(new ApiCompatibilityReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
