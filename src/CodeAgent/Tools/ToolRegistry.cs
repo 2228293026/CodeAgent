@@ -540,6 +540,7 @@ public sealed class ToolRegistry
         registry.Register(new NullCoalescingReportTool());
         registry.Register(new EqualityContractReportTool());
         registry.Register(new UsingDirectiveReportTool());
+        registry.Register(new DisposablePatternReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
