@@ -600,6 +600,37 @@ public static class InputLine
     internal static MenuPickAction PickAction(bool mentionActive) =>
         mentionActive ? MenuPickAction.Insert : MenuPickAction.Submit;
 
+    /// <summary>读当前 TreatControlCAsInput；不支持的平台返回 false 而不是抛。</summary>
+    internal static bool TreatControlCAsInputSafe()
+    {
+        try { return Console.TreatControlCAsInput; }
+        catch { return false; }
+    }
+
+    internal enum CtrlCOutcome
+    {
+        /// <summary>非空输入：清空这一行，继续会话。</summary>
+        ClearInput,
+
+        /// <summary>输入已空：退出（与 Claude Code 一致：先清、再退）。</summary>
+        Exit,
+    }
+
+    /// <summary>
+    /// Ctrl+C 在输入行的语义（学自 Claude Code）。
+    ///
+    /// 此前 Ctrl+C 在输入行里**直接终止整个进程**：对话没了、草稿没了、
+    /// 正在写的东西没了，而且没有任何提示。按下和松手之间用户来不及反应。
+    ///
+    /// 改成两段式：非空输入先清这一行（"我不想发这句"），
+    /// 已经空了再按才退出（"我真要走"）。误触不再有不可挽回的后果，
+    /// 而真想退出也不需要连按很多下。
+    ///
+    /// 纯函数，好测：这条语义一旦被改坏，用户丢会话的方式会静默变回去。
+    /// </summary>
+    internal static CtrlCOutcome CtrlCBehavior(string text) =>
+        string.IsNullOrEmpty(text) ? CtrlCOutcome.Exit : CtrlCOutcome.ClearInput;
+
     /// <summary>
     /// 一段文本在给定列宽下占**多少个终端行**——显式换行与自动折行都要算。
     ///
@@ -691,11 +722,11 @@ public static class InputLine
     }
 
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式，initial 为预填文本（取消回合后回填草稿）。</summary>
-    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
-        => Read(prompt, modes, ansi, initial, DefaultPlaceholder);
+    public static async Task<string?> Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
+        => await Read(prompt, modes, ansi, initial, DefaultPlaceholder);
 
     /// <summary>读取一行输入。placeholder 为 null/空串时不显示占位提示。mentionRoot 非空时启用 @ 文件引用。</summary>
-    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null, string? mentionRoot = null)
+    public static async Task<string?> Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null, string? mentionRoot = null)
     {
         var root = mentionRoot ?? string.Empty;
         if (Console.IsInputRedirected)
@@ -725,942 +756,666 @@ public static class InputLine
         // 宽度相关量必须先于 InputText 声明：搜索行要按 fitBudget 收敛查询串（CS0841）
         var winW = TryWindowWidth();
         var ansiOk = ShouldUseAnsiInPlace(ansi, Console.IsOutputRedirected, winW);
-        if (ansiOk)
-            BracketedPaste.Enable(); // 粘贴边界标记（详见 BracketedPaste 注释）；重定向/窄终端不启用
-        var fitBudget = FitBudget(winW);
-        string Fit(string s) => fitBudget > 0 ? FitToWidth(s, fitBudget) : s;
-
-        // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）。
-        // 名称列宽按**实际菜单内容**定，不写死 16：短名称时不必空出十几列。
-        var menuNameWidth = MenuNameWidth(modes?.Select(m => m.Name) ?? Array.Empty<string>());
-        string FitMenu(string name, string desc, bool mode, int row) =>
-            fitBudget > 0
-                ? FitMenuLine(name, desc, fitBudget, mode, row, menuNameWidth)
-                : FormatMenuLine(name, desc, row, mode, menuNameWidth);
-
-        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M）」；
-        // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
-        //
-        // 关键：用 **promptTail（提示符最后一行）**，不是 promptPlain（整段）。
-        // 提示符可能占多行（BuildInputFrameTop 的「上边框 + 提示符」），而重绘是
-        // 「\r\x1b[2K + text」——清行只作用一行。带上边框就等于**每次按键都把边框
-        // 再打一遍**，多出来的行往下堆，表现为「敲一个字就多出一行 ◈ high · /thinking」。
-        // 边框属于 chrome，首次绘制一次即可，不该参与重绘。
-        string InputText() =>
-            FormatInputText(promptTail, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
-                SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk);
-
-        var menuOpen = false;
-        var modePicker = false;
-        var menuItems = new List<(string Name, string Desc)>();
-        var menuIndex = -1;
-        var lastFilter = "";
-        var menuShown = 0;   // 可见项数
-        var menuOffset = 0;  // 可见窗口在列表中的起点
-        var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
-        var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
-        var lastInputLines = 1;      // 上次绘制的输入块行数（多行重绘逐行清残留用）
-        var lastCursorLine = 0;      // 终端光标当前所在行（上次重绘后 PositionCursor 放置处，多行重绘上移基点）
-        var inputExpanded = false;   // 用户是否展开过折叠的多行输入（展开后不再自动折叠）
-        // @ 引用状态：(token 起点, 前缀)。Start >= 0 表示菜单当前列的是文件。
-        // 用 (start, prefix) 而不是 bool：选中时要知道把哪一段替换掉。
-        var mention = (-1, (string?)null);
-        const int MentionLimit = 200;
-
-        Console.Write(prompt);
-        // 提示符可能占多行（BuildInputFrameTop 返回「上边框 + 提示符」）。但**边框是 chrome，
-        // 不属于重绘块**：它只画一次，之后 InputText() 只重画提示符的最后一行。
-        //   · lastInputLines 必须是「提示符最后一行 + 输入文本各行」的行数，
-        //     绝不能把边框算进去——ScrollInput 里 `lastInputLines > 1` 会走多行分支，
-        //     那样单行输入每次按键都多写一个 \n（正是「敲一个字就多出一行」）。
-        //   · lastCursorLine 是光标在**重绘块内**的行号，第 0 行就是提示符那一行。
-        if (!string.IsNullOrEmpty(initial))
+        // 让 Ctrl+C **作为按键**送达 ReadKey，而不是触发 CancelKeyPress 终止进程。
+        // 必须在此期间恢复：回合内（Read 已返回）Ctrl+C 要继续走 CancelKeyPress 去取消本轮，
+        // 漏恢复会让"取消当前回合"这个功能整体失灵——比原来的行为更糟。
+        var priorTreatControlC = TreatControlCAsInputSafe();
+        var treatControlCSet = false;
+        try { Console.TreatControlCAsInput = true; treatControlCSet = true; }
+        catch { /* 不支持时退回旧的"Ctrl+C 直接退出"行为 */ }
+        try
         {
-            Console.Write(initial); // 预填文本也要显示出来
-            // 预填可能多行（取消回合回填的多行草稿）：重绘基线必须按实际行数初始化，
-            // 否则首个按键重绘时 lastInputLines=1 / lastCursorLine=0，会在预填块下方再画一份重复块
-            lastInputLines = 1 + CountNewlines(initial);
-            lastCursorLine = CountNewlines(initial); // 光标停在预填末尾（末行）
+            return await ReadInner();
         }
-        else
+        finally
         {
-            // 首次进入就显示占位提示：等用户敲第一个键才出现的话，那时已经没意义了。
-            // 首个按键的 RedrawInput 会用 \r\x1b[2K 整行擦掉它，不会残留。
-            var initialHint = BuildPlaceholder(placeholder, fitBudget, DisplayWidth(promptTail), ansiOk);
-            if (initialHint.Length > 0)
-                Console.Write(initialHint);
+            if (treatControlCSet)
+            {
+                try { Console.TreatControlCAsInput = priorTreatControlC; }
+                catch { /* 忽略 */ }
+            }
         }
 
-        // —— 绘制助手（局部函数） ——
-
-        int MenuAbove() => menuRows + DisplayedNewlines(inputExpanded, buf.Text); // 菜单块 + 输入块总行数（光标到块顶的行距，折叠感知）
-
-        // 菜单表头必须说清楚现在列的是什么。@ 引用菜单列的是**文件**，
-        // 沿用 "Commands … Enter run" 会让人以为按回车会执行某个命令，
-        // 实际上回车是在插入路径。
-        string Header() => BuildMenuHeader(modePicker, mention.Item1 >= 0);
-
-        int CountNewlines(string s)
-        {
-            // 去掉末尾换行再计数：与 SkipDirs.CountLines / DiffUtil.SplitLines 语义一致，
-            // 避免 "a\nb\n" 被当成 3 行导致 PositionCursor 把光标行算到折叠提示行上。
-            s = s.TrimEnd('\n');
-            int n = 0;
-            foreach (var c in s)
-                if (c == '\n')
-                    n++;
-            return n;
-        }
-
-        /// <summary>光标所在行距输入块首行多少行（多行输入时菜单锚点计算用）。</summary>
-        int CursorLineInBlock() =>
-            DisplayedCursorLine(inputExpanded, buf.Text, buf.Cursor); // 折叠时第 2 行及以后都显示在折叠行
-
-        /// <summary>输入块的显示文本：与 ScrollInput 同口径（未展开且 &gt;3 行时折叠）。
-        /// 菜单重绘也必须画折叠视图——画原始多行会把块高从 3 行撑回 N 行，与菜单定位的行数口径不符。</summary>
-        string DisplayedInputText() =>
-            !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold
-                ? FoldText(InputText(), FoldThreshold, fitBudget)
-                : InputText();
-
-        void ScrollInput()
+        async Task<string?> ReadInner()
         {
             if (ansiOk)
+                BracketedPaste.Enable(); // 粘贴边界标记（详见 BracketedPaste 注释）；重定向/窄终端不启用
+            var fitBudget = FitBudget(winW);
+            string Fit(string s) => fitBudget > 0 ? FitToWidth(s, fitBudget) : s;
+
+            // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）。
+            // 名称列宽按**实际菜单内容**定，不写死 16：短名称时不必空出十几列。
+            var menuNameWidth = MenuNameWidth(modes?.Select(m => m.Name) ?? Array.Empty<string>());
+            string FitMenu(string name, string desc, bool mode, int row) =>
+                fitBudget > 0
+                    ? FitMenuLine(name, desc, fitBudget, mode, row, menuNameWidth)
+                    : FormatMenuLine(name, desc, row, mode, menuNameWidth);
+
+            // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M）」；
+            // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
+            //
+            // 关键：用 **promptTail（提示符最后一行）**，不是 promptPlain（整段）。
+            // 提示符可能占多行（BuildInputFrameTop 的「上边框 + 提示符」），而重绘是
+            // 「\r\x1b[2K + text」——清行只作用一行。带上边框就等于**每次按键都把边框
+            // 再打一遍**，多出来的行往下堆，表现为「敲一个字就多出一行 ◈ high · /thinking」。
+            // 边框属于 chrome，首次绘制一次即可，不该参与重绘。
+            string InputText() =>
+                FormatInputText(promptTail, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
+                    SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk);
+
+            var menuOpen = false;
+            var modePicker = false;
+            var menuItems = new List<(string Name, string Desc)>();
+            var menuIndex = -1;
+            var lastFilter = "";
+            var menuShown = 0;   // 可见项数
+            var menuOffset = 0;  // 可见窗口在列表中的起点
+            var menuRows = 0;    // 已绘制的菜单块行数（擦除用）
+            var menuListShown = false;   // 滚动模式下完整列表是否已打印（之后过滤变化只打单行）
+            var lastInputLines = 1;      // 上次绘制的输入块行数（多行重绘逐行清残留用）
+            var lastCursorLine = 0;      // 终端光标当前所在行（上次重绘后 PositionCursor 放置处，多行重绘上移基点）
+            var inputExpanded = false;   // 用户是否展开过折叠的多行输入（展开后不再自动折叠）
+                                         // @ 引用状态：(token 起点, 前缀)。Start >= 0 表示菜单当前列的是文件。
+                                         // 用 (start, prefix) 而不是 bool：选中时要知道把哪一段替换掉。
+            var mention = (-1, (string?)null);
+            const int MentionLimit = 200;
+
+            Console.Write(prompt);
+            // 提示符可能占多行（BuildInputFrameTop 返回「上边框 + 提示符」）。但**边框是 chrome，
+            // 不属于重绘块**：它只画一次，之后 InputText() 只重画提示符的最后一行。
+            //   · lastInputLines 必须是「提示符最后一行 + 输入文本各行」的行数，
+            //     绝不能把边框算进去——ScrollInput 里 `lastInputLines > 1` 会走多行分支，
+            //     那样单行输入每次按键都多写一个 \n（正是「敲一个字就多出一行」）。
+            //   · lastCursorLine 是光标在**重绘块内**的行号，第 0 行就是提示符那一行。
+            if (!string.IsNullOrEmpty(initial))
             {
-                // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
-                var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold;
-                var text = fold ? InputLine.FoldText(InputText()) : InputText();
-                // 传入真实列宽：文本敲过列宽时终端会自动折行，
-                // 而 \x1b[2K 只清一行——不把折行算进块行数，残字会留在屏幕上
-                Console.Write(BuildRedrawAnsi(
-                    text, lastInputLines, lastCursorLine, out lastInputLines, winW, DisplayWidth(promptTail)));
-                PositionCursor(fold);
-                // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
-                // 折叠时按折叠视图行计），作为下次多行重绘的上移基点。
-                // 与 PositionCursor 同口径：折行也算进去，否则下一次上移的基点是错的。
-                var (rawCursorLine, _) = CursorRowInBlock(promptTail, buf.Text, buf.Cursor, winW);
-                lastCursorLine = fold ? Math.Min(rawCursorLine, 2) : rawCursorLine;
+                Console.Write(initial); // 预填文本也要显示出来
+                                        // 预填可能多行（取消回合回填的多行草稿）：重绘基线必须按实际行数初始化，
+                                        // 否则首个按键重绘时 lastInputLines=1 / lastCursorLine=0，会在预填块下方再画一份重复块
+                lastInputLines = 1 + CountNewlines(initial);
+                lastCursorLine = CountNewlines(initial); // 光标停在预填末尾（末行）
             }
             else
             {
-                // 滚动模式无 ANSI 无法原地擦除：多行时只写一次（双写会加倍刷屏），
-                // 单行保持原逻辑（\r 重写 + 空格清残留）
-                if (1 + CountNewlines(buf.Text) > 1)
-                    Console.Write("\r" + InputText());
+                // 首次进入就显示占位提示：等用户敲第一个键才出现的话，那时已经没意义了。
+                // 首个按键的 RedrawInput 会用 \r\x1b[2K 整行擦掉它，不会残留。
+                var initialHint = BuildPlaceholder(placeholder, fitBudget, DisplayWidth(promptTail), ansiOk);
+                if (initialHint.Length > 0)
+                    Console.Write(initialHint);
+            }
+
+            // —— 绘制助手（局部函数） ——
+
+            int MenuAbove() => menuRows + DisplayedNewlines(inputExpanded, buf.Text); // 菜单块 + 输入块总行数（光标到块顶的行距，折叠感知）
+
+            // 菜单表头必须说清楚现在列的是什么。@ 引用菜单列的是**文件**，
+            // 沿用 "Commands … Enter run" 会让人以为按回车会执行某个命令，
+            // 实际上回车是在插入路径。
+            string Header() => BuildMenuHeader(modePicker, mention.Item1 >= 0);
+
+            int CountNewlines(string s)
+            {
+                // 去掉末尾换行再计数：与 SkipDirs.CountLines / DiffUtil.SplitLines 语义一致，
+                // 避免 "a\nb\n" 被当成 3 行导致 PositionCursor 把光标行算到折叠提示行上。
+                s = s.TrimEnd('\n');
+                int n = 0;
+                foreach (var c in s)
+                    if (c == '\n')
+                        n++;
+                return n;
+            }
+
+            /// <summary>光标所在行距输入块首行多少行（多行输入时菜单锚点计算用）。</summary>
+            int CursorLineInBlock() =>
+                DisplayedCursorLine(inputExpanded, buf.Text, buf.Cursor); // 折叠时第 2 行及以后都显示在折叠行
+
+            /// <summary>输入块的显示文本：与 ScrollInput 同口径（未展开且 &gt;3 行时折叠）。
+            /// 菜单重绘也必须画折叠视图——画原始多行会把块高从 3 行撑回 N 行，与菜单定位的行数口径不符。</summary>
+            string DisplayedInputText() =>
+                !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold
+                    ? FoldText(InputText(), FoldThreshold, fitBudget)
+                    : InputText();
+
+            void ScrollInput()
+            {
+                if (ansiOk)
+                {
+                    // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
+                    var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold;
+                    var text = fold ? InputLine.FoldText(InputText()) : InputText();
+                    // 传入真实列宽：文本敲过列宽时终端会自动折行，
+                    // 而 \x1b[2K 只清一行——不把折行算进块行数，残字会留在屏幕上
+                    Console.Write(BuildRedrawAnsi(
+                        text, lastInputLines, lastCursorLine, out lastInputLines, winW, DisplayWidth(promptTail)));
+                    PositionCursor(fold);
+                    // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
+                    // 折叠时按折叠视图行计），作为下次多行重绘的上移基点。
+                    // 与 PositionCursor 同口径：折行也算进去，否则下一次上移的基点是错的。
+                    var (rawCursorLine, _) = CursorRowInBlock(promptTail, buf.Text, buf.Cursor, winW);
+                    lastCursorLine = fold ? Math.Min(rawCursorLine, 2) : rawCursorLine;
+                }
                 else
                 {
-                    Console.Write("\r" + InputText() + new string(' ', 4));
-                    Console.Write("\r" + InputText());
+                    // 滚动模式无 ANSI 无法原地擦除：多行时只写一次（双写会加倍刷屏），
+                    // 单行保持原逻辑（\r 重写 + 空格清残留）
+                    if (1 + CountNewlines(buf.Text) > 1)
+                        Console.Write("\r" + InputText());
+                    else
+                    {
+                        Console.Write("\r" + InputText() + new string(' ', 4));
+                        Console.Write("\r" + InputText());
+                    }
                 }
             }
-        }
 
-        /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈，支持多行输入与折叠视图）。</summary>
-        void PositionCursor(bool folded)
-        {
-            var cursor = Math.Clamp(buf.Cursor, 0, buf.Text.Length);
-            var upTo = buf.Text[..cursor];
-            // 行号必须把**终端自动折行**算进去：只数显式 \n 时，敲到超过列宽
-            // 光标所在行算少，上移的行数就不对，光标落到错误的行上。
-            var (cursorLine, totalLines) = CursorRowInBlock(promptTail, buf.Text, cursor, winW);
-            if (folded)
+            /// <summary>把终端光标移到 buf.Cursor 对应的列（行内编辑的视觉反馈，支持多行输入与折叠视图）。</summary>
+            void PositionCursor(bool folded)
             {
-                // 折叠视图：前 2 行 + 折叠行（⏷ 共 N 行）；buf 行 >= 2 都显示在折叠行
-                var dispLine = cursorLine < 2 ? cursorLine : 2;
-                var up = 3 - 1 - dispLine; // 从块末尾（折叠行末尾）上移到光标显示行
-                if (up > 0)
+                var cursor = Math.Clamp(buf.Cursor, 0, buf.Text.Length);
+                var upTo = buf.Text[..cursor];
+                // 行号必须把**终端自动折行**算进去：只数显式 \n 时，敲到超过列宽
+                // 光标所在行算少，上移的行数就不对，光标落到错误的行上。
+                var (cursorLine, totalLines) = CursorRowInBlock(promptTail, buf.Text, cursor, winW);
+                if (folded)
                 {
-                    string seg;
-                    int col;
-                    if (dispLine == 2)
+                    // 折叠视图：前 2 行 + 折叠行（⏷ 共 N 行）；buf 行 >= 2 都显示在折叠行
+                    var dispLine = cursorLine < 2 ? cursorLine : 2;
+                    var up = 3 - 1 - dispLine; // 从块末尾（折叠行末尾）上移到光标显示行
+                    if (up > 0)
                     {
-                        var foldLines = DiffUtil.SplitLines(InputLine.FoldText(InputText()));
-                        seg = foldLines.Length > 2 ? foldLines[2] : ""; // 折叠行文本，光标显示在末尾
-                        col = DisplayWidth(seg); // 折叠行独立成行，无提示符前缀
+                        string seg;
+                        int col;
+                        if (dispLine == 2)
+                        {
+                            var foldLines = DiffUtil.SplitLines(InputLine.FoldText(InputText()));
+                            seg = foldLines.Length > 2 ? foldLines[2] : ""; // 折叠行文本，光标显示在末尾
+                            col = DisplayWidth(seg); // 折叠行独立成行，无提示符前缀
+                        }
+                        else
+                        {
+                            seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
+                            // 显示行首是提示符：光标列 = 提示符宽 + 行内内容宽（少算提示符会偏到其左侧）
+                            col = DisplayWidth(promptTail) + DisplayWidth(seg);
+                        }
+                        Console.Write($"\x1b[{up}A\r{CursorForward(col)}");
+                    }
+                    // up == 0：光标已在折叠行末尾（重绘后块末尾即折叠行末尾），无需移动
+                    return;
+                }
+                var up2 = totalLines - 1 - cursorLine; // 从块末尾（末行行尾）上移到光标行
+                if (up2 > 0)
+                {
+                    // 上移不改变列：回到列 1 后右移到光标行的行内偏移。显示行首是提示符
+                    // （首行带前缀、其余行各自成行），光标列 = 提示符宽 + 该行到 cursor 的内容宽
+                    var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
+                    Console.Write($"\x1b[{up2}A\r{CursorForward(DisplayWidth(promptTail) + DisplayWidth(seg))}");
+                }
+                else
+                {
+                    // 光标在最后一行：从行尾左移到 cursor（单行输入或光标在末行）
+                    // 占位提示写在行尾，光标要从它**前面**停住，否则看起来像用户输入的一部分
+                    var placeholderCols = RenderedPlaceholderWidth(
+                        buf.Text, searching, idx, session.Count, placeholder, fitBudget, DisplayWidth(promptTail));
+                    var offset = CursorLeftOffset(buf.Text, buf.Cursor) + placeholderCols;
+                    if (offset > 0)
+                        Console.Write($"\x1b[{offset}D");
+                }
+            }
+
+            void RedrawInput()
+            {
+                // 统一走 ScrollInput：菜单打开时它只重绘输入行（菜单块在上方不动），
+                // 多行粘贴用逐行覆盖（\x1b[2K 清整行），避免 \x1b[J 在部分终端无效导致刷屏
+                ScrollInput();
+            }
+
+            // —— ANSI 原地渲染（默认） ——
+            void PrintListAnsi()
+            {
+                menuShown = Math.Min(menuItems.Count, MenuMaxRows); // 数字键可见窗口（与布局高度解耦）
+                if (menuOffset > menuItems.Count - menuShown)
+                    menuOffset = Math.Max(0, menuItems.Count - menuShown);
+                var rows = BlockRows(menuItems.Count);
+                var sb = new StringBuilder();
+                // 菜单块绘制在输入行正上方（块空间已由 ResizeMenuSpace 用 IL/DL 腾出），
+                // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大。
+                // 多行输入：块顶在光标行上方 rows + (显示行数-1) 处（折叠视图只占 3 行）
+                sb.Append($"\x1b[{rows + DisplayedNewlines(inputExpanded, buf.Text)}A\x1b[1G");
+                sb.AppendLine(Fit(Header()) + "\x1b[K");
+                if (menuItems.Count == 0)
+                {
+                    sb.AppendLine(Fit("  (no matching item, press Esc to close)") + "\x1b[K");
+                    sb.AppendLine("\x1b[K"); // 占位到 3 行高，与 BlockRows 一致
+                }
+                else
+                {
+                    // 固定高度项区：始终画 MenuMaxRows 行，项不足补空行（高度稳定，无跳动）
+                    for (int i = 0; i < MenuMaxRows; i++)
+                    {
+                        var k = menuOffset + i;
+                        if (k >= menuItems.Count)
+                        {
+                            sb.AppendLine("\x1b[K");
+                            continue;
+                        }
+                        var line = FitMenu(menuItems[k].Name, menuItems[k].Desc, modePicker, i);
+                        // 预算不足以放下编号+名称：整行清空（与「本行无内容」同一处理，保持块高稳定）
+                        if (line.Length == 0)
+                        {
+                            sb.AppendLine("\x1b[K");
+                            continue;
+                        }
+                        // 选中项：反显高亮（\x1b[7m）；行尾 \x1b[K 清残留
+                        sb.AppendLine((k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line) + "\x1b[K");
+                    }
+                    // more 计数随窗口滚动更新（下方剩余项数）
+                    var remaining = menuItems.Count - menuOffset - MenuMaxRows;
+                    sb.AppendLine(Fit(remaining > 0 ? $"  ... (+{remaining} more)" : "") + "\x1b[K");
+                }
+                sb.AppendLine(); // 空行；末尾换行后光标已在输入行
+                sb.Append("\x1b[1G");
+                sb.Append(DisplayedInputText());
+                sb.Append("\x1b[K");
+                menuRows = rows;
+                Console.Write(sb.ToString());
+            }
+
+            /// <summary>菜单行文本：命令菜单带 1-9 编号；模式菜单无编号（数字键是普通输入）。
+            /// 名称列取**实际最长的菜单项**，短名称的菜单不再空出十几列。</summary>
+            string MenuLineText(int listIndex, int visibleRow) =>
+                FormatMenuLine(
+                    menuItems[listIndex].Name,
+                    menuItems[listIndex].Desc,
+                    visibleRow,
+                    modePicker,
+                    MenuNameWidth(menuItems.Select(m => m.Name)));
+
+            // 关闭菜单块（rows 行）：整块删除（DL），输入行上移回到原位，屏幕不留残影
+            void EraseMenuAnsi(int rows)
+            {
+                var sb = new StringBuilder();
+                if (rows > 0)
+                    // 上移到块顶整块删除；多行输入时块顶在光标行上方 rows + (显示行数-1) 处（折叠感知，与绘制口径一致）
+                    sb.Append($"\x1b[{rows + DisplayedNewlines(inputExpanded, buf.Text)}A\x1b[{rows}M");
+                sb.Append("\x1b[1G");
+                sb.Append(DisplayedInputText());
+                sb.Append("\x1b[K");
+                menuRows = 0;
+                Console.Write(sb.ToString());
+            }
+
+            void MoveSelectionAnsi(int oldIndex, int newIndex)
+            {
+                if (newIndex < menuOffset || newIndex >= menuOffset + menuShown)
+                {
+                    // 窗口滚动：显式更新偏移，原地重绘整个块（行高不变，直接覆盖旧内容）
+                    menuOffset = newIndex < menuOffset
+                        ? newIndex
+                        : Math.Max(0, newIndex - menuShown + 1);
+                    menuOffset = Math.Min(menuOffset, Math.Max(0, menuItems.Count - menuShown));
+                    PrintListAnsi();
+                    return;
+                }
+                // 整段拼接后单次写入：擦旧行 → 写新行 → 回到输入行
+                var sb = new StringBuilder();
+                if (oldIndex >= menuOffset && oldIndex < menuOffset + menuShown && oldIndex != newIndex)
+                {
+                    var up = MenuAbove() - 1 - (oldIndex - menuOffset);
+                    sb.Append($"\x1b[{up}A\x1b[1G\x1b[K");
+                    sb.Append(Fit(MenuLineText(oldIndex, oldIndex - menuOffset)));
+                    sb.Append($"\x1b[{up}B");
+                }
+                var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
+                sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
+                sb.Append("\x1b[7m" + Fit(MenuLineText(newIndex, newIndex - menuOffset)) + "\x1b[0m");
+                sb.Append($"\x1b[{up2}B\x1b[1G");
+                sb.Append(DisplayedInputText());
+                sb.Append("\x1b[K");
+                Console.Write(sb.ToString());
+            }
+
+            // —— 滚动式渲染（tuiAnsi=false 时的兜底） ——
+            void PrintListScroll()
+            {
+                menuListShown = true;
+                var sb = new StringBuilder();
+                sb.AppendLine();
+                sb.AppendLine(Fit(Header()));
+                if (menuItems.Count == 0)
+                {
+                    // 过滤无匹配时显示提示而非回退到全部命令（与 PrintFilterScroll 一致）
+                    sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
+                }
+                else
+                {
+                    // 紧凑展示：一行列出当前过滤结果（避免 14 行大块渲染导致卡顿）
+                    var names = menuItems.Select(m => m.Name);
+                    sb.AppendLine(Fit("  " + string.Join(" ", names)));
+                }
+                sb.AppendLine();
+                sb.Append(InputText());
+                Console.Write(sb.ToString());
+            }
+
+            // 过滤变化时单行显示带编号的匹配结果（可直接按数字执行）
+            void PrintFilterScroll()
+            {
+                var sb = new StringBuilder();
+                if (menuItems.Count == 0)
+                {
+                    sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
+                }
+                else
+                {
+                    // 与数字键上限一致（1-9 run）：显示前 9 项，超出提示总数
+                    var parts = menuItems.Take(9).Select((m, i) => $"{i + 1}) {m.Name}");
+                    var more = menuItems.Count > 9 ? $" {SafeColor.Glyphs.Ellipsis}(共 {menuItems.Count} 项)" : "";
+                    sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
+                }
+                sb.AppendLine();
+                sb.Append(InputText());
+                Console.Write(sb.ToString());
+            }
+
+            void MoveSelectionScroll(int newIndex)
+            {
+                if (menuItems.Count == 0)
+                    return;
+                menuIndex = newIndex;
+                var sb = new StringBuilder();
+                sb.AppendLine();
+                sb.AppendLine(Fit($"  {SafeColor.Glyphs.Arrow} {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
+                sb.Append(InputText());
+                Console.Write(sb.ToString());
+            }
+
+            void PrintMenu()
+            {
+                if (ansiOk)
+                    PrintListAnsi();
+                else
+                    PrintListScroll();
+            }
+
+            /// <summary>调整菜单块高度（menuRows → newAbove）：在块顶插入/删除行差（IL/DL 序列）。
+            /// 多行输入时光标可能停在块中间的行：所有定位都以「输入块首行」为锚，
+            /// 菜单始终插在整块上方，不切入输入文本行之间。</summary>
+            void ResizeMenuSpace(int newAbove)
+            {
+                if (newAbove == menuRows)
+                    return;
+                var aboveInput = CursorLineInBlock();             // 光标 → 输入块首行的行距
+                var up = aboveInput + menuRows;                   // 光标 → 菜单块顶（首次开菜单时 menuRows=0）
+                if (up > 0)
+                    Console.Write($"\x1b[{up}A");
+                Console.Write(newAbove > menuRows
+                    ? $"\x1b[{newAbove - menuRows}L"              // 扩高：块顶插入空行，下方内容（含输入块）下移
+                    : $"\x1b[{menuRows - newAbove}M");            // 缩高：块顶删除行差，下方内容上移
+                Console.Write($"\x1b[{aboveInput + newAbove}B");  // 回到（移动后的）光标行
+                menuRows = newAbove;
+            }
+
+            void RefreshMenu()
+            {
+                // @ 引用：光标停在 @token 里时，菜单列的是工作区文件而不是命令。
+                // 与 / 命令菜单互斥——两者的触发字符不可能同时成立。
+                var (mentionActive, mentionPrefix, mentionStart) = ParseMention(buf.Text, buf.Cursor);
+                mention = mentionActive ? (mentionStart, mentionPrefix) : (-1, null);
+                List<(string Name, string Desc)> newItems;
+                if (mentionActive)
+                {
+                    newItems = MentionItems(root, mentionPrefix, MentionLimit, CancellationToken.None);
+                }
+                else
+                {
+                    var src = modePicker ? modes ?? [] : Commands;
+                    newItems = src
+                        .Where(m => m.Name.StartsWith(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
+                // 仅当过滤结果真的变化时才重绘，避免 /m→/mo→/mod 每个按键都刷一块菜单
+                var same = newItems.Count == menuItems.Count &&
+                           newItems.Zip(menuItems, (a, b) => a.Name == b.Name).All(x => x);
+                if (!same)
+                {
+                    menuItems = newItems;
+                    if (menuIndex >= menuItems.Count)
+                        menuIndex = menuItems.Count - 1;
+                    if (ansiOk)
+                    {
+                        // 固定面板：仅「空态 ↔ 非空」切换时调整高度（输入行只在此刻移动一次），
+                        // 其余过滤/滚动全部原位重绘，屏幕零跳动
+                        var target = BlockRows(menuItems.Count);
+                        if (target != menuRows)
+                            ResizeMenuSpace(target);
+                        PrintListAnsi();
+                    }
+                    else if (!menuListShown)
+                    {
+                        PrintListScroll(); // 打开：完整编号列表
                     }
                     else
                     {
-                        seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
-                        // 显示行首是提示符：光标列 = 提示符宽 + 行内内容宽（少算提示符会偏到其左侧）
-                        col = DisplayWidth(promptTail) + DisplayWidth(seg);
+                        PrintFilterScroll(); // 过滤变化：单行匹配结果
                     }
-                    Console.Write($"\x1b[{up}A\r{CursorForward(col)}");
                 }
-                // up == 0：光标已在折叠行末尾（重绘后块末尾即折叠行末尾），无需移动
-                return;
-            }
-            var up2 = totalLines - 1 - cursorLine; // 从块末尾（末行行尾）上移到光标行
-            if (up2 > 0)
-            {
-                // 上移不改变列：回到列 1 后右移到光标行的行内偏移。显示行首是提示符
-                // （首行带前缀、其余行各自成行），光标列 = 提示符宽 + 该行到 cursor 的内容宽
-                var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
-                Console.Write($"\x1b[{up2}A\r{CursorForward(DisplayWidth(promptTail) + DisplayWidth(seg))}");
-            }
-            else
-            {
-                // 光标在最后一行：从行尾左移到 cursor（单行输入或光标在末行）
-                // 占位提示写在行尾，光标要从它**前面**停住，否则看起来像用户输入的一部分
-                var placeholderCols = RenderedPlaceholderWidth(
-                    buf.Text, searching, idx, session.Count, placeholder, fitBudget, DisplayWidth(promptTail));
-                var offset = CursorLeftOffset(buf.Text, buf.Cursor) + placeholderCols;
-                if (offset > 0)
-                    Console.Write($"\x1b[{offset}D");
-            }
-        }
-
-        void RedrawInput()
-        {
-            // 统一走 ScrollInput：菜单打开时它只重绘输入行（菜单块在上方不动），
-            // 多行粘贴用逐行覆盖（\x1b[2K 清整行），避免 \x1b[J 在部分终端无效导致刷屏
-            ScrollInput();
-        }
-
-        // —— ANSI 原地渲染（默认） ——
-        void PrintListAnsi()
-        {
-            menuShown = Math.Min(menuItems.Count, MenuMaxRows); // 数字键可见窗口（与布局高度解耦）
-            if (menuOffset > menuItems.Count - menuShown)
-                menuOffset = Math.Max(0, menuItems.Count - menuShown);
-            var rows = BlockRows(menuItems.Count);
-            var sb = new StringBuilder();
-            // 菜单块绘制在输入行正上方（块空间已由 ResizeMenuSpace 用 IL/DL 腾出），
-            // 输入行被推到块下方；终端在窗口底部自动滚动，无需逐行重推、无输出放大。
-            // 多行输入：块顶在光标行上方 rows + (显示行数-1) 处（折叠视图只占 3 行）
-            sb.Append($"\x1b[{rows + DisplayedNewlines(inputExpanded, buf.Text)}A\x1b[1G");
-            sb.AppendLine(Fit(Header()) + "\x1b[K");
-            if (menuItems.Count == 0)
-            {
-                sb.AppendLine(Fit("  (no matching item, press Esc to close)") + "\x1b[K");
-                sb.AppendLine("\x1b[K"); // 占位到 3 行高，与 BlockRows 一致
-            }
-            else
-            {
-                // 固定高度项区：始终画 MenuMaxRows 行，项不足补空行（高度稳定，无跳动）
-                for (int i = 0; i < MenuMaxRows; i++)
+                else
                 {
-                    var k = menuOffset + i;
-                    if (k >= menuItems.Count)
-                    {
-                        sb.AppendLine("\x1b[K");
-                        continue;
-                    }
-                    var line = FitMenu(menuItems[k].Name, menuItems[k].Desc, modePicker, i);
-                    // 预算不足以放下编号+名称：整行清空（与「本行无内容」同一处理，保持块高稳定）
-                    if (line.Length == 0)
-                    {
-                        sb.AppendLine("\x1b[K");
-                        continue;
-                    }
-                    // 选中项：反显高亮（\x1b[7m）；行尾 \x1b[K 清残留
-                    sb.AppendLine((k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line) + "\x1b[K");
+                    // 过滤结果未变（/mo→/mod 仍是同一批命令）：菜单块不重绘，
+                    // 但输入行必须重画——曾在此直接跳过绘制，导致按下的字符不上屏、
+                    // 屏幕停在旧输入（/m），直到过滤结果变化（如补一个空格）才一次性刷新
+                    RedrawInput();
                 }
-                // more 计数随窗口滚动更新（下方剩余项数）
-                var remaining = menuItems.Count - menuOffset - MenuMaxRows;
-                sb.AppendLine(Fit(remaining > 0 ? $"  ... (+{remaining} more)" : "") + "\x1b[K");
+                lastFilter = mentionActive ? mentionPrefix : NormalizeCommandFilter(buf.Text);
             }
-            sb.AppendLine(); // 空行；末尾换行后光标已在输入行
-            sb.Append("\x1b[1G");
-            sb.Append(DisplayedInputText());
-            sb.Append("\x1b[K");
-            menuRows = rows;
-            Console.Write(sb.ToString());
-        }
 
-        /// <summary>菜单行文本：命令菜单带 1-9 编号；模式菜单无编号（数字键是普通输入）。
-        /// 名称列取**实际最长的菜单项**，短名称的菜单不再空出十几列。</summary>
-        string MenuLineText(int listIndex, int visibleRow) =>
-            FormatMenuLine(
-                menuItems[listIndex].Name,
-                menuItems[listIndex].Desc,
-                visibleRow,
-                modePicker,
-                MenuNameWidth(menuItems.Select(m => m.Name)));
-
-        // 关闭菜单块（rows 行）：整块删除（DL），输入行上移回到原位，屏幕不留残影
-        void EraseMenuAnsi(int rows)
-        {
-            var sb = new StringBuilder();
-            if (rows > 0)
-                // 上移到块顶整块删除；多行输入时块顶在光标行上方 rows + (显示行数-1) 处（折叠感知，与绘制口径一致）
-                sb.Append($"\x1b[{rows + DisplayedNewlines(inputExpanded, buf.Text)}A\x1b[{rows}M");
-            sb.Append("\x1b[1G");
-            sb.Append(DisplayedInputText());
-            sb.Append("\x1b[K");
-            menuRows = 0;
-            Console.Write(sb.ToString());
-        }
-
-        void MoveSelectionAnsi(int oldIndex, int newIndex)
-        {
-            if (newIndex < menuOffset || newIndex >= menuOffset + menuShown)
+            void OpenMenu(bool picker)
             {
-                // 窗口滚动：显式更新偏移，原地重绘整个块（行高不变，直接覆盖旧内容）
-                menuOffset = newIndex < menuOffset
-                    ? newIndex
-                    : Math.Max(0, newIndex - menuShown + 1);
-                menuOffset = Math.Min(menuOffset, Math.Max(0, menuItems.Count - menuShown));
-                PrintListAnsi();
-                return;
-            }
-            // 整段拼接后单次写入：擦旧行 → 写新行 → 回到输入行
-            var sb = new StringBuilder();
-            if (oldIndex >= menuOffset && oldIndex < menuOffset + menuShown && oldIndex != newIndex)
-            {
-                var up = MenuAbove() - 1 - (oldIndex - menuOffset);
-                sb.Append($"\x1b[{up}A\x1b[1G\x1b[K");
-                sb.Append(Fit(MenuLineText(oldIndex, oldIndex - menuOffset)));
-                sb.Append($"\x1b[{up}B");
-            }
-            var up2 = MenuAbove() - 1 - (newIndex - menuOffset);
-            sb.Append($"\x1b[{up2}A\x1b[1G\x1b[K");
-            sb.Append("\x1b[7m" + Fit(MenuLineText(newIndex, newIndex - menuOffset)) + "\x1b[0m");
-            sb.Append($"\x1b[{up2}B\x1b[1G");
-            sb.Append(DisplayedInputText());
-            sb.Append("\x1b[K");
-            Console.Write(sb.ToString());
-        }
-
-        // —— 滚动式渲染（tuiAnsi=false 时的兜底） ——
-        void PrintListScroll()
-        {
-            menuListShown = true;
-            var sb = new StringBuilder();
-            sb.AppendLine();
-            sb.AppendLine(Fit(Header()));
-            if (menuItems.Count == 0)
-            {
-                // 过滤无匹配时显示提示而非回退到全部命令（与 PrintFilterScroll 一致）
-                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
-            }
-            else
-            {
-                // 紧凑展示：一行列出当前过滤结果（避免 14 行大块渲染导致卡顿）
-                var names = menuItems.Select(m => m.Name);
-                sb.AppendLine(Fit("  " + string.Join(" ", names)));
-            }
-            sb.AppendLine();
-            sb.Append(InputText());
-            Console.Write(sb.ToString());
-        }
-
-        // 过滤变化时单行显示带编号的匹配结果（可直接按数字执行）
-        void PrintFilterScroll()
-        {
-            var sb = new StringBuilder();
-            if (menuItems.Count == 0)
-            {
-                sb.AppendLine(Fit("  (no matching item, press Esc to close)"));
-            }
-            else
-            {
-                // 与数字键上限一致（1-9 run）：显示前 9 项，超出提示总数
-                var parts = menuItems.Take(9).Select((m, i) => $"{i + 1}) {m.Name}");
-                var more = menuItems.Count > 9 ? $" {SafeColor.Glyphs.Ellipsis}(共 {menuItems.Count} 项)" : "";
-                sb.AppendLine(Fit($"  [{buf}] {string.Join(" ", parts)}{more}"));
-            }
-            sb.AppendLine();
-            sb.Append(InputText());
-            Console.Write(sb.ToString());
-        }
-
-        void MoveSelectionScroll(int newIndex)
-        {
-            if (menuItems.Count == 0)
-                return;
-            menuIndex = newIndex;
-            var sb = new StringBuilder();
-            sb.AppendLine();
-            sb.AppendLine(Fit($"  {SafeColor.Glyphs.Arrow} {menuItems[menuIndex].Name,-16} {menuItems[menuIndex].Desc}"));
-            sb.Append(InputText());
-            Console.Write(sb.ToString());
-        }
-
-        void PrintMenu()
-        {
-            if (ansiOk)
-                PrintListAnsi();
-            else
-                PrintListScroll();
-        }
-
-        /// <summary>调整菜单块高度（menuRows → newAbove）：在块顶插入/删除行差（IL/DL 序列）。
-        /// 多行输入时光标可能停在块中间的行：所有定位都以「输入块首行」为锚，
-        /// 菜单始终插在整块上方，不切入输入文本行之间。</summary>
-        void ResizeMenuSpace(int newAbove)
-        {
-            if (newAbove == menuRows)
-                return;
-            var aboveInput = CursorLineInBlock();             // 光标 → 输入块首行的行距
-            var up = aboveInput + menuRows;                   // 光标 → 菜单块顶（首次开菜单时 menuRows=0）
-            if (up > 0)
-                Console.Write($"\x1b[{up}A");
-            Console.Write(newAbove > menuRows
-                ? $"\x1b[{newAbove - menuRows}L"              // 扩高：块顶插入空行，下方内容（含输入块）下移
-                : $"\x1b[{menuRows - newAbove}M");            // 缩高：块顶删除行差，下方内容上移
-            Console.Write($"\x1b[{aboveInput + newAbove}B");  // 回到（移动后的）光标行
-            menuRows = newAbove;
-        }
-
-        void RefreshMenu()
-        {
-            // @ 引用：光标停在 @token 里时，菜单列的是工作区文件而不是命令。
-            // 与 / 命令菜单互斥——两者的触发字符不可能同时成立。
-            var (mentionActive, mentionPrefix, mentionStart) = ParseMention(buf.Text, buf.Cursor);
-            mention = mentionActive ? (mentionStart, mentionPrefix) : (-1, null);
-            List<(string Name, string Desc)> newItems;
-            if (mentionActive)
-            {
-                newItems = MentionItems(root, mentionPrefix, MentionLimit, CancellationToken.None);
-            }
-            else
-            {
-                var src = modePicker ? modes ?? [] : Commands;
-                newItems = src
-                    .Where(m => m.Name.StartsWith(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
-            // 仅当过滤结果真的变化时才重绘，避免 /m→/mo→/mod 每个按键都刷一块菜单
-            var same = newItems.Count == menuItems.Count &&
-                       newItems.Zip(menuItems, (a, b) => a.Name == b.Name).All(x => x);
-            if (!same)
-            {
-                menuItems = newItems;
-                if (menuIndex >= menuItems.Count)
-                    menuIndex = menuItems.Count - 1;
+                if (menuOpen)
+                    return;
+                menuOpen = true;
+                modePicker = picker;
+                menuIndex = -1;
+                // 打开即按目标高度一次性腾出空间（Claude Code 式稳定面板）：
+                // 命令菜单按满高预留（过滤从全量开始），之后高度只在空态边界变
                 if (ansiOk)
                 {
-                    // 固定面板：仅「空态 ↔ 非空」切换时调整高度（输入行只在此刻移动一次），
-                    // 其余过滤/滚动全部原位重绘，屏幕零跳动
-                    var target = BlockRows(menuItems.Count);
-                    if (target != menuRows)
-                        ResizeMenuSpace(target);
-                    PrintListAnsi();
+                    var initial = picker ? (modes?.Count ?? 0) : Commands.Length;
+                    ResizeMenuSpace(BlockRows(initial));
                 }
-                else if (!menuListShown)
+                if (picker)
                 {
-                    PrintListScroll(); // 打开：完整编号列表
+                    menuItems = [.. modes ?? []];
+                    PrintMenu();
+                    lastFilter = "/";
                 }
                 else
                 {
-                    PrintFilterScroll(); // 过滤变化：单行匹配结果
-                }
-            }
-            else
-            {
-                // 过滤结果未变（/mo→/mod 仍是同一批命令）：菜单块不重绘，
-                // 但输入行必须重画——曾在此直接跳过绘制，导致按下的字符不上屏、
-                // 屏幕停在旧输入（/m），直到过滤结果变化（如补一个空格）才一次性刷新
-                RedrawInput();
-            }
-            lastFilter = mentionActive ? mentionPrefix : NormalizeCommandFilter(buf.Text);
-        }
-
-        void OpenMenu(bool picker)
-        {
-            if (menuOpen)
-                return;
-            menuOpen = true;
-            modePicker = picker;
-            menuIndex = -1;
-            // 打开即按目标高度一次性腾出空间（Claude Code 式稳定面板）：
-            // 命令菜单按满高预留（过滤从全量开始），之后高度只在空态边界变
-            if (ansiOk)
-            {
-                var initial = picker ? (modes?.Count ?? 0) : Commands.Length;
-                ResizeMenuSpace(BlockRows(initial));
-            }
-            if (picker)
-            {
-                menuItems = [.. modes ?? []];
-                PrintMenu();
-                lastFilter = "/";
-            }
-            else
-            {
-                RefreshMenu();
-            }
-        }
-
-        void CloseMenu()
-        {
-            menuOpen = false;
-            menuItems.Clear();
-            menuIndex = -1;
-            modePicker = false; // 必须重置，否则后续 / 命令菜单永远打不开
-            if (ansiOk)
-            {
-                EraseMenuAnsi(menuRows);
-            }
-            menuListShown = false;
-        }
-
-        void MoveSelection(int newIndex)
-        {
-            if (menuItems.Count == 0)
-                return;
-            var oldIndex = menuIndex;
-            menuIndex = newIndex;
-            if (ansiOk)
-                MoveSelectionAnsi(oldIndex, newIndex);
-            else
-                MoveSelectionScroll(newIndex);
-        }
-
-        void OnTextChanged()
-        {
-            if (menuOpen && !modePicker && !SlashLike(buf.Text))
-            {
-                // 输入不再以斜杠开头（如退格删掉 /）：关闭并擦除菜单
-                CloseMenu();
-                RedrawInput();
-                return;
-            }
-            if (menuOpen && !modePicker)
-            {
-                var pat = NormalizeCommandFilter(buf.Text);
-                if (pat != lastFilter)
                     RefreshMenu();
-                else
-                    RedrawInput();
-            }
-            else
-            {
-                RedrawInput();
-            }
-        }
-
-        // —— 主输入循环 ——
-        var pending = new Queue<ConsoleKeyInfo>(); // 暂存键队列（标记探测误吞时放回、CRLF 携带键等）
-        var keySw = new System.Diagnostics.Stopwatch();
-        var pasteStream = false; // 最近一次 ReadKey 等待 < 阈值 → 键已缓冲（无括号粘贴终端的回退启发式）
-        var pasteActive = false; // 括号粘贴中（终端显式标记了粘贴边界）：Enter/Tab 都是内容
-        var lastPasteWasCR = false; // 粘贴中上一个换行来自 \r（CRLF 的 \n 折叠用）
-        var pasteEndedWithNewline = false; // 粘贴刚结束时缓冲区末尾有 \n（避免 Enter 重复插入）
-        var needsRedraw = false; // 挂起的重绘：粘贴流中逐键整行重画会卡顿，缓冲排空后一次画
-        while (true)
-        {
-            // 粘贴流排空：把挂起的重绘补上（仍键入中则继续攒）
-            if (needsRedraw && !Console.KeyAvailable && !pasteActive)
-            {
-                needsRedraw = false;
-                OnTextChanged();
-            }
-            ConsoleKeyInfo key;
-            if (pending.Count > 0)
-            {
-                key = pending.Dequeue(); // 暂存键可能来自粘贴流，保持 pasteStream
-            }
-            else
-            {
-                keySw.Restart();
-                key = Console.ReadKey(intercept: true);
-                keySw.Stop();
-                // 键几乎立即返回（<30ms）说明是缓冲中的粘贴流；手动输入的键间隔通常更慢
-                pasteStream = keySw.ElapsedMilliseconds < 30;
+                }
             }
 
-            // 括号粘贴标记 ESC[200~/ESC[201~：使能 ESC[?2004h 的终端在粘贴内容外注入边界，
-            // 换行判定从计时启发式变成确定性标记（分批注入时 \n 曾被误判为真人按 Enter，
-            // 半截草稿被提交）。非标记（用户单按 ESC）时把已消费键放回队列，走正常 ESC 处理
-            if (key.Key == ConsoleKey.Escape)
+            void CloseMenu()
             {
-                var detector = new PasteMarkerDetector();
-                detector.Feed('\x1b');
-                var consumed = new List<ConsoleKeyInfo>();
-                var waited = 0;
-                while (detector.InProgress)
+                menuOpen = false;
+                menuItems.Clear();
+                menuIndex = -1;
+                modePicker = false; // 必须重置，否则后续 / 命令菜单永远打不开
+                if (ansiOk)
                 {
-                    if (!Console.KeyAvailable)
+                    EraseMenuAnsi(menuRows);
+                }
+                menuListShown = false;
+            }
+
+            void MoveSelection(int newIndex)
+            {
+                if (menuItems.Count == 0)
+                    return;
+                var oldIndex = menuIndex;
+                menuIndex = newIndex;
+                if (ansiOk)
+                    MoveSelectionAnsi(oldIndex, newIndex);
+                else
+                    MoveSelectionScroll(newIndex);
+            }
+
+            void OnTextChanged()
+            {
+                if (menuOpen && !modePicker && !SlashLike(buf.Text))
+                {
+                    // 输入不再以斜杠开头（如退格删掉 /）：关闭并擦除菜单
+                    CloseMenu();
+                    RedrawInput();
+                    return;
+                }
+                if (menuOpen && !modePicker)
+                {
+                    var pat = NormalizeCommandFilter(buf.Text);
+                    if (pat != lastFilter)
+                        RefreshMenu();
+                    else
+                        RedrawInput();
+                }
+                else
+                {
+                    RedrawInput();
+                }
+            }
+
+            // —— 主输入循环 ——
+            var pending = new Queue<ConsoleKeyInfo>(); // 暂存键队列（标记探测误吞时放回、CRLF 携带键等）
+            var keySw = new System.Diagnostics.Stopwatch();
+            var pasteStream = false; // 最近一次 ReadKey 等待 < 阈值 → 键已缓冲（无括号粘贴终端的回退启发式）
+            var pasteActive = false; // 括号粘贴中（终端显式标记了粘贴边界）：Enter/Tab 都是内容
+            var lastPasteWasCR = false; // 粘贴中上一个换行来自 \r（CRLF 的 \n 折叠用）
+            var pasteEndedWithNewline = false; // 粘贴刚结束时缓冲区末尾有 \n（避免 Enter 重复插入）
+            var needsRedraw = false; // 挂起的重绘：粘贴流中逐键整行重画会卡顿，缓冲排空后一次画
+            while (true)
+            {
+                // 粘贴流排空：把挂起的重绘补上（仍键入中则继续攒）
+                if (needsRedraw && !Console.KeyAvailable && !pasteActive)
+                {
+                    needsRedraw = false;
+                    OnTextChanged();
+                }
+                ConsoleKeyInfo key;
+                if (pending.Count > 0)
+                {
+                    key = pending.Dequeue(); // 暂存键可能来自粘贴流，保持 pasteStream
+                }
+                else
+                {
+                    keySw.Restart();
+                    key = Console.ReadKey(intercept: true);
+                    keySw.Stop();
+                    // 键几乎立即返回（<30ms）说明是缓冲中的粘贴流；手动输入的键间隔通常更慢
+                    pasteStream = keySw.ElapsedMilliseconds < 30;
+                }
+
+                // 括号粘贴标记 ESC[200~/ESC[201~：使能 ESC[?2004h 的终端在粘贴内容外注入边界，
+                // 换行判定从计时启发式变成确定性标记（分批注入时 \n 曾被误判为真人按 Enter，
+                // 半截草稿被提交）。非标记（用户单按 ESC）时把已消费键放回队列，走正常 ESC 处理
+                if (key.Key == ConsoleKey.Escape)
+                {
+                    var detector = new PasteMarkerDetector();
+                    detector.Feed('\x1b');
+                    var consumed = new List<ConsoleKeyInfo>();
+                    var waited = 0;
+                    while (detector.InProgress)
                     {
-                        if (waited >= 10)
-                            break; // 单按 ESC：等了 10ms 无后续，不是标记
-                        System.Threading.Thread.Sleep(2);
-                        waited += 2;
+                        if (!Console.KeyAvailable)
+                        {
+                            if (waited >= 10)
+                                break; // 单按 ESC：等了 10ms 无后续，不是标记
+                            System.Threading.Thread.Sleep(2);
+                            waited += 2;
+                            continue;
+                        }
+                        var mk = Console.ReadKey(intercept: true);
+                        consumed.Add(mk);
+                        detector.Feed(mk.KeyChar);
+                    }
+                    if (detector.Result == PasteMarkerResult.Start)
+                    {
+                        pasteActive = true;
+                        lastPasteWasCR = false;
                         continue;
                     }
-                    var mk = Console.ReadKey(intercept: true);
-                    consumed.Add(mk);
-                    detector.Feed(mk.KeyChar);
-                }
-                if (detector.Result == PasteMarkerResult.Start)
-                {
-                    pasteActive = true;
-                    lastPasteWasCR = false;
-                    continue;
-                }
-                if (detector.Result == PasteMarkerResult.End)
-                {
-                    pasteActive = false;
-                    pasteEndedWithNewline = buf.Text.Length > 0 && buf.Text[^1] == '\n';
-                    if (needsRedraw)
+                    if (detector.Result == PasteMarkerResult.End)
                     {
-                        needsRedraw = false;
-                        OnTextChanged();
-                    }
-                    continue;
-                }
-                // 不是标记：已消费键按到达顺序放回（先到先出），ESC 本身继续正常处理
-                foreach (var ck in consumed)
-                    pending.Enqueue(ck);
-            }
-            if (key.Key != ConsoleKey.Enter)
-            {
-                lastPasteWasCR = false; // 非换行键到达：下一个 \n 不再是 CRLF 的尾半
-                pasteEndedWithNewline = false;
-            }
-
-            // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
-            if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
-                CloseMenu();
-
-            switch (key.Key)
-            {
-                // Shift+Enter：插入换行（手动多行输入）。必须排在无修饰符的 Enter 分支之前；
-                // Alt+Enter 不用——conhost 里它是全屏切换，会误导
-                case ConsoleKey.Enter when (key.Modifiers & ConsoleModifiers.Shift) != 0:
-                    searching = false;
-                    buf.Insert((char)10); // Shift+Enter 插入换行
-                    if (pasteActive)
-                        lastPasteWasCR = false; // 明确换行：中断 CRLF 折叠链
-                    break;
-                case ConsoleKey.Enter:
-                    searching = false; // 搜索结束：提交当前命中的历史条目
-                    if (pasteActive)
-                    {
-                        // 括号粘贴中的换行一律是内容：不提交、不选菜单。
-                        // CRLF 成对到达：\r 插入，紧跟的 \n 折叠掉；LF-only 各自插入（空行不塌）
-                        if (TryConsumePasteEnter(ref lastPasteWasCR, key.KeyChar))
-                            break;
-                        buf.Insert('\n');
-                        if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
-                            needsRedraw = true;
-                        else
-                            OnTextChanged();
-                        break;
-                    }
-                    // 粘贴刚结束时缓冲区末尾已有 \n：Enter 不再重复插入（避免内容尾换行被翻倍），
-                    // 但仍应提交当前输入——break 会导致需要按两次 Enter，体验错误
-                    if (pasteEndedWithNewline)
-                        pasteEndedWithNewline = false;
-                    if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
-                    {
-                        var sel = menuItems[menuIndex].Name;
-                        // @ 文件菜单：Enter 与 → / 数字键同义，都是**插入**。
-                        // 沿用命令菜单的"提交"会把裸路径当成整条提示发出去，
-                        // 用户敲的"看下这个文件"被整段丢掉。
-                        if (PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert)
+                        pasteActive = false;
+                        pasteEndedWithNewline = buf.Text.Length > 0 && buf.Text[^1] == '\n';
+                        if (needsRedraw)
                         {
-                            buf.Replace(ApplyMention(buf.Text, mention.Item1, sel));
+                            needsRedraw = false;
+                            OnTextChanged();
+                        }
+                        continue;
+                    }
+                    // 不是标记：已消费键按到达顺序放回（先到先出），ESC 本身继续正常处理
+                    foreach (var ck in consumed)
+                        pending.Enqueue(ck);
+                }
+                if (key.Key != ConsoleKey.Enter)
+                {
+                    lastPasteWasCR = false; // 非换行键到达：下一个 \n 不再是 CRLF 的尾半
+                    pasteEndedWithNewline = false;
+                }
+
+                // 命令菜单：输入不再以斜杠开头 → 关闭；模式选择器不受输入影响
+                if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
+                    CloseMenu();
+
+                switch (key.Key)
+                {
+                    // Ctrl+C：先清当前行，再按才退出（见 CtrlCBehavior）。
+                    // 必须在 switch 的最前面：它一旦落到默认分支，就会被当成普通字符插进输入框。
+                    case ConsoleKey.C when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        if (CtrlCBehavior(buf.Text) == CtrlCOutcome.ClearInput)
+                        {
+                            buf.Replace(string.Empty);
                             draft = null;
+                            searchQuery.Clear();
+                            searching = false;
                             CloseMenu();
                             RedrawInput();
                             break;
                         }
-                        CloseMenu();
-                        Console.WriteLine();
-                        var submit = modePicker ? $"/mode {sel}" : sel;
-                        Remember(submit);
-                        return submit;
-                    }
-                    if (menuOpen)
-                    {
-                        // 菜单打开但未选中任何项：关闭菜单，按原输入提交。
-                        // 必须优先于粘贴检测——否则快速输入时 Enter 会被误判为粘贴插入 \n（逻辑冲突）
-                        CloseMenu();
-                        Console.WriteLine();
-                        var raw = buf.Text;
-                        Remember(raw);
-                        return raw;
-                    }
-                    // 粘贴多行内容：键快速连续到达（粘贴流）时，换行是内容的一部分，插入而非提交。
-                    // Windows 终端粘贴是分批注入，首个 \r 到达时后续字符可能尚未进入缓冲区，
-                    // 仅靠 KeyAvailable 不可靠，需结合 ReadKey 等待时间（<30ms=粘贴流）判定。
-                    if (pasteStream)
-                    {
-                        // 与括号粘贴分支一致：CRLF 的 \r 后紧跟的 \n 应被折叠而非插入
-                        if (TryConsumePasteEnter(ref lastPasteWasCR, key.KeyChar))
-                            break;
-                        buf.Insert('\n');
-                        lastPasteWasCR = key.KeyChar == '\r';
-                        // 仅当本次是 \r（CRLF 首段）时才等待并折叠紧随的 \n；
-                        // 纯 LF 粘贴不折叠下一行的 Enter，避免多行粘贴丢换行
-                        if (lastPasteWasCR)
-                        {
-                            if (!Console.KeyAvailable)
-                                System.Threading.Thread.Sleep(5);
-                            if (Console.KeyAvailable)
-                            {
-                                var next = Console.ReadKey(intercept: true);
-                                pending.Enqueue(next);
-                            }
-                        }
-                        OnTextChanged();
+                        return null; // 输入已空：退出（EOF）
+                                     // Shift+Enter：插入换行（手动多行输入）。必须排在无修饰符的 Enter 分支之前；
+                                     // Alt+Enter 不用——conhost 里它是全屏切换，会误导
+                    case ConsoleKey.Enter when (key.Modifiers & ConsoleModifiers.Shift) != 0:
+                        searching = false;
+                        buf.Insert((char)10); // Shift+Enter 插入换行
+                        if (pasteActive)
+                            lastPasteWasCR = false; // 明确换行：中断 CRLF 折叠链
                         break;
-                    }
-                    if (menuOpen)
-                        CloseMenu(); // 未选择任何项：关闭菜单，按原输入提交
-                    Console.WriteLine();
-                    var line = buf.Text;
-                    Remember(line);
-                    return line;
-
-                case ConsoleKey.Backspace when pasteActive:
-                case ConsoleKey.Delete when pasteActive:
-                    break; // 粘贴流中的控制键是内容的一部分（罕见），不当作编辑命令误删已插入文本
-
-                case ConsoleKey.Backspace:
-                    if (searching)
-                    {
-                        // 搜索模式退格：删 query 末字符并重新跳到最新命中
-                        if (searchQuery.Length > 0)
+                    case ConsoleKey.Enter:
+                        searching = false; // 搜索结束：提交当前命中的历史条目
+                        if (pasteActive)
                         {
-                            searchQuery.Remove(searchQuery.Length - 1, 1);
-                            searchFrom = FindHistoryMatch(session, searchQuery.ToString(), session.Count - 1);
-                            if (searchFrom >= 0)
-                            {
-                                SetBuf(session, buf, searchFrom);
-                                inputExpanded = false;
-                            }
-                            RedrawInput();
-                        }
-                        break;
-                    }
-                    if (menuOpen && modePicker)
-                        CloseMenu();
-                    if ((key.Modifiers & ConsoleModifiers.Control) != 0)
-                    {
-                        if (buf.DeleteWordBackward()) // Ctrl+Backspace：删前一个单词
-                            OnTextChanged();
-                        break;
-                    }
-                    if (buf.Backspace())
-                        OnTextChanged();
-                    break;
-
-                case ConsoleKey.LeftArrow:
-                    if (!menuOpen)
-                    {
-                        if ((key.Modifiers & ConsoleModifiers.Control) != 0)
-                            buf.MoveWordLeft(); // Ctrl+←：按单词移动
-                        else
-                            buf.MoveLeft();
-                        RedrawInput();
-                    }
-                    break;
-                case ConsoleKey.RightArrow:
-                    if (menuOpen && !modePicker && menuItems.Count > 0 && (key.Modifiers & ConsoleModifiers.Control) == 0)
-                    {
-                        // → ：把选中的命令填充到输入行（不执行），可继续编辑/加参数；
-                        // 无选中时默认填第一项（顶部项即隐式高亮）。Tab 在多匹配时是循环换选，
-                        // → 是「就要这个」——补全后关菜单，回车执行或继续输入
-                        // @ 引用只替换 @token 那一段，整行其余内容（"看这个 … 谢谢"）必须留下。
-                        // 与 Enter / 数字键走同一个 PickAction 判定——三处必须一致，
-                        // 少一处就会有一条路径把裸路径当成整条提示提交出去。
-                        var picked = menuItems[menuIndex >= 0 ? menuIndex : 0].Name;
-                        buf.Replace(PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert
-                            ? ApplyMention(buf.Text, mention.Item1, picked)
-                            : picked);
-                        draft = null;
-                        CloseMenu();
-                        RedrawInput();
-                    }
-                    else if (!menuOpen)
-                    {
-                        if ((key.Modifiers & ConsoleModifiers.Control) != 0)
-                            buf.MoveWordRight(); // Ctrl+→：按单词移动
-                        else
-                            buf.MoveRight();
-                        RedrawInput();
-                    }
-                    break;
-                case ConsoleKey.Home:
-                    if (!menuOpen)
-                    {
-                        buf.LineHome(); // 多行输入：Home 到当前行行首
-                        RedrawInput();
-                    }
-                    break;
-
-                case ConsoleKey.End:
-                    if (!menuOpen)
-                    {
-                        buf.LineEnd();
-                        RedrawInput();
-                    }
-                    break;
-
-                case ConsoleKey.Delete:
-                    // 与 Backspace 一致：命令菜单打开时也应删字符并刷新过滤（曾因 !menuOpen 守卫被完全忽略）
-                    if (menuOpen && modePicker)
-                        CloseMenu();
-                    if ((key.Modifiers & ConsoleModifiers.Control) != 0)
-                    {
-                        if (buf.DeleteWordForward()) // Ctrl+Delete：删光标处一个单词
-                            OnTextChanged();
-                        break;
-                    }
-                    if (buf.Delete())
-                        OnTextChanged();
-                    break;
-                case ConsoleKey.UpArrow:
-                    searching = false; // 方向键退出搜索，回到普通历史浏览
-                    if (menuOpen && menuItems.Count > 0)
-                    {
-                        MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
-                    }
-                    else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
-                    {
-                        // 多行输入且未在浏览历史：↑ 只做行内上移（已在首行行首则不移动）。
-                        // 正在浏览历史时（idx < session.Count）必须继续回溯历史，
-                        // 即使历史条目是多行文本——否则多行条目会把 ↑ 劫持成光标移动（回归）
-                        if (buf.MoveLineUp())
-                            RedrawInput();
-                    }
-                    else
-                    {
-                        if (menuOpen)
-                            break; // 0 匹配的菜单：保持空态提示，不关闭也不浏览历史（Esc 或继续输入关闭）
-                        if (idx > 0)
-                        {
-                            if (draft is null)
-                                draft = buf.Text; // 记住浏览历史前的草稿
-                            idx--;
-                            SetBuf(session, buf, idx);
-                            inputExpanded = false; // 新载入的内容重新按行数决定折叠
-                            RedrawInput();
-                        }
-                    }
-                    break;
-
-                case ConsoleKey.DownArrow:
-                    searching = false; // 方向键退出搜索，回到普通历史浏览
-                    if (menuOpen && menuItems.Count > 0)
-                    {
-                        MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
-                    }
-                    else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
-                    {
-                        // 多行输入且未在浏览历史：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入）。
-                        // 正在浏览历史时（idx < session.Count）↓ 一律前进历史，即使条目是多行文本
-                        if (!inputExpanded && SkipDirs.CountLines(buf.Text) > 3)
-                            inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
-                        else
-                            buf.MoveLineDown();
-                        RedrawInput();
-                    }
-                    else
-                    {
-                        if (menuOpen)
-                            break; // 0 匹配的菜单：保持空态提示，不关闭也不浏览历史（Esc 或继续输入关闭）
-                        if (idx < session.Count)
-                        {
-                            idx++;
-                            if (idx == session.Count && draft is not null)
-                            {
-                                // 回到草稿（浏览历史前的原始输入）
-                                buf.Replace(draft);
-                                draft = null;
-                                inputExpanded = false; // 回到草稿同样重新按行数决定折叠
-                            }
+                            // 括号粘贴中的换行一律是内容：不提交、不选菜单。
+                            // CRLF 成对到达：\r 插入，紧跟的 \n 折叠掉；LF-only 各自插入（空行不塌）
+                            if (TryConsumePasteEnter(ref lastPasteWasCR, key.KeyChar))
+                                break;
+                            buf.Insert('\n');
+                            if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
+                                needsRedraw = true;
                             else
-                            {
-                                SetBuf(session, buf, idx);
-                                inputExpanded = false;
-                            }
-                            RedrawInput();
+                                OnTextChanged();
+                            break;
                         }
-                    }
-                    break;
-
-                case ConsoleKey.Tab when (key.Modifiers & ConsoleModifiers.Shift) != 0:
-                    // Shift+Tab：菜单内（多项时）反向循环选择；菜单外或菜单仅 1 项时切换文件访问权限模式
-                    // （strict → whitelist → full → strict，由 /access next 处理并显示）。
-                    // 仅 1 项时循环无意义，切换权限才是用户意图，避免按键静默失效
-                    if (menuOpen && menuItems.Count > 1)
-                    {
-                        MoveSelection(menuIndex < 0 ? 0 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
-                    }
-                    else
-                    {
-                        CloseMenu();
-                        Console.WriteLine();
-                        Remember("/access next");
-                        return "/access next"; // Shift+Tab：切换文件访问权限模式
-                    }
-                    break;
-
-                case ConsoleKey.Tab when pasteActive:
-                    buf.Insert('\t'); // 粘贴的 Tab 是内容（缩进代码），不触发补全/模式切换
-                    lastPasteWasCR = false;
-                    needsRedraw = true;
-                    break;
-
-                case ConsoleKey.Tab:
-                    if (menuOpen && menuItems.Count == 1)
-                    {
-                        // 唯一匹配：Tab 补全为完整命令（/think + Tab → /thinking）
-                        // @ 引用只替换 @token 那一段，与 Enter / → / 数字键同一判定
-                        var only = menuItems[0].Name;
-                        buf.Replace(PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert
-                            ? ApplyMention(buf.Text, mention.Item1, only)
-                            : only);
-                        draft = null;
-                        CloseMenu();
-                        RedrawInput();
-                    }
-                    else if (!menuOpen && SlashLike(buf.Text))
-                    {
-                        OpenMenu(false);
-                    }
-                    else if (!menuOpen && ParseMention(buf.Text, buf.Cursor).Active)
-                    {
-                        OpenMenu(false); // @ 引用：Tab 打开文件菜单
-                    }
-                    else if (menuOpen && menuItems.Count > 1)
-                    {
-                        // 多匹配：先把输入补到候选公共前缀（bash 式），补不动时才循环高亮
-                        var typed = NormalizeCommandFilter(buf.Text);
-                        var filled = TabCompletion(menuItems.Select(m => m.Name).ToList(), typed);
-                        if (filled is not null && filled.Length > typed.Length)
+                        // 粘贴刚结束时缓冲区末尾已有 \n：Enter 不再重复插入（避免内容尾换行被翻倍），
+                        // 但仍应提交当前输入——break 会导致需要按两次 Enter，体验错误
+                        if (pasteEndedWithNewline)
+                            pasteEndedWithNewline = false;
+                        if (menuOpen && menuItems.Count > 0 && menuIndex >= 0)
                         {
-                            buf.Replace(filled);
-                            draft = null;
-                            menuIndex = -1;
-                            RefreshMenu(); // 候选集随之收窄，重绘菜单
-                        }
-                        else
-                        {
-                            MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
-                        }
-                    }
-                    else if (!menuOpen)
-                    {
-                        // 菜单未开且输入不以 / 开头：Tab 切换下一个工作模式（/mode next）。
-                        // 以 / 开头时命中上面的 OpenMenu 分支打开命令菜单，两者不冲突
-                        Console.WriteLine();
-                        Remember("/mode next");
-                        return "/mode next"; // Tab：切换工作模式
-                    }
-                    break;
-
-                case ConsoleKey.D1 or ConsoleKey.D2 or ConsoleKey.D3 or ConsoleKey.D4 or ConsoleKey.D5
-                    or ConsoleKey.D6 or ConsoleKey.D7 or ConsoleKey.D8 or ConsoleKey.D9:
-                    // 命令菜单：数字键直接执行（1-9）；模式菜单不拦截数字（关闭并按普通输入，避免误触发切换）。
-                    // 输入已完整匹配某命令（如 /model 或全角 ／model）时数字视为参数输入，不再劫持
-                    //（要执行直接按 Enter）
-                    if (menuOpen && !modePicker && menuItems.Count > 0
-                        && !menuItems.Any(m => m.Name.Equals(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase)))
-                    {
-                        var n = key.Key - ConsoleKey.D1 + 1;
-                        // 只对可见窗口内的项生效：菜单滚动后窗口外（如第 9 项）不可见，不应被数字键触发
-                        var selIdx = DigitKeySelection(n, menuOffset, menuShown, menuItems.Count);
-                        if (selIdx >= 0)
-                        {
-                            var sel = menuItems[selIdx].Name;
-                            // @ 文件菜单：数字键是**插入**，不是提交。
-                            // 沿用命令菜单的"直接 return"会把裸路径当成整条提示发出去——
-                            // 用户已经敲的"看下这个文件"被整段丢掉，换来一句莫名其妙的路径。
+                            var sel = menuItems[menuIndex].Name;
+                            // @ 文件菜单：Enter 与 → / 数字键同义，都是**插入**。
+                            // 沿用命令菜单的"提交"会把裸路径当成整条提示发出去，
+                            // 用户敲的"看下这个文件"被整段丢掉。
                             if (PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert)
                             {
                                 buf.Replace(ApplyMention(buf.Text, mention.Item1, sel));
@@ -1671,157 +1426,470 @@ public static class InputLine
                             }
                             CloseMenu();
                             Console.WriteLine();
-                            Remember(sel);
-                            return sel;
+                            var submit = modePicker ? $"/mode {sel}" : sel;
+                            Remember(submit);
+                            return submit;
                         }
-                        break;
-                    }
-                    if (menuOpen && modePicker)
-                        CloseMenu(); // 模式菜单：数字按普通输入处理
-                    if (key.KeyChar != '\0' && !char.IsControl(key.KeyChar))
-                    {
-                        buf.Insert(key.KeyChar);
-                        draft = null;
-                        RedrawInput();
-                    }
-                    break;
-
-                case ConsoleKey.Escape:
-                    if (searching)
-                    {
-                        // 退出搜索：保留当前命中的文本，继续编辑
-                        searching = false;
-                        RedrawInput();
-                        break;
-                    }
-                    if (menuOpen)
-                    {
-                        CloseMenu();
-                        if (!ansiOk)
+                        if (menuOpen)
                         {
-                            Console.WriteLine("  (menu closed)");
-                            Console.Write(InputText());
+                            // 菜单打开但未选中任何项：关闭菜单，按原输入提交。
+                            // 必须优先于粘贴检测——否则快速输入时 Enter 会被误判为粘贴插入 \n（逻辑冲突）
+                            CloseMenu();
+                            Console.WriteLine();
+                            var raw = buf.Text;
+                            Remember(raw);
+                            return raw;
                         }
-                    }
-                    else if (buf.Length > 0)
-                    {
-                        // ESC：清空当前输入
-                        buf.Clear();
-                        draft = null;
-                        inputExpanded = false; // 输入已清空：恢复自动折叠，之后粘贴长文本仍折叠
-                        RedrawInput();
-                    }
-                    else
-                    {
-                        // ESC（空输入）：撤回最后一条已发送的消息。
-                        // 二次确认防误触——连按 Esc 本会从"关菜单/清输入"一路滑到"撤回"（有副作用）
-                        var confirm = promptPlain + "(再按 Esc 撤回上一条消息，其他键继续)";
-                        if (ansiOk)
-                            Console.Write("\r\x1b[2K" + confirm);
-                        else
-                            Console.Write("\r" + confirm);
-                        var confirmKey = Console.ReadKey(intercept: true);
-                        if (confirmKey.Key != ConsoleKey.Escape)
+                        // 粘贴多行内容：键快速连续到达（粘贴流）时，换行是内容的一部分，插入而非提交。
+                        // Windows 终端粘贴是分批注入，首个 \r 到达时后续字符可能尚未进入缓冲区，
+                        // 仅靠 KeyAvailable 不可靠，需结合 ReadKey 等待时间（<30ms=粘贴流）判定。
+                        if (pasteStream)
                         {
-                            // 取消确认：恢复输入行，按键交给主循环继续处理
-                            pending.Enqueue(confirmKey);
-                            RedrawInput();
+                            // 与括号粘贴分支一致：CRLF 的 \r 后紧跟的 \n 应被折叠而非插入
+                            if (TryConsumePasteEnter(ref lastPasteWasCR, key.KeyChar))
+                                break;
+                            buf.Insert('\n');
+                            lastPasteWasCR = key.KeyChar == '\r';
+                            // 仅当本次是 \r（CRLF 首段）时才等待并折叠紧随的 \n；
+                            // 纯 LF 粘贴不折叠下一行的 Enter，避免多行粘贴丢换行
+                            if (lastPasteWasCR)
+                            {
+                                if (!Console.KeyAvailable)
+                                    System.Threading.Thread.Sleep(5);
+                                if (Console.KeyAvailable)
+                                {
+                                    var next = Console.ReadKey(intercept: true);
+                                    pending.Enqueue(next);
+                                }
+                            }
+                            OnTextChanged();
                             break;
                         }
-                        if (ansiOk)
-                            Console.Write("\r\x1b[2K");
+                        if (menuOpen)
+                            CloseMenu(); // 未选择任何项：关闭菜单，按原输入提交
                         Console.WriteLine();
-                        return RecallMarker;
-                    }
-                    break;
+                        var line = buf.Text;
+                        Remember(line);
+                        return line;
 
-                case ConsoleKey.M when IsShortcut(key) && modes is { Count: > 0 }:
-                    OpenMenu(true); // Alt+M / Ctrl+Shift+M：模式选择菜单
-                    break;
+                    case ConsoleKey.Backspace when pasteActive:
+                    case ConsoleKey.Delete when pasteActive:
+                        break; // 粘贴流中的控制键是内容的一部分（罕见），不当作编辑命令误删已插入文本
 
-                case ConsoleKey.U when IsShortcut(key) && !menuOpen:
-                    CloseMenu();
-                    Console.WriteLine();
-                    Remember("/undo");
-                    return "/undo"; // Alt+U / Ctrl+Shift+U：撤销最近一次修改（菜单打开时不触发，避免过滤输入时误触）
-
-                case ConsoleKey.D when IsShortcut(key) && !menuOpen:
-                    CloseMenu();
-                    Console.WriteLine();
-                    Remember("/diff");
-                    return "/diff"; // Alt+D / Ctrl+Shift+D：查看最近修改的 diff（菜单打开时不触发）
-
-                case ConsoleKey.N when IsShortcut(key) && !menuOpen:
-                    CloseMenu();
-                    Console.WriteLine();
-                    Remember("/clear");
-                    return "/clear"; // Alt+N / Ctrl+Shift+N：新建会话（清空历史）（菜单打开时不触发）
-
-                case ConsoleKey.R when (key.Modifiers & ConsoleModifiers.Control) != 0 && !menuOpen:
-                    // Ctrl+R：反向搜索历史（bash 式）。进入搜索；再按跳到更早的下一个命中
-                    if (!searching)
-                    {
-                        searching = true;
-                        searchQuery.Clear();
-                        searchFrom = -1;
-                        RedrawInput();
-                    }
-                    else
-                    {
-                        var next = FindHistoryMatch(session, searchQuery.ToString(), searchFrom - 1);
-                        if (next >= 0)
-                        {
-                            searchFrom = next;
-                            SetBuf(session, buf, next);
-                            inputExpanded = false;
-                            RedrawInput();
-                        }
-                    }
-                    break;
-
-                case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
-                    try { Console.Clear(); } catch { /* 忽略 */ }
-                    // 清屏后菜单内容已消失：RefreshMenu 在过滤未变时短路不重绘，
-                    // 必须用 PrintMenu 强制整体重绘（菜单 + 输入行）
-                    if (menuOpen)
-                        PrintMenu();
-                    else
-                        RedrawInput();
-                    break;
-
-                default:
-                    if (key.KeyChar != '\0' && key.KeyChar != '\u0003' && !char.IsControl(key.KeyChar))
-                    {
-                        // 搜索模式：可打印字符进 query 并跳到最新命中（bash 语义），不进输入缓冲
+                    case ConsoleKey.Backspace:
                         if (searching)
                         {
-                            searchQuery.Append(key.KeyChar);
-                            searchFrom = FindHistoryMatch(session, searchQuery.ToString(), session.Count - 1);
-                            if (searchFrom >= 0)
+                            // 搜索模式退格：删 query 末字符并重新跳到最新命中
+                            if (searchQuery.Length > 0)
                             {
-                                SetBuf(session, buf, searchFrom);
-                                inputExpanded = false;
+                                searchQuery.Remove(searchQuery.Length - 1, 1);
+                                searchFrom = FindHistoryMatch(session, searchQuery.ToString(), session.Count - 1);
+                                if (searchFrom >= 0)
+                                {
+                                    SetBuf(session, buf, searchFrom);
+                                    inputExpanded = false;
+                                }
+                                RedrawInput();
                             }
-                            RedrawInput();
                             break;
                         }
                         if (menuOpen && modePicker)
                             CloseMenu();
-                        buf.Insert(key.KeyChar);
-                        draft = null; // 输入使草稿失效
-                        lastPasteWasCR = false;
-                        pasteEndedWithNewline = false;
-                        // 粘贴流中不逐键整行重绘（大粘贴会卡顿/闪烁）：挂起，缓冲排空或粘贴结束时一次画
-                        if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
-                            needsRedraw = true;
-                        else
+                        if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                        {
+                            if (buf.DeleteWordBackward()) // Ctrl+Backspace：删前一个单词
+                                OnTextChanged();
+                            break;
+                        }
+                        if (buf.Backspace())
                             OnTextChanged();
-                        // 任何斜杠输入都弹菜单：无匹配块本身是打字状态的实时反馈（打错字可见），
-                        // 菜单常驻到 ESC/Enter 或输入脱离斜杠才关闭
-                        if (!modePicker && SlashLike(buf.Text) && !menuOpen)
+                        break;
+
+                    case ConsoleKey.LeftArrow:
+                        if (!menuOpen)
+                        {
+                            if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                                buf.MoveWordLeft(); // Ctrl+←：按单词移动
+                            else
+                                buf.MoveLeft();
+                            RedrawInput();
+                        }
+                        break;
+                    case ConsoleKey.RightArrow:
+                        if (menuOpen && !modePicker && menuItems.Count > 0 && (key.Modifiers & ConsoleModifiers.Control) == 0)
+                        {
+                            // → ：把选中的命令填充到输入行（不执行），可继续编辑/加参数；
+                            // 无选中时默认填第一项（顶部项即隐式高亮）。Tab 在多匹配时是循环换选，
+                            // → 是「就要这个」——补全后关菜单，回车执行或继续输入
+                            // @ 引用只替换 @token 那一段，整行其余内容（"看这个 … 谢谢"）必须留下。
+                            // 与 Enter / 数字键走同一个 PickAction 判定——三处必须一致，
+                            // 少一处就会有一条路径把裸路径当成整条提示提交出去。
+                            var picked = menuItems[menuIndex >= 0 ? menuIndex : 0].Name;
+                            buf.Replace(PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert
+                                ? ApplyMention(buf.Text, mention.Item1, picked)
+                                : picked);
+                            draft = null;
+                            CloseMenu();
+                            RedrawInput();
+                        }
+                        else if (!menuOpen)
+                        {
+                            if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                                buf.MoveWordRight(); // Ctrl+→：按单词移动
+                            else
+                                buf.MoveRight();
+                            RedrawInput();
+                        }
+                        break;
+                    case ConsoleKey.Home:
+                        if (!menuOpen)
+                        {
+                            buf.LineHome(); // 多行输入：Home 到当前行行首
+                            RedrawInput();
+                        }
+                        break;
+
+                    case ConsoleKey.End:
+                        if (!menuOpen)
+                        {
+                            buf.LineEnd();
+                            RedrawInput();
+                        }
+                        break;
+
+                    case ConsoleKey.Delete:
+                        // 与 Backspace 一致：命令菜单打开时也应删字符并刷新过滤（曾因 !menuOpen 守卫被完全忽略）
+                        if (menuOpen && modePicker)
+                            CloseMenu();
+                        if ((key.Modifiers & ConsoleModifiers.Control) != 0)
+                        {
+                            if (buf.DeleteWordForward()) // Ctrl+Delete：删光标处一个单词
+                                OnTextChanged();
+                            break;
+                        }
+                        if (buf.Delete())
+                            OnTextChanged();
+                        break;
+                    case ConsoleKey.UpArrow:
+                        searching = false; // 方向键退出搜索，回到普通历史浏览
+                        if (menuOpen && menuItems.Count > 0)
+                        {
+                            MoveSelection(menuIndex < 0 ? menuItems.Count - 1 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
+                        }
+                        else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
+                        {
+                            // 多行输入且未在浏览历史：↑ 只做行内上移（已在首行行首则不移动）。
+                            // 正在浏览历史时（idx < session.Count）必须继续回溯历史，
+                            // 即使历史条目是多行文本——否则多行条目会把 ↑ 劫持成光标移动（回归）
+                            if (buf.MoveLineUp())
+                                RedrawInput();
+                        }
+                        else
+                        {
+                            if (menuOpen)
+                                break; // 0 匹配的菜单：保持空态提示，不关闭也不浏览历史（Esc 或继续输入关闭）
+                            if (idx > 0)
+                            {
+                                if (draft is null)
+                                    draft = buf.Text; // 记住浏览历史前的草稿
+                                idx--;
+                                SetBuf(session, buf, idx);
+                                inputExpanded = false; // 新载入的内容重新按行数决定折叠
+                                RedrawInput();
+                            }
+                        }
+                        break;
+
+                    case ConsoleKey.DownArrow:
+                        searching = false; // 方向键退出搜索，回到普通历史浏览
+                        if (menuOpen && menuItems.Count > 0)
+                        {
+                            MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
+                        }
+                        else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
+                        {
+                            // 多行输入且未在浏览历史：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入）。
+                            // 正在浏览历史时（idx < session.Count）↓ 一律前进历史，即使条目是多行文本
+                            if (!inputExpanded && SkipDirs.CountLines(buf.Text) > 3)
+                                inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
+                            else
+                                buf.MoveLineDown();
+                            RedrawInput();
+                        }
+                        else
+                        {
+                            if (menuOpen)
+                                break; // 0 匹配的菜单：保持空态提示，不关闭也不浏览历史（Esc 或继续输入关闭）
+                            if (idx < session.Count)
+                            {
+                                idx++;
+                                if (idx == session.Count && draft is not null)
+                                {
+                                    // 回到草稿（浏览历史前的原始输入）
+                                    buf.Replace(draft);
+                                    draft = null;
+                                    inputExpanded = false; // 回到草稿同样重新按行数决定折叠
+                                }
+                                else
+                                {
+                                    SetBuf(session, buf, idx);
+                                    inputExpanded = false;
+                                }
+                                RedrawInput();
+                            }
+                        }
+                        break;
+
+                    case ConsoleKey.Tab when (key.Modifiers & ConsoleModifiers.Shift) != 0:
+                        // Shift+Tab：菜单内（多项时）反向循环选择；菜单外或菜单仅 1 项时切换文件访问权限模式
+                        // （strict → whitelist → full → strict，由 /access next 处理并显示）。
+                        // 仅 1 项时循环无意义，切换权限才是用户意图，避免按键静默失效
+                        if (menuOpen && menuItems.Count > 1)
+                        {
+                            MoveSelection(menuIndex < 0 ? 0 : (menuIndex - 1 + menuItems.Count) % menuItems.Count);
+                        }
+                        else
+                        {
+                            CloseMenu();
+                            Console.WriteLine();
+                            Remember("/access next");
+                            return "/access next"; // Shift+Tab：切换文件访问权限模式
+                        }
+                        break;
+
+                    case ConsoleKey.Tab when pasteActive:
+                        buf.Insert('\t'); // 粘贴的 Tab 是内容（缩进代码），不触发补全/模式切换
+                        lastPasteWasCR = false;
+                        needsRedraw = true;
+                        break;
+
+                    case ConsoleKey.Tab:
+                        if (menuOpen && menuItems.Count == 1)
+                        {
+                            // 唯一匹配：Tab 补全为完整命令（/think + Tab → /thinking）
+                            // @ 引用只替换 @token 那一段，与 Enter / → / 数字键同一判定
+                            var only = menuItems[0].Name;
+                            buf.Replace(PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert
+                                ? ApplyMention(buf.Text, mention.Item1, only)
+                                : only);
+                            draft = null;
+                            CloseMenu();
+                            RedrawInput();
+                        }
+                        else if (!menuOpen && SlashLike(buf.Text))
+                        {
                             OpenMenu(false);
-                    }
-                    break;
+                        }
+                        else if (!menuOpen && ParseMention(buf.Text, buf.Cursor).Active)
+                        {
+                            OpenMenu(false); // @ 引用：Tab 打开文件菜单
+                        }
+                        else if (menuOpen && menuItems.Count > 1)
+                        {
+                            // 多匹配：先把输入补到候选公共前缀（bash 式），补不动时才循环高亮
+                            var typed = NormalizeCommandFilter(buf.Text);
+                            var filled = TabCompletion(menuItems.Select(m => m.Name).ToList(), typed);
+                            if (filled is not null && filled.Length > typed.Length)
+                            {
+                                buf.Replace(filled);
+                                draft = null;
+                                menuIndex = -1;
+                                RefreshMenu(); // 候选集随之收窄，重绘菜单
+                            }
+                            else
+                            {
+                                MoveSelection(menuIndex < 0 ? 0 : (menuIndex + 1) % menuItems.Count);
+                            }
+                        }
+                        else if (!menuOpen)
+                        {
+                            // 菜单未开且输入不以 / 开头：Tab 切换下一个工作模式（/mode next）。
+                            // 以 / 开头时命中上面的 OpenMenu 分支打开命令菜单，两者不冲突
+                            Console.WriteLine();
+                            Remember("/mode next");
+                            return "/mode next"; // Tab：切换工作模式
+                        }
+                        break;
+
+                    case ConsoleKey.D1 or ConsoleKey.D2 or ConsoleKey.D3 or ConsoleKey.D4 or ConsoleKey.D5
+                        or ConsoleKey.D6 or ConsoleKey.D7 or ConsoleKey.D8 or ConsoleKey.D9:
+                        // 命令菜单：数字键直接执行（1-9）；模式菜单不拦截数字（关闭并按普通输入，避免误触发切换）。
+                        // 输入已完整匹配某命令（如 /model 或全角 ／model）时数字视为参数输入，不再劫持
+                        //（要执行直接按 Enter）
+                        if (menuOpen && !modePicker && menuItems.Count > 0
+                            && !menuItems.Any(m => m.Name.Equals(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase)))
+                        {
+                            var n = key.Key - ConsoleKey.D1 + 1;
+                            // 只对可见窗口内的项生效：菜单滚动后窗口外（如第 9 项）不可见，不应被数字键触发
+                            var selIdx = DigitKeySelection(n, menuOffset, menuShown, menuItems.Count);
+                            if (selIdx >= 0)
+                            {
+                                var sel = menuItems[selIdx].Name;
+                                // @ 文件菜单：数字键是**插入**，不是提交。
+                                // 沿用命令菜单的"直接 return"会把裸路径当成整条提示发出去——
+                                // 用户已经敲的"看下这个文件"被整段丢掉，换来一句莫名其妙的路径。
+                                if (PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert)
+                                {
+                                    buf.Replace(ApplyMention(buf.Text, mention.Item1, sel));
+                                    draft = null;
+                                    CloseMenu();
+                                    RedrawInput();
+                                    break;
+                                }
+                                CloseMenu();
+                                Console.WriteLine();
+                                Remember(sel);
+                                return sel;
+                            }
+                            break;
+                        }
+                        if (menuOpen && modePicker)
+                            CloseMenu(); // 模式菜单：数字按普通输入处理
+                        if (key.KeyChar != '\0' && !char.IsControl(key.KeyChar))
+                        {
+                            buf.Insert(key.KeyChar);
+                            draft = null;
+                            RedrawInput();
+                        }
+                        break;
+
+                    case ConsoleKey.Escape:
+                        if (searching)
+                        {
+                            // 退出搜索：保留当前命中的文本，继续编辑
+                            searching = false;
+                            RedrawInput();
+                            break;
+                        }
+                        if (menuOpen)
+                        {
+                            CloseMenu();
+                            if (!ansiOk)
+                            {
+                                Console.WriteLine("  (menu closed)");
+                                Console.Write(InputText());
+                            }
+                        }
+                        else if (buf.Length > 0)
+                        {
+                            // ESC：清空当前输入
+                            buf.Clear();
+                            draft = null;
+                            inputExpanded = false; // 输入已清空：恢复自动折叠，之后粘贴长文本仍折叠
+                            RedrawInput();
+                        }
+                        else
+                        {
+                            // ESC（空输入）：撤回最后一条已发送的消息。
+                            // 二次确认防误触——连按 Esc 本会从"关菜单/清输入"一路滑到"撤回"（有副作用）
+                            var confirm = promptPlain + "(再按 Esc 撤回上一条消息，其他键继续)";
+                            if (ansiOk)
+                                Console.Write("\r\x1b[2K" + confirm);
+                            else
+                                Console.Write("\r" + confirm);
+                            var confirmKey = Console.ReadKey(intercept: true);
+                            if (confirmKey.Key != ConsoleKey.Escape)
+                            {
+                                // 取消确认：恢复输入行，按键交给主循环继续处理
+                                pending.Enqueue(confirmKey);
+                                RedrawInput();
+                                break;
+                            }
+                            if (ansiOk)
+                                Console.Write("\r\x1b[2K");
+                            Console.WriteLine();
+                            return RecallMarker;
+                        }
+                        break;
+
+                    case ConsoleKey.M when IsShortcut(key) && modes is { Count: > 0 }:
+                        OpenMenu(true); // Alt+M / Ctrl+Shift+M：模式选择菜单
+                        break;
+
+                    case ConsoleKey.U when IsShortcut(key) && !menuOpen:
+                        CloseMenu();
+                        Console.WriteLine();
+                        Remember("/undo");
+                        return "/undo"; // Alt+U / Ctrl+Shift+U：撤销最近一次修改（菜单打开时不触发，避免过滤输入时误触）
+
+                    case ConsoleKey.D when IsShortcut(key) && !menuOpen:
+                        CloseMenu();
+                        Console.WriteLine();
+                        Remember("/diff");
+                        return "/diff"; // Alt+D / Ctrl+Shift+D：查看最近修改的 diff（菜单打开时不触发）
+
+                    case ConsoleKey.N when IsShortcut(key) && !menuOpen:
+                        CloseMenu();
+                        Console.WriteLine();
+                        Remember("/clear");
+                        return "/clear"; // Alt+N / Ctrl+Shift+N：新建会话（清空历史）（菜单打开时不触发）
+
+                    case ConsoleKey.R when (key.Modifiers & ConsoleModifiers.Control) != 0 && !menuOpen:
+                        // Ctrl+R：反向搜索历史（bash 式）。进入搜索；再按跳到更早的下一个命中
+                        if (!searching)
+                        {
+                            searching = true;
+                            searchQuery.Clear();
+                            searchFrom = -1;
+                            RedrawInput();
+                        }
+                        else
+                        {
+                            var next = FindHistoryMatch(session, searchQuery.ToString(), searchFrom - 1);
+                            if (next >= 0)
+                            {
+                                searchFrom = next;
+                                SetBuf(session, buf, next);
+                                inputExpanded = false;
+                                RedrawInput();
+                            }
+                        }
+                        break;
+
+                    case ConsoleKey.L when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        try { Console.Clear(); } catch { /* 忽略 */ }
+                        // 清屏后菜单内容已消失：RefreshMenu 在过滤未变时短路不重绘，
+                        // 必须用 PrintMenu 强制整体重绘（菜单 + 输入行）
+                        if (menuOpen)
+                            PrintMenu();
+                        else
+                            RedrawInput();
+                        break;
+
+                    default:
+                        if (key.KeyChar != '\0' && key.KeyChar != '\u0003' && !char.IsControl(key.KeyChar))
+                        {
+                            // 搜索模式：可打印字符进 query 并跳到最新命中（bash 语义），不进输入缓冲
+                            if (searching)
+                            {
+                                searchQuery.Append(key.KeyChar);
+                                searchFrom = FindHistoryMatch(session, searchQuery.ToString(), session.Count - 1);
+                                if (searchFrom >= 0)
+                                {
+                                    SetBuf(session, buf, searchFrom);
+                                    inputExpanded = false;
+                                }
+                                RedrawInput();
+                                break;
+                            }
+                            if (menuOpen && modePicker)
+                                CloseMenu();
+                            buf.Insert(key.KeyChar);
+                            draft = null; // 输入使草稿失效
+                            lastPasteWasCR = false;
+                            pasteEndedWithNewline = false;
+                            // 粘贴流中不逐键整行重绘（大粘贴会卡顿/闪烁）：挂起，缓冲排空或粘贴结束时一次画
+                            if (Console.KeyAvailable || pending.Count > 0 || pasteActive)
+                                needsRedraw = true;
+                            else
+                                OnTextChanged();
+                            // 任何斜杠输入都弹菜单：无匹配块本身是打字状态的实时反馈（打错字可见），
+                            // 菜单常驻到 ESC/Enter 或输入脱离斜杠才关闭
+                            if (!modePicker && SlashLike(buf.Text) && !menuOpen)
+                                OpenMenu(false);
+                        }
+                        break;
+                }
             }
         }
     }

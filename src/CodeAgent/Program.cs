@@ -437,7 +437,7 @@ internal static class Program
             var promptText = inlinePrompt ?? PromptFor(opts, agent);
             if (framed)
                 promptText = BuildInputFrameTop(promptText, InputModeHint(config.ThinkingEffort), cols);
-            var line = InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft, InputLine.DefaultPlaceholder, Environment.CurrentDirectory);
+            var line = await InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft, InputLine.DefaultPlaceholder, Environment.CurrentDirectory);
             inlinePrompt = null;
             // 下边框把刚输入的这一行封进框里。EOF 不画：没有用户输入就没有框可封。
             if (line is not null)
@@ -3593,6 +3593,7 @@ internal static class Program
               -v, --version        显示版本号
             快捷键:
               Esc                   撤回最近一轮对话（空输入时；连按逐轮回退）
+              Ctrl+C                清空当前输入行（再按一次退出）
               Tab                    切换下一个工作模式（/mode next）
               Shift+Tab              切换文件访问权限模式（strict{SafeColor.Glyphs.Arrow}whitelist{SafeColor.Glyphs.Arrow}full）
               Alt+M / Ctrl+Shift+M   模式切换菜单
