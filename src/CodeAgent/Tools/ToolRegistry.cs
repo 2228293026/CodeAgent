@@ -552,6 +552,7 @@ public sealed class ToolRegistry
         registry.Register(new NullableAnnotationReportTool());
         registry.Register(new GitignoreQualityReportTool());
         registry.Register(new TodoCommentReportTool());
+        registry.Register(new CsharpKeywordReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
