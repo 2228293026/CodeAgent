@@ -748,7 +748,11 @@ public sealed partial class Agent
                 _spinnerLastWidth = 0;
             }
             // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
-            Console.WriteLine($"{SafeColor.Glyphs.Ok} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}{SafeColor.Glyphs.Up} {tok} tokens");
+            // 必须按宽度收口：用时最长到「1 分 23 秒」、token 到「128.4K」，
+            // 拼起来 30 多列；窄终端上不收口就折行，把接下来的正文顶走。
+            var frozen = $"{SafeColor.Glyphs.Ok} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}{SafeColor.Glyphs.Up} {tok} tokens";
+            var frozenWidth = CodeAgent.Program.ConsoleColumnsForNotice();
+            Console.WriteLine(frozenWidth > 0 ? InputLine.FitToWidth(frozen, frozenWidth) : frozen);
         }
     }
 
@@ -1273,7 +1277,11 @@ public sealed partial class Agent
             {
                 using (SafeColor.Scope(SafeColor.Muted))
                 {
-                    Console.WriteLine($"  {SafeColor.Glyphs.Tool} {summary} …");
+                    // summary 含路径与参数，长度不受控；不按宽度收口时窄终端必折行，
+                    // 而这行正插在工具执行的流里，折行会把后面的输出顶走。
+                    var startLine = $"  {SafeColor.Glyphs.Tool} {summary} …";
+                    var startWidth = CodeAgent.Program.ConsoleColumnsForNotice();
+                    Console.WriteLine(startWidth > 0 ? InputLine.FitToWidth(startLine, startWidth) : startLine);
                 }
                 // edit_file / write_file 附带 diff 预览：执行前就看到改动内容（而非两段截断片段）
                 if (tc.Name is "edit_file" or "write_file")

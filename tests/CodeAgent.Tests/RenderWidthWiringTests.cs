@@ -136,4 +136,55 @@ public sealed class RenderWidthWiringTests
         // 并且这些调用点都应该是合规的（否则上面的测试会先失败）
         Assert.All(methods, m => Assert.False(string.IsNullOrWhiteSpace(m)));
     }
+
+    /// <summary>
+    /// 直接 <c>Console.Write(Line)($"…")</c> 的**裸插值输出**同样会超宽。
+    ///
+    /// 上面那个守卫只覆盖"带 width 参数的函数"，覆盖面的边界就在**哪些函数有那个参数**。
+    /// 手写的插值行根本没有那个函数，自然落网——而它们恰恰是最容易写长的一批
+    /// （含路径、含耗时、含 token 数）。这两行就是这么被漏掉的：
+    ///   · 定格统计行「✓ 用时 1 分 23 秒 · ↑ 128.4K tokens」30 多列
+    ///   · 工具开始行「⏵ Read(path=…) …」，path 长度不受控
+    /// </summary>
+    [Fact]
+    public void NoBareInterpolatedOutputInTheTurnStream()
+    {
+        // 回合内流式输出这几行必须走 FitToWidth / 宽度受限的格式化函数
+        var agent = File.ReadAllText(Path.Combine(SourceDir(), "Agent", "Agent.cs"));
+        var offenders = new List<string>();
+        var lines = agent.Replace("\r\n", "\n").Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var t = lines[i].Trim();
+            // 命中"把可能变长的内容直接插值进 Console.Write(Line)"的模式
+            if (!t.StartsWith("Console.WriteLine($\"", StringComparison.Ordinal)
+                && !t.StartsWith("Console.Write($\"", StringComparison.Ordinal))
+                continue;
+            // 只看含长内容的那些：含 summary / elapsed / tok / path 等
+            if (!t.Contains("summary", StringComparison.Ordinal)
+                && !t.Contains("FormatSessionTime", StringComparison.Ordinal)
+                && !t.Contains(" tokens", StringComparison.Ordinal))
+                continue;
+            var window = i + 1 < lines.Length ? t + " " + lines[i + 1].Trim() : t;
+            if (!window.Contains("FitToWidth") && !window.Contains("ConsoleColumnsForNotice") && !window.Contains("Columns()"))
+                offenders.Add($"Agent.cs:{i + 1} {t}");
+        }
+        Assert.True(offenders.Count == 0,
+            "这些回合内输出行既没走 FitToWidth 也没读终端列数（窄终端必折行）：" + string.Join(" | ", offenders));
+    }
+
+    [Fact]
+    public void FrozenSpinnerLineAndToolStartLine_AreWidthBounded()
+    {
+        // 单独点名：这两条曾经是全 TUI 仅有的没被任何守卫覆盖的裸插值输出
+        var agent = File.ReadAllText(Path.Combine(SourceDir(), "Agent", "Agent.cs"));
+        foreach (var needle in new[] { "var frozen =", "var startLine =" })
+        {
+            var at = agent.IndexOf(needle, StringComparison.Ordinal);
+            Assert.True(at > 0, $"找不到 {needle}");
+            var snippet = agent.Substring(at, Math.Min(420, agent.Length - at));
+            Assert.True(snippet.Contains("FitToWidth") || snippet.Contains("ConsoleColumnsForNotice"),
+                $"{needle} 仍未按宽度收口");
+        }
+    }
 }
