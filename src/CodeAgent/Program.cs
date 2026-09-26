@@ -987,6 +987,10 @@ internal static class Program
                 : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}",
             DateTime.Now.ToString("HH:mm"),
             ConsoleColumns()));
+        // 常驻提示行：权限模式随时可查，不必翻历史
+        var hint = BuildHintLine(agent.Context.Config.FileAccess, ConsoleColumns());
+        if (hint.Length > 0)
+            Console.WriteLine(hint);
     }
     /// <summary>
     /// 配置写回路径：-c 显式路径 {SafeColor.Glyphs.Arrow} 实际加载的来源文件（可能是 ~/.codeagent/config.json）{SafeColor.Glyphs.Arrow} 默认当前目录。
@@ -1069,6 +1073,34 @@ internal static class Program
     {
         output.Write($"{SafeColor.Glyphs.Warn} {question} [y/N] ");
         return string.Equals(input.ReadLine()?.Trim(), "y", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>常驻提示行：当前文件访问权限 + 切换方式。
+    ///
+    /// 此前权限模式**只在切换的那一刻**打一行。切完 20 轮之后，屏幕底部早就
+    /// 被输出冲走了，用户想确认「我现在是不是 full 模式」只能去翻历史，
+    /// 或者干脆不敢确认——而这恰恰是最需要随时可查的那个设置。
+    /// 现在它跟着状态栏一起常驻在每轮结束处。
+    ///
+    /// 与状态栏**分行**而不是拼进同一行：状态栏是数据，这一行是操作提示，
+    /// 混在一起时扫读时会在数字里找动词。
+    /// </summary>
+    internal static string BuildHintLine(string accessMode, int width)
+    {
+        if (string.IsNullOrEmpty(accessMode))
+            return string.Empty;
+        var desc = accessMode.ToLowerInvariant() switch
+        {
+            "strict" => "仅工作区可读写",
+            "whitelist" => "工作区读写 + 只读白名单",
+            "full" => "所有文件可读可写",
+            _ => accessMode,
+        };
+        var mark = SafeColor.Glyphs.HintMark;
+        var line = $"{mark}{mark} {accessMode}（{desc}）· Shift+Tab 切换";
+        if (width <= 0)
+            return line;
+        return InputLine.FitToWidth(line, width);
     }
 
     /// <summary>显示文件访问权限模式与说明（/access 与 Shift+Tab 用）——灰色 UI 层级。</summary>

@@ -192,6 +192,9 @@ public static class SafeColor
         /// 那套扣减就会与实际行长对不上，缩短路径时永远缩不到位。</summary>
         public static string SegmentSeparator => AsciiEnabled ? " | " : " · ";
 
+        /// <summary>常驻提示行的前导标记（连续两个，和状态栏的单个区分开）。</summary>
+        public static string HintMark => AsciiEnabled ? ">" : "⏵";
+
         /// <summary>底部状态栏的分隔符。**故意与顶部的 <c>·</c> 不同**：
         /// 同一屏里两行结构相似的文字若分隔符一致，人眼会把它们当成同一行读。</summary>
         public static string FooterSep => AsciiEnabled ? "|" : "|";
