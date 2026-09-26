@@ -469,6 +469,20 @@ public static class InputLine
         n <= 0 ? string.Empty : n == 1 ? " " : $"\x1b[{n}C";
 
     /// <summary>
+    /// 当前渲染里占位提示占的**显示列数**（未显示时为 0）。
+    ///
+    /// 光标必须停在占位提示**之前**：重绘把提示写在输入文本后面，不减掉这几列的话
+    /// 光标会落在提示末尾，看上去像「这句提示是用户自己打的」。
+    /// 刻意用 colored:false 量宽度——ANSI 转义序列不占列，按含转义的串量会算多。
+    /// </summary>
+    internal static int RenderedPlaceholderWidth(
+        string draft, bool searching, int historyIndex, int historyCount,
+        string? placeholder, int budget, int promptWidth) =>
+        ShouldShowPlaceholder(draft, searching, historyIndex, historyCount)
+            ? TextUtil.DisplayWidth(BuildPlaceholder(placeholder, budget, promptWidth, colored: false))
+            : 0;
+
+    /// <summary>
     /// ANSI 原地重绘要写出的**完整字节序列**（不含光标定位，那步要读 buf.Cursor）。
     ///
     /// 抽成纯函数是为了能断言「敲一个字符不新增行」这条不变量：用户报上来的现象
@@ -710,7 +724,10 @@ public static class InputLine
             else
             {
                 // 光标在最后一行：从行尾左移到 cursor（单行输入或光标在末行）
-                var offset = CursorLeftOffset(buf.Text, buf.Cursor);
+                // 占位提示写在行尾，光标要从它**前面**停住，否则看起来像用户输入的一部分
+                var placeholderCols = RenderedPlaceholderWidth(
+                    buf.Text, searching, idx, session.Count, placeholder, fitBudget, DisplayWidth(promptTail));
+                var offset = CursorLeftOffset(buf.Text, buf.Cursor) + placeholderCols;
                 if (offset > 0)
                     Console.Write($"\x1b[{offset}D");
             }
