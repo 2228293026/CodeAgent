@@ -708,6 +708,10 @@ public sealed partial class Agent
     /// 续行顶到行首会让预览块「逃出」它所属的 ✔/⚠ 工具状态行。</summary>
     internal const string ToolPreviewIndent = "      ";
 
+    /// <summary>预览块的可用显示宽度：终端列数扣掉缩进。
+    /// 宽度未知（0）时返回 0 = 不做宽度裁剪（既有约定：未知宽度不猜折行位置）。</summary>
+    internal static int ToolPreviewWidth(int columns) => columns - TextUtil.DisplayWidth(ToolPreviewIndent);
+
     /// <summary>
     /// 工具名按**下划线边界**缩短：`read_file` → `read_…`。
     /// 直接按显示宽度硬截会得到 `read_fi…` —— 那看起来像一个真实存在的工具名，
@@ -820,24 +824,56 @@ public sealed partial class Agent
 
     /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。
     /// 按**行**边界截断：切在半行上会让人以为那就是完整的一行。
-    /// 注明保留/总行数：5000 行编译输出只说"共 8,000 字符"完全无法判断丢了多少。</summary>
-    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars)
+    /// 注明保留/总行数：5000 行编译输出只说"共 8,000 字符"完全无法判断丢了多少。
+    /// width &gt; 0 时再加一层**显示宽度**约束：上限本来是 800 **字符**，
+    /// 而 800 个汉字占 1600 **列**——在 80 列终端上会把屏幕冲烂，
+    /// 逐行硬折还会把源码行拦腰折断、看起来像语法错误。
+    /// 因此这里按行裁而不是折行，并在末尾注明有几行被裁。</summary>
+    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars, int width = 0)
     {
         if (maxChars <= 0)
             return string.Empty;
-        if (text.Length <= maxChars)
-            return text;
-        var kept = text[..maxChars];
-        var lastBreak = kept.LastIndexOf('\n');
-        // 整段都是一行（无换行）时只能硬切，但仍要保证不劈开代理对
-        if (lastBreak > 0)
-            kept = kept[..lastBreak];
-        if (kept.Length > 0 && char.IsHighSurrogate(kept[^1]))
-            kept = kept[..^1];
-        kept = kept.TrimEnd();
+        // 总数必须**在截断前**记下来：截断后再数，两边都是同一个数，
+        // 提示会变成「共 8 行，已保留 8 行」——谎报什么都没丢。
         var totalLines = DiffUtil.CountLines(text);
-        var keptLines = DiffUtil.CountLines(kept);
-        return kept + $"…（共 {totalLines:N0} 行 / {text.Length:N0} 字符，已保留 {keptLines:N0} 行）";
+        var totalChars = text.Length;
+        var truncatedByChars = false;
+        if (text.Length > maxChars)
+        {
+            truncatedByChars = true;
+            var kept = text[..maxChars];
+            var lastBreak = kept.LastIndexOf('\n');
+            // 整段都是一行（无换行）时只能硬切，但仍要保证不劈开代理对
+            if (lastBreak > 0)
+                kept = kept[..lastBreak];
+            if (kept.Length > 0 && char.IsHighSurrogate(kept[^1]))
+                kept = kept[..^1];
+            text = kept.TrimEnd();
+        }
+        var widthCutLines = 0;
+        if (width > 0)
+        {
+            text = string.Join("\n", text.Split('\n').Select(line =>
+            {
+                if (TextUtil.DisplayWidth(line) <= width)
+                    return line;
+                widthCutLines++;
+                return InputLine.FitToWidth(line, width);
+            }));
+        }
+        if (!truncatedByChars && widthCutLines == 0)
+            return text;
+        var keptLines = DiffUtil.CountLines(text);
+        var widthNote = widthCutLines > 0 ? $"，{widthCutLines} 行按宽度裁剪" : "";
+        var note = $"…（共 {totalLines:N0} 行 / {totalChars:N0} 字符，已保留 {keptLines:N0} 行{widthNote}）";
+        if (width <= 0)
+            return text + note;
+        // 注记必须**独占一行**：拼在最后一行内容后面会把它顶出宽度，
+        // 而且注记是元信息、不是内容，混进内容里容易被当成输出的一部分。
+        // 放不下完整句就只留最关键的事实：保留了多少行 / 一共多少行。
+        if (TextUtil.DisplayWidth(note) > width)
+            note = InputLine.FitToWidth($"…(保留 {keptLines}/{totalLines} 行)", width);
+        return text + "\n" + note;
     }
 
     /// <summary>打印文件修改类工具的 diff 预览（红删绿增，头行灰/青）；失败静默。</summary>
@@ -998,7 +1034,7 @@ public sealed partial class Agent
                         SafeColor.Foreground(ConsoleColor.Yellow);
                         // 与成功路径同一预算：失败信息再长也不能整屏刷掉对话
                         Console.WriteLine(TextUtil.IndentBlock(
-                            FormatToolOutputPreview(BuildToolOutputPreview(output, ct)), ToolPreviewIndent));
+                            FormatToolOutputPreview(BuildToolOutputPreview(output, ct), width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
                         SafeColor.Reset();
                     }
                     SafeColor.Reset();
@@ -1013,7 +1049,7 @@ public sealed partial class Agent
                     {
                         SafeColor.Foreground(ConsoleColor.DarkGray);
                         var preview = BuildToolOutputPreview(output, ct);
-                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview), ToolPreviewIndent));
+                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
                         SafeColor.Reset();
                     }
                 }

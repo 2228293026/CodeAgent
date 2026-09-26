@@ -1221,6 +1221,9 @@ internal static class Program
 
     /// <summary>供其他类复用的终端列数（0 = 未知）。</summary>
     internal static int ConsoleColumnsForNotice() => ConsoleColumns();
+    /// <summary>当前终端列数（未知时为 0）。供非 Program 类型（如工具预览）复用，
+    /// 免得各处复制一份「怎么读终端宽度」，读到不一致的值。</summary>
+    internal static int Columns() => ConsoleColumns();
 
     /// <summary>正文末尾若是路径，就按**尾部保留**缩短那一段（其余文字原样保留）。
     /// 确认/告警行常以「已保存到 C:\Users\…\会话.json」「已导出: out/report.md」结尾——
