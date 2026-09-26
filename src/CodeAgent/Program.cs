@@ -476,7 +476,7 @@ internal static class Program
                 {
                     PrintResult(result, agent.StreamedLastRun, prefixNewline: true, agent.StreamedOnLineBoundary);
                 }
-                PrintTurnSummary(agent, sw.Elapsed, opts);
+                PrintTurnSummary(agent, sw.Elapsed, opts, FooterCtxText(agent.ContextTokens, EffectiveContextWindow()));
                 // 上下文占用监控：配置了 autoCompactPercent 达标自动压缩；否则 ≥90% 提示建议 /compact
                 {
                     var win = EffectiveContextWindow();
@@ -883,7 +883,84 @@ internal static class Program
     /// <summary>回合结束后打印摘要行（轮数/工具/时长/思考/tokens/缓存比例）——灰色弱化视觉噪音。
     /// token 显示本回合用量（与状态栏、spinner 定格行同口径）；会话累计见 /stats。
     /// 配置了单价时附本回合费用估算（≈$x.xx）。窄终端下按优先级丢段，保证仍是一行。</summary>
-    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts)
+    /// <summary>底部状态栏：<c>分支 | 目录 | 模型 | ↑in ↓out | ctx% | HH:MM</c>。
+    ///
+    /// 与顶部 <see cref="BuildStatusBar"/> 的分工：
+    /// 顶部是**本轮**视角（模式、模型、本轮 token、思考档），每轮开始前打一次；
+    /// 底部是**会话**视角（分支、目录、模型、累计 token、上下文占用、时钟），
+    /// 每轮结束时打一次，钉在屏幕最下面。
+    ///
+    /// 两者的分隔符故意不同：顶部用 <c>·</c>，底部用 <c>|</c>。
+    /// 同一屏里出现两行结构相似、分隔符一致的文字时，人眼会把它们当成同一行读。
+    ///
+    /// 降级顺序按「越靠右越先丢」：时钟 → 目录 → 模型。
+    /// **上下文占用永不丢弃**——窄屏下其余都可以不看，占用了多少上下文不能不知道。
+    /// </summary>
+    internal static string BuildFooterBar(
+        string? branch, string cwd, string model,
+        long inTokens, long outTokens, string ctxText, string clock, int width)
+    {
+        var sep = SafeColor.Glyphs.FooterSep;
+        var sepWidth = TextUtil.DisplayWidth(sep);
+        var showBranch = !string.IsNullOrEmpty(branch);
+        var showDir = true;
+        var showModel = true;
+        var showClock = !string.IsNullOrEmpty(clock);
+        string shownPath = string.Empty;
+
+        string Render()
+        {
+            var parts = new List<string>();
+            if (showBranch) parts.Add(branch!);
+            var path = shownPath.Length > 0 ? shownPath : cwd;
+            if (showDir && path.Length > 0) parts.Add(path);
+            if (showModel) parts.Add(model);
+            parts.Add($"{SafeColor.Glyphs.TokensIn}{TextUtil.CompactTokenCount(inTokens)} {SafeColor.Glyphs.TokensOut}{TextUtil.CompactTokenCount(outTokens)}");
+            parts.Add(ctxText);
+            if (showClock) parts.Add(clock);
+            return string.Join(sep, parts);
+        }
+
+        var text = Render();
+        if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+        // 逐段丢：时钟先走（每秒都在变，少一列无所谓），再走目录（终端标题里还有），
+        // 最后走模型。最后兜底才截目录——截成半截路径不如不显示。
+        var drops = new Action[] { () => showClock = false, () => showDir = false, () => showModel = false };
+        for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
+        {
+            drops[i]();
+            text = Render();
+        }
+        if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+        var budget = width - (TextUtil.DisplayWidth(ctxText) + 1 + sepWidth + TextUtil.DisplayWidth($"{SafeColor.Glyphs.TokensIn}{TextUtil.CompactTokenCount(inTokens)} {SafeColor.Glyphs.TokensOut}{TextUtil.CompactTokenCount(outTokens)}") + sepWidth);
+        if (budget >= MinStatusPathWidth)
+        {
+            shownPath = TruncatePathHead(cwd, budget);
+            return Render();
+        }
+        // 连路径的最低展示宽度都放不下：只剩 token 与 ctx。
+        // 仍然要**按宽度收口**——直接拼「↑37.9k ↓132 | ctx 3%」在 8 列终端上
+        // 会折成两行，把最该看到的 ctx 顶到第二行去。
+        var tokens = $"{SafeColor.Glyphs.TokensIn}{TextUtil.CompactTokenCount(inTokens)} {SafeColor.Glyphs.TokensOut}{TextUtil.CompactTokenCount(outTokens)}";
+        var both = $"{tokens}{sep}{ctxText}";
+        if (width <= 0 || TextUtil.DisplayWidth(both) <= width)
+            return both;
+        if (TextUtil.DisplayWidth(ctxText) <= width)
+            return ctxText;
+        // ctx 自己都放不下：至少别留空行，也别越界
+        return InputLine.FitToWidth(ctxText, width);
+    }
+
+    /// <summary>底部状态栏的上下文段：知道窗口大小时给**百分比**（"还能聊多久"），
+    /// 不知道时只给已用量。给了 `37.9k/1.0M (3%)` 这种三段式会把最该看的百分比挤到括号里。</summary>
+    internal static string FooterCtxText(long contextTokens, int contextWindow) =>
+        contextWindow > 0 && contextTokens > 0
+            ? $"ctx {TextUtil.PercentOf(contextTokens, contextWindow)}%"
+            : $"ctx {TextUtil.CompactTokenCount(contextTokens)}";
+
+    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts, string ctxText)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
@@ -899,8 +976,18 @@ internal static class Program
             agent.TurnRounds, agent.TurnToolCalls, TextUtil.FormatElapsed(elapsed),
             $"{agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok",
             think, cache, costText, ConsoleColumns()));
+        // 底部状态栏：会话视角，钉在每轮结束处
+        Console.WriteLine(BuildFooterBar(
+            GitInfo.CurrentBranch(Environment.CurrentDirectory),
+            TruncatePathHead(Environment.CurrentDirectory, 42),
+            TextUtil.ShortModelName(opts.Model),
+            agent.TurnInputTokens, agent.TurnOutputTokens,
+            agent.ContextTokens > 0 && ctxText.Length > 0
+                ? ctxText
+                : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}",
+            DateTime.Now.ToString("HH:mm"),
+            ConsoleColumns()));
     }
-
     /// <summary>
     /// 配置写回路径：-c 显式路径 {SafeColor.Glyphs.Arrow} 实际加载的来源文件（可能是 ~/.codeagent/config.json）{SafeColor.Glyphs.Arrow} 默认当前目录。
     /// 忽略来源文件时，从主目录配置启动的 /model 会把半份配置写进 cwd 的新 codeagent.json，配置被一分为二。

@@ -192,6 +192,16 @@ public static class SafeColor
         /// 那套扣减就会与实际行长对不上，缩短路径时永远缩不到位。</summary>
         public static string SegmentSeparator => AsciiEnabled ? " | " : " · ";
 
+        /// <summary>底部状态栏的分隔符。**故意与顶部的 <c>·</c> 不同**：
+        /// 同一屏里两行结构相似的文字若分隔符一致，人眼会把它们当成同一行读。</summary>
+        public static string FooterSep => AsciiEnabled ? "|" : "|";
+
+        /// <summary>底部状态栏的输入 token 箭头。</summary>
+        public static string TokensIn => AsciiEnabled ? "^" : "↑";
+
+        /// <summary>底部状态栏的输出 token 箭头。</summary>
+        public static string TokensOut => AsciiEnabled ? "v" : "↓";
+
         /// <summary>输入框右上角的模式标记（推理档位）。几何图形区在老代码页里是乱码。</summary>
         public static string ModeMark => AsciiEnabled ? "#" : "◈";
 

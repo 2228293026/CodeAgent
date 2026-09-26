@@ -188,8 +188,11 @@ public class FinalPushTests
     {
         // 回归：REPL 主循环曾把 PrintTurnSummary 调用写了两遍，导致每回合「✓ 完成」摘要打印两行；
         // 调用点必须唯一——防止再次复制粘贴引入重复调用
+        //
+        // 刻意**不**匹配完整参数表：底部状态栏那轮给摘要多传了一个 ctx 文本参数，
+        // 把签名原样写进正则会让这条守卫随签名一起失效。这里只钉住「唯一」这个意图。
         var src = ProgramSourcePath();
-        var calls = Regex.Matches(File.ReadAllText(src), @"PrintTurnSummary\(agent, sw\.Elapsed, opts\)");
+        var calls = Regex.Matches(File.ReadAllText(src), @"PrintTurnSummary\(agent,\s*sw\.Elapsed");
         Assert.Single(calls);
     }
 
