@@ -483,6 +483,91 @@ public static class InputLine
             : 0;
 
     /// <summary>
+    /// 输入行里的 <c>@文件</c> 引用（学自 Claude Code）：<c>@src/Program.cs</c> 把文件
+    /// 塞进提示词，省得手打长路径。
+    ///
+    /// 判定规则刻意保守——只有**前面是空白或行首**的 <c>@</c> 才算数：
+    /// <c>foo@bar</c>、<c>git@github.com</c> 里都有 @，把它们当引用会弹出文件菜单，
+    /// 用户莫名其妙。宁可少认，不可乱认。
+    ///
+    /// 只看光标**之前**的文本：光标不在这个 token 里就不激活，
+    /// 否则打完 "@src" 又跑回去改前面几个字，菜单会莫名其妙地跟着跳。
+    /// </summary>
+    internal static (bool Active, string Prefix, int Start) ParseMention(string text, int cursor)
+    {
+        if (string.IsNullOrEmpty(text))
+            return (false, string.Empty, -1);
+        var upto = cursor <= 0 ? 0 : Math.Min(cursor, text.Length);
+        var at = -1;
+        for (var i = upto - 1; i >= 0; i--)
+        {
+            var ch = text[i];
+            if (ch == '@')
+            {
+                at = i;
+                break;
+            }
+            // token 只能由路径字符组成：碰到空白就说明 @ 那段已经结束
+            if (ch == ' ' || ch == '\t' || ch == '\n')
+                return (false, string.Empty, -1);
+        }
+        if (at < 0)
+            return (false, string.Empty, -1);
+        // @ 必须在行首或空白之后（邮箱、git@host 不算引用）
+        if (at > 0)
+        {
+            var prev = text[at - 1];
+            if (prev != ' ' && prev != '\t' && prev != '\n')
+                return (false, string.Empty, -1);
+        }
+        return (true, text[(at + 1)..upto], at);
+    }
+
+    /// <summary>选中某个文件后替换整个 token 的文本（@ 到下一个空白为止）。</summary>
+    internal static string ApplyMention(string text, int start, string replacement)
+    {
+        var end = start;
+        while (end < text.Length && text[end] != ' ' && text[end] != '\t' && text[end] != '\n')
+            end++;
+        return text[..start] + replacement + text[end..];
+    }
+
+    /// <summary>
+    /// 工作区里与前缀匹配的文件（按路径显示，供 @ 菜单挑选）。
+    /// 只按**路径后缀**匹配：用户打的是 <c>Prog</c>，要能命中 <c>src/CodeAgent/Program.cs</c>——
+    /// 按文件名匹配就得先打完整个 basename，@ 的价值就没有了。
+    /// </summary>
+    internal static List<(string Name, string Desc)> MentionItems(
+        string root, string prefix, int limit, CancellationToken ct)
+    {
+        var items = new List<(string Name, string Desc)>();
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            return items;
+        foreach (var file in SkipDirs.EnumerateFilesPruned(root, 8, includeIgnored: false, ct: ct, followSymlinks: false))
+        {
+            ct.ThrowIfCancellationRequested();
+            var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+            if (prefix.Length == 0)
+            {
+                items.Add((rel, ""));
+                continue;
+            }
+            // 大小写不敏感的后缀匹配；命中位置越靠后（越接近文件名）越相关
+            var at = rel.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+            if (at >= 0)
+                items.Add((rel, at.ToString("D6")));
+        }
+        // 前缀越长、命中越靠后 → 越靠前
+        items.Sort((a, b) =>
+        {
+            var ka = int.Parse(a.Desc.Length == 0 ? "999999" : a.Desc);
+            var kb = int.Parse(b.Desc.Length == 0 ? "999999" : b.Desc);
+            return ka != kb ? ka.CompareTo(kb) : string.CompareOrdinal(a.Name, b.Name);
+        });
+        return items.Take(Math.Max(1, limit)).ToList();
+    }
+
+    /// <summary>
     /// 一段文本在给定列宽下占**多少个终端行**——显式换行与自动折行都要算。
     ///
     /// \x1b[2K 只清**一行**。此前重绘块行数只数文本里的显式 \n，
@@ -576,9 +661,10 @@ public static class InputLine
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
         => Read(prompt, modes, ansi, initial, DefaultPlaceholder);
 
-    /// <summary>读取一行输入。placeholder 为 null/空串时不显示占位提示。</summary>
-    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null)
+    /// <summary>读取一行输入。placeholder 为 null/空串时不显示占位提示。mentionRoot 非空时启用 @ 文件引用。</summary>
+    public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null, string? mentionRoot = null)
     {
+        var root = mentionRoot ?? string.Empty;
         if (Console.IsInputRedirected)
         {
             Console.Write(prompt);
@@ -643,6 +729,10 @@ public static class InputLine
         var lastInputLines = 1;      // 上次绘制的输入块行数（多行重绘逐行清残留用）
         var lastCursorLine = 0;      // 终端光标当前所在行（上次重绘后 PositionCursor 放置处，多行重绘上移基点）
         var inputExpanded = false;   // 用户是否展开过折叠的多行输入（展开后不再自动折叠）
+        // @ 引用状态：(token 起点, 前缀)。Start >= 0 表示菜单当前列的是文件。
+        // 用 (start, prefix) 而不是 bool：选中时要知道把哪一段替换掉。
+        var mention = (-1, (string?)null);
+        const int MentionLimit = 200;
 
         Console.Write(prompt);
         // 提示符可能占多行（BuildInputFrameTop 返回「上边框 + 提示符」）。但**边框是 chrome，
@@ -980,11 +1070,22 @@ public static class InputLine
 
         void RefreshMenu()
         {
-            var pat = NormalizeCommandFilter(buf.Text);
-            var source = modePicker ? modes ?? [] : Commands;
-            var newItems = source
-                .Where(m => m.Name.StartsWith(pat, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            // @ 引用：光标停在 @token 里时，菜单列的是工作区文件而不是命令。
+            // 与 / 命令菜单互斥——两者的触发字符不可能同时成立。
+            var (mentionActive, mentionPrefix, mentionStart) = ParseMention(buf.Text, buf.Cursor);
+            mention = mentionActive ? (mentionStart, mentionPrefix) : (-1, null);
+            List<(string Name, string Desc)> newItems;
+            if (mentionActive)
+            {
+                newItems = MentionItems(root, mentionPrefix, MentionLimit, CancellationToken.None);
+            }
+            else
+            {
+                var src = modePicker ? modes ?? [] : Commands;
+                newItems = src
+                    .Where(m => m.Name.StartsWith(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
             // 仅当过滤结果真的变化时才重绘，避免 /m→/mo→/mod 每个按键都刷一块菜单
             var same = newItems.Count == menuItems.Count &&
                        newItems.Zip(menuItems, (a, b) => a.Name == b.Name).All(x => x);
@@ -1018,7 +1119,7 @@ public static class InputLine
                 // 屏幕停在旧输入（/m），直到过滤结果变化（如补一个空格）才一次性刷新
                 RedrawInput();
             }
-            lastFilter = pat;
+            lastFilter = mentionActive ? mentionPrefix : NormalizeCommandFilter(buf.Text);
         }
 
         void OpenMenu(bool picker)
@@ -1308,7 +1409,11 @@ public static class InputLine
                         // → ：把选中的命令填充到输入行（不执行），可继续编辑/加参数；
                         // 无选中时默认填第一项（顶部项即隐式高亮）。Tab 在多匹配时是循环换选，
                         // → 是「就要这个」——补全后关菜单，回车执行或继续输入
-                        buf.Replace(menuItems[menuIndex >= 0 ? menuIndex : 0].Name);
+                        var picked = menuItems[menuIndex >= 0 ? menuIndex : 0].Name;
+                        // @ 引用只替换 @token 那一段，整行其余内容（"看这个 … 谢谢"）必须留下
+                        buf.Replace(mention.Item1 >= 0
+                            ? ApplyMention(buf.Text, mention.Item1, picked)
+                            : picked);
                         draft = null;
                         CloseMenu();
                         RedrawInput();
@@ -1448,7 +1553,9 @@ public static class InputLine
                     if (menuOpen && menuItems.Count == 1)
                     {
                         // 唯一匹配：Tab 补全为完整命令（/think + Tab → /thinking）
-                        buf.Replace(menuItems[0].Name);
+                        // @ 引用只替换 @token 那一段
+                        var only = menuItems[0].Name;
+                        buf.Replace(mention.Item1 >= 0 ? ApplyMention(buf.Text, mention.Item1, only) : only);
                         draft = null;
                         CloseMenu();
                         RedrawInput();
@@ -1456,6 +1563,10 @@ public static class InputLine
                     else if (!menuOpen && SlashLike(buf.Text))
                     {
                         OpenMenu(false);
+                    }
+                    else if (!menuOpen && ParseMention(buf.Text, buf.Cursor).Active)
+                    {
+                        OpenMenu(false); // @ 引用：Tab 打开文件菜单
                     }
                     else if (menuOpen && menuItems.Count > 1)
                     {

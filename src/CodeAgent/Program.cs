@@ -437,7 +437,7 @@ internal static class Program
             var promptText = inlinePrompt ?? PromptFor(opts, agent);
             if (framed)
                 promptText = BuildInputFrameTop(promptText, InputModeHint(config.ThinkingEffort), cols);
-            var line = InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft);
+            var line = InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft, InputLine.DefaultPlaceholder, Environment.CurrentDirectory);
             inlinePrompt = null;
             // 下边框把刚输入的这一行封进框里。EOF 不画：没有用户输入就没有框可封。
             if (line is not null)
@@ -3486,6 +3486,7 @@ internal static class Program
     internal static readonly HelpEntry[] BangModeHelp =
     [
         new("!命令", "直接执行 shell 命令（不经过模型）"),
+        new("@路径", $"引用工作区文件（Tab 或 {SafeColor.Glyphs.Arrow} 选入）"),
     ];
 
     private static void PrintReplHelp()
