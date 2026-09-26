@@ -280,7 +280,7 @@ public static class InputLine
     /// 现在保证名称列完整对齐，描述列拿剩余宽度；剩余不足 <see cref="MinMenuDescWidth"/> 列时整列省略。
     /// 预算不足以放下编号+名称时返回空串（调用方应隐藏该行，而不是画出半截）。
     /// </summary>
-    internal static string FitMenuLine(string name, string desc, int budget, bool modePicker, int visibleRow, int nameWidth = 16)
+    internal static string FitMenuLine(string name, string desc, int budget, bool modePicker, int visibleRow, int nameWidth = MaxMenuNameWidth)
     {
         if (budget <= 0)
             return string.Empty;
@@ -297,11 +297,32 @@ public static class InputLine
         return head + FitToWidth(desc, remain);
     }
 
+    /// <summary>名称列的最小/最大宽度：小于下限会让最短的名称也显得拥挤，
+    /// 大于上限则把很长的名称整列截断（描述才是用户要读的内容）。</summary>
+    internal const int MinMenuNameWidth = 4;
+    internal const int MaxMenuNameWidth = 16;
+
+    /// <summary>按菜单里**实际最长的名称**定名称列宽（而不是固定 16 列）。
+    /// 此前固定 16：模式菜单的名称都很短（plan/auto），每行白白空出十几列，
+    /// 描述列被推到很靠右，宽终端上有一大片空白。宽度不足时再由
+    /// <see cref="FitMenuLine"/> 按预算收敛，所以这里只负责「够宽就贴合」。</summary>
+    internal static int MenuNameWidth(IEnumerable<string> names, int cap = MaxMenuNameWidth)
+    {
+        var longest = 0;
+        foreach (var name in names)
+        {
+            var w = DisplayWidth(name);
+            if (w > longest)
+                longest = w;
+        }
+        return Math.Clamp(longest, MinMenuNameWidth, cap);
+    }
+
     /// <summary>
     /// 菜单行文本：命令菜单带 1-9 编号（数字键可执行）；模式菜单无编号（数字键是普通输入）。
     /// 名称列按显示宽度对齐而非字符数：中文命令名按 1 字符计却占 2 列，用 char 补齐会让描述列整体错位。
     /// </summary>
-    internal static string FormatMenuLine(string name, string desc, int visibleRow, bool modePicker, int nameWidth = 16) =>
+    internal static string FormatMenuLine(string name, string desc, int visibleRow, bool modePicker, int nameWidth = MaxMenuNameWidth) =>
         (modePicker ? "  " : $"  {visibleRow + 1}) ") + PadToDisplayWidth(name, nameWidth) + " " + desc;
 
     /// <summary>
@@ -354,9 +375,13 @@ public static class InputLine
         var fitBudget = FitBudget(winW);
         string Fit(string s) => fitBudget > 0 ? FitToWidth(s, fitBudget) : s;
 
-        // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）
+        // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）。
+        // 名称列宽按**实际菜单内容**定，不写死 16：短名称时不必空出十几列。
+        var menuNameWidth = MenuNameWidth(modes?.Select(m => m.Name) ?? Array.Empty<string>());
         string FitMenu(string name, string desc, bool mode, int row) =>
-            fitBudget > 0 ? FitMenuLine(name, desc, fitBudget, mode, row) : FormatMenuLine(name, desc, row, mode);
+            fitBudget > 0
+                ? FitMenuLine(name, desc, fitBudget, mode, row, menuNameWidth)
+                : FormatMenuLine(name, desc, row, mode, menuNameWidth);
 
         // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」；
         // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
@@ -583,9 +608,15 @@ public static class InputLine
             Console.Write(sb.ToString());
         }
 
-        /// <summary>菜单行文本：命令菜单带 1-9 编号；模式菜单无编号（数字键是普通输入）。</summary>
+        /// <summary>菜单行文本：命令菜单带 1-9 编号；模式菜单无编号（数字键是普通输入）。
+        /// 名称列取**实际最长的菜单项**，短名称的菜单不再空出十几列。</summary>
         string MenuLineText(int listIndex, int visibleRow) =>
-            FormatMenuLine(menuItems[listIndex].Name, menuItems[listIndex].Desc, visibleRow, modePicker);
+            FormatMenuLine(
+                menuItems[listIndex].Name,
+                menuItems[listIndex].Desc,
+                visibleRow,
+                modePicker,
+                MenuNameWidth(menuItems.Select(m => m.Name)));
 
         // 关闭菜单块（rows 行）：整块删除（DL），输入行上移回到原位，屏幕不留残影
         void EraseMenuAnsi(int rows)
