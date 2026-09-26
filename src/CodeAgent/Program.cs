@@ -1141,6 +1141,31 @@ internal static class Program
     internal static string FormatHintLine(string body, int width = 0) =>
         FormatResultLine("  " + body, width);
 
+    /// <summary>查询词在结果行里能占的列数上限（占整行的比例）。
+    /// 用户输入的长度不受控，`/find 「很长很长…」` 曾经把整行撑爆并把查询词切掉一半——
+    /// 用户看到半截查询根本没法确认自己搜的是什么。</summary>
+    internal const double QueryColumnMaxRatio = 0.5;
+
+    /// <summary>把「前缀 + 用户查询词 + 后缀」压进整行预算：查询词**优先保头**（用户记得住开头），
+    /// 超长时补 `…` 明确标记截断，绝不产出「看起来是完整查询」的残串；
+    /// 预算不足以放下任何查询内容时，返回 null 交给调用方按普通行处理。</summary>
+    internal static string? FitQueryLine(string before, string keyword, string after, int width)
+    {
+        if (width <= 0 || keyword.Length == 0)
+            return null;
+        var head = TextUtil.DisplayWidth(before);
+        var tail = TextUtil.DisplayWidth(after);
+        var room = width - head - tail;
+        if (room < 3)
+            return null;
+        var cap = Math.Max(3, (int)(width * QueryColumnMaxRatio));
+        var budget = Math.Min(room, cap);
+        var fitted = InputLine.FitToWidth(keyword, budget);
+        return TextUtil.DisplayWidth(fitted) < TextUtil.DisplayWidth(keyword) || fitted.Length == keyword.Length
+            ? before + fitted + after
+            : null;
+    }
+
     /// <summary>普通结果/说明行（无标记）：按显示宽度裁剪。
     /// /find 这类输出会把**用户输入的关键字**与快照名直接拼进行里，
     /// 二者长度不受控，没有宽度预算就必然溢出。</summary>
@@ -2097,7 +2122,9 @@ internal static class Program
                         printed++;
                     }
                     if (printed == 0)
-                        Console.WriteLine(FormatResultLine($"历史会话中没有匹配「{kw}」的内容。", ConsoleColumns()));
+                        Console.WriteLine(FormatResultLine(
+                            FitQueryLine("历史会话中没有匹配「", kw, "」的内容。", ConsoleColumns())
+                            ?? $"历史会话中没有匹配「{kw}」的内容。", ConsoleColumns()));
                     else if (moreAvailable)
                         Console.WriteLine(FormatResultLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）", ConsoleColumns()));
 
