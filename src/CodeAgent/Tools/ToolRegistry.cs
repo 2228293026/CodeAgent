@@ -520,6 +520,7 @@ public sealed class ToolRegistry
         registry.Register(new DataContractReportTool());
         registry.Register(new TestQualityReportTool());
         registry.Register(new ResourceLifecycleReportTool());
+        registry.Register(new LocalizationReadinessReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
