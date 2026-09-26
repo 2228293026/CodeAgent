@@ -193,22 +193,38 @@ public static class SafeColor
         }
     }
 
-    /// <summary>配色方案。深色是绝大多数终端的默认；浅色用于亮背景终端。</summary>
+    /// <summary>配色方案。深色是绝大多数终端的默认；浅色用于亮背景终端；
+    /// 高对比用于低视力用户、以及配色不常见的终端。</summary>
     public enum ColorTheme
     {
         Dark,
         Light,
+        /// <summary>高对比（假定深色背景）。与 <see cref="Dark"/> 的关键差别是
+        /// <see cref="Muted"/>：DarkGray 在黑底上大约只有 3:1，低于正文 4.5:1 的
+        /// 可读性底线；这里换成 Gray。</summary>
+        Contrast,
+        /// <summary>高对比 + 浅色背景。</summary>
+        ContrastLight,
     }
 
     /// <summary>配色方案的判定，单独抽出来便于穷举测试。
     /// .NET 没有可靠的方式读取终端背景亮度，所以这里**不猜**：
-    /// 只认用户显式指定的 <c>CODEAGENT_THEME=light|dark</c>，其余一律深色。</summary>
-    internal static ColorTheme ComputeTheme(string? setting) =>
-        string.Equals(setting, "light", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(setting, "Light", StringComparison.Ordinal) ||
-        setting == "亮色"
-            ? ColorTheme.Light
-            : ColorTheme.Dark;
+    /// 只认用户显式指定的 <c>CODEAGENT_THEME=light|dark|contrast|contrast-light</c>，
+    /// 其余一律深色。高对比的两个值也必须**显式**写出背景——同样是"亮色压暗"，
+    /// 猜错方向的代价（白底白字）比用默认深色更大。</summary>
+    internal static ColorTheme ComputeTheme(string? setting)
+    {
+        if (Is(setting, "light", "亮色"))
+            return ColorTheme.Light;
+        if (Is(setting, "contrast", "高对比"))
+            return ColorTheme.Contrast;
+        if (Is(setting, "contrast-light", "contrastlight", "高对比浅色", "高对比亮色"))
+            return ColorTheme.ContrastLight;
+        return ColorTheme.Dark;
+    }
+
+    private static bool Is(string? setting, params string[] accepted) =>
+        setting is not null && accepted.Any(a => string.Equals(setting, a, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>当前配色方案。默认深色。</summary>
     public static ColorTheme Theme => ComputeTheme(ReadEnv("CODEAGENT_THEME"));
@@ -217,15 +233,24 @@ public static class SafeColor
     // 调用点一律用语义名，不再直接写 ConsoleColor.Xxx。
     // 浅色背景下亮色（Blue/Cyan/Green/Yellow/White）会「洗掉」，
     // 必须换成对应的 Dark* 变体；深色背景反之。这组映射是本项目的可读性底线。
-    /// <summary>次要文本（灰色层级）。**不随主题变化**：DarkGray 在黑底和白底上
-    /// 都是中灰，是 8 色里唯一两边都读得清的。真正会洗掉的是下面的亮色。</summary>
-    public static ConsoleColor Muted => ConsoleColor.DarkGray;
-    public static ConsoleColor Accent => Theme == ColorTheme.Light ? ConsoleColor.DarkCyan : ConsoleColor.Cyan;
-    public static ConsoleColor Link => Theme == ColorTheme.Light ? ConsoleColor.DarkBlue : ConsoleColor.Blue;
-    public static ConsoleColor Success => Theme == ColorTheme.Light ? ConsoleColor.DarkGreen : ConsoleColor.Green;
-    public static ConsoleColor Danger => Theme == ColorTheme.Light ? ConsoleColor.DarkRed : ConsoleColor.Red;
-    public static ConsoleColor Warning => Theme == ColorTheme.Light ? ConsoleColor.DarkYellow : ConsoleColor.Yellow;
-    public static ConsoleColor Emphasis => Theme == ColorTheme.Light ? ConsoleColor.Black : ConsoleColor.White;
+    /// <summary>次要文本（灰色层级）。默认用 <see cref="ConsoleColor.DarkGray"/>：
+    /// 它在黑底和白底上都是中灰，是 8 色里唯一两边都读得清的。
+    /// 高对比主题下换 <see cref="ConsoleColor.Gray"/>——DarkGray 在黑底上约 3:1，
+    /// 低于正文 4.5:1 的可读性底线；次要文本虽然不是正文，但**提示符、路径、
+    /// 工具耗时**这些恰恰是用户最常扫读的部分。</summary>
+    public static ConsoleColor Muted => Theme switch
+    {
+        ColorTheme.Contrast => ConsoleColor.Gray,
+        ColorTheme.ContrastLight => ConsoleColor.Black,
+        _ => ConsoleColor.DarkGray,
+    };
+    private static bool IsLight => Theme is ColorTheme.Light or ColorTheme.ContrastLight;
+    public static ConsoleColor Accent => IsLight ? ConsoleColor.DarkCyan : ConsoleColor.Cyan;
+    public static ConsoleColor Link => IsLight ? ConsoleColor.DarkBlue : ConsoleColor.Blue;
+    public static ConsoleColor Success => IsLight ? ConsoleColor.DarkGreen : ConsoleColor.Green;
+    public static ConsoleColor Danger => IsLight ? ConsoleColor.DarkRed : ConsoleColor.Red;
+    public static ConsoleColor Warning => IsLight ? ConsoleColor.DarkYellow : ConsoleColor.Yellow;
+    public static ConsoleColor Emphasis => IsLight ? ConsoleColor.Black : ConsoleColor.White;
 }
 
 /// <summary>通用小工具。</summary>
