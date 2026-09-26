@@ -967,9 +967,18 @@ internal static class Program
         var text = Render();
         if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
             return text;
-        // 逐段丢：时钟先走（每秒都在变，少一列无所谓），再走目录（终端标题里还有），
-        // 最后走模型。最后兜底才截目录——截成半截路径不如不显示。
-        var drops = new Action[] { () => showClock = false, () => showDir = false, () => showModel = false };
+        // 逐段丢：时钟先走（每秒都在变，少一列无所谓），再走分支（顶部状态栏里还有），
+        // 然后走目录（终端标题里还有），最后走模型。最后兜底才截目录——截成半截路径不如不显示。
+        //
+        // 分支名长度完全不受控（`feature/非常长的分支名字` 有 22 列），
+        // 此前它不在丢弃列表里，于是窄终端下这一段直接撑破整行。
+        var drops = new Action[]
+        {
+            () => showClock = false,
+            () => showBranch = false,
+            () => showDir = false,
+            () => showModel = false,
+        };
         for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
         {
             drops[i]();
@@ -981,7 +990,9 @@ internal static class Program
         if (budget >= MinStatusPathWidth)
         {
             shownPath = TruncatePathHead(cwd, budget);
-            return Render();
+            text = Render();
+            if (TextUtil.DisplayWidth(text) <= width)
+                return text;
         }
         // 连路径的最低展示宽度都放不下：只剩 token 与 ctx。
         // 仍然要**按宽度收口**——直接拼「↑37.9k ↓132 | ctx 3%」在 8 列终端上
@@ -1633,10 +1644,16 @@ internal static class Program
         var mark = marker ?? SafeColor.Glyphs.Warn;
         if (width <= 0)
             return $"{mark} {body}";
+        // 标记本身就可能比终端宽（窄到 1~2 列），此时连标记都放不下
+        if (TextUtil.DisplayWidth(mark) >= width)
+            return InputLine.FitToWidth(mark, width);
         var budget = width - TextUtil.DisplayWidth(mark) - 1;
         if (budget <= 0)
-            return mark;
-        return $"{mark} {ShortenTrailingPath(body, budget) ?? InputLine.FitToWidth(body, budget)}";
+            return InputLine.FitToWidth(mark, width);
+        // ShortenTrailingPath 只缩正文**末尾那几段路径**，前后的普通文字原样保留，
+        // 所以它的结果仍可能超预算（`路径 D:\… 很长很长` 缩完路径还是 22 列 / 10 列预算）。
+        // 拼接后再兜一次底，否则这里就是"所有通知行都安全"这条承诺的漏口。
+        return InputLine.FitToWidth($"{mark} {ShortenTrailingPath(body, budget) ?? body}", width);
     }
 
     /// <summary>所有「回显用户输入或异常消息」的通知行的**唯一出口**。
