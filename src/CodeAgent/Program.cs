@@ -1277,6 +1277,11 @@ internal static class Program
     /// width &lt;= 0（宽度未知）时**只给提示符、不画框**——宁可少一条线，
     /// 也不能画一条必然越界的线。
     /// </summary>
+    /// <summary>提示符的**最后一行**：重绘只用它，边框（chrome）不参与。
+    /// 与 <c>BuildInputFrameTop</c> 的形状约定配套——两个分支都保证「边框在上、提示符在下」，
+    /// 所以"最后一行"在宽窄两种终端下都是同一个含义。</summary>
+    internal static string BuildInputTextTail(string prompt) =>
+        prompt[(prompt.LastIndexOf('\n') + 1)..];
     internal static string BuildInputFrameTop(string prompt, string? rightHint, int width)
     {
         if (width <= 0)

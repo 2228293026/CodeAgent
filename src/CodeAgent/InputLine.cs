@@ -468,6 +468,49 @@ public static class InputLine
     internal static string CursorForward(int n) =>
         n <= 0 ? string.Empty : n == 1 ? " " : $"\x1b[{n}C";
 
+    /// <summary>
+    /// ANSI 原地重绘要写出的**完整字节序列**（不含光标定位，那步要读 buf.Cursor）。
+    ///
+    /// 抽成纯函数是为了能断言「敲一个字符不新增行」这条不变量：用户报上来的现象
+    /// 正是每敲一个字屏幕就多出一行。此前这段逻辑内联在 ScrollInput 里，只能靠肉眼看
+    /// 终端，任何改动都无法回归验证。
+    ///
+    /// <paramref name="newLastInputLines"/> 是重绘后块的行数，调用方据此更新基线。
+    /// </summary>
+    internal static string BuildRedrawAnsi(string text, int lastInputLines, int lastCursorLine, out int newLastInputLines)
+    {
+        var lines = 1 + (text.TrimEnd('\n').Split('\n').Length - 1);
+        newLastInputLines = lines;
+        // 单行：一行清 + 一行写，**不产生任何 \n**。
+        // 边框（chrome）不在 text 里，所以这里的单行判定不会被提示符的多行外观污染。
+        if (lines <= 1 && lastInputLines <= 1)
+            return "\r\x1b[2K" + text;
+
+        // 多行输入（粘贴含换行）：上移到块首后逐行 \x1b[2K 清整行重写。
+        // 不依赖 \x1b[J（清屏到末尾）——部分终端对 ED 支持不佳，导致每次重绘
+        // 向下追加旧块、刷屏。行数取新旧最大值，多余的旧行清空。
+        // 上移基点用 lastCursorLine（终端光标当前行）而非块末尾：
+        // 删除文本后光标被 PositionCursor 放在中间行，从中间行上移 rows-1
+        // 到不了块首，会覆盖错位、提示符行残留重复。
+        var rows = Math.Max(lines, lastInputLines);
+        var sb = new StringBuilder();
+        // lastCursorLine 为 0 时必须省略 CUU：多数终端（xterm/Windows Terminal/conhost）
+        // 把参数 0 按 1 处理，"\x1b[0A" 会真的上移一行，覆盖掉输入块上方的提示符行
+        // 同一条规则对光标右移（C）同样成立，见 CursorForward。
+        if (lastCursorLine > 0)
+            sb.Append($"\x1b[{lastCursorLine}A");
+        var textLines = DiffUtil.SplitLines(text);
+        for (var i = 0; i < rows; i++)
+        {
+            sb.Append("\r\x1b[2K");
+            if (i < textLines.Length)
+                sb.Append(textLines[i]);
+            if (i < rows - 1)
+                sb.Append('\n');
+        }
+        return sb.ToString();
+    }
+
     /// <summary>读取一行输入；EOF（重定向输入关闭）时返回 null。modes 用于 Alt+M 模式菜单，ansi 控制菜单渲染方式，initial 为预填文本（取消回合后回填草稿）。</summary>
     public static string? Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
         => Read(prompt, modes, ansi, initial, DefaultPlaceholder);
@@ -602,36 +645,7 @@ public static class InputLine
                 // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
                 var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold;
                 var text = fold ? InputLine.FoldText(InputText()) : InputText();
-                var lines = 1 + CountNewlines(text); // 显示块总行数（折叠时 = FoldThreshold）
-                if (lines > 1 || lastInputLines > 1)
-                {
-                    // 多行输入（粘贴含换行）：上移到块首后逐行 \x1b[2K 清整行重写。
-                    // 不依赖 \x1b[J（清屏到末尾）——部分终端对 ED 支持不佳，导致每次重绘
-                    // 向下追加旧块、刷屏。行数取新旧最大值，多余的旧行清空。
-                    // 上移基点用 lastCursorLine（终端光标当前行）而非块末尾：
-                    // 删除文本后光标被 PositionCursor 放在中间行，从中间行上移 rows-1
-                    // 到不了块首，会覆盖错位、提示符行残留重复。
-                    var rows = Math.Max(lines, lastInputLines);
-                    // lastCursorLine 为 0 时必须省略 CUU：多数终端（xterm/Windows Terminal/conhost）
-                    // 把参数 0 按 1 处理，"\x1b[0A" 会真的上移一行，覆盖掉输入块上方的提示符行
-                    // 同一条规则对光标右移（C）同样成立，见 CursorForward。
-                    if (lastCursorLine > 0)
-                        Console.Write($"\x1b[{lastCursorLine}A");
-                    var textLines = DiffUtil.SplitLines(text);
-                    for (int i = 0; i < rows; i++)
-                    {
-                        Console.Write("\r\x1b[2K");
-                        if (i < textLines.Length)
-                            Console.Write(textLines[i]);
-                        if (i < rows - 1)
-                            Console.Write("\n");
-                    }
-                    lastInputLines = lines;
-                }
-                else
-                {
-                    Console.Write("\r\x1b[2K" + text);
-                }
+                Console.Write(BuildRedrawAnsi(text, lastInputLines, lastCursorLine, out lastInputLines));
                 PositionCursor(fold);
                 // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
                 // 折叠时按折叠视图行计），作为下次多行重绘的上移基点
