@@ -548,6 +548,7 @@ public sealed class ToolRegistry
         registry.Register(new PartialMethodReportTool());
         registry.Register(new ObsoleteUsageReportTool());
         registry.Register(new ExtensionMethodReportTool());
+        registry.Register(new RecordMutabilityReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
