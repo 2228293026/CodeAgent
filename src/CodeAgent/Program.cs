@@ -2607,6 +2607,17 @@ internal static class Program
     /// <summary>说明列至少保留的宽度：低于此值时分列显示反而更难读，改为上下两行。</summary>
     private const int MinHelpBodyWidth = 24;
 
+    /// <summary>说明折行后的续行缩进宽度（"  " + "    "）。续行不再带命令列，
+    /// 所以折行预算必须扣掉**这个**缩进，而不是命令列宽度。</summary>
+    private const int HelpContIndent = 6;
+
+    /// <summary>折行后的说明块：每一行都带续行缩进。
+    /// 直接 `indent + "    " + WrapDisplay(…)` 只会给**首行**加缩进，
+    /// 第 2..n 行跑到行首——续行看起来像顶层输出，读者会以为这是另一条命令。
+    /// 用 <see cref="TextUtil.IndentBlock"/> 给每一行都补上前缀。</summary>
+    internal static string HelpContinuation(string description, int width) =>
+        TextUtil.IndentBlock(TextUtil.WrapDisplay(description, width), new string(' ', HelpContIndent));
+
     /// <summary>帮助列表渲染。
     /// 命令列按最长条目自适应；说明放不下时**整体移到下一行并缩进折行**，
     /// 而不是交给终端硬折行——硬折行会在词中间断开、丢失缩进，续行看起来像另一条内容。
@@ -2619,7 +2630,13 @@ internal static class Program
         const int gap = 2;
         var commandWidth = entries.Max(e => TextUtil.DisplayWidth(e.Command));
         var useColumns = width <= 0 || width - indent.Length - commandWidth - gap >= MinHelpBodyWidth;
-        var bodyWidth = useColumns ? width - indent.Length - commandWidth - gap : width - indent.Length - 4;
+        // 走单列（命令与说明同行）时，说明能拿到的列数 = 整行 - 缩进 - 命令列 - 间隔。
+        var inlineWidth = width - indent.Length - commandWidth - gap;
+        // 折行后的续行只有缩进、没有命令列，预算必须按续行缩进（6 列）算。
+        // 此前这里错用了 inlineWidth 给续行，等于给续行预留了命令列的宽度，
+        // 结果 2 + 4 + (width - 2 - commandWidth - 2) = width + 2 - commandWidth 列——
+        // 只要命令列宽于 2 列（永远是），每一行折行的说明都会溢出终端。
+        var contWidth = width - HelpContIndent;
         var output = new StringBuilder();
         foreach (var entry in entries)
         {
@@ -2629,13 +2646,14 @@ internal static class Program
                 // 必须截断，否则这一行会硬折行，把整列表的网格结构打散。
                 output.AppendLine(indent + FitColumn(entry.Command, width));
                 if (entry.Description.Length > 0)
-                    output.AppendLine(indent + "    " + TextUtil.WrapDisplay(entry.Description, bodyWidth));
+                    output.AppendLine(HelpContinuation(entry.Description, contWidth));
                 continue;
             }
-            if (width > 0 && TextUtil.DisplayWidth(entry.Description) > bodyWidth)
+            // 说明放不进同行就整体挪到下一行；判定用**同行**预算，折行用**续行**预算
+            if (width > 0 && TextUtil.DisplayWidth(entry.Description) > inlineWidth)
             {
                 output.AppendLine(indent + FitColumn(entry.Command, width));
-                output.AppendLine(indent + "    " + TextUtil.WrapDisplay(entry.Description, bodyWidth));
+                output.AppendLine(HelpContinuation(entry.Description, contWidth));
                 continue;
             }
             output.AppendLine(indent + InputLine.PadToDisplayWidth(entry.Command, commandWidth + gap) + entry.Description);
