@@ -519,6 +519,7 @@ public sealed class ToolRegistry
         registry.Register(new PerformanceAntiPatternReportTool());
         registry.Register(new DataContractReportTool());
         registry.Register(new TestQualityReportTool());
+        registry.Register(new ResourceLifecycleReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
