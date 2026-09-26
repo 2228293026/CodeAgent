@@ -204,6 +204,33 @@ public static class InputLine
         return current < width ? s + new string(' ', width - current) : FitToWidth(s, width);
     }
 
+    /// <summary>描述列的最小可读宽度：不足这么多列时宁可整列省略，
+    /// 也不要切出几个看起来像内容的碎片（误导性的残片比没有信息更糟）。</summary>
+    internal const int MinMenuDescWidth = 6;
+
+    /// <summary>
+    /// 窄屏下的菜单行：**名称列优先**。此前整行一起截断，窄终端下名称列被切掉右补白，
+    /// 描述列随之整体错位——<see cref="FormatMenuLine"/> 刻意做的对齐（表格感）就没了。
+    /// 现在保证名称列完整对齐，描述列拿剩余宽度；剩余不足 <see cref="MinMenuDescWidth"/> 列时整列省略。
+    /// 预算不足以放下编号+名称时返回空串（调用方应隐藏该行，而不是画出半截）。
+    /// </summary>
+    internal static string FitMenuLine(string name, string desc, int budget, bool modePicker, int visibleRow, int nameWidth = 16)
+    {
+        if (budget <= 0)
+            return string.Empty;
+        var num = modePicker ? "  " : $"  {visibleRow + 1}) ";
+        var numWidth = DisplayWidth(num);
+        // 名称列 + 至少一个分隔空格
+        var nameBudget = Math.Min(nameWidth, budget - numWidth - 1);
+        if (nameBudget <= 0)
+            return string.Empty;
+        var head = num + PadToDisplayWidth(FitToWidth(name, nameBudget), nameBudget) + " ";
+        var remain = budget - DisplayWidth(head);
+        if (remain < MinMenuDescWidth)
+            return head.TrimEnd() + " …";
+        return head + FitToWidth(desc, remain);
+    }
+
     /// <summary>
     /// 菜单行文本：命令菜单带 1-9 编号（数字键可执行）；模式菜单无编号（数字键是普通输入）。
     /// 名称列按显示宽度对齐而非字符数：中文命令名按 1 字符计却占 2 列，用 char 补齐会让描述列整体错位。
@@ -255,6 +282,10 @@ public static class InputLine
             BracketedPaste.Enable(); // 粘贴边界标记（详见 BracketedPaste 注释）；重定向/窄终端不启用
         var fitBudget = FitBudget(winW);
         string Fit(string s) => fitBudget > 0 ? FitToWidth(s, fitBudget) : s;
+
+        // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）
+        string FitMenu(string name, string desc, bool mode, int row) =>
+            fitBudget > 0 ? FitMenuLine(name, desc, fitBudget, mode, row) : FormatMenuLine(name, desc, row, mode);
 
         var menuOpen = false;
         var modePicker = false;
@@ -450,7 +481,13 @@ public static class InputLine
                         sb.AppendLine("\x1b[K");
                         continue;
                     }
-                    var line = Fit(MenuLineText(k, i));
+                    var line = FitMenu(menuItems[k].Name, menuItems[k].Desc, modePicker, i);
+                    // 预算不足以放下编号+名称：整行清空（与「本行无内容」同一处理，保持块高稳定）
+                    if (line.Length == 0)
+                    {
+                        sb.AppendLine("\x1b[K");
+                        continue;
+                    }
                     // 选中项：反显高亮（\x1b[7m）；行尾 \x1b[K 清残留
                     sb.AppendLine((k == menuIndex ? "\x1b[7m" + line + "\x1b[0m" : line) + "\x1b[K");
                 }
