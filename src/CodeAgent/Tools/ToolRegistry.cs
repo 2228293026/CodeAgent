@@ -585,6 +585,7 @@ public sealed class ToolRegistry
         registry.Register(new LockMisuseReportTool());
         registry.Register(new DependencyInversionReportTool());
         registry.Register(new OwnershipReportTool());
+        registry.Register(new WeakAssertionReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
