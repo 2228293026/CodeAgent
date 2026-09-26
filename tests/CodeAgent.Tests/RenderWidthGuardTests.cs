@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 
 namespace CodeAgent.Tests;
@@ -173,6 +174,18 @@ public sealed class RenderWidthGuardTests
         foreach (var p in Payloads)
             foreach (var w in Widths())
                 AssertLinesFit(Program.FormatStatusPanel(rows, w), w, "FormatStatusPanel");
+    }
+
+    [Fact]
+    public void ChangedFilesLine_NeverExceedsWidth()
+    {
+        // 这行带"…等 N 个"后缀：后缀也必须占预算，否则拼接后就超宽
+        var files = Enumerable.Range(0, 40)
+            .Select(i => $"src/quite/a/long/path/File{i}.cs")
+            .Append("中文/文件名/很长的一个.md")
+            .ToList();
+        foreach (var w in Widths())
+            AssertLinesFit(Program.FormatChangedFilesLine(files, w), w, "FormatChangedFilesLine");
     }
 
     [Fact]

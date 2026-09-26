@@ -501,6 +501,9 @@ internal static class Program
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
+                // 回合开始时记下改动面：回合结束后才知道**这一轮**改了哪些文件。
+                // /files 给的是整个会话的累计，不回答"刚才这一下到底动没动文件"。
+                var filesBefore = agent.Context.Undo.AllPaths();
                 var result = await RunTurnAsync(t => agent.RunAsync(line, t));
                 sw.Stop();
                 if (IsCancelledTurn(result))
@@ -520,6 +523,16 @@ internal static class Program
                     PrintResult(result, agent.StreamedLastRun, prefixNewline: true, agent.StreamedOnLineBoundary);
                 }
                 PrintTurnSummary(agent, sw.Elapsed, opts, FooterCtxText(agent.ContextTokens, EffectiveContextWindow()));
+                // 本轮改了哪些文件（学自 Claude Code 的 Modified files）：不另开命令，
+                // 用户不必为了确认"它到底动没动我的文件"再敲一次 /files。
+                if (FormatChangedFilesLine(
+                        NewFilesThisTurn(filesBefore, agent.Context.Undo.AllPaths())
+                            .Select(p => agent.Context.Workspace.ToRelative(p).Replace('\\', '/'))
+                            .ToList(),
+                        ConsoleColumns()) is { Length: > 0 } changed)
+                {
+                    Console.WriteLine(changed);
+                }
                 // 上下文占用监控：配置了 autoCompactPercent 达标自动压缩；否则 ≥90% 提示建议 /compact
                 {
                     var win = EffectiveContextWindow();
@@ -846,6 +859,60 @@ internal static class Program
     /// <summary>回合摘要的可丢段优先级：费用 {SafeColor.Glyphs.Arrow} 缓存比例 {SafeColor.Glyphs.Arrow} 思考耗时 {SafeColor.Glyphs.Arrow} 本回合 token 明细。
     /// 固定段保留「{SafeColor.Glyphs.Ok} 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
     /// 可丢段丢完仍超宽时先**脱掉装饰外框**（纯装饰，省 13 列），最后才硬截。</summary>
+    /// <summary>
+    /// 本轮**新**改动的文件（相对本轮开始时的快照）。
+    ///
+    /// 按**集合差**算而不是按数量差：<c>AllPaths()</c> 已去重，同一个文件在一轮里
+    /// 被改两次时数量不变——按数量差算会把"改过的文件"算成"没改过"，
+    /// 而这正是用户最想确认的那件事。
+    /// </summary>
+    internal static List<string> NewFilesThisTurn(IReadOnlyList<string> before, IReadOnlyList<string> after)
+    {
+        var seen = new HashSet<string>(before, StringComparer.Ordinal);
+        return after.Where(p => !seen.Contains(p)).ToList();
+    }
+
+    /// <summary>
+    /// 回合结束后的一行改动摘要（学自 Claude Code 的「Modified files」）。
+    ///
+    /// 不塞进 <see cref="BuildTurnSummary"/>：那条行的丢段优先级调了很久
+    /// （费用 → 缓存 → 思考 → token → 脱框 → 工具数 → 耗时 → 轮数），
+    /// 塞进新段要么挤掉既有信息、要么把优先级搅乱。单独一行更稳。
+    ///
+    /// 文件名**按工作区相对路径**显示：绝对路径在深目录项目里长到没法扫读。
+    /// 宽度不足时保留前几个 + "…等 N 个"——"等"字是关键的，它告诉用户后面还有。
+    /// </summary>
+    internal static string FormatChangedFilesLine(IReadOnlyList<string> relPaths, int width)
+    {
+        if (relPaths.Count == 0)
+            return string.Empty;
+        const string head = "  改 ";
+        const int sepWidth = 2; // "、" 占 1 显示列
+        var all = string.Join("、", relPaths);
+        if (width <= 0)
+            return head + all;
+        // 全部放得下：直接给全名，不加"等 N 个"
+        if (TextUtil.DisplayWidth(head) + TextUtil.DisplayWidth(all) <= width)
+            return head + all;
+
+        // 放不下：**先给后缀留位置**再挑路径。
+        // 反过来（先挑路径、最后再拼后缀）会超宽——后缀从没被算进预算。
+        var suffix = $"…等 {relPaths.Count} 个";
+        var budget = width - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(suffix);
+        var shown = new List<string>();
+        foreach (var p in relPaths)
+        {
+            var lead = shown.Count == 0 ? 0 : sepWidth;
+            if (budget - lead - TextUtil.DisplayWidth(p) < 0)
+                break;
+            shown.Add(p);
+            budget -= lead + TextUtil.DisplayWidth(p);
+        }
+        // 一条路径都放不下：整段不显示，绝不留半截路径（半截看不出是哪个文件）
+        if (shown.Count == 0)
+            return string.Empty;
+        return head + string.Join("、", shown) + suffix;
+    }
     internal static string BuildTurnSummary(
         int rounds, int toolCalls, string elapsed, string tokenText,
         string thinkText, string cacheText, string costText, int width)
