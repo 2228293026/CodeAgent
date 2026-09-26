@@ -571,6 +571,7 @@ public sealed class ToolRegistry
         registry.Register(new DeferredQueryReportTool());
         registry.Register(new BoxingAllocationReportTool());
         registry.Register(new TimeUnitConfusionReportTool());
+        registry.Register(new CultureFormatReportTool());
         registry.Register(new FileExtensionReportTool());
         registry.Register(new GitIgnoredFilesTool());
         registry.Register(new GitPathDiffTool());
