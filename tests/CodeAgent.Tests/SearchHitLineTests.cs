@@ -36,6 +36,36 @@ public class SearchHitLineTests
     }
 
     [Fact]
+    public void FormatHintLine_RealHintsFit()
+    {
+        // 这些提示行此前都是裸字符串，最长的一条在 40 列终端上会硬折行
+        var hints = new[]
+        {
+            "Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定",
+            "（服务未返回任何模型：检查 baseUrl 是否指向支持 /models 的端点、API Key 是否有列表权限；仍可直接 /model <名称> 使用）",
+            "提示: /model <编号> 可直接切换",
+            "* = 当前配置的模型",
+            "输入 /help 查看命令；直接输入任务描述即可开始。",
+            "仍将按输入保存；/models [关键字] 可查列表",
+        };
+        foreach (var hint in hints)
+        {
+            foreach (var width in new[] { 30, 40, 60, 80, 120 })
+            {
+                var line = Program.FormatHintLine(hint, width);
+                Assert.True(TextUtil.DisplayWidth(line) <= width, $"宽度 {width} 溢出: {line}");
+                Assert.StartsWith("  ", line);
+            }
+        }
+    }
+
+    [Fact]
+    public void FormatHintLine_UnknownWidthKeepsTwoSpaceIndent()
+    {
+        Assert.Equal("  * = 当前配置的模型", Program.FormatHintLine("* = 当前配置的模型"));
+    }
+
+    [Fact]
     public void FormatResultLine_UnknownWidthKeepsFullText()
     {
         var body = $"历史会话中没有匹配「{new string('词', 200)}」的内容。";

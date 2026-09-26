@@ -913,7 +913,7 @@ internal static class Program
         SafeColor.Foreground(ConsoleColor.DarkGray);
         Console.WriteLine(FormatConfirmLine($"已切换权限: {mode}（{desc}）", ConsoleColumns()));
         if (showHint)
-            Console.WriteLine("  Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定");
+            Console.WriteLine(FormatHintLine("Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定", ConsoleColumns()));
         SafeColor.Reset();
     }
 
@@ -1065,6 +1065,12 @@ internal static class Program
     /// 启动错误常带完整路径与异常消息，宽度未知时不做猜测性折行，但已知宽度下必须不溢出。</summary>
     private static void WriteStartupNotice(string body) =>
         Console.Error.WriteLine(FormatNoticeLine(body, ConsoleColumns()));
+
+    /// <summary>操作提示行（解释"接下来能输入什么"）：两空格缩进 + 按显示宽度裁剪。
+    /// 提示行此前都是裸字符串，`（服务未返回任何模型：检查 baseUrl 是否指向支持 /models 的端点…）`
+    /// 这类长中文在 40 列终端上会硬折行，续行与上一条提示失去关联。</summary>
+    internal static string FormatHintLine(string body, int width = 0) =>
+        FormatResultLine("  " + body, width);
 
     /// <summary>普通结果/说明行（无标记）：按显示宽度裁剪。
     /// /find 这类输出会把**用户输入的关键字**与快照名直接拼进行里，
@@ -1276,7 +1282,7 @@ internal static class Program
             if (models.Count == 0)
             {
                 // 成功响应但空列表：常见于 baseUrl 指错端点或 Key 无列表权限——给出可行动的提示
-                Console.WriteLine("  （服务未返回任何模型：检查 baseUrl 是否指向支持 /models 的端点、API Key 是否有列表权限；仍可直接 /model <名称> 使用）");
+                Console.WriteLine(FormatHintLine("（服务未返回任何模型：检查 baseUrl 是否指向支持 /models 的端点、API Key 是否有列表权限；仍可直接 /model <名称> 使用）", ConsoleColumns()));
                 return;
             }
             var marked = false;
@@ -1291,9 +1297,9 @@ internal static class Program
                 modelEntries.Add(new HelpEntry($"{num})", m + (isCurrent ? "  *" : string.Empty)));
             }
             Console.WriteLine(FormatHelpList(modelEntries, ConsoleColumns()));
-            Console.WriteLine("  提示: /model <编号> 可直接切换");
+            Console.WriteLine(FormatHintLine("提示: /model <编号> 可直接切换", ConsoleColumns()));
             if (marked)
-                Console.WriteLine("  * = 当前配置的模型");
+                Console.WriteLine(FormatHintLine("* = 当前配置的模型", ConsoleColumns()));
             else if (!string.IsNullOrWhiteSpace(currentModel))
                 Console.WriteLine($"  （当前配置的模型不在列表中: {currentModel}）");
         }
@@ -1380,7 +1386,7 @@ internal static class Program
             Console.WriteLine($"  会话日志  : {agent.SessionPath}");
         if (config.SourceFile is not null)
             Console.WriteLine($"  配置文件  : {config.SourceFile}");
-        Console.WriteLine("  输入 /help 查看命令；直接输入任务描述即可开始。");
+        Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", ConsoleColumns()));
         Console.WriteLine("──────────────────────────────────────────────────────────");
     }
     /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
@@ -1615,7 +1621,7 @@ internal static class Program
                                 Console.WriteLine($"⚠ 模型列表中没有「{modelArg}」（共 {knownModels.Count} 个模型）");
                                 if (near.Count > 0)
                                     Console.WriteLine($"  相近的模型: {string.Join("、", near)}");
-                                Console.WriteLine("  仍将按输入保存；/models [关键字] 可查列表");
+                                Console.WriteLine(FormatHintLine("仍将按输入保存；/models [关键字] 可查列表", ConsoleColumns()));
                             }
                         }
                         catch { /* 离线/接口不支持时跳过检查 */ }
