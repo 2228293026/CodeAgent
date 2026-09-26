@@ -288,7 +288,7 @@ public sealed partial class Agent
                 var truncatedTools = resp.ToolCalls.Count > 0 ? "，工具调用参数可能残缺" : "";
                 lock (ConsoleLock)
                 {
-                    SafeColor.Foreground(ConsoleColor.Yellow);
+                    SafeColor.Foreground(SafeColor.Warning);
                     Console.WriteLine($"⚠ 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens");
                     SafeColor.Reset();
                 }
@@ -399,7 +399,7 @@ public sealed partial class Agent
                     _streamTokens += TextUtil.EstimateTokens(reason); // 估算已生成 token（spinner ↑ 显示）
                     lock (ConsoleLock)
                     {
-                        SafeColor.Foreground(ConsoleColor.DarkGray);
+                        SafeColor.Foreground(SafeColor.Muted);
                         Console.Write(reason);
                         SafeColor.Reset();
                     }
@@ -888,15 +888,15 @@ public sealed partial class Agent
             {
                 // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿
                 if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
-                    SafeColor.Foreground(ConsoleColor.DarkGray);
+                    SafeColor.Foreground(SafeColor.Muted);
                 else if (line.StartsWith("@@", StringComparison.Ordinal))
-                    SafeColor.Foreground(ConsoleColor.Cyan);
+                    SafeColor.Foreground(SafeColor.Accent);
                 else if (line.StartsWith('-'))
-                    SafeColor.Foreground(ConsoleColor.Red);
+                    SafeColor.Foreground(SafeColor.Danger);
                 else if (line.StartsWith('+'))
-                    SafeColor.Foreground(ConsoleColor.Green);
+                    SafeColor.Foreground(SafeColor.Success);
                 else
-                    SafeColor.Foreground(ConsoleColor.DarkGray);
+                    SafeColor.Foreground(SafeColor.Muted);
                 Console.WriteLine("      " + line);
                 SafeColor.Reset();
             }
@@ -978,7 +978,7 @@ public sealed partial class Agent
         {
             lock (ConsoleLock)
             {
-                SafeColor.Foreground(ConsoleColor.DarkGray);
+                SafeColor.Foreground(SafeColor.Muted);
                 Console.WriteLine($"  🔧 {summary} …");
                 SafeColor.Reset();
                 // edit_file / write_file 附带 diff 预览：执行前就看到改动内容（而非两段截断片段）
@@ -1027,11 +1027,11 @@ public sealed partial class Agent
                 var status = FormatToolStatusLine(summary, isError, sw.Elapsed);
                 if (isError)
                 {
-                    SafeColor.Foreground(ConsoleColor.Red);
+                    SafeColor.Foreground(SafeColor.Danger);
                     Console.WriteLine(status);
                     if (output.Length > 0)
                     {
-                        SafeColor.Foreground(ConsoleColor.Yellow);
+                        SafeColor.Foreground(SafeColor.Warning);
                         // 与成功路径同一预算：失败信息再长也不能整屏刷掉对话
                         Console.WriteLine(TextUtil.IndentBlock(
                             FormatToolOutputPreview(BuildToolOutputPreview(output, ct), width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
@@ -1041,13 +1041,13 @@ public sealed partial class Agent
                 }
                 else
                 {
-                    SafeColor.Foreground(ConsoleColor.Green);
+                    SafeColor.Foreground(SafeColor.Success);
                     Console.WriteLine(status);
                     SafeColor.Reset();
                     // 命令类工具附带输出预览，方便直接看到构建/测试结果
                     if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
-                        SafeColor.Foreground(ConsoleColor.DarkGray);
+                        SafeColor.Foreground(SafeColor.Muted);
                         var preview = BuildToolOutputPreview(output, ct);
                         Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
                         SafeColor.Reset();
