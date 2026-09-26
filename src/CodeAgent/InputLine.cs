@@ -42,12 +42,32 @@ public static class InputLine
     /// <summary>折叠提示行里「末行」预览的最大显示宽度（超出按 CJK 双宽截断）。</summary>
     internal const int FoldTailPreviewWidth = 40;
 
+    /// <summary>末行预览的最小可读列数：不足这么多列时整段省略，而不是切出看不出内容的碎片。</summary>
+    internal const int MinFoldTailWidth = 8;
+
+    /// <summary>折叠提示行固定前缀的显示宽度（不含末行预览）。按显示宽度算——
+    /// 提示文案几乎全是中文，按字符数算会低估近一倍，窄屏下反而更容易折行。</summary>
+    internal static int FoldHintPrefixWidth(int lineCount) =>
+        TextUtil.DisplayWidth($"⏷ 共 {lineCount} 行 ↓ 展开 · 末行: ");
+
+    /// <summary>末行预览在该终端宽度下能拿到的列数。
+    /// 宽度未知（&lt;= 0）时用固定值（不做猜测性裁剪）；剩余不足 <see cref="MinFoldTailWidth"/> 列时返回 0 ——
+    /// 此时整段省略：折行的提示行会破坏折叠块的固定行高，菜单锚点随之错位。</summary>
+    internal static int FoldTailBudget(int windowWidth, int lineCount, int minTail = MinFoldTailWidth)
+    {
+        if (windowWidth <= 0)
+            return FoldTailPreviewWidth;
+        var remain = windowWidth - FoldHintPrefixWidth(lineCount);
+        return remain < minTail ? 0 : Math.Min(FoldTailPreviewWidth, remain);
+    }
+
     /// <summary>
     /// 折叠长文本为「前 threshold-1 行 + 折叠提示行」：行数超过 threshold 时折叠，否则原样。
     /// 折叠提示行显示总行数（⏷ 共 N 行 ↓ 展开）并附末行预览：折叠后中间行不可见，
     /// 此前无法确认「末尾长什么样」，粘贴长段落后只能先展开再看。
+    /// <paramref name="windowWidth"/> 传入时按该宽度收敛末行预览，避免提示行折行。
     /// </summary>
-    internal static string FoldText(string text, int threshold = FoldThreshold)
+    internal static string FoldText(string text, int threshold = FoldThreshold, int windowWidth = 0)
     {
         var lines = DiffUtil.SplitLines(text);
         if (lines.Length <= threshold)
@@ -55,9 +75,10 @@ public static class InputLine
         var tail = lines[^1].Trim();
         if (tail.Length == 0 && lines.Length >= 2)
             tail = lines[^2].Trim(); // 末尾空行：回看一行，避免出现空的「末行: 」
-        var hint = tail.Length == 0
+        var budget = FoldTailBudget(windowWidth, lines.Length);
+        var hint = budget == 0 || tail.Length == 0
             ? $"⏷ 共 {lines.Length} 行 ↓ 展开"
-            : $"⏷ 共 {lines.Length} 行 ↓ 展开 · 末行: {FitToWidth(tail, FoldTailPreviewWidth)}";
+            : $"⏷ 共 {lines.Length} 行 ↓ 展开 · 末行: {FitToWidth(tail, budget)}";
         return string.Join('\n', lines.Take(threshold - 1)) + "\n" + hint;
     }
 
@@ -337,7 +358,9 @@ public static class InputLine
         /// <summary>输入块的显示文本：与 ScrollInput 同口径（未展开且 &gt;3 行时折叠）。
         /// 菜单重绘也必须画折叠视图——画原始多行会把块高从 3 行撑回 N 行，与菜单定位的行数口径不符。</summary>
         string DisplayedInputText() =>
-            !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold ? FoldText(InputText()) : InputText();
+            !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold
+                ? FoldText(InputText(), FoldThreshold, fitBudget)
+                : InputText();
 
         void ScrollInput()
         {
