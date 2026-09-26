@@ -85,19 +85,44 @@ public static class InputLine
     /// <summary>反向搜索时查询串的最大显示宽度（超出截断；长查询曾把草稿整段挤出屏幕）。</summary>
     internal const int SearchQueryDisplayWidth = 24;
 
+    /// <summary>搜索行除查询串外的固定开销列数：`(搜索)` + 两枚反引号 + 命中标记 + 分隔空格。</summary>
+    internal const int SearchRowOverhead = 10;
+
+    /// <summary>反向搜索时查询串在该终端宽度下能拿到的列数。
+    /// 此前写死 <see cref="SearchQueryDisplayWidth"/>：窄终端上「提示符 + (搜索) + 24 列查询」
+    /// 就能把整行占满，草稿被完全挤出屏幕——用户按 Ctrl+R 反而看不到自己在搜什么。
+    /// 宽度未知（&lt;= 0）时返回固定值（不做猜测性裁剪）；放不下时返回 0，
+    /// 调用方应整段省略查询而不是显示一两个残缺字符。</summary>
+    internal static int SearchQueryBudget(int windowWidth, int promptWidth, int maxQuery = SearchQueryDisplayWidth)
+    {
+        if (windowWidth <= 0)
+            return maxQuery;
+        var avail = windowWidth - promptWidth - SearchRowOverhead;
+        return avail <= 0 ? 0 : Math.Min(maxQuery, avail);
+    }
+
     /// <summary>
     /// 输入行可见文本：普通态、浏览历史态、反向搜索态的统一拼装。
     /// 搜索无命中时显式提示「未命中」：此前命中与未命中外观完全一致（都只显示 `(搜索)`query``），
     /// 用户按 Ctrl+R 后无法判断是「没匹配到」还是「还没继续按」。
+    /// <paramref name="windowWidth"/> 传入时按该宽度收敛查询串，避免把草稿挤出屏幕。
     /// </summary>
     internal static string FormatInputText(
         string prompt, bool searching, string searchQuery, bool searchHit,
-        int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth)
+        int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth, int windowWidth = 0)
     {
         if (searching)
         {
-            var query = searchQuery.Length == 0 ? "" : $"`{FitToWidth(searchQuery, queryWidth)}`";
-            var mark = searchQuery.Length == 0 ? "" : searchHit ? " ✔" : " 未命中";
+            if (searchQuery.Length == 0)
+                return $"{prompt} (搜索) {draft}";
+            var budget = windowWidth > 0
+                ? SearchQueryBudget(windowWidth, DisplayWidth(prompt), queryWidth)
+                : queryWidth;
+            // 放不下查询串时整段省略：只显示「未命中/命中」状态，草稿优先占剩余空间
+            if (budget <= 0)
+                return $"{prompt} (搜索) {(searchHit ? "✔" : "未命中")} {draft}";
+            var query = $"`{FitToWidth(searchQuery, budget)}`";
+            var mark = searchHit ? " ✔" : " 未命中";
             return $"{prompt} (搜索){query}{mark} {draft}";
         }
         return historyIndex >= 0 && historyIndex < historyCount
@@ -292,11 +317,7 @@ public static class InputLine
         var searchQuery = new StringBuilder();
         var searchFrom = -1;        // 当前命中的 session 下标（-1 = 无命中）
 
-        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」；
-        // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
-        string InputText() =>
-            FormatInputText(promptPlain, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text);
-
+        // 宽度相关量必须先于 InputText 声明：搜索行要按 fitBudget 收敛查询串（CS0841）
         var winW = TryWindowWidth();
         var ansiOk = ShouldUseAnsiInPlace(ansi, Console.IsOutputRedirected, winW);
         if (ansiOk)
@@ -307,6 +328,12 @@ public static class InputLine
         // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）
         string FitMenu(string name, string desc, bool mode, int row) =>
             fitBudget > 0 ? FitMenuLine(name, desc, fitBudget, mode, row) : FormatMenuLine(name, desc, row, mode);
+
+        // 输入行文本：浏览命令历史（↑/↓）时附带位置提示「(历史 N/M)」；
+        // Ctrl+R 反向搜索时展示查询串与命中状态（搜索无命中显式提示「未命中」）
+        string InputText() =>
+            FormatInputText(promptPlain, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
+                SearchQueryDisplayWidth, fitBudget);
 
         var menuOpen = false;
         var modePicker = false;
