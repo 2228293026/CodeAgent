@@ -181,9 +181,8 @@ internal static class Program
         // 配置非致命警告（未知配置项 / 枚举回退）：拼写错误此前被静默忽略，用户无从得知「配了不生效」
         foreach (var warning in config.Warnings)
         {
-            SafeColor.Foreground(SafeColor.Warning);
+            using var scope = SafeColor.Scope(SafeColor.Warning);
             Console.WriteLine(FormatNoticeLine($"配置: {warning}", ConsoleColumns()));
-            SafeColor.Reset();
         }
 
         // 交互式供应商配置向导：生成/更新 codeagent.json 后退出
@@ -460,9 +459,8 @@ internal static class Program
                 if (agent.LastTurnFailed)
                 {
                     // 空回复：红色 ⚠ 明确提示失败
-                    SafeColor.Foreground(SafeColor.Danger);
+                    using var scope = SafeColor.Scope(SafeColor.Danger);
                     Console.WriteLine(FormatNoticeLine(result, ConsoleColumns()));
-                    SafeColor.Reset();
                 }
                 else
                 {
@@ -886,12 +884,11 @@ internal static class Program
         string costText = "";
         if (cost is { } c)
             costText = $" ≈${TextUtil.FormatCost(c)}";
-        SafeColor.Foreground(SafeColor.Muted);
+        using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(BuildTurnSummary(
             agent.TurnRounds, agent.TurnToolCalls, TextUtil.FormatElapsed(elapsed),
             $"{agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok",
             think, cache, costText, ConsoleColumns()));
-        SafeColor.Reset();
     }
 
     /// <summary>
@@ -987,11 +984,10 @@ internal static class Program
             "full" => "所有文件可读可写（完全放开）",
             _ => mode,
         };
-        SafeColor.Foreground(SafeColor.Muted);
+        using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(FormatConfirmLine(FormatAccessSwitchedLine(mode, desc), ConsoleColumns()));
         if (showHint)
             Console.WriteLine(FormatHintLine("Shift+Tab 或 /access next 循环切换; /access <strict|whitelist|full> 直接指定", ConsoleColumns()));
-        SafeColor.Reset();
     }
 
     /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。
@@ -1001,18 +997,22 @@ internal static class Program
         var width = ConsoleColumns();
         foreach (var line in DiffUtil.SplitLines(diff))
         {
+            // 作用域而非 Foreground/Reset 成对：FormatDiffLine 抛异常时若漏掉 Reset，
+            // 循环会继续，于是**后面每一行 diff 都染上上一行的颜色**，
+            // 而用户根本不知道出过错。
+            ConsoleColor? tint = null;
             if (line.StartsWith("== ", StringComparison.Ordinal))
-                SafeColor.Foreground(SafeColor.Emphasis);       // 文件标题
+                tint = SafeColor.Emphasis;         // 文件标题
             else if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
-                SafeColor.Foreground(SafeColor.Muted);    // 文件头
+                tint = SafeColor.Muted;    // 文件头
             else if (line.StartsWith("@@", StringComparison.Ordinal))
-                SafeColor.Foreground(SafeColor.Accent);        // hunk 头
+                tint = SafeColor.Accent;        // hunk 头
             else if (line.StartsWith('+'))
-                SafeColor.Foreground(SafeColor.Success);       // 新增
+                tint = SafeColor.Success;       // 新增
             else if (line.StartsWith('-'))
-                SafeColor.Foreground(SafeColor.Danger);         // 删除
+                tint = SafeColor.Danger;         // 删除
+            using var scope = tint is { } t ? SafeColor.Scope(t) : null;
             Console.WriteLine(FormatDiffLine(line, width));
-            SafeColor.Reset();
         }
     }
 
@@ -1500,12 +1500,11 @@ internal static class Program
         var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
         // git 分支段（非仓库整体省略）：多仓库/多分支工作流下快速确认当前所在位置
         var branch = CachedBranch(Environment.CurrentDirectory);
-        SafeColor.Foreground(SafeColor.Muted);
+        using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,
             TextUtil.CompactTokenCount(agent.TurnInputTokens), TextUtil.CompactTokenCount(agent.TurnOutputTokens),
             ctx, think, ConsoleColumns()));
-        SafeColor.Reset();
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
@@ -2735,9 +2734,8 @@ internal static class Program
     private static void PrintModeSwitched(AgentMode mode, string model)
     {
         try { Console.Title = $"CodeAgent · {mode.Name} · {model}"; } catch { /* 部分终端不支持标题 */ }
-        SafeColor.Foreground(SafeColor.Muted);
+        using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(FormatConfirmLine(FormatModeSwitchedLine(mode.Name, mode.Description), ConsoleColumns()));
-        SafeColor.Reset();
     }
     internal static (string cmd, string rest) SplitCommand(string line)
     {

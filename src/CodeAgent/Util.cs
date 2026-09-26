@@ -56,6 +56,29 @@ public static class SafeColor
         try { Console.ResetColor(); } catch { /* 不支持颜色 */ }
     }
 
+    /// <summary>把 <see cref="Foreground"/> + <see cref="Reset"/> 合成一个**异常安全**的作用域。
+    ///
+    /// 手写成对时，中间只要有一行会抛，<c>Reset()</c> 就被跳过，颜色会**泄漏到后面所有输出**：
+    /// 一行 diff 渲染失败，用户随后看到的整屏都是红的，而且完全不知道发生过什么。
+    /// 用 <c>using</c> 作用域后，无论正常结束、提前 return 还是抛异常都会复位。
+    /// 颜色关闭时是一个空作用域，不产生任何输出。</summary>
+    public static IDisposable Scope(ConsoleColor c) => new ColourScope(c);
+
+    private sealed class ColourScope : IDisposable
+    {
+        private bool _reset = true;
+
+        public ColourScope(ConsoleColor c) => Foreground(c);
+
+        public void Dispose()
+        {
+            if (!_reset)
+                return;
+            _reset = false;
+            Reset();
+        }
+    }
+
     /// <summary>配色方案。深色是绝大多数终端的默认；浅色用于亮背景终端。</summary>
     public enum ColorTheme
     {

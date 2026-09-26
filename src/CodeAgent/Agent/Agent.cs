@@ -886,19 +886,19 @@ public sealed partial class Agent
                 return;
             foreach (var line in DiffUtil.SplitLines(text, ct))
             {
-                // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿
-                if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
-                    SafeColor.Foreground(SafeColor.Muted);
-                else if (line.StartsWith("@@", StringComparison.Ordinal))
-                    SafeColor.Foreground(SafeColor.Accent);
-                else if (line.StartsWith('-'))
-                    SafeColor.Foreground(SafeColor.Danger);
-                else if (line.StartsWith('+'))
-                    SafeColor.Foreground(SafeColor.Success);
-                else
-                    SafeColor.Foreground(SafeColor.Muted);
+                // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿。
+                // 作用域保证这一行中途抛异常也不会把颜色带到下一行。
+                var tint = line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal)
+                    ? SafeColor.Muted
+                    : line.StartsWith("@@", StringComparison.Ordinal)
+                        ? SafeColor.Accent
+                        : line.StartsWith('-')
+                            ? SafeColor.Danger
+                            : line.StartsWith('+')
+                                ? SafeColor.Success
+                                : SafeColor.Muted;
+                using var scope = SafeColor.Scope(tint);
                 Console.WriteLine("      " + line);
-                SafeColor.Reset();
             }
         }
         catch (OperationCanceledException) { throw; }
@@ -1027,17 +1027,19 @@ public sealed partial class Agent
                 var status = FormatToolStatusLine(summary, isError, sw.Elapsed);
                 if (isError)
                 {
-                    SafeColor.Foreground(SafeColor.Danger);
+                    // 作用域而非 Foreground/Reset 成对：中间要跑 BuildToolOutputPreview、
+                    // FormatToolOutputPreview、IndentBlock，哪一步抛了都不会把红色漏到后面
+                    using var danger = SafeColor.Scope(SafeColor.Danger);
                     Console.WriteLine(status);
                     if (output.Length > 0)
                     {
-                        SafeColor.Foreground(SafeColor.Warning);
                         // 与成功路径同一预算：失败信息再长也不能整屏刷掉对话
-                        Console.WriteLine(TextUtil.IndentBlock(
-                            FormatToolOutputPreview(BuildToolOutputPreview(output, ct), width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
-                        SafeColor.Reset();
+                        using (SafeColor.Scope(SafeColor.Warning))
+                        {
+                            Console.WriteLine(TextUtil.IndentBlock(
+                                FormatToolOutputPreview(BuildToolOutputPreview(output, ct), width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
+                        }
                     }
-                    SafeColor.Reset();
                 }
                 else
                 {
