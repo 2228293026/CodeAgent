@@ -491,6 +491,10 @@ public static class InputLine
         var idx = session.Count;
         var draft = (string?)null; // 浏览历史前的原始输入草稿（↓ 回到底部时恢复）
         var promptPlain = prompt.TrimStart('\n');
+        // 提示符可能占多行（BuildInputFrameTop 的「上边框 + 提示符」）。光标列只能按
+        // **最后一行**的宽度算——按整段算会把上边框那几十列也加进去，光标被推到行外，
+        // 终端折行后又和下一次重绘叠加，表现为「敲一个字就多出一行」。
+        var promptTail = promptPlain[(promptPlain.LastIndexOf('\n') + 1)..];
         var searching = false;      // Ctrl+R 反向搜索模式：输入进 query，输入行显示命中的历史条目
         var searchQuery = new StringBuilder();
         var searchFrom = -1;        // 当前命中的 session 下标（-1 = 无命中）
@@ -531,19 +535,26 @@ public static class InputLine
         var inputExpanded = false;   // 用户是否展开过折叠的多行输入（展开后不再自动折叠）
 
         Console.Write(prompt);
+        // 提示符本身可能占多行（例如 BuildInputFrameTop 返回「上边框 + 提示符」两行）。
+        // 重绘基线必须把提示符已占的行数算进去：此前恒为 1，于是首个按键重绘时
+        // 按「块只有 1 行」上移，实际块有 2 行，光标落在**边框那一行**，
+        // 重写内容把边框覆盖掉、提示被挤到下一行——表现为「敲一个字就换行」。
+        var promptRows = 1 + CountNewlines(promptPlain);
+        lastInputLines = promptRows;
+        lastCursorLine = promptRows - 1; // 光标停在提示符最后一行
         if (!string.IsNullOrEmpty(initial))
         {
             Console.Write(initial); // 预填文本也要显示出来
             // 预填可能多行（取消回合回填的多行草稿）：重绘基线必须按实际行数初始化，
             // 否则首个按键重绘时 lastInputLines=1 / lastCursorLine=0，会在预填块下方再画一份重复块
-            lastInputLines = 1 + CountNewlines(initial);
-            lastCursorLine = CountNewlines(initial); // 光标停在预填末尾（末行）
+            lastInputLines = promptRows + CountNewlines(initial);
+            lastCursorLine = promptRows - 1 + CountNewlines(initial); // 光标停在预填末尾（末行）
         }
         else
         {
             // 首次进入就显示占位提示：等用户敲第一个键才出现的话，那时已经没意义了。
             // 首个按键的 RedrawInput 会用 \r\x1b[2K 整行擦掉它，不会残留。
-            var initialHint = BuildPlaceholder(placeholder, fitBudget, DisplayWidth(promptPlain), ansiOk);
+            var initialHint = BuildPlaceholder(placeholder, fitBudget, DisplayWidth(promptTail), ansiOk);
             if (initialHint.Length > 0)
                 Console.Write(initialHint);
         }
@@ -662,7 +673,7 @@ public static class InputLine
                     {
                         seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
                         // 显示行首是提示符：光标列 = 提示符宽 + 行内内容宽（少算提示符会偏到其左侧）
-                        col = DisplayWidth(promptPlain) + DisplayWidth(seg);
+                        col = DisplayWidth(promptTail) + DisplayWidth(seg);
                     }
                     Console.Write($"\x1b[{up}A\r{CursorForward(col)}");
                 }
@@ -675,7 +686,7 @@ public static class InputLine
                 // 上移不改变列：回到列 1 后右移到光标行的行内偏移。显示行首是提示符
                 // （首行带前缀、其余行各自成行），光标列 = 提示符宽 + 该行到 cursor 的内容宽
                 var seg = cursorLine == 0 ? upTo : upTo[(upTo.LastIndexOf('\n') + 1)..];
-                Console.Write($"\x1b[{up2}A\r{CursorForward(DisplayWidth(promptPlain) + DisplayWidth(seg))}");
+                Console.Write($"\x1b[{up2}A\r{CursorForward(DisplayWidth(promptTail) + DisplayWidth(seg))}");
             }
             else
             {

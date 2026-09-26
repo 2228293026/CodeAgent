@@ -1279,9 +1279,18 @@ internal static class Program
         // 提示前留 1 列；只留 1 而不是 2——框线左侧不留白（贴左边更满格）。
         var ruleWidth = width - hintWidth - 1;
         if (ruleWidth < 4)
-            return InputLine.FitToWidth(prompt, width) + "\n" + new string(SafeColor.Glyphs.RuleChar, Math.Max(1, width));
+        {
+            // 窄到放不下提示时：丢掉提示，但**保持「边框在上、提示符在下」的形状**。
+            // 此前这里返回「提示符 + 换行 + 边框」，两个分支形状不一致，于是
+            // 「最后一行就是输入行」这个前提在窄终端下不成立——光标列按边框宽度算，
+            // 光标被推出行宽，敲一个字符就折行。
+            return new string(SafeColor.Glyphs.RuleChar, Math.Max(1, width)) + "\n" + InputLine.FitToWidth(prompt, width);
+        }
         var line = new string(SafeColor.Glyphs.RuleChar, ruleWidth) + " " + hint;
-        return line + "\n" + prompt;
+        // 提示符**必须**按 width 收敛。此前两个分支都没做，于是提示符比终端宽时
+        // 必然折行——这正是「敲一个字就多出一行」的直接成因：
+        // 折行把输入块撑高，而重绘基线仍按 1 行算，之后每次按键都再错一行。
+        return line + "\n" + InputLine.FitToWidth(prompt, width);
     }
 
     /// <summary>输入框下边框。输入提交后打印，把已发出的这行封进框里。</summary>

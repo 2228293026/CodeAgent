@@ -489,8 +489,77 @@ public sealed partial class Agent
         return "\r" + new string(' ', columns) + "\r";
     }
 
+    /// <summary>spinner 行的分段降级顺序：提示 → token → 用时。动画帧永不丢弃——
+    /// 没有帧的行读起来就像卡死了，那正是用户最需要反馈的时刻。</summary>
+    internal static string BuildSpinnerLine(
+        string frame, TimeSpan elapsed, long tokens, string? interruptHint, int width)
+    {
+        var sep = SafeColor.Glyphs.SegmentSeparator;
+        var tok = tokens >= 1000 ? $"{tokens / 1000.0:F1}K" : tokens.ToString();
+        var showHint = !string.IsNullOrEmpty(interruptHint);
+        var showTok = true;
+        var showElapsed = true;
+
+        string Render()
+        {
+            var parts = new List<string> { frame };
+            if (showElapsed)
+                parts.Add($"用时 {TextUtil.FormatSessionTime(elapsed)}");
+            if (showTok)
+                parts.Add($"{SafeColor.Glyphs.Up} {tok} tokens");
+            if (showHint)
+                parts.Add(interruptHint!);
+            return string.Join($"{sep} ", parts);
+        }
+
+        var text = Render();
+        if (width <= 0)
+            return text; // 宽度未知：不猜。宁可超宽也不要凭空少一段。
+        var drops = new Action[]
+        {
+            () => showHint = false,
+            () => showTok = false,
+            () => showElapsed = false,
+        };
+        for (var i = 0; TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
+        {
+            drops[i]();
+            text = Render();
+        }
+        // 丢完仍超宽（极窄终端）：动画帧本身只有 1~2 列，硬截会劈成半个代理对
+        return TextUtil.DisplayWidth(text) <= width ? text : frame;
+    }
+
     /// <summary>本轮模型产出首个输出前的耗时（思考时间，秒）。</summary>
     public double TurnThinkingSeconds { get; private set; }
+
+    /// <summary>ESC 中断提示：宽度不够时返回 null（宁可不提示，也不要把 spinner 撑出屏幕）。</summary>
+    internal static string? SpinnerHint(int columns) =>
+        columns >= 34 ? $"{SafeColor.Glyphs.Escape} 中断" : null;
+
+    private static int _lastGoodColumns; // 上一次成功读到的可信宽度（跨帧保留）
+
+    /// <summary>spinner 行的终端列数；未知时返回 0（表示不裁剪）。
+    /// 沿用 <see cref="ConsoleRenderer"/> 的既有做法：各自读一次，但**解析与阈值都调用
+    /// <see cref="Program.ResolveColumns"/>/<see cref="Program.MinPlausibleColumns"/>**——
+    /// 终端最小化/拖拽时 <c>Console.WindowWidth</c> 会抖到 1~2 列，直接用会让整行折行。</summary>
+    private static int ConsoleColumns()
+    {
+        if (Console.IsOutputRedirected)
+            return 0;
+        try
+        {
+            var width = Console.WindowWidth;
+            var resolved = Program.ResolveColumns(width, _lastGoodColumns);
+            if (resolved >= Program.MinPlausibleColumns)
+                _lastGoodColumns = resolved;
+            return resolved;
+        }
+        catch
+        {
+            return _lastGoodColumns;
+        }
+    }
 
     /// <summary>思考计时器：动画帧 + 整个对话的累计时间 + ↑ 累计 tokens（会话全部口径）。
     /// 先换到输入行下方独立一行（spinner 专属行），\r 只更新该行，不覆盖输入框。</summary>
@@ -514,19 +583,20 @@ public sealed partial class Agent
                     var f = SpinnerFrame(frame++);
                     // 本回合口径：/clear 后新对话从 0 起（会话累计在 /stats），与状态栏/回合摘要一致
                     var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
-                    var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
-                    // 显示实际用时与 token（而非"思考中"），实时更新。
                     // 取锁后再查一次取消：ClearSpinner/FinalizeSpinner 在锁内先取消再清行，
                     // 若已取消就不再画帧——否则清行之后又落下一帧动画残留在屏幕上
                     lock (ConsoleLock)
                     {
                         if (cts.IsCancellationRequested)
                             break;
-                        // label 模式（压缩历史等非流式调用）：无 token 可计，显示已进行时长；
-                        // 默认模式维持原样（用时 + 本回合 tokens）
+                        // 宽度感知：spinner 是 \r 原地重写的一行，**不能折行**——
+                        // 折行会把输入块撑成两行，之后每次重绘的光标定位都偏。
+                        var columns = ConsoleColumns();
                         var frame_text = label is null
-                            ? $"{f} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}{SafeColor.Glyphs.Up} {tok} tokens"
-                            : $"{f} {label} 已用时 {TextUtil.FormatSessionTime(_spinnerSw.Elapsed)}";
+                            ? BuildSpinnerLine(f, _turnSw.Elapsed, total, SpinnerHint(columns), columns)
+                            : BuildSpinnerLine(f, _spinnerSw.Elapsed, total, SpinnerHint(columns), columns);
+                        if (label is not null && frame_text.Length > 0)
+                            frame_text = $"{label}{SafeColor.Glyphs.SegmentSeparator}{frame_text}";
                         _spinnerLastWidth = TextUtil.DisplayWidth(frame_text);
                         Console.Write("\r" + frame_text);
                     }
