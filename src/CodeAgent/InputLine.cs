@@ -230,9 +230,11 @@ public static class InputLine
     /// <summary>上一次可信的终端宽度（读数抖动时沿用）。</summary>
     private static int _lastGoodWidth;
 
-    /// <summary>输入行可接受的最低可信宽度。低于此值的读数视为测量失效
-    /// （终端最小化、拖拽过程中的抖动），沿用上一次的好值而不是当成真的。</summary>
-    internal const int MinPlausibleWidth = 8;
+    /// <summary>输入行可接受的最低可信宽度。**不另立标准**：直接引用
+    /// <see cref="Program.MinPlausibleColumns"/>，让"可信宽度"在项目里只有一处定义。
+    /// 两处各写一个常数再靠测试断言相等，迟早会被某次修改悄悄改歪，
+    /// 而症状是"状态栏敢信、输入行不敢信"这种极难定位的分裂行为。</summary>
+    internal const int MinPlausibleWidth = Program.MinPlausibleColumns;
 
     /// <summary>把一次窗口宽度读数解析成「本轮应使用的宽度」。
     /// 读数低于 <see cref="MinPlausibleWidth"/> 视为失效：输入行会据此决定

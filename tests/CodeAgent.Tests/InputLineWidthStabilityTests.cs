@@ -58,6 +58,8 @@ public class InputLineWidthStabilityTests
     {
         // 同一个项目里「可信宽度」只能有一套标准：两处阈值必须一致，
         // 否则会出现「状态栏敢信、输入行不敢信」的分裂行为。
+        // InputLine.MinPlausibleWidth 现在是 Program.MinPlausibleColumns 的**别名**，
+        // 这条断言钉住的是「别名关系不许被改回各自的字面量」。
         Assert.Equal(Program.MinPlausibleColumns, InputLine.MinPlausibleWidth);
     }
 
