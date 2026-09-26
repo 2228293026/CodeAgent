@@ -1194,7 +1194,10 @@ public sealed partial class Agent
                 run.Clear();
                 return;
             }
-            var line = FormatToolGroupLine(run, runWatch.Elapsed);
+            // 必须传宽度：这行是"Read×3 Grep×2 …"的形式，工具种类一多就会很长。
+            // width=0 的含义是"不裁剪"，窄终端上必然折行——而它正插在流式输出中间，
+            // 折行会把下面的正文顶走。此前这里是全 TUI 唯一没传宽度的一行。
+            var line = FormatToolGroupLine(run, runWatch.Elapsed, CodeAgent.Program.ConsoleColumnsForNotice());
             run.Clear();
             lock (ConsoleLock)
             {
@@ -1324,7 +1327,8 @@ public sealed partial class Agent
         {
             lock (ConsoleLock)
             {
-                var status = FormatToolStatusLine(summary, isError, sw.Elapsed);
+                // 必须传宽度：工具摘要含文件名/参数，窄终端上不裁剪必然折行
+                var status = FormatToolStatusLine(summary, isError, sw.Elapsed, CodeAgent.Program.ConsoleColumnsForNotice());
                 if (isError)
                 {
                     // 作用域而非 Foreground/Reset 成对：中间要跑 BuildToolOutputPreview、
