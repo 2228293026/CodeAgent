@@ -569,6 +569,38 @@ public static class InputLine
     }
 
     /// <summary>
+    /// 菜单表头：必须说清楚现在列的是什么。
+    ///
+    /// @ 引用菜单列的是**文件**。沿用命令菜单的 "Commands … Enter run" 会让人以为
+    /// 按回车会执行某个命令，实际上回车是在往输入行里插入路径——
+    /// 提示与实际行为相反，用户会一直等一个不会到来的执行。
+    /// 纯函数，好测：表头是纯展示，藏在这里就没有守卫会碰它。
+    /// </summary>
+    internal static string BuildMenuHeader(bool modePicker, bool mentionActive)
+    {
+        if (modePicker)
+            return $"  Modes (up/down select, {SafeColor.Glyphs.Enter} switch, {SafeColor.Glyphs.Escape} close):";
+        if (mentionActive)
+            return $"  Files (1-9 insert, up/down select, {SafeColor.Glyphs.Arrow} insert, {SafeColor.Glyphs.Enter} next line, {SafeColor.Glyphs.Escape} close):";
+        return $"  Commands (1-9 run, up/down select, {SafeColor.Glyphs.Arrow} fill, {SafeColor.Glyphs.Enter} run, {SafeColor.Glyphs.Escape} close):";
+    }
+
+    /// <summary>
+    /// 菜单项被数字键选中时的动作：命令菜单是**提交**（返回该命令），
+    /// @ 文件菜单是**插入**（返回 null，交给调用方改写输入行）。
+    ///
+    /// 区分错了后果很重：把裸路径当成整条提示发出去，用户敲的半句话被整段丢掉。
+    /// </summary>
+    internal enum MenuPickAction
+    {
+        Submit,
+        Insert,
+    }
+
+    internal static MenuPickAction PickAction(bool mentionActive) =>
+        mentionActive ? MenuPickAction.Insert : MenuPickAction.Submit;
+
+    /// <summary>
     /// 一段文本在给定列宽下占**多少个终端行**——显式换行与自动折行都要算。
     ///
     /// \x1b[2K 只清**一行**。此前重绘块行数只数文本里的显式 \n，
@@ -763,9 +795,10 @@ public static class InputLine
 
         int MenuAbove() => menuRows + DisplayedNewlines(inputExpanded, buf.Text); // 菜单块 + 输入块总行数（光标到块顶的行距，折叠感知）
 
-        string Header() => modePicker
-            ? "  Modes (up/down select, Enter switch, Esc close):"
-            : $"  Commands (1-9 run, up/down select, {SafeColor.Glyphs.Arrow} fill, {SafeColor.Glyphs.Enter} run, {SafeColor.Glyphs.Escape} close):";
+        // 菜单表头必须说清楚现在列的是什么。@ 引用菜单列的是**文件**，
+        // 沿用 "Commands … Enter run" 会让人以为按回车会执行某个命令，
+        // 实际上回车是在插入路径。
+        string Header() => BuildMenuHeader(modePicker, mention.Item1 >= 0);
 
         int CountNewlines(string s)
         {
@@ -1610,6 +1643,17 @@ public static class InputLine
                         if (selIdx >= 0)
                         {
                             var sel = menuItems[selIdx].Name;
+                            // @ 文件菜单：数字键是**插入**，不是提交。
+                            // 沿用命令菜单的"直接 return"会把裸路径当成整条提示发出去——
+                            // 用户已经敲的"看下这个文件"被整段丢掉，换来一句莫名其妙的路径。
+                            if (PickAction(mention.Item1 >= 0) == InputLine.MenuPickAction.Insert)
+                            {
+                                buf.Replace(ApplyMention(buf.Text, mention.Item1, sel));
+                                draft = null;
+                                CloseMenu();
+                                RedrawInput();
+                                break;
+                            }
                             CloseMenu();
                             Console.WriteLine();
                             Remember(sel);
