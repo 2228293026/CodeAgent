@@ -45,6 +45,11 @@ public sealed class ConsoleRenderer
     }
 
     /// <summary>结束输出：刷出剩余缓冲。</summary>
+    /// <summary>流结束时是否停在行边界（没有未输出的半行，也没有待冲刷的空行）。
+    /// 调用方据此决定要不要补换行：模型最后一段已经带换行时再补一个会多出空行；
+    /// 没有结束时必须补，否则后续的工具状态行/摘要行会粘在正文同一行。</summary>
+    public bool EndsOnLineBoundary => !_inCode && _line.Length == 0 && _pendingBlanks == 0;
+
     public void Flush()
     {
         if (!_enabled)

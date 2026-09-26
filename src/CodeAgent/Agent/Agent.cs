@@ -67,6 +67,11 @@ public sealed partial class Agent
     /// <summary>本轮运行是否已把最终答复流式打印到控制台（Program 据此避免重复打印）。</summary>
     public bool StreamedLastRun { get; internal set; }
 
+    /// <summary>本轮流式结束时是否已停在行边界。Program 据此决定要不要补换行：
+    /// 模型最后一段已经带换行时再补一个会多出空行；没结束时必须补，
+    /// 否则工具状态行/回合摘要会粘在正文同一行。</summary>
+    public bool StreamedOnLineBoundary { get; internal set; } = true;
+
     private bool _streamedThisCall;
 
     /// <summary>最近一次用户请求文本（/retry 用）。</summary>
@@ -314,6 +319,7 @@ public sealed partial class Agent
             {
                 _ctx.StopRequested = false;
                 StreamedLastRun = _streamedThisCall;
+                StreamedOnLineBoundary = !_streamedThisCall || _renderer?.EndsOnLineBoundary != false;
                 if (resp.Text is null)
                 {
                     LastTurnFailed = true;

@@ -315,7 +315,7 @@ internal static class Program
                 var result = await RunTurnAsync(t => agent.RunAsync(task, t));
                 if (IsCancelledTurn(result))
                     result = "\n" + FormatCancelLine("已取消。", ConsoleColumns()); // 哨兵映射回显示文本（一次性模式没有草稿回填）
-                PrintResult(result, agent.StreamedLastRun, prefixNewline: false);
+                PrintResult(result, agent.StreamedLastRun, prefixNewline: false, agent.StreamedOnLineBoundary);
                 agent.Close();
                 return agent.LastTurnFailed ? 1 : 0; // 空回复视为失败，非零退出码供脚本判断
             }
@@ -452,7 +452,7 @@ internal static class Program
                 }
                 else
                 {
-                    PrintResult(result, agent.StreamedLastRun, prefixNewline: true);
+                    PrintResult(result, agent.StreamedLastRun, prefixNewline: true, agent.StreamedOnLineBoundary);
                 }
                 PrintTurnSummary(agent, sw.Elapsed, opts);
                 // 上下文占用监控：配置了 autoCompactPercent 达标自动压缩；否则 ≥90% 提示建议 /compact
@@ -1226,12 +1226,14 @@ internal static class Program
         return "\n" + BuildPromptText(agent.CurrentMode.Name, model, dir, ConsoleColumns());
     }
 
-    /// <summary>输出最终答复：若已流式打印过则只补换行，否则整体打印。</summary>
-    private static void PrintResult(string result, bool streamed, bool prefixNewline)
+    /// <summary>输出最终答复：若已流式打印过则按需补换行，否则整体打印。
+    /// 流式路径此前**无条件**补一个换行：模型最后一段本来就带换行时会多出一个空行，
+    /// 而没带换行时又必须补——否则工具状态行/回合摘要会粘在正文同一行。</summary>
+    private static void PrintResult(string result, bool streamed, bool prefixNewline, bool streamedOnLineBoundary = false)
     {
         if (streamed)
         {
-            if (result.Length > 0)
+            if (result.Length > 0 && !streamedOnLineBoundary)
                 Console.WriteLine();
         }
         else
@@ -1239,6 +1241,10 @@ internal static class Program
             Console.WriteLine((prefixNewline ? "\n" : "") + result);
         }
     }
+
+    /// <summary>PrintResult 的测试入口（internal 以便断言实际写出的字符）。</summary>
+    internal static void PrintResultForTest(string result, bool streamed, bool prefixNewline, bool streamedOnLineBoundary) =>
+        PrintResult(result, streamed, prefixNewline, streamedOnLineBoundary);
 
     /// <summary>从模型列表中找与输入相近的候选（按输入首个家族段做包含匹配，忽略大小写；最多 max 个）。</summary>
     internal static IReadOnlyList<string> SuggestModels(IReadOnlyList<string> models, string input, int max = 3)
