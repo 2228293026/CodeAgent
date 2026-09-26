@@ -14,7 +14,14 @@ public sealed class ConsoleRenderer
     private bool _inInlineCode; // 是否在行内代码 `` `...` `` 内
     private bool _skipCodeIntro; // 围栏起始行的语言标注（如 ```cs 的 cs）应丢弃
 
+    /// <summary>终端列数（0 = 未知）。列表项/块引用按此宽度折行并加悬挂缩进；
+    /// 未知时保持原样，交回终端软换行。</summary>
+    private int _width;
+
     public ConsoleRenderer(bool enabled) => _enabled = enabled;
+
+    /// <summary>设置折行宽度（0 = 不折行）。</summary>
+    public void SetWidth(int width) => _width = width;
 
     /// <summary>流式追加文本；完整行 / 完整代码块立即输出。</summary>
     public void Append(string text)
@@ -206,6 +213,18 @@ public sealed class ConsoleRenderer
         _code.Append(ch);
     }
 
+    /// <summary>列表项 / 块引用的悬挂缩进：续行对齐到正文起始列。
+    /// 没有它时终端软换行会让续行顶到行首，视觉上变成新段落，
+    /// 读者看不出「这一行还是上一条列表项的内容」。</summary>
+    internal static string HangingIndentFor(string content)
+    {
+        var quote = BlockquoteLevel(content);
+        if (quote > 0)
+            return string.Concat(Enumerable.Repeat("> ", quote));
+        var bullet = System.Text.RegularExpressions.Regex.Match(content, @"^(\s*(?:[-*+]|\d+[.)])\s)");
+        return bullet.Success ? bullet.Groups[1].Value : "";
+    }
+
     private void EmitLine(string line)
     {
         // 剥离行尾 \r（Windows 换行残留）：否则终端把 \r 当回车，光标跳回行首覆盖本行
@@ -222,6 +241,26 @@ public sealed class ConsoleRenderer
         var color = ResolveLineColor(content);
         var parts = ParseInline(content);
 
+        // 列表项/块引用的正文按显示宽度折行并加悬挂缩进：续行仍与首行同属一条内容。
+        // WrapDisplay 会把缩进加到**每一行**（含首行），所以传入的必须是去掉标记的正文，
+        // 否则首行会出现 "- - 内容" 这样的重复标记。
+        // 宽度未知（0）或不够折行时保持原样，交回终端软换行。
+        var hanging = HangingIndentFor(content);
+        if (hanging.Length > 0 && _width > hanging.Length)
+        {
+            var body = content[hanging.Length..];
+            // WrapDisplay 的 width 是正文预算：这里要扣掉每行都要加的悬挂缩进
+            var budget = _width - TextUtil.DisplayWidth(hanging);
+            var wrapped = TextUtil.WrapDisplay(body, budget, hanging);
+            var lines = DiffUtil.SplitLines(wrapped, CancellationToken.None);
+            if (lines.Length > 1)
+            {
+                for (var i = 0; i < lines.Length; i++)
+                    EmitStyledLine(lines[i], color, i == 0 && hadNewline);
+                return;
+            }
+        }
+
         // 无任何样式且没有任何标记被剥离：原样输出（保留换行）。
         // 必须比较「剥离标记后的纯文本」与原行是否一致：整行就是一个行内代码时，
         // 解析结果会塌成单个 Normal 段，若只看样式就会误走快速路径，把 ` 标记漏回屏幕。
@@ -232,6 +271,28 @@ public sealed class ConsoleRenderer
             return;
         }
 
+        EmitStyledParts(parts, color);
+        SafeColor.Reset();
+        Console.WriteLine();
+    }
+
+    /// <summary>输出一行带样式的内容（行内代码 / 标题 / 引用配色）。</summary>
+    private void EmitStyledLine(string content, ConsoleColor? color, bool hadNewline)
+    {
+        var parts = ParseInline(content);
+        var plain = string.Concat(parts.Select(p => p.text));
+        if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal) && plain == content)
+        {
+            Console.Write(content + (hadNewline ? "\n" : ""));
+            return;
+        }
+        EmitStyledParts(parts, color);
+        SafeColor.Reset();
+        Console.WriteLine();
+    }
+
+    private void EmitStyledParts(List<(string text, InlineStyleToken style)> parts, ConsoleColor? color)
+    {
         foreach (var (text, style) in parts)
         {
             SafeColor.Foreground(style switch
@@ -242,8 +303,6 @@ public sealed class ConsoleRenderer
             });
             Console.Write(text);
         }
-        SafeColor.Reset();
-        Console.WriteLine();
     }
 
     /// <summary>

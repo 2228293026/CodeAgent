@@ -249,6 +249,7 @@ public sealed partial class Agent
         StreamedLastRun = false;
         LastPrompt = userPrompt;
         _renderer = new ConsoleRenderer(_ctx.Config.RenderMarkdown);
+        _renderer.SetWidth(CodeAgent.Program.ConsoleColumnsForNotice());
         TurnRounds = 0;
         _turnToolCalls = 0;
         TurnInputTokens = 0;

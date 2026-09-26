@@ -345,7 +345,10 @@ public static class TextUtil
         return i == s.Length ? s : s[..i];
     }
 
-    /// <summary>按显示宽度折行；width &lt;= 0（宽度未知）时原样返回，不做任何猜测性折行。</summary>
+    /// <summary>按显示宽度折行；width &lt;= 0（宽度未知）时原样返回，不做任何猜测性折行。
+    /// **width 是正文预算，indent 是额外加在每行前面的**——最终行宽 = indent 宽度 + width。
+    /// 想要「整行不超过 N 列」时必须传 width = N - DisplayWidth(indent)，
+    /// 否则每行都会比预期宽出一个 indent 的量。</summary>
     public static string WrapDisplay(string text, int width, string indent = "")
     {
         if (string.IsNullOrEmpty(text) || width <= 0)
