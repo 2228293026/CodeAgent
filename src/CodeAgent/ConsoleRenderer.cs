@@ -576,7 +576,7 @@ public sealed class ConsoleRenderer
             text = text[..space];
         if (text.Length == 0)
             return string.Empty;
-        var badge = "  ▌" + InputLine.FitToWidth(text, MaxCodeLangChars);
+        var badge = "  " + SafeColor.Glyphs.Badge + InputLine.FitToWidth(text, MaxCodeLangChars);
         return width > 0 && TextUtil.DisplayWidth(badge) > width ? string.Empty : badge;
     }
 
@@ -832,9 +832,9 @@ public sealed class ConsoleRenderer
             {
                 // 超宽单元格先截断到列宽（FitToWidth 代理对安全并补省略号），再补空格对齐
                 var cell = InputLine.FitToWidth(r[i], widths[i]);
-                cells[i] = isSep ? new string('─', widths[i]) : PadToWidth(cell, widths[i]);
+                cells[i] = isSep ? new string(SafeColor.Glyphs.Rule, widths[i]) : PadToWidth(cell, widths[i]);
             }
-            Console.WriteLine("  " + string.Join(" │ ", cells));
+            Console.WriteLine("  " + string.Join(" " + SafeColor.Glyphs.ColumnSeparator + " ", cells));
         }
         // 截断提示本身也要受宽度约束：解释截断的那一行**溢出**终端比不解释更糟。
         // budget <= 0 表示宽度未知，此时不做猜测性裁剪（既有约定）。
@@ -856,15 +856,19 @@ public sealed class ConsoleRenderer
     /// 不能按字符数——「仅显示前」三个汉字只占 3 个字符却占 6 列。</summary>
     internal static string TableDroppedColsNote(int total, int keep, int width = 0)
     {
-        var full = $"…(表格共 {total} 列，终端较窄，仅显示前 {keep} 列)";
-        return width > 0 && TextUtil.DisplayWidth(full) > width ? $"…({total} 列 → {keep} 列)" : full;
+        var dots = SafeColor.Glyphs.Ellipsis;
+        var arrow = SafeColor.Glyphs.AsciiEnabled ? "->" : "→";
+        var full = $"{dots}(表格共 {total} 列，终端较窄，仅显示前 {keep} 列)";
+        return width > 0 && TextUtil.DisplayWidth(full) > width ? $"{dots}({total} 列 {arrow} {keep} 列)" : full;
     }
 
     /// <summary>裁行提示。与 <see cref="TableDroppedColsNote"/> 同样的宽度判定。</summary>
     internal static string TableDroppedRowsNote(int total, int keep, int width = 0)
     {
-        var full = $"…(表格共 {total} 行，仅显示前 {keep} 行)";
-        return width > 0 && TextUtil.DisplayWidth(full) > width ? $"…({total} 行 → {keep} 行)" : full;
+        var dots = SafeColor.Glyphs.Ellipsis;
+        var arrow = SafeColor.Glyphs.AsciiEnabled ? "->" : "→";
+        var full = $"{dots}(表格共 {total} 行，仅显示前 {keep} 行)";
+        return width > 0 && TextUtil.DisplayWidth(full) > width ? $"{dots}({total} 行 {arrow} {keep} 行)" : full;
     }
 
     private static List<string> SplitCells(string row)

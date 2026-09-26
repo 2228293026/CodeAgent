@@ -38,6 +38,45 @@ public static class SafeColor
     internal static bool ComputeEnabled(Func<string, string?> env, bool redirected) =>
         ComputeEnabled(env("NO_COLOR"), env("TERM"), redirected);
 
+    /// <summary>UI 符号是否退回纯 ASCII。
+    ///
+    /// 背景：渲染层用的是制表符（<c>▌ │ ─</c>）和符号（<c>… ⚠ →</c>）。
+    /// 在老式 Windows 控制台、代码页 437/850 的日志、或某些 CI 采集端里，
+    /// 这些字符会变成 <c>?</c> 或乱码——而**框线错位比没有框线更糟**：
+    /// 分隔线变成问号，表格的列对应关系就彻底读不出来了。
+    /// <c>CODEAGENT_ASCII=1</c> 可显式退回 ASCII；<c>TERM=dumb</c> 同样退回。
+    /// 与 <see cref="SafeColor"/> 一样，读数可注入以便测试。</summary>
+    public static class Glyphs
+    {
+        public static bool AsciiEnabled => ComputeAscii(ReadEnv);
+
+        internal static bool ComputeAscii(Func<string, string?> env)
+        {
+            var ascii = env("CODEAGENT_ASCII");
+            if (ascii is "1" or "true" or "on" or "yes")
+                return true;
+            if (ascii is "0" or "false" or "off" or "no" or null or "")
+                return string.Equals(env("TERM"), "dumb", StringComparison.OrdinalIgnoreCase);
+            return true; // 写了别的值：宁可退回 ASCII，也不要赌它想要 Unicode
+        }
+
+        /// <summary>徽标前缀（代码块语言标记）。</summary>
+        public static string Badge => AsciiEnabled ? "|" : "▌";
+
+        /// <summary>表格列分隔符。</summary>
+        public static string ColumnSeparator => AsciiEnabled ? "|" : "│";
+
+        /// <summary>表格分隔行的填充字符。</summary>
+        public static char Rule => AsciiEnabled ? '-' : '─';
+
+        /// <summary>省略号。注意 ASCII 版是 3 个字符，会**改变显示宽度**——
+        /// 调用方必须把它喂给 TextUtil.DisplayWidth 计算，不能按 1 列算。</summary>
+        public static string Ellipsis => AsciiEnabled ? "..." : "…";
+
+        /// <summary>警告前缀。</summary>
+        public static string Warn => AsciiEnabled ? "!" : "⚠";
+    }
+
     public static void Foreground(ConsoleColor c)
     {
         if (!Enabled) return;
