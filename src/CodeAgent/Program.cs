@@ -1196,11 +1196,33 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// 是/否确认提示的**纯渲染**（与命令确认块同一套约定）。
+    ///
+    /// 此前直接 <c>output.Write($"{Warn} {question} [y/N] ")</c>：问题串由调用方拼，
+    /// 长度不受控；折行后 <c>[y/N]</c> 被顶走，用户在一行文字里找按键位置。
+    /// 而且**没说回车就是取消**——而 EOF/非 y 一律按取消处理，
+    /// 用户不知道"直接回车"是安全的那个选项。
+    /// </summary>
+    internal static string FormatYesNoPrompt(string question, int width)
+    {
+        var hint = $"{SafeColor.Glyphs.Ok} y 确认  {SafeColor.Glyphs.Escape}/回车 取消";
+        var head = $"{SafeColor.Glyphs.Warn} {question}  ";
+        if (width <= 0)
+            return head + hint;
+        var hintWidth = TextUtil.DisplayWidth(hint);
+        // 提示比问题更该留在屏幕上：先给提示留位置，问题按剩余空间收口
+        var room = width - hintWidth - TextUtil.DisplayWidth(SafeColor.Glyphs.Warn) - 4;
+        if (room < 4)
+            return InputLine.FitToWidth($"{SafeColor.Glyphs.Warn} {question}", width);
+        return $"{SafeColor.Glyphs.Warn} {InputLine.FitToWidth(question, room)}  {hint}";
+    }
+
     /// <summary>放开沙箱（fileAccess=full）前的二次确认：工作区外可读写是高危操作。
     /// 已处于 full 时再次经过不重复询问。EOF/非 y 一律视为取消（安全默认）。</summary>
     internal static bool ConfirmFullAccess(TextReader input, TextWriter output)
     {
-        output.Write($"{SafeColor.Glyphs.Warn} 即将完全放开文件沙箱（工作区外可读写，仅限信任场景）。确认? [y/N] ");
+        output.Write(FormatYesNoPrompt("即将完全放开文件沙箱（工作区外可读写，仅限信任场景）。确认？", ConsoleColumns()));
         var answer = input.ReadLine()?.Trim();
         if (string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase))
             return true;
@@ -1211,7 +1233,7 @@ internal static class Program
     /// <summary>通用覆盖确认（/save 同名快照等）：只有明确 y 放行，EOF/其他输入取消（安全默认）。</summary>
     internal static bool ConfirmReplace(TextReader input, TextWriter output, string question)
     {
-        output.Write($"{SafeColor.Glyphs.Warn} {question} [y/N] ");
+        output.Write(FormatYesNoPrompt(question, ConsoleColumns()));
         return string.Equals(input.ReadLine()?.Trim(), "y", StringComparison.OrdinalIgnoreCase);
     }
 
