@@ -50,7 +50,7 @@ public static class SetupWizard
             .ToList();
 
         var cols = Program.Columns();
-        output.WriteLine($"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2} CodeAgent 供应商配置向导 {new string(SafeColor.Glyphs.RuleChar, 14)}");
+        output.WriteLine(FormatWizardBanner(Program.Columns()));
         output.WriteLine(FormatFieldLine("将更新配置文件", path, cols) + "\n");
         output.WriteLine("请选择供应商:");
         for (int i = 0; i < Presets.Length; i++)
@@ -68,14 +68,15 @@ public static class SetupWizard
             var name = extras[idx - Presets.Length - 1];
             var existing = config.Providers[name];
             config.Provider = name;
-            output.WriteLine($"沿用已有配置: {name}");
+            output.WriteLine(FormatFieldLine("沿用已有配置", name, Program.Columns()));
 
             if (testConnection)
                 TestConnection(name, existing, output);
 
             AgentConfig.Save(config, path);
-            output.WriteLine($"\n{SafeColor.Glyphs.Ok} 配置已保存: {path}");
-            output.WriteLine($"当前供应商: {name}   模型: {existing.Model}");
+            output.WriteLine();
+            output.WriteLine(FormatFieldLine($"{SafeColor.Glyphs.Ok} 配置已保存", path, Program.Columns()));
+            output.WriteLine(FormatFieldLine("当前供应商", $"{name}   模型: {existing.Model}", Program.Columns()));
             // 只在**交互式**会话里问。输入被重定向（脚本、CI、测试）时没有人能回答，
             // 多问一句会把后续答案全部错位地吃掉；而渲染设置事后用 /diag 就能看，
             // 不值得为此破坏非交互流程。
@@ -152,7 +153,7 @@ public static class SetupWizard
             else
             {
                 opts.ApiKeyEnv = p.Env;
-                output.WriteLine($"提示: 启动前请先设置环境变量 {p.Env}。");
+                output.WriteLine(FormatFieldLine("提示", $"启动前请先设置环境变量 {p.Env}。", Program.Columns()));
             }
         }
 
@@ -165,8 +166,9 @@ public static class SetupWizard
             TestConnection(p.Name, opts, output);
 
         AgentConfig.Save(config, path);
-        output.WriteLine($"\n{SafeColor.Glyphs.Ok} 配置已保存: {path}");
-        output.WriteLine($"当前供应商: {p.Name}   模型: {opts.Model}");
+        output.WriteLine();
+        output.WriteLine(FormatFieldLine($"{SafeColor.Glyphs.Ok} 配置已保存", path, Program.Columns()));
+        output.WriteLine(FormatFieldLine("当前供应商", $"{p.Name}   模型: {opts.Model}", Program.Columns()));
         output.WriteLine("运行 codeagent 即可开始使用。");
     }
 
@@ -178,7 +180,7 @@ public static class SetupWizard
                      || (opts.ApiKeyEnv is { Length: > 0 } && Environment.GetEnvironmentVariable(opts.ApiKeyEnv) is { Length: > 0 });
         if (!hasKey && providerName is not ("ollama" or "hitmargin"))
         {
-            output.WriteLine($"\n{SafeColor.Glyphs.Next} 跳过连接测试（{opts.ApiKeyEnv ?? "API Key"} 未设置）");
+            output.WriteLine(Program.FormatNoticeLine($"跳过连接测试（{opts.ApiKeyEnv ?? "API Key"} 未设置）", Program.Columns(), SafeColor.Glyphs.Next));
             return;
         }
         // 免费服务（ollama / hitmargin）不校验鉴权：若调用方未预填占位 Key，补一个以免后续 Provider 初始化报错
@@ -195,11 +197,11 @@ public static class SetupWizard
             output.WriteLine();
             if (models.Count == 0)
             {
-                output.WriteLine($"{SafeColor.Glyphs.Warn} 服务未返回任何模型，请检查 API 地址。");
+                Notice(output, "服务未返回任何模型，请检查 API 地址。", SafeColor.Glyphs.Warn);
             }
             else if (!models.Contains(opts.Model ?? "", StringComparer.OrdinalIgnoreCase))
             {
-                output.WriteLine($"{SafeColor.Glyphs.Warn} 可连接，但模型列表中没有「{opts.Model}」（共 {models.Count} 个模型，可能拼写有误或无权限）。");
+                Notice(output, $"可连接，但模型列表中没有「{opts.Model}」（共 {models.Count} 个模型，可能拼写有误或无权限）。", SafeColor.Glyphs.Warn);
                 // 给出相近候选（与 REPL /model 的拼写提示同款逻辑），少走一趟 /models
                 var family = (opts.Model ?? "").Split('-', '.')[0];
                 var near = string.IsNullOrEmpty(family)
@@ -209,20 +211,26 @@ public static class SetupWizard
                             .Take(3)
                             .ToList();
                 if (near.Count > 0)
-                    output.WriteLine($"  相近的模型: {string.Join("、", near)}");
+                    Notice(output, $"相近的模型: {string.Join("、", near)}", "");
             }
             else
             {
-                output.WriteLine($"{SafeColor.Glyphs.Ok} 连接成功，模型 {opts.Model} 可用（服务共 {models.Count} 个模型）。");
+                Notice(output, $"连接成功，模型 {opts.Model} 可用（服务共 {models.Count} 个模型）。", SafeColor.Glyphs.Ok);
             }
         }
         catch (Exception ex)
         {
             output.WriteLine();
-            output.WriteLine($"{SafeColor.Glyphs.Warn} 连接失败: {ex.Message}");
+            // 异常消息可能带整条堆栈路径，不收口会折行并把下一条提示顶走
+            Notice(output, $"连接失败: {ex.Message}", SafeColor.Glyphs.Warn);
             output.WriteLine("  配置仍会保存；请检查地址/Key，或稍后用 /models 复查。");
         }
     }
+
+    /// <summary>向导内的提示行，复用 REPL 的 <c>FormatNoticeLine</c>（已处理按宽度收口）。
+    /// 自己另写一份只会在这套约定之外再多一个可能超宽的地方。</summary>
+    private static void Notice(TextWriter output, string body, string marker) =>
+        output.WriteLine(Program.FormatNoticeLine(body, Program.Columns(), marker));
 
     /// <summary>
     /// 向导提问的**纯渲染**（不碰 IO，好测）。
@@ -258,6 +266,23 @@ public static class SetupWizard
         return hint + "\n" + field;
     }
 
+    /// <summary>向导标题行。装饰线按剩余宽度伸缩；放不下就只留标题文字
+    /// （装饰是装饰，标题才是信息）。</summary>
+    internal static string FormatWizardBanner(int width)
+    {
+        const string title = " CodeAgent 供应商配置向导 ";
+        var head = $"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2}";
+        var full = $"{head}{title} {new string(SafeColor.Glyphs.RuleChar, 14)}";
+        if (width <= 0 || TextUtil.DisplayWidth(full) <= width)
+            return full;
+        var room = width - TextUtil.DisplayWidth(head) - 1;
+        if (room < TextUtil.DisplayWidth(title))
+            return CodeAgent.InputLine.FitToWidth(title.Trim(), Math.Max(1, width));
+        // room == titleWidth 时余量正好为 0，再减 1 会变成 -1，
+        // new string(char, -1) 直接抛 ArgumentOutOfRangeException——向导在那个宽度上起不来
+        var fill = Math.Max(0, room - TextUtil.DisplayWidth(title) - 1);
+        return fill == 0 ? head + title : head + title + " " + new string(SafeColor.Glyphs.RuleChar, fill);
+    }
     /// <summary>
     /// 选项行的**纯渲染**：<c>  3) 供应商名（已配置）</c>。
     ///
@@ -362,7 +387,7 @@ public static class SetupWizard
             var trimmed = key.Trim();
             if (trimmed.Length == 0 || trimmed == "关闭原因")
                 continue;
-            output.WriteLine($"  {trimmed}: {value}");
+            output.WriteLine(FormatFieldLine(trimmed, value, Program.Columns()));
         }
         output.WriteLine();
         var options = new (string Label, string? Key, string Value)[]
@@ -373,8 +398,9 @@ public static class SetupWizard
             ("浅色背景配色", "CODEAGENT_THEME", "light"),
             ("字符形退回纯 ASCII（老终端/代码页 437 850）", "CODEAGENT_ASCII", "1"),
         };
+        var cols = Program.Columns();
         for (var i = 0; i < options.Length; i++)
-            output.WriteLine($"  {i + 1}) {options[i].Label}");
+            output.WriteLine(FormatOptionLine(i + 1, options[i].Label, cols));
         output.WriteLine();
         var pick = AskChoice(input, output, "选择（直接回车 = 1）", options.Length, 1);
         output.WriteLine();
@@ -385,7 +411,13 @@ public static class SetupWizard
             return;
         }
         output.WriteLine("把下面这行粘到你的 shell 里生效（本次会话不会自动改变）：");
-        output.WriteLine($"  PowerShell: {EnvCommand("powershell", chosen.Key, chosen.Value)}");
-        output.WriteLine($"  cmd.exe:    {EnvCommand("cmd", chosen.Key, chosen.Value)}");
+        // 可粘贴的命令**单独成行且永不截断**：截一半的命令粘进 shell 会报错，
+        // 折行的话用户复制到的是两行碎片。与普通输出相反，这里宁可让终端自己折。
+        // 标签单独一行，不与命令同行——否则命令只剩终端宽度减去标签宽度。
+        output.WriteLine("PowerShell:");
+        output.WriteLine(EnvCommand("powershell", chosen.Key, chosen.Value));
+        output.WriteLine("cmd.exe:");
+        output.WriteLine(EnvCommand("cmd", chosen.Key, chosen.Value));
     }
 }
+
