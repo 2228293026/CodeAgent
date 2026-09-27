@@ -409,8 +409,13 @@ public class AgentEdgeTests : IDisposable
         agent.SetMode(mode);
 
         Assert.Equal("custom", agent.CurrentMode.Name); // 模式仍生效
-        var tools = agent.ToolsForMode();
-        Assert.Single(tools); // 只有合法的 read_file 生效
+        var tools = agent.ToolsForMode().Select(t => t.Name).ToList();
+        // 拼错的 read_filles 已被丢弃，只有合法的 read_file 生效。
+        // update_tasks 是**任何模式都放行**的例外：它只改内存里的进度面板，不碰工作区，
+        // 挡它没有任何安全收益（见 TaskListModeTests）。所以这里不是 Single。
+        Assert.Contains("read_file", tools);
+        Assert.DoesNotContain("read_filles", tools);
+        Assert.Equal(2, tools.Count);
     }
 
     [Fact]

@@ -567,12 +567,28 @@ public sealed partial class Agent
         ex.StatusCode is int code ? $"HTTP {code}" : "网络错误";
 
     /// <summary>当前模式下暴露给模型的工具（按模式过滤）。</summary>
+    /// <summary>不属于"写操作"、任何模式都放行的工具。
+    ///
+    /// <c>update_tasks</c> 只改内存里的进度面板，**不碰工作区**——它不写文件、不动配置。
+    /// 但它会被 <c>AllowedTools</c> 的过滤一并挡掉，于是只读模式下进度面板永远空白，
+    /// 而只读恰恰是**最需要进度可见**的场景（长时间的排查、审计、大范围阅读）。
+    /// 挡它没有任何安全收益，只会让用户看着一个不动的 spinner 猜。
+    /// </summary>
+    internal const string AlwaysAvailableTool = "update_tasks";
+
+    /// <summary>某工具在当前模式下是否可用（不含任何模式的例外处理）。</summary>
+    internal bool ToolAllowedInMode(string name) =>
+        CurrentMode.AllowedTools is not { } allowed
+        || allowed.Contains(name, StringComparer.OrdinalIgnoreCase)
+        || name.Equals(AlwaysAvailableTool, StringComparison.OrdinalIgnoreCase);
+
     public IReadOnlyList<ToolSpec> ToolsForMode()
     {
         var all = _tools.ToToolSpecs();
         if (CurrentMode.AllowedTools is not { } allowed)
             return all;
         var set = new HashSet<string>(allowed, StringComparer.OrdinalIgnoreCase);
+        set.Add(AlwaysAvailableTool);
         return all.Where(t => set.Contains(t.Name)).ToList();
     }
 
@@ -1261,7 +1277,7 @@ public sealed partial class Agent
     private async Task<ProviderMessage> ExecuteToolCallAsync(ToolCall tc, CancellationToken ct, List<(string Verb, bool IsError)>? run = null)
     {
         // 模式限制：只读模式下拦截写操作（防御性，正常情况模型看不到这些工具）
-        if (CurrentMode.AllowedTools is { } allowed && !allowed.Contains(tc.Name, StringComparer.OrdinalIgnoreCase))
+        if (!ToolAllowedInMode(tc.Name))
         {
             return new ProviderMessage
             {
