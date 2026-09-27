@@ -541,6 +541,19 @@ public sealed partial class Agent
                     {
                         // 思考结束（首个文本到达）：定格"用时 · tokens"统计行，结论文本从下一行流式输出
                         FinalizeSpinner();
+                        // 思考与正文之间必须换行。
+                        //
+                        // 此前思考（暗色）与正文共用一行：
+                        //   The user asks: … No file edits needed.CodeAgent 是一个用 C#/.NET 写的…
+                        // 有颜色时只是"暗色/正常"的细微差别；**无颜色或重定向到文件时
+                        // 两者完全无法区分**——转存下来的会话记录里，模型的思考过程
+                        // 和最终答案混成一段，分不清哪句是给人看的。
+                        if (_reasoningShown)
+                        {
+                            lock (ConsoleLock)
+                                Console.WriteLine();
+                            _reasoningShown = false; // 行已断开，别让后面再补一次
+                        }
                         _streamedThisCall = true;
                     }
                     _renderer?.Append(delta);
