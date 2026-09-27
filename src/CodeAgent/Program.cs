@@ -2526,6 +2526,26 @@ internal static class Program
         requested > available && available > 0
             ? $"编号超出范围：只有 {available} 条可撤销（可用 1-{available}）。你输入的 {requested} 会撤销全部 {available} 条——确定？输入 y 确认。"
             : null;
+    /// <summary>
+    /// 「无效取值」提示的**统一格式**：<c>无效值: bogus（可选: a / b / c）</c>。
+    ///
+    /// 此前同一个意思有四种写法：<c>无效权限模式: x(可选 a | b | c)</c>（半角括号、
+    /// 中文句子里夹半角括号本身就是排版错误）、<c>无效值: x（可选: a / b / c）</c>、
+    /// <c>无效值: x（可选 a / b / c）</c>、<c>没有模式「x」，可用: a, b, c</c>。
+    /// 用户不该在四个命令里看到四种标点风格——分号、空格、括号形式全都对不上，
+    /// 读起来像是四个不同的程序。
+    ///
+    /// 收口到一处还有一个好处：以后加取值项（比如新的 shell、新的权限档位）时，
+    /// 格式跟着走，不需要在每个调用点重新想一遍标点。
+    /// </summary>
+    internal static string FormatInvalidValueLine(string label, string given, IEnumerable<string> options, int width = 0)
+    {
+        var list = string.Join(" / ", options);
+        var body = string.IsNullOrEmpty(list)
+            ? $"{label}: {given}"
+            : $"{label}: {given}（可选: {list}）";
+        return width > 0 ? FormatNoticeLine(body, width) : body;
+    }
     private static bool HandleCommand(
         string line,
         AgentConfig config,
@@ -2620,7 +2640,7 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice($"无效权限模式: {rest}(可选 strict | whitelist | full)");
+                        WriteNotice(FormatInvalidValueLine("无效权限模式", rest, ["strict", "whitelist", "full"], ConsoleColumns()));
                     }
                 }
                 else
@@ -3302,8 +3322,8 @@ internal static class Program
                     var mode = modes.FirstOrDefault(m => m.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase));
                     if (mode is null)
                     {
-                        Console.WriteLine(FormatNoticeLine(
-                            $"没有模式「{wanted}」，可用: {string.Join(", ", modes.Select(m => m.Name))}", ConsoleColumns()));
+                        Console.WriteLine(FormatInvalidValueLine(
+                            "没有模式", wanted, modes.Select(m => m.Name), ConsoleColumns()));
                         var near = modes.Where(m => m.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)
                                                     || wanted.Contains(m.Name, StringComparison.OrdinalIgnoreCase))
                                         .Select(m => m.Name).Take(3).ToList();
@@ -3467,7 +3487,7 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice($"无效值: {rest}（可选: {string.Join(" / ", ThinkingEfforts)}）");
+                        WriteNotice(FormatInvalidValueLine("无效值", rest, ThinkingEfforts, ConsoleColumns()));
                     }
                 }
                 break;
@@ -3503,7 +3523,7 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice($"无效值: {rest}（可选: cmd / powershell / pwsh / bash / sh / auto）");
+                        WriteNotice(FormatInvalidValueLine("无效值", rest, ["cmd", "powershell", "pwsh", "bash", "sh", "auto"], ConsoleColumns()));
                     }
                 }
                 break;

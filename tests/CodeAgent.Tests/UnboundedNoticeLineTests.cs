@@ -83,11 +83,15 @@ public class UnboundedNoticeLineTests
     {
         // 守卫：这些回显用户输入的行必须经过 WriteNotice（宽度收口），
         // 而不是裸的 Console.WriteLine($"…")。
+        //
+        // 「无效值 / 无效权限模式」两条已改成 FormatInvalidValueLine（Round 270 统一了
+        // 四种标点风格），所以这里锚定它们**新的**入口，而不是那句已经删掉的字面量——
+        // 断言一段被删掉的文本，既会在改动时报错，也证明不了"是否走了收口"。
         var source = File.ReadAllText(FindSource("Program.cs"));
         foreach (var echo in new[]
         {
-            "无效值: {rest}",
-            "无效权限模式: {rest}",
+            "FormatInvalidValueLine(\"无效值\"",
+            "FormatInvalidValueLine(\"无效权限模式\"",
             "模型列表中没有「{modelArg}」",
             "切换失败: {ex.Message}",
             "保存失败: {ex.Message}",
