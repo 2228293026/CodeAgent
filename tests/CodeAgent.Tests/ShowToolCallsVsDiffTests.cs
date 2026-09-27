@@ -70,8 +70,11 @@ public sealed class ShowToolCallsVsDiffTests : IDisposable
     public void DiffPreviewIsNotInsideTheShowLogBranch()
     {
         // 纯结构性断言：预览调用必须与 showLog 判断**并列**，而不是嵌在里面。
-        // 嵌进去 = 关掉工具日志就再也看不到改了��么。
-        var src = File.ReadAllText(Find());
+        // 嵌进去 = 关掉工具日志就再也看不到改了什��。
+        //
+        // **必须先归一化换行**：Windows 上工作区是 CRLF，直接找 "\n        }\n"
+        // 永远匹配不上——这条测试会在本地（LF）通过、在 CI（CRLF）失败。
+        var src = File.ReadAllText(Find()).Replace("\r\n", "\n");
         var at = src.IndexOf("var showLog = _ctx.Config.ShowToolCalls;", StringComparison.Ordinal);
         Assert.True(at > 0, "找不到 showLog 判定");
         var window = src.Substring(at, Math.Min(2000, src.Length - at));

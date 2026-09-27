@@ -441,7 +441,10 @@ public class AsciiGlyphTests : IDisposable
     {
         // 源码级守卫：ShortenSummaryAsWhole 里不得再出现写死的 `budget - 3`。
         // `(…)` 是 3 列而 ASCII 的 `(...)` 是 4 列，写死 3 会让工具状态行超预算 1 列。
-        var source = File.ReadAllText(FindSource(Path.Combine("Agent", "Agent.cs")));
+        // 归一化换行：Windows 开发者本机 core.autocrlf=true 时检出的是 CRLF，
+        // 直接找 "\n    }" 会 IndexOf 返回 -1，body[..-1] 直接抛异常。
+        // 这条守卫此前只是**碰巧**在 CI 上活着（runner 检出 LF）。
+        var source = File.ReadAllText(FindSource(Path.Combine("Agent", "Agent.cs"))).Replace("\r\n", "\n");
         var at = source.IndexOf("ShortenSummaryAsWhole(string summary, int budget)", StringComparison.Ordinal);
         Assert.True(at >= 0, "找不到 ShortenSummaryAsWhole");
         var body = source[at..];
