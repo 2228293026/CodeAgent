@@ -367,8 +367,7 @@ internal static class Program
                     return 2;
                 }
                 var result = await RunTurnAsync(t => agent.RunAsync(task, t));
-                if (IsCancelledTurn(result))
-                    result = "\n" + FormatCancelLine("已取消。", ConsoleColumns()); // 哨兵映射回显示文本（一次性模式没有草稿回填）
+                // 取消哨兵由 PrintResult 统一映射成「已取消。」（一次性模式没有草稿回填）
                 PrintResult(result, agent.StreamedLastRun, prefixNewline: false, agent.StreamedOnLineBoundary);
                 agent.Close();
                 return agent.LastTurnFailed ? 1 : 0; // 空回复视为失败，非零退出码供脚本判断
@@ -2323,6 +2322,20 @@ internal static class Program
     /// 而没带换行时又必须补——否则工具状态行/回合摘要会粘在正文同一行。</summary>
     private static void PrintResult(string result, bool streamed, bool prefixNewline, bool streamedOnLineBoundary = false)
     {
+        // 取消哨兵绝不能原样打出去。
+        //
+        // 一次性模式（:370）与 /compact（:2720）各自把哨兵映射成了显示文本，
+        // 唯独交互式回合（:545）没映射：它撤回了这一轮、把草稿还给用户，
+        // 然后把哨兵交给这里。streamed=true 时只多打一个换行（看不出问题），
+        // **本轮还没吐过任何内容就按 Esc 时 streamed=false，
+        // 于是屏幕上真的会出现 `␛CANCELLED_TURN`** —— 内部实现细节直接怼到用户脸上。
+        //
+        // 收口在这一层：以后任何新的调用点都自动安全，不必记得先映射。
+        if (IsCancelledTurn(result))
+        {
+            Console.WriteLine((prefixNewline ? "\n" : "") + FormatCancelLine("已取消。", ConsoleColumns()));
+            return;
+        }
         if (streamed)
         {
             if (result.Length > 0 && !streamedOnLineBoundary)
