@@ -106,8 +106,12 @@ public sealed partial class Agent
         sb.AppendLine();
         // 元信息头：归档时不用翻内容就知道来源
         sb.AppendLine($"- 导出时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        // 用**实际生效**的 provider/model，而不是配置里写的那个：会话级覆盖
+        // （-m / -p / 环境变量 / /model 切换）不写回配置，写配置就是记了个假的模型。
         var po = _config.Providers?.TryGetValue(_config.Provider, out var o) == true ? o : null;
-        sb.AppendLine($"- 模型：{_config.Provider}{(string.IsNullOrWhiteSpace(po?.Model) ? "" : $" / {po!.Model}")}");
+        var shownProvider = EffectiveProviderName ?? _config.Provider;
+        var shownModel = EffectiveModelName ?? po?.Model;
+        sb.AppendLine($"- 模型：{shownProvider}{(string.IsNullOrWhiteSpace(shownModel) ? "" : $" / {shownModel}")}");
         var branch = GitInfo.CurrentBranch(Environment.CurrentDirectory);
         if (branch is not null)
             sb.AppendLine($"- Git 分支：{branch}");

@@ -24,6 +24,28 @@ public sealed partial class Agent
     private readonly List<ProviderMessage> _messages = [];
     private StreamWriter? _sessionLog; // 非 readonly：/clear 与恢复会话时会滚动到新日志文件
 
+    /// <summary>
+    /// 本次运行**实际生效**的 provider / model 标识。
+    ///
+    /// 导出头部、诊断等"归档后要能对上号"的地方必须用它，而不是 <c>config</c> 里的值：
+    /// <c>config.Provider</c>/<c>config.Providers[x].Model</c> 是**配置里写的**，
+    /// 会话级覆盖（<c>-m</c>、<c>-p</c>、环境变量、<c>/model</c> 切换）不写回配置。
+    /// 实测：会话跑的是 <c>kilo/stealth/space-bunny-alpha</c>，导出头却写着
+    /// <c>custom / gpt5</c>——几个月后回看这份记录，模型信息是错的。
+    /// </summary>
+    public string? EffectiveProviderName { get; private set; }
+    public string? EffectiveModelName { get; private set; }
+
+    /// <summary>记录本次运行**当前**生效的 provider/model。
+    ///
+    /// 必须由 REPL 在每次归档前刷新，不能只在构造时记一次：会话中途
+    /// <c>/model</c>、<c>/provider</c> 都会换掉实际生效的值，而记录要的是
+    /// **归档那一刻**在用的模型——否则导出头部写的是三分钟前的模型。</summary>
+    public void SetEffectiveIdentity(string? provider, string? model)
+    {
+        EffectiveProviderName = string.IsNullOrWhiteSpace(provider) ? null : provider;
+        EffectiveModelName = string.IsNullOrWhiteSpace(model) ? null : model;
+    }
     public Agent(AgentConfig config, IAgentProvider provider, ToolRegistry tools, string? workingDirectory = null)
     {
         config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);

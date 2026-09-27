@@ -310,6 +310,9 @@ internal static class Program
         }
 
         var agent = new AgentClass(config, providerInst, tools);
+        // 归档类输出（导出头部）要用**实际生效**的 provider/model，不是配置里写的；
+        // 各导出点会再刷新一次，覆盖会话中途的 /model、/provider 切换
+        agent.SetEffectiveIdentity(config.Provider, opts.Model);
 
         // --continue：恢复最近会话。必须在 SetMode 之前加载——SetMode 会把 messages[0]
         // 的旧 system 提示换成当前模式的提示词
@@ -3264,6 +3267,7 @@ internal static class Program
                         {
                             try
                             {
+                                agent.SetEffectiveIdentity(config.Provider, opts.Model); // 归档时**当前**生效的模型，不是构造时的
                                 var exported = agent.ExportSessionLogMarkdown(log);
                                 Console.WriteLine(FormatConfirmLine($"{Path.GetFileNameWithoutExtension(log)} {SafeColor.Glyphs.Arrow} {exported}", ConsoleColumns()));
                                 ok++;
@@ -3305,6 +3309,7 @@ internal static class Program
                             Console.WriteLine($"{SafeColor.Glyphs.Warn} 编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。");
                             break;
                         }
+                        agent.SetEffectiveIdentity(config.Provider, opts.Model); // 同上：/model 切换后要记切换后的
                         file = agent.ExportSessionLogMarkdown(logs[eidx - 1]);
                     }
                     else
