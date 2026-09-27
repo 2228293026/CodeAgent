@@ -223,11 +223,44 @@ public static class SetupWizard
         }
     }
 
+    /// <summary>
+    /// 向导提问的**纯渲染**（不碰 IO，好测）。
+    ///
+    /// 此前是 <c>output.Write($"{prompt} [{def}]: ")</c>：prompt 与默认值拼成一行，
+    /// 长度不受控（base URL + 模型名能到 60 列）。窄终端上一行放不下就折行，
+    /// 而折行点常常正好落在末尾的 <c>": "</c> 之前——用户看到的是一个**没有提示的行**，
+    /// 在那儿敲完 Key，回车后才发现填错了一项。
+    ///
+    /// 折行时不截断任何内容：把默认值**单独提到上一行**，让 <c>": "</c> 永远待在有提示的那行末尾。
+    /// 默认值连它自己那一行都放不下时**整段不显示**（回车仍用默认值）——
+    /// 截断默认值是危险的：用户会把半条 URL 当成真值存进配置。
+    /// 字段名是标签，可以收口；但提示行**绝不能为空**，否则用户是在无提示的行上输入。
+    /// </summary>
+    internal static string FormatAskPrompt(string prompt, string? defaultValue, int width)
+    {
+        var hasDefault = !string.IsNullOrEmpty(defaultValue);
+        var single = hasDefault ? $"{prompt} [{defaultValue}]: " : $"{prompt}: ";
+        if (width <= 0 || TextUtil.DisplayWidth(single) <= width)
+            return single;
+        // 放不下：默认值独占一行，提示行只留字段名
+        var field = $"{prompt}: ";
+        if (TextUtil.DisplayWidth(field) > width)
+            field = CodeAgent.InputLine.FitToWidth(prompt, Math.Max(1, width - 2)) + ": ";
+
+        var hint = $"  默认: {defaultValue}";
+        if (TextUtil.DisplayWidth(hint) > width)
+        {
+            // **整段丢弃默认值的显示，而不是截断它**——用户会把半条 URL 当成真值存进配置。
+            // 丢显示不影响行为：回车仍然使用默认值（Ask 的语义没变）。
+            return field;
+        }
+        return hint + "\n" + field;
+    }
+
     /// <summary>带默认值的文本输入：回车使用默认值；输入被中断（EOF）时返回 null。</summary>
     private static string? Ask(TextReader input, TextWriter output, string prompt, string? defaultValue = null)
     {
-        var def = defaultValue is null ? "" : $" [{defaultValue}]";
-        output.Write($"{prompt}{def}: ");
+        output.Write(FormatAskPrompt(prompt, defaultValue, Program.Columns()));
         var line = input.ReadLine();
         if (line is null)
             return null;
@@ -242,7 +275,7 @@ public static class SetupWizard
     {
         while (true)
         {
-            output.Write($"{prompt}: ");
+            output.Write(FormatAskPrompt(prompt, null, Program.Columns()));
             var line = input.ReadLine();
             if (line is null)
             {
