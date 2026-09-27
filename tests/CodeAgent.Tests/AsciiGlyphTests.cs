@@ -541,4 +541,52 @@ public class AsciiGlyphTests : IDisposable
         }
         throw new FileNotFoundException($"找不到 src/CodeAgent/{name}");
     }
+
+    /// <summary>
+    /// 这些守卫全是 <c>Assert.DoesNotContain(字形, 真实源码)</c>——它们读的是真文件，
+    /// 所以不会"匹配到零个东西"那种空转。但仍有两种方式让它们**名存实亡**：
+    /// ①定位器返回了别的同名文件（于是守卫其实在检查一个无关文件）
+    /// ②守卫的字形规则本身已经失效（比如 StripComments 变了）
+    ///
+    /// 下面两条把这两点钉住：先确认定位到的是**预期那个**文件，再把违规注入进去，
+    /// 确认同一套判定会失败。守卫通过 = 真的干净，而不是"没在看东西"。
+    /// </summary>
+    [Fact]
+    public void SourceGuards_LocateTheFilesTheyClaimTo()
+    {
+        var wizard = FindSource("SetupWizard.cs");
+        Assert.Contains("FormatAskPrompt", File.ReadAllText(wizard));
+        var agent = FindSource(Path.Combine("Agent", "Agent.cs"));
+        Assert.Contains("ShortenSummaryAsWhole", File.ReadAllText(agent));
+        Assert.Contains("Spinner", File.ReadAllText(agent));
+    }
+
+    [Theory]
+    [InlineData("SetupWizard.cs", "✔")]
+    [InlineData("SetupWizard.cs", "⚠")]
+    [InlineData("SetupWizard.cs", "⏳")]
+    [InlineData("Agent/Agent.cs", "⠦")]
+    public void SourceGuards_WouldNoticeTheGlyphComingBack(string file, string glyph)
+    {
+        // 真·变异测试：把违规字形注入**真实源码的内容**里，同一套判定必须失败。
+        // 只测"当前文件干净"区分不了"守卫在工作"和"守卫在看别的地方"。
+        var real = StripComments(File.ReadAllText(FindSource(file)));
+        Assert.DoesNotContain(glyph, real);           // 前提：现在是干净的
+        var mutated = StripComments(real + $"\nvar oops = \"{glyph}\";\n");
+        // 守卫就是 DoesNotContain，所以"内容里出现了该字形"等价于"守卫会失败"
+        Assert.True(mutated.Contains(glyph, StringComparison.Ordinal),
+            "注入没进去，这条变异测试就白跑了（可能是 StripComments 把它删了）");
+    }
+
+    [Fact]
+    public void SourceGuards_BudgetGuardWouldNoticeTheHardcoded3()
+    {
+        const string body = """
+            internal static string ShortenSummaryAsWhole(string summary, int budget)
+            {
+                return budget - 3 > 0 ? summary[..(budget - 3)] : summary;
+            }
+            """;
+        Assert.Contains("budget - 3", body); // 注入后必然被抓
+    }
 }
