@@ -176,6 +176,11 @@ public sealed partial class Agent
         LastPrompt = null; // 对话已清空：/retry 不应把旧问题复活进新会话
         LastTurnFailed = false; // 新会话不应残留上一回合的失败状态：状态栏红标会误导
         StreamedLastRun = false; // 新会话不应残留上一轮的流式输出状态
+        // 任务清单同样要清：上面每一项都是"新会话不应残留上一轮的状态"，任务清单同理。
+        // 更实际的问题是一份**过期的**清单看起来像新对话还有一堆待办，
+        // 而模型根本不会去接着做——用户会一直以为它在推进度。
+        // （/compact 不清：那是压缩历史、对话继续，模型可能确实还在做那些任务。）
+        Tasks.Clear();
         // 新开一个日志文件：--continue 恢复最近会话时不会带回已清空的历史；
         // 新日志先写入当前 system 提示，保持自包含
         RollSessionLog();
