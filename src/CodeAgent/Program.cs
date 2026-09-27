@@ -925,6 +925,25 @@ internal static class Program
     }
 
     /// <summary>
+    /// diff 预览的单行渲染：六空格缩进 + 按显示宽度收口。
+    ///
+    /// 此前是 <c>Console.WriteLine("      " + line)</c>：diff 行的长度不受控
+    /// （被新增/删除的一整行代码都可能很长），窄终端上硬折行之后**这一行就废了**——
+    /// 续行没有 +/- 前缀，看起来像另一条独立的改动，看不出删掉还是加上的。
+    /// 所以这里宁可截断：省略号至少还标着"后面还有"。
+    /// </summary>
+    internal static string FormatDiffPreviewLine(string line, int width)
+    {
+        const string Indent = "      ";
+        if (width <= 0)
+            return Indent + line;
+        var room = width - TextUtil.DisplayWidth(Indent);
+        if (room < 1)
+            return InputLine.FitToWidth(Indent + line, Math.Max(1, width));
+        return Indent + InputLine.FitToWidth(line, room);
+    }
+
+    /// <summary>
     /// 本轮**新**改动的文件（相对本轮开始时的快照）。
     ///
     /// 按**集合差**算而不是按数量差：<c>AllPaths()</c> 已去重，同一个文件在一轮里

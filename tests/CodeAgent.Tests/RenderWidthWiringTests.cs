@@ -216,7 +216,8 @@ public sealed class RenderWidthWiringTests
                 var t = lines[i];
                 if (!t.StartsWith("Console.Write", StringComparison.Ordinal) || !t.Contains("$\"", StringComparison.Ordinal))
                     continue;
-                if (!longContent.Any(k => t.Contains("{" + k, StringComparison.Ordinal) || t.Contains("." + k + "}", StringComparison.Ordinal)))
+                if (!longContent.Any(k => t.Contains("{" + k, StringComparison.Ordinal) || t.Contains("." + k + "}", StringComparison.Ordinal))
+                && !(t.Contains("{line}", StringComparison.Ordinal) && t.StartsWith("Console.WriteLine(\"", StringComparison.Ordinal)))
                     continue;
                 var window = i + 1 < lines.Length ? t + " " + lines[i + 1] : t;
                 if (Bounded(writer: window))
@@ -247,6 +248,10 @@ public sealed class RenderWidthWiringTests
         // 反向保护：匹配规则一旦跟不上代码演进（换行、格式化、变量改名），
         // 这个扫描会安静地扫到 0 行、永远通过——那比没有守卫更危险，
         // 因为它占着"这里有防线"的位置。
+        // 显式点名 diff 预览：它写的是 Console.WriteLine("      " + line)，
+        // 变量名 line 不在 longContent 清单里，通用规则扫不到
+        var preview = File.ReadAllText(Path.Combine(SourceDir(), "Agent", "Agent.cs"));
+        Assert.DoesNotContain("Console.WriteLine(\"      \" + line)", preview);
         var hits = 0;
         foreach (var file in ProductionSources())
             foreach (var raw in File.ReadAllLines(file))

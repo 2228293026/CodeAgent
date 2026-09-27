@@ -1194,7 +1194,9 @@ public sealed partial class Agent
                                 ? SafeColor.Success
                                 : SafeColor.Muted;
                 using var scope = SafeColor.Scope(tint);
-                Console.WriteLine("      " + line);
+                // 按宽度收口：diff 行折行后看不出 +/- 前缀，一行改动会被读成两条
+                var width = CodeAgent.Program.ConsoleColumnsForNotice();
+                Console.WriteLine(CodeAgent.Program.FormatDiffPreviewLine(line, width));
             }
         }
         catch (OperationCanceledException) { throw; }
