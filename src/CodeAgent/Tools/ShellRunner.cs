@@ -149,19 +149,46 @@ public static class ShellRunner
         }
     }
 
+    /// <summary>
+    /// 命令确认块的纯渲染（不碰 IO，好测）。
+    ///
+    /// 此前是 <c>Console.Write($"\n[codeagent] 执行命令? {cmd}\n[y/N] ")</c>：命令**不按宽度收口**，
+    /// 而"命令很长"恰恰是最该让人停下来看清楚的情况——折行后 [y/N] 被顶走，
+    /// 用户在一片命令里找按键位置。也没有任何地方说明 ESC 可以取消，
+    /// 尽管 ESC 确实会取消（靠 ConsoleInputBusy 挡 ESC 监视线程实现）。
+    /// </summary>
+    internal static string FormatConfirmCommandBlock(string command, int width)
+    {
+        var lines = new List<string>();
+        lines.Add($"{SafeColor.Glyphs.Warn} 允许执行以下命令?");
+        // 命令逐行按宽度收口；放不下一行就硬截并留省略号——
+        // 这是安全确认，宁可少显示也不能让用户以为看全了
+        var budget = width > 0 ? Math.Max(8, width - 4) : 0;
+        foreach (var raw in command.Replace("\r\n", "\n").Split('\n'))
+        {
+            lines.Add("  " + (budget > 0 ? CodeAgent.InputLine.FitToWidth(raw, budget) : raw));
+        }
+        // 明确写出取消方式：ESC 确实会取消，不说等于让人猜
+        lines.Add($"{CodeAgent.SafeColor.Glyphs.Ok} 允许本次  {CodeAgent.SafeColor.Glyphs.Escape} 取消");
+        if (width <= 0)
+            return string.Join("\n", lines);
+        return string.Join("\n", lines.Select(l => CodeAgent.TextUtil.DisplayWidth(l) <= width ? l : CodeAgent.InputLine.FitToWidth(l, width)));
+    }
+
     /// <summary>命令确认询问，返回是否放行。</summary>
     public static async Task<bool> ConfirmAsync(string command)
     {
-        Console.Write($"\n[codeagent] 执行命令? {command}\n[y/N] ");
+        Console.WriteLine();
+        Console.WriteLine(FormatConfirmCommandBlock(command, Program.Columns()));
+        ConsoleInputBusy = true; // 挡住 ESC 监视线程，防止按键被吞
         bool answer;
-        ShellRunner.ConsoleInputBusy = true; // 挡住 ESC 监视线程，防止按键被吞
         try
         {
             answer = string.Equals(await Task.Run(() => Console.ReadLine()?.Trim()), "y", StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
-            ShellRunner.ConsoleInputBusy = false;
+            ConsoleInputBusy = false;
         }
         return answer;
     }
