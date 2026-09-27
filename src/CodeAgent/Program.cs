@@ -3213,7 +3213,7 @@ internal static class Program
                         var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
                         Console.WriteLine(FormatResultLine($"{label} · {age}（/resume 可恢复）:", ConsoleColumns()));
                         foreach (var (role, snippet) in hits)
-                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns()));
+                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns(), kw));
                         printed++;
                     }
                     if (printed == 0)
@@ -3235,7 +3235,7 @@ internal static class Program
                             continue;
                         Console.WriteLine(FormatResultLine($"快照 {name} · {age}（/load {name} 恢复）:", ConsoleColumns()));
                         foreach (var (role, snippet) in hits)
-                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns()));
+                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns(), kw));
                         snapshotPrinted++;
                     }
                 }
@@ -3928,13 +3928,94 @@ internal static class Program
     /// 宽屏白白浪费。宽度未知时回退到 110 字符，保持原有观感。
     /// 终端比角色标记还窄时，按 <see cref="FitRoleTag"/> 缩成可辨识的缩写并给摘要留出余量——
     /// 直接丢掉摘要会得到一列长得一模一样的角色标记，完全看不出命中了什么。</summary>
-    internal static string FormatSearchHitLine(string role, string snippet, int width = 0)
+    /// <summary>搜索命中片段里的高亮包裹符。用**可见字符**而不是反显：
+    /// NO_COLOR / 重定向到文件时反显会整条消失，而文件恰恰是最需要看懂"为什么命中"的地方。</summary>
+    internal const string MatchOpen = "«";
+
+    /// <inheritdoc cref="MatchOpen"/>
+    internal const string MatchClose = "»";
+
+    /// <summary>
+    /// 把片段里所有命中关键字用 <c>«…»</c> 包起来（纯函数，好测）。
+    ///
+    /// <c>/find</c> 此前只说"这个会话命中了"，**不说命中在哪**：
+    /// 搜 "the" 得到三行长得一模一样的 <c>[tool] …Enter ColorThemeTests.cs Enter…</c>，
+    /// 用户无从判断该回看哪个会话。搜索的全部意义就是定位到那一处。
+    ///
+    /// 必须在**裁剪之后**再高亮：先包标记再按列裁剪，会从标记中间劈开
+    /// （留下一个孤零零的 <c>«</c>），而半个标记比没有标记更难读。
+    /// </summary>
+    internal static string HighlightMatches(string text, string? keyword)
+    {
+        if (string.IsNullOrEmpty(keyword) || text.Length == 0)
+            return text;
+        var sb = new System.Text.StringBuilder(text.Length + 16);
+        var searchFrom = 0;
+        while (searchFrom <= text.Length)
+        {
+            var idx = text.IndexOf(keyword, searchFrom, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                break;
+            sb.Append(text, searchFrom, idx - searchFrom).Append(MatchOpen);
+            sb.Append(text, idx, keyword.Length).Append(MatchClose);
+            searchFrom = idx + keyword.Length;
+        }
+        sb.Append(text, searchFrom, text.Length - searchFrom);
+        return sb.ToString();
+    }
+    /// <summary>
+    /// 高亮之后再按预算收敛（纯函数，好测）。
+    ///
+    /// <see cref="HighlightMatches"/> 是在**裁剪之后**跑的，标记的 2 列**不在原预算里**：
+    /// 预算 6 的行包上标记就变成 8 列，整行超预算，折行会把下一条搜索结果顶走。
+    ///
+    /// 收敛方式是从尾部**整块摘掉**命中（而不是硬截）——硬截会从 <c>«…»</c> 中间劈开，
+    /// 留下半个标记。宁可少显示几个命中，也不能留下一行超宽的残缺标记。
+    /// </summary>
+    /// <summary>
+    /// 裁剪片段并高亮命中，宽度不超过 <paramref name="budget"/>（纯函数，好测）。
+    ///
+    /// 高亮的标记有 2 列宽，而它是在裁剪**之后**才加的——直接拼起来会超预算，
+    /// 折行把下一条搜索结果顶走。所以超了就整块摘掉末尾的命中。
+    ///
+    /// 窄到放不下任何一个完整命中时**退回未高亮的原文**：把摘要整个丢掉，
+    /// 只会得到一列空行，而用户宁可要一个没有高亮、但看得见内容的摘要。
+    /// </summary>
+    internal static string FitHighlightedSnippet(string snippet, string? keyword, int budget)
+    {
+        var plain = budget > 0 ? InputLine.FitToWidth(snippet, budget) : snippet;
+        if (string.IsNullOrEmpty(keyword) || !plain.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            return plain;
+        var fitted = FitHighlighted(HighlightMatches(plain, keyword), budget);
+        return fitted.Trim().Length == 0 ? plain : fitted;
+    }
+    internal static string FitHighlighted(string highlighted, int budget)
+    {
+        if (budget <= 0 || TextUtil.DisplayWidth(highlighted) <= budget)
+            return highlighted;
+        var head = highlighted;
+        while (TextUtil.DisplayWidth(head) > budget)
+        {
+            var lastOpen = head.LastIndexOf(MatchOpen, StringComparison.Ordinal);
+            var lastClose = head.LastIndexOf(MatchClose, StringComparison.Ordinal);
+            if (lastOpen < 0)
+                return InputLine.FitToWidth(highlighted, budget); // 本来就没有标记可摘
+            // 一律切在**开标记之前**，把最后一个 «…» 整块摘掉。
+            // 不能切在 lastClose（更靠后）：那会留下属于这一块的开标记，
+            // 变成一个孤零零的 «——半个标记比没有标记更难读。
+            // 切在 lastOpen 时长度必然严格减少（lastOpen=0 时 head 变空串），
+            // 切在 lastClose+1 则在 » 是末尾字符时长度不变，会**死循环**。
+            head = head[..lastOpen].TrimEnd();
+        }
+        return head;
+    }
+    internal static string FormatSearchHitLine(string role, string snippet, int width = 0, string? keyword = null)
     {
         const string indent = "  ";
         var tag = $"[{role}] ";
         var head = indent + tag;
         if (width <= 0)
-            return head + TextUtil.TruncateLine(snippet, 110);
+            return head + FitHighlightedSnippet(snippet, keyword, 110);
         var budget = width - TextUtil.DisplayWidth(head);
         if (budget <= 0)
         {
@@ -3943,9 +4024,9 @@ internal static class Program
             var snippetBudget = width - indent.Length - TextUtil.DisplayWidth(shortTag);
             return snippetBudget <= 0
                 ? indent + shortTag.TrimEnd()
-                : indent + shortTag + InputLine.FitToWidth(snippet, snippetBudget);
+                : indent + shortTag + FitHighlightedSnippet(snippet, keyword, snippetBudget);
         }
-        return head + InputLine.FitToWidth(snippet, budget);
+        return head + FitHighlightedSnippet(snippet, keyword, budget);
     }
 
     /// <summary>把命令名裁到给定宽度（width 未知时原样返回）。</summary>
