@@ -2512,6 +2512,20 @@ internal static class Program
     }
     /// <summary>处理 REPL 斜杠命令。返回 true = 该命令已展示过状态信息，本轮跳过状态栏
     /// （模式/权限切换只需一行灰色确认，避免「消息 + 状态栏 + 提示符」三处重复模式名）。</summary>
+    /// <summary>
+    /// 越界撤销编号的提示；<paramref name="requested"/> 在范围内时返回 null。
+    ///
+    /// <c>UndoManager.TryUndo</c> 把 count 静默 clamp 到实际条数——于是 <c>/undo 999</c>
+    /// 在只有 3 条记录时**一次清空整栈**，屏幕上只显示"撤销了 3 次"，用户完全看不出
+    /// 自己敲的 999 被改了。撤销栈弹出后**不可恢复**，这跟"多撤了两次"不是一个量级的事故。
+    ///
+    /// 与 <c>/resume</c> 同款处理（那边早就修过：「数字越界时明确指出范围，
+    /// 静默回退到列表曾让人以为编号生效了」）——同一个毛病，**一条修了另一条没修**。
+    /// </summary>
+    internal static string? OutOfRangeUndoNotice(int requested, int available) =>
+        requested > available && available > 0
+            ? $"编号超出范围：只有 {available} 条可撤销（可用 1-{available}）。你输入的 {requested} 会撤销全部 {available} 条——确定？输入 y 确认。"
+            : null;
     private static bool HandleCommand(
         string line,
         AgentConfig config,
@@ -2828,6 +2842,13 @@ internal static class Program
                 // 用法: /undo 撤销最近一次; /undo N 撤销最近 N 次; /undo list 列出历史; 多条时可交互选择
                 if (int.TryParse(rest.Trim(), out var undoN) && undoN >= 1)
                 {
+                    // 越界编号要显式确认：TryUndo 会静默 clamp，撤销栈弹出后不可恢复
+                    if (OutOfRangeUndoNotice(undoN, agent.Context.Undo.Count) is { } warn &&
+                        !ConfirmReplace(Console.In, Console.Out, warn))
+                    {
+                        Console.WriteLine(FormatCancelLine("已取消（未撤销任何操作）。", ConsoleColumns()));
+                        break;
+                    }
                     Console.WriteLine(agent.Context.Undo.TryUndo(undoN) ?? "没有可撤销的操作。");
                     // 注意：此处不自动附 diff——TryUndo 弹出条目后 DiffAt(1) 指向下一条旧记录，
                     // 与刚撤销的改动无关；需要看内容用 /diff（对比撤销快照与当前文件）
@@ -2865,7 +2886,14 @@ internal static class Program
                         Console.WriteLine($"可撤销操作（编号 1 = 最近;输入编号撤销到该步,回车撤销最近一次,其他取消）:\n{list}");
                         var pick = Console.ReadLine()?.Trim();
                         if (int.TryParse(pick, out var sel) && sel >= 1)
-                            Console.WriteLine(agent.Context.Undo.TryUndo(sel));
+                        {
+                            // 与 /undo N 同一条规则：两条路径各写一份必然漂移
+                            if (OutOfRangeUndoNotice(sel, agent.Context.Undo.Count) is { } warn &&
+                                !ConfirmReplace(Console.In, Console.Out, warn))
+                                Console.WriteLine(FormatCancelLine("已取消（未撤销任何操作）。", ConsoleColumns()));
+                            else
+                                Console.WriteLine(agent.Context.Undo.TryUndo(sel));
+                        }
                         else if (string.IsNullOrEmpty(pick))
                             Console.WriteLine(agent.Context.Undo.TryUndo());
                         else
