@@ -377,6 +377,8 @@ public sealed partial class Agent
         TurnCachedTokens = 0;
         TurnThinkingSeconds = 0;
         LastTurnFailed = false;
+        _taskPanelShownThisTurn = false; // 每回合重新"首次显示"，让新回合的第一次更新也能画出来
+        _taskPanelLastDone = 0;
         _turnSw.Restart(); // 本回合计时：每轮重启，spinner/定格行显示本轮用时而非整个会话的累计用时
         _turnStarts.Push(_messages.Count); // 记录本轮起点（ESC 多级撤回用）
         _messages.Add(new ProviderMessage { Role = MessageRole.User, Content = effectivePrompt });
@@ -586,6 +588,36 @@ public sealed partial class Agent
         CurrentMode.AllowedTools is not { } allowed
         || allowed.Contains(name, StringComparer.OrdinalIgnoreCase)
         || name.Equals(AlwaysAvailableTool, StringComparison.OrdinalIgnoreCase);
+
+    private bool _taskPanelShownThisTurn;
+    private int _taskPanelLastDone;
+
+    /// <summary>
+    /// 回合内是否要重画任务面板。
+    ///
+    /// 规则：**本回合首次**画一次，之后只在**完成数增加**时再画。
+    ///
+    /// 全量重画会吵：模型每完成一步就 update_tasks 一次，五步的任务就有六张同样的面板。
+    /// 但一次都不画也不行——长任务里用户只能盯着 spinner，模型做的计划完全不可见。
+    /// 「首次 + 每次真有进展」是这两者之间唯一说得通的折中。
+    /// </summary>
+    internal static bool ShouldRenderTaskPanel(bool shownThisTurn, int lastShownDone, int done) =>
+        !shownThisTurn || done > lastShownDone;
+
+    /// <summary>update_tasks 执行后把最新面板画出来（锁内写行，与工具日志同一把锁）。</summary>
+    private void RenderTaskPanelIfNeeded()
+    {
+        var done = Tasks.CompletedCount;
+        if (!ShouldRenderTaskPanel(_taskPanelShownThisTurn, _taskPanelLastDone, done))
+            return;
+        var panel = CodeAgent.Program.FormatTaskPanel(Tasks.Tasks, CodeAgent.Program.ConsoleColumnsForNotice());
+        _taskPanelShownThisTurn = true;
+        _taskPanelLastDone = done;
+        if (panel.Length == 0)
+            return; // 模型把清单清空了：没有面板可画，也不必解释
+        lock (ConsoleLock)
+            Console.WriteLine(panel);
+    }
 
     public IReadOnlyList<ToolSpec> ToolsForMode()
     {
@@ -1328,6 +1360,10 @@ public sealed partial class Agent
         {
             output = await _tools.ExecuteAsync(tc.Name, tc.ArgumentsJson, _ctx, ct);
             isError = false;
+            // 任务清单变了就把最新进度画出来——长任务里模型在做什么必须看得见，
+            // 否则用户只能盯着一个不动的 spinner 猜。
+            if (tc.Name == AlwaysAvailableTool)
+                RenderTaskPanelIfNeeded();
         }
         catch (ToolException ex)
         {
