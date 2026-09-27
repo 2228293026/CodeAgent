@@ -544,6 +544,9 @@ internal static class Program
                 PrintTurnSummary(agent, sw.Elapsed, opts, FooterCtxText(agent.ContextTokens, EffectiveContextWindow()));
                 // 本轮改了哪些文件（学自 Claude Code 的 Modified files）：不另开命令，
                 // 用户不必为了确认"它到底动没动我的文件"再敲一次 /files。
+                // 任务进度一行结论：面板一次五个任务就是五行，回合摘要里只给一行
+                if (FormatTaskProgressLine(agent.Tasks.CompletedCount, agent.Tasks.Count, ConsoleColumns()) is { Length: > 0 } taskLine)
+                    Console.WriteLine(taskLine);
                 if (FormatChangedFilesLine(
                         NewFilesThisTurn(filesBefore, agent.Context.Undo.AllPaths())
                             .Select(p => agent.Context.Workspace.ToRelative(p).Replace('\\', '/'))
@@ -878,6 +881,47 @@ internal static class Program
     /// <summary>回合摘要的可丢段优先级：费用 {SafeColor.Glyphs.Arrow} 缓存比例 {SafeColor.Glyphs.Arrow} 思考耗时 {SafeColor.Glyphs.Arrow} 本回合 token 明细。
     /// 固定段保留「{SafeColor.Glyphs.Ok} 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
     /// 可丢段丢完仍超宽时先**脱掉装饰外框**（纯装饰，省 13 列），最后才硬截。</summary>
+    /// <summary>任务清单面板（学自 Claude Code 的 TodoWrite 面板）：每个任务独占一行。
+    /// 空清单返回空串——不打印"暂无任务"，那是一行没信息量的噪音。</summary>
+    internal static string FormatTaskPanel(IReadOnlyList<CodeAgent.Tools.AgentTask> tasks, int width)
+    {
+        if (tasks.Count == 0)
+            return string.Empty;
+        var sb = new StringBuilder();
+        var done = tasks.Count(t => t.Status == CodeAgent.Tools.TaskStatus.Completed);
+        sb.AppendLine(FormatResultLine($"任务（{done}/{tasks.Count} 完成）:", width));
+        // 前缀（两空格缩进 + 状态标记）也占列，预算必须把它算进去
+        foreach (var t in tasks)
+        {
+            // 标记取自 SafeColor.Glyphs：CODEAGENT_ASCII 模式要能整体替换
+            var mark = t.Status switch
+            {
+                CodeAgent.Tools.TaskStatus.Completed => $"{SafeColor.Glyphs.Ok} ",
+                CodeAgent.Tools.TaskStatus.InProgress => $"{SafeColor.Glyphs.Arrow} ",
+                _ => "  ",
+            };
+            var prefix = "  " + mark;
+            var body = width <= 0
+                ? t.Content
+                : InputLine.FitToWidth(t.Content, Math.Max(1, width - TextUtil.DisplayWidth(prefix)));
+            // width<=0 = 宽度未知，此时不做任何收口（反复栽在这条语义上）
+            sb.AppendLine(width <= 0 ? prefix + body : InputLine.FitToWidth(prefix + body, width));
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>回合结束后的单行任务进度：<c>⏵⏵ 任务 2/5</c>。
+    /// 面板太占屏（一次五个任务就是五行），回合摘要里只给一行结论。</summary>
+    internal static string FormatTaskProgressLine(int done, int total, int width)
+    {
+        if (total <= 0)
+            return string.Empty;
+        var line = $"{SafeColor.Glyphs.HintMark}{SafeColor.Glyphs.HintMark} 任务 {done}/{total}";
+        if (width <= 0 || TextUtil.DisplayWidth(line) <= width)
+            return line;
+        return InputLine.FitToWidth(line, width);
+    }
+
     /// <summary>
     /// 本轮**新**改动的文件（相对本轮开始时的快照）。
     ///
@@ -3018,6 +3062,15 @@ internal static class Program
                         Console.WriteLine(FormatHintLine(advice, ConsoleColumns()));
                     return true;
                 }
+            case "/tasks":
+                // 任务清单（学自 Claude Code 的 TodoWrite 面板）。长任务里模型自己在做什么
+                // 不说出来，用户就只能盯着一个不动的 spinner 猜。
+                if (FormatTaskPanel(agent.Tasks.Tasks, ConsoleColumns()) is { Length: > 0 } panel)
+                    Console.WriteLine(panel);
+                else
+                    Console.WriteLine("当前没有任务清单。");
+                return true;
+
             case "/stats":
                 {
                     // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
@@ -3676,6 +3729,7 @@ internal static class Program
         new("/load <名>", "恢复已保存的会话"),
         new("/export [名/编号/all]", "导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话；all = 全部）"),
         new("/stats", "显示 token 用量统计"),
+        new("/tasks", "显示当前任务清单（模型进度）"),
         new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具"),

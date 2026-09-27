@@ -16,6 +16,9 @@ public sealed partial class Agent
 {
     private IAgentProvider _provider;
     private readonly ToolRegistry _tools;
+
+    /// <summary>本轮任务清单（模型通过 update_tasks 写，REPL 读同一份）。/tasks 查看。</summary>
+    public TaskList Tasks { get; } = new();
     private readonly AgentContext _ctx;
     private readonly AgentConfig _config;
     private readonly List<ProviderMessage> _messages = [];
@@ -37,6 +40,10 @@ public sealed partial class Agent
         _provider = provider;
         _tools = tools;
         _config = config;
+        // 任务清单挂在 Agent 上：模型通过 update_tasks 写，REPL 读同一份。
+        // 放在工具实例上不行——工具在别处构造，REPL 拿不到同一个对象。
+        Tasks = new TaskList();
+        tools.AttachTaskList(Tasks);
         _ctx = new AgentContext
         {
             Config = config,

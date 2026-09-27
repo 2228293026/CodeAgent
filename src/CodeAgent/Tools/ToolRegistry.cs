@@ -361,6 +361,19 @@ public sealed class ToolRegistry
 
     public void Register(ITool tool) => _tools[tool.Name] = tool;
 
+    /// <summary>
+    /// 把任务清单挂到已注册的 <c>update_tasks</c> 上（Agent 构造时调用）。
+    ///
+    /// 走注册表而不是把 TaskList 传进 CreateDefault：清单是**会话状态**，
+    /// 工具是**进程内单例**。让注册表在构造后补挂一次，工具工厂就不必知道会话状态存在。
+    /// 没有该工具时静默跳过——清单是可选能力，不该让缺了它就启动不了。
+    /// </summary>
+    internal void AttachTaskList(TaskList tasks)
+    {
+        if (_tools.TryGetValue("update_tasks", out var tool) && tool is UpdateTasksTool upd)
+            upd.Attach(tasks);
+    }
+
     public IReadOnlyList<ToolSpec> ToToolSpecs() =>
         _tools.Values.Select(t => new ToolSpec
         {
@@ -626,6 +639,7 @@ public sealed class ToolRegistry
         registry.Register(new SessionSearchTool());
         registry.Register(new StopTool());
         registry.Register(new ApplyPatchTool());
+        registry.Register(new UpdateTasksTool());
         return registry;
     }
 }
