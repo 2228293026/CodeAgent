@@ -917,7 +917,14 @@ public sealed partial class Agent
             if (key == from)
                 return to;
         }
-        // 前缀相同但后缀不同（read_file / read_binary_file）都归到同一个动词
+        // 前缀相同、后缀只是单复数/短后缀的（read_file / read_files、delete_file / delete_files、
+        // replace_in_file / replace_in_files）归到同一个动词。
+        //
+        // 长度上限 +6 是**故意的**：再长的后缀往往已经不是同一个动作了
+        // （read_configuration 是"读配置"而非"读"），宁可退回原名也不硬套动词。
+        //
+        // 此处原先举例的 read_binary_file **并不存在**——全仓库只有这条注释提到它。
+        // 拿一个不存在的工具当理由，下一个读到这里的人会以为前缀规则覆盖得比实际宽得多。
         foreach (var (from, to) in VerbMap)
         {
             if (from.Length > 0 && key.StartsWith(from, StringComparison.Ordinal) && key.Length <= from.Length + 6)
