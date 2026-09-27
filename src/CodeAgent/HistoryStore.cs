@@ -4,6 +4,24 @@ public sealed class HistoryStore
 {
     public const int MaxEntries = 100;
 
+    /// <summary>
+    /// 单条历史的上限（字符数，含换行）。
+    ///
+    /// 粘贴一大段代码会进来几万字符，此前**原样入库**：当次会话里 ↑ 一次就把它全量灌回
+    /// 输入框（重绘与折叠都要处理它），下次启动还会从文件里整个读回来。
+    /// 更大的代价是文件——<see cref="Save"/> 每次提交都全量重写，100 条大条目就是几 MB 的写放大。
+    ///
+    /// 超限的条目**直接不入库，而不是截断**：截断后的命令被 ↑ 召回再回车执行，
+    /// 是一句"看起来完整、实际缺了尾巴"的命令——可能删错文件、发错请求。
+    /// 少一条历史只是少一次召回，远比执行半条命令安全。
+    /// </summary>
+    public const int MaxEntryChars = 2000;
+
+    /// <summary>一条输入是否值得入库（空行与超长条目都不入）。
+    /// 纯函数：这条规则决定了"什么会出现在 ↑ 里"，写死成内联条件就没人能测。</summary>
+    internal static bool ShouldRemember(string line) =>
+        !string.IsNullOrWhiteSpace(line) && line.Length <= MaxEntryChars;
+
     private readonly string _path;
     private readonly List<string> _entries;
 
@@ -39,11 +57,11 @@ public sealed class HistoryStore
         try { File.Delete(_path); } catch { }
     }
 
-    /// <summary>记录一条输入：空白忽略；重复条目移到末尾（↑/↓ 与 Ctrl+R 里不再出现
-    /// 散落的旧副本）；超上限丢最旧。</summary>
+    /// <summary>记录一条输入：空白忽略；超长条目忽略（见 <see cref="MaxEntryChars"/>）；
+    /// 重复条目移到末尾（↑/↓ 与 Ctrl+R 里不再出现散落的旧副本）；超上限丢最旧。</summary>
     public void Remember(string line)
     {
-        if (string.IsNullOrWhiteSpace(line))
+        if (!ShouldRemember(line))
             return;
         if (_entries.Count > 0 && _entries[^1] == line)
             return;
@@ -66,7 +84,9 @@ public sealed class HistoryStore
             var entries = new Queue<string>(MaxEntries);
             foreach (var line in File.ReadLines(_path))
             {
-                if (string.IsNullOrWhiteSpace(line))
+                // 同样跳过超长条目：规则只加在写入侧的话，改规则之前写进去的老文件
+                // 仍会在启动时把几万字符灌进输入框——那正是这条规则要防的场景
+                if (!ShouldRemember(line))
                     continue;
                 entries.Enqueue(Decode(line));
                 if (entries.Count > MaxEntries)
