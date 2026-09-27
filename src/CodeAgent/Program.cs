@@ -925,12 +925,16 @@ internal static class Program
     }
 
     /// <summary>
-    /// diff 预览的单行渲染：六空格缩进 + 按显示宽度收口。
+    /// 工具执行前预览的 diff 行：六空格缩进 + **复用** <see cref="FormatDiffLine"/> 收口。
     ///
     /// 此前是 <c>Console.WriteLine("      " + line)</c>：diff 行的长度不受控
     /// （被新增/删除的一整行代码都可能很长），窄终端上硬折行之后**这一行就废了**——
     /// 续行没有 +/- 前缀，看起来像另一条独立的改动，看不出删掉还是加上的。
-    /// 所以这里宁可截断：省略号至少还标着"后面还有"。
+    ///
+    /// 收口**必须走 <see cref="FormatDiffLine"/> 而不是自己 FitToWidth**：那条已经处理了三件
+    /// 预览版做不到的事——<c>@@</c> 头放不下时丢掉装饰性上下文、**保住行号范围**；
+    /// 文件路径按尾部保留缩短（硬截尾会让人以为是另一个文件）；<c>+</c>/<c>-</c> 行
+    /// 必须带省略号标记。两处 diff 渲染规则若各写一份，窄终端下就会给出两种答案。
     /// </summary>
     internal static string FormatDiffPreviewLine(string line, int width)
     {
@@ -940,7 +944,8 @@ internal static class Program
         var room = width - TextUtil.DisplayWidth(Indent);
         if (room < 1)
             return InputLine.FitToWidth(Indent + line, Math.Max(1, width));
-        return Indent + InputLine.FitToWidth(line, room);
+        var body = FormatDiffLine(ShortenDiffPathLine(line, room) ?? line, room);
+        return Indent + body;
     }
 
     /// <summary>

@@ -61,6 +61,39 @@ public sealed class DiffPreviewLineTests
     }
 
     [Fact]
+    public void Line_HunkHeaderKeepsItsLineNumbers()
+    {
+        // @@ 头尾的上下文标题（C# 里常是很长的方法签名）是装饰性的，
+        // 放不下时整段丢掉——**行号范围才是 hunk 的结构信息**
+        var out1 = Program.FormatDiffPreviewLine("@@ -12,7 +12,9 @@ public static string VeryLongMethodName(int a)", 40);
+        Assert.Contains("@@", out1);
+        Assert.Contains("-12,7", out1);
+        Assert.Contains("+12,9", out1);
+    }
+
+    [Fact]
+    public void Line_PathHeaderKeepsTheFileName()
+    {
+        // 硬截尾部（a/src/CodeAgent/Agent…）会让人以为是另一个文件；
+        // 路径最有信息量的是末段文件名
+        var out1 = Program.FormatDiffPreviewLine("--- a/src/CodeAgent/Agent/Agent.cs", 40);
+        Assert.Contains("Agent.cs", out1);
+    }
+
+    [Fact]
+    public void Line_AgreesWithSlashDiffOnTheSameLine()
+    {
+        // 两处 diff 渲染规则若各写一份，窄终端下就会给出两种答案。
+        // 预览多六格缩进，所以预算比 /diff 少六——契约是"同一条规则、减去缩进后的预算"，
+        // 而不是字面相等（那不可能成立）。
+        foreach (var line in new[] { "+" + new string('a', 200), "--- a/src/CodeAgent/Agent/Agent.cs", "@@ -1,2 +1,3 @@ ctx" })
+            foreach (var w in new[] { 20, 30, 40, 60 })
+                Assert.Equal(
+                    "      " + Program.FormatDiffLine(line, w - 6),
+                    Program.FormatDiffPreviewLine(line, w));
+    }
+
+    [Fact]
     public void Line_ShortLinesAreUntouched()
     {
         Assert.Equal("      @@ -1 +1 @@", Program.FormatDiffPreviewLine("@@ -1 +1 @@", 80));
