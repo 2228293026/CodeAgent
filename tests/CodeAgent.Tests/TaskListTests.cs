@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using System.Threading;
 using CodeAgent.Tools;
 using Xunit;
+using AgentClass = CodeAgent.Agent.Agent;
 
 namespace CodeAgent.Tests;
 
@@ -188,6 +189,74 @@ public sealed class TaskListTests
         // 通过注册表分发一次，清单应当被填上
         var reg = ToolRegistry.CreateDefault();
         reg.AttachTaskList(list);
+        Assert.True(list.IsEmpty);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Registry_AttachesTheListAndTheCallReachesIt()
+    {
+        // 上面那条只断言 Attach 之后 list.IsEmpty —— Attach 本来就不改列表，
+        // 所以**挂没挂上都能过**，是条空转检查。必须真的经注册表分发一次工具调用，
+        // 看清单有没有被填上——那才是模型实际走的路径。
+        var reg = ToolRegistry.CreateDefault();
+        var list = new TaskList();
+        reg.AttachTaskList(list);
+        var ack = await reg.ExecuteAsync("update_tasks", """
+            {"tasks":[{"content":"第一步","status":"completed"},{"content":"第二步","status":"pending"}]}
+            """, Ctx(), CancellationToken.None);
+        Assert.Equal(2, list.Count);
+        Assert.Equal("第一步", list.Tasks[0].Content);
+        Assert.Contains("2", ack);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task ModelCallingTheToolActuallyFillsTheList()
+    {
+        // 端到端：模型发出 update_tasks 工具调用 → Agent 执行 → agent.Tasks 有内容。
+        // 这是"清单到底能不能被模型填上"的唯一有说服力的验证；
+        // 前面那些都只是直接调工具，绕过了 Agent 真正走的执行路径。
+        var queue = new Queue<Providers.ProviderResponse>();
+        queue.Enqueue(new Providers.ProviderResponse
+        {
+            ToolCalls =
+            [
+                new Providers.ToolCall
+                {
+                    Id = "t1",
+                    Name = "update_tasks",
+                    ArgumentsJson = """{"tasks":[{"content":"先摸清结构","status":"completed"},{"content":"再改代码","status":"in_progress"}]}""",
+                },
+            ],
+        });
+        queue.Enqueue(new Providers.ProviderResponse { Text = "已完成第一步。" });
+        var provider = new FakeProvider { ResponseQueue = queue };
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false },
+            provider,
+            ToolRegistry.CreateDefault());
+        await agent.RunAsync("把函数抽出来", CancellationToken.None);
+        Assert.Equal(2, agent.Tasks.Count);
+        Assert.Equal("先摸清结构", agent.Tasks.Tasks[0].Content);
+        Assert.Equal(CodeAgent.Tools.TaskStatus.InProgress, agent.Tasks.Tasks[1].Status);
+        Assert.Equal(1, agent.Tasks.CompletedCount);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task SystemPromptIsWhatTellsTheModelToDoThat()
+    {
+        // 端到端的另一半：工具能跑不等于模型会跑。提示里没有这条，
+        // 上面那个测试里的模型不会被真实模型那样调用。
+        Assert.Contains("update_tasks", agent_prompt());
+        static string agent_prompt() => AgentConfig.DefaultSystemPrompt;
+    }
+
+    [Fact]
+    public void Registry_AttachAloneDoesNotFillTheList()
+    {
+        // 反向说明：上面那条有意义，前提是"只 Attach 不调用"确实不会改清单。
+        // 没有这条，将来有人给 Attach 加上副作用，会误以为上面那条在验证接线。
+        var list = new TaskList();
+        ToolRegistry.CreateDefault().AttachTaskList(list);
         Assert.True(list.IsEmpty);
     }
 
