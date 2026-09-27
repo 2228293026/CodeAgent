@@ -1338,16 +1338,25 @@ public sealed partial class Agent
                     var startWidth = CodeAgent.Program.ConsoleColumnsForNotice();
                     Console.WriteLine(startWidth > 0 ? InputLine.FitToWidth(startLine, startWidth) : startLine);
                 }
-                // edit_file / write_file 附带 diff 预览：执行前就看到改动内容（而非两段截断片段）
-                if (tc.Name is "edit_file" or "write_file")
-                {
-                    JsonObject? previewArgs = null;
-                    try { previewArgs = JsonNode.Parse(tc.ArgumentsJson) as JsonObject; }
-                    catch { }
-                    ShowFilePreview(tc.Name, previewArgs, _ctx.Workspace, ct);
-                }
             }
         }
+
+        // edit_file / write_file 的 diff 预览**不受 showToolCalls 影响**。
+        //
+        // showToolCalls 管的是"要不要逐条念工具名"（噪音）；diff 管的是"代码到底被改成了什么"
+        //（事实）。关掉工具日志的用户要的是安静，不是"看不见自己工作区被改了什么"。
+        // 把两者绑在一起的结果是：showToolCalls=false 时回合结束只留下一行
+        // 「本次会话修改过的文件」，用户从头到尾没看到一行改动内容——
+        // 对一个写代码的工具来说，那等于让它在黑箱里改你的文件。
+        if (tc.Name is "edit_file" or "write_file")
+        {
+            JsonObject? previewArgs = null;
+            try { previewArgs = JsonNode.Parse(tc.ArgumentsJson) as JsonObject; }
+            catch { }
+            lock (ConsoleLock)
+                ShowFilePreview(tc.Name, previewArgs, _ctx.Workspace, ct);
+        }
+
         var sw = Stopwatch.StartNew();
         string output;
         bool isError;
