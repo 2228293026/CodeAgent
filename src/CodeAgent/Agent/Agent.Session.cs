@@ -475,6 +475,65 @@ public sealed partial class Agent
     }
 
     /// <summary>关键字的命中片段：前后窗口折叠换行，超出部分用省略号标记。日志与快照搜索共用。</summary>
+    /// <summary>会话内容里算作"单词内部"的字符：ASCII 字母/数字/下划线。
+    /// 非 ASCII（中文等）**不算**——中文没有词边界可言。</summary>
+    private static bool IsSearchWordChar(char c) =>
+        c is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '_';
+
+    /// <summary>这个关键字要不要按词边界匹配（纯判定，好测）。
+    ///
+    /// 纯 ASCII 关键字要，中文不要——中文没有空格，强行找边界等于什么都搜不到。
+    /// 关键字里混了标点（<c>Read()</c>、<c>foo.bar</c>）也不要：那种符号本身就是边界的一部分，
+    /// 两侧很可能紧挨着单词字符，按边界匹配会把用户**真正想找的东西**滤掉。
+    /// </summary>
+    internal static bool NeedsSearchWordBoundary(string keyword)
+    {
+        if (string.IsNullOrEmpty(keyword))
+            return false;
+        foreach (var ch in keyword)
+            if (!(ch is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '_'))
+                return false;
+        return true;
+    }
+
+    /// <summary>从 <paramref name="from"/> 起找下一处命中；<c>-1</c> 表示没有了（纯函数，好测）。
+    ///
+    /// 纯子串匹配在**会话日志**这种内容上噪音极大：搜 "the" 会命中
+    /// <c>Pa·th·E·scapeReportToolTests.cs</c>、<c>Color·The·meTests.cs</c>、
+    /// <c>Contra·stThe·me</c>——搜代码标识符时几乎每一行都会"命中"，等于没搜。
+    /// 所以 ASCII 关键字会跳过**严格长在词中间**的命中。
+    ///
+    /// 注意是「两侧**都**是单词字符」才丢：前缀/后缀搜索必须保留，
+    /// 用户搜 Rfc2898 找的就是 Rfc2898DeriveBytes。
+    ///
+    /// 中文关键字仍走纯子串：中文没有词边界，硬套只会搜不到东西。
+    /// </summary>
+    internal static int FindOccurrence(string content, string keyword, int from, StringComparison cmp)
+    {
+        if (string.IsNullOrEmpty(keyword) || from < 0 || from >= content.Length)
+            return -1;
+        // 词边界规则只看关键字本身，与大小写敏感性无关：
+        // 即使用户显式选了区分大小写，PathEscape 里的 The 同样不是他要找的那个
+        var bounded = NeedsSearchWordBoundary(keyword);
+        var at = content.IndexOf(keyword, from, cmp);
+        while (at >= 0)
+        {
+            if (!bounded)
+                return at;
+            // 只在**两侧都是单词字符**（即严格长在别的词中间）时才丢弃。
+            //
+            // 用「两侧都要是边界」会误伤前缀搜索：用户搜 Rfc2898 要的就是
+            // Rfc2898DeriveBytes，而那里右侧紧挨着 D、根本不是边界——
+            // 那是最典型的用法，比 PathEscape 里的假命中常见得多。
+            var beforeOk = at == 0 || !IsSearchWordChar(content[at - 1]);
+            var end = at + keyword.Length;
+            var afterOk = end >= content.Length || !IsSearchWordChar(content[end]);
+            if (beforeOk || afterOk)
+                return at;
+            at = content.IndexOf(keyword, at + 1, cmp);
+        }
+        return -1;
+    }
     private static IEnumerable<(string Role, string Snippet)> MatchWindow(string content, string keyword, string role, bool caseSensitive, int maxPerMsg, CancellationToken ct)
     {
         var cmp = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
@@ -482,7 +541,7 @@ public sealed partial class Agent
         while (found < maxPerMsg)
         {
             ct.ThrowIfCancellationRequested();
-            var idx = content.IndexOf(keyword, searchFrom, cmp);
+            var idx = FindOccurrence(content, keyword, searchFrom, cmp);
             if (idx < 0)
                 yield break;
             var start = Math.Max(0, idx - 40);
