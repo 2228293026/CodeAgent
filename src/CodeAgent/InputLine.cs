@@ -219,6 +219,7 @@ public static class InputLine
         ("/files", "列出本次会话修改过的文件"),
         ("/stats", "显示 token 用量统计"),
         ("/tasks", "显示当前任务清单（模型进度）"),
+        ("/todos", "任务清单（/tasks 的别名）"),
         ("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具"),

@@ -2396,7 +2396,21 @@ internal static class Program
         if (notice.Count > 0)
             Console.WriteLine(BuildBannerNotice(string.Join("; ", notice), width));
         Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", width));
-        Console.WriteLine(InputLine.FitToWidth(new string(SafeColor.Glyphs.RuleChar, 58), width));
+        Console.WriteLine(BuildBannerRule(width));
+    }
+
+    /// <summary>横幅末尾的分隔线：最多 <see cref="BannerRuleWidth"/> 列，放不下就按终端宽度截。
+    ///
+    /// 此前是 <c>FitToWidth(new string(RuleChar, 58), width)</c>：窄终端上截出来的是
+    /// 一条**以省略号结尾的横线**——横线后面本来就没有内容，那个「还有」的暗示是假的，
+    /// 看起来像渲染出错。分隔线按宽度截断本来就没有语义，所以直接按宽度取。
+    /// </summary>
+    internal const int BannerRuleWidth = 58;
+
+    internal static string BuildBannerRule(int width)
+    {
+        var len = width <= 0 ? BannerRuleWidth : Math.Clamp(width, 1, BannerRuleWidth);
+        return new string(SafeColor.Glyphs.RuleChar, len);
     }
 
     /// <summary>向上找规则文件：<c>AGENTS.md</c> 优先，其次 <c>CLAUDE.md</c>、<c>.cursorrules</c>。
@@ -3102,6 +3116,10 @@ internal static class Program
                         Console.WriteLine(FormatHintLine(advice, ConsoleColumns()));
                     return true;
                 }
+            // /todos：Claude Code 叫这个名字。用户照着习惯敲 /todos 却得到"未知命令"，
+            // 是纯摩擦——两个名字指同一件事，就该都能敲。（工具名仍叫 update_tasks：
+            // 它本来就叫 tasks，改成 TodoWrite 反倒对不上 /tasks。）
+            case "/todos":
             case "/tasks":
                 // 任务清单（学自 Claude Code 的 TodoWrite 面板）。长任务里模型自己在做什么
                 // 不说出来，用户就只能盯着一个不动的 spinner 猜。
@@ -3770,6 +3788,7 @@ internal static class Program
         new("/export [名/编号/all]", "导出会话为 Markdown（同名快照优先；编号为 /resume 列表中的历史会话；all = 全部）"),
         new("/stats", "显示 token 用量统计"),
         new("/tasks", "显示当前任务清单（模型进度）"),
+        new("/todos", "任务清单（/tasks 的别名）"),
         new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具"),
