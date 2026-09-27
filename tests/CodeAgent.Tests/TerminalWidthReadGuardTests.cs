@@ -25,27 +25,38 @@ public class TerminalWidthReadGuardTests
 {
     private const int ResolutionPoints = 3;
 
+    /// <summary>
+    /// 扫描一段源码，返回"既没解析也不是诊断读数"的裸宽度读数（空 = 干净）。
+    ///
+    /// 抽成方法是为了让这条守卫**可证伪**：把真正的判定做成纯函数之后，才能拿一段
+    /// 「故意加了裸读、并按同样手法加了「合法」的解析读」的代码喂进去，确认它确实会报。
+    /// 否则"守卫通过"和"守卫根本没在工作"在结果上完全无法区分。
+    /// </summary>
+    internal static List<string> ScanForUnresolvedWidthReads(string source, string label)
+    {
+        var offenders = new List<string>();
+        var lines = source.Replace("\r\n", "\n").Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!lines[i].Contains("Console.WindowWidth", StringComparison.Ordinal))
+                continue;
+            // 诊断读数：/diag 要显示终端的原始值，不该被「可信化」过
+            if (lines[i].Contains("W(() =>", StringComparison.Ordinal))
+                continue;
+            // 否则所在区域必须有解析调用
+            var region = string.Join("\n", lines.Skip(Math.Max(0, i - 8)).Take(16));
+            if (!region.Contains("Resolve", StringComparison.Ordinal))
+                offenders.Add($"{label}:{i + 1} {lines[i].Trim()}");
+        }
+        return offenders;
+    }
+
     [Fact]
     public void EveryWidthReadIsEitherResolvedOrDiagnostic()
     {
         var offenders = new List<string>();
         foreach (var file in EnumerateSources())
-        {
-            var source = File.ReadAllText(file);
-            var lines = source.Replace("\r\n", "\n").Split('\n');
-            for (var i = 0; i < lines.Length; i++)
-            {
-                if (!lines[i].Contains("Console.WindowWidth", StringComparison.Ordinal))
-                    continue;
-                // 诊断读数：/diag 要显示终端的原始值，不该被「可信化」过
-                if (lines[i].Contains("W(() =>", StringComparison.Ordinal))
-                    continue;
-                // 否则所在区域必须有解析调用
-                var region = string.Join("\n", lines.Skip(Math.Max(0, i - 8)).Take(16));
-                if (!region.Contains("Resolve", StringComparison.Ordinal))
-                    offenders.Add($"{Path.GetFileName(file)}:{i + 1} {lines[i].Trim()}");
-            }
-        }
+            offenders.AddRange(ScanForUnresolvedWidthReads(File.ReadAllText(file), Path.GetFileName(file)));
         Assert.True(offenders.Count == 0,
             "以下宽度读数既没有解析、也不是诊断读数：" + string.Join(" | ", offenders));
     }
@@ -96,16 +107,73 @@ public class TerminalWidthReadGuardTests
     [Fact]
     public void GuardWouldNoticeANewRawRead()
     {
-        // 守卫本身不是空转：构造一个「有裸读、无解析」的区域，确认它会被判为违规
-        var sample = @"
-        private static int Bad()
-        {
-            try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
-        }";
-        var region = string.Join("\n", sample.Replace("\r\n", "\n").Split('\n'));
-        var isDiagnostic = region.Contains("W(() =>", StringComparison.Ordinal);
-        Assert.False(isDiagnostic && !region.Contains("Resolve", StringComparison.Ordinal));
-        Assert.DoesNotContain("Resolve", region);
+        // 真·变异测试：拿一段**确实违规**的代码（裸读、附近没有解析调用）喂进去，确认会被报。
+        // 前一版只是断言示例字符串里没有 "Resolve"——那跟守卫的真实逻辑毫无关系，
+        // 通过了也证明不了任何事。
+        const string bad = """
+            private static int BareRead()
+            {
+                try { return Console.WindowWidth; } catch { return 0; }
+            }
+            """;
+        var found = ScanForUnresolvedWidthReads(bad, "bad");
+        Assert.Single(found);
+        // 报的是**含读数的那一行**（不是所在方法名）
+        Assert.Contains("Console.WindowWidth", found[0]);
+        Assert.StartsWith("bad:", found[0]);
+    }
+
+    [Fact]
+    public void Guard_IgnoresReadsThatHaveAResolveNearby()
+    {
+        // **如实记录这条守卫的粒度**：判定是「±8 行窗口里出现过 Resolve 就算合规」。
+        // 也就是说一个真正合规的解析点会顺带为窗口内的裸读开脱。
+        // 这是已知的粗放之处（先有规则、后补精度），这里把它钉住，
+        // 免得有人以为这条守卫能逐处精确判定。
+        const string mixed = """
+            private static int Columns()
+            {
+                try { return Math.Clamp(Console.WindowWidth, 0, 300); } catch { return 0; }
+            }
+            private static int ColumnsViaHelper()
+            {
+                return ResolveColumns(() => Console.WindowWidth);
+            }
+            """;
+        Assert.Empty(ScanForUnresolvedWidthReads(mixed, "mixed"));
+    }
+
+    [Fact]
+    public void Guard_DiagnosticReadsAreStillExempt()
+    {
+        // /diag 必须能看到终端的原始值，诊断读数不该被判违规
+        const string diag = """
+            private static string Diag()
+            {
+                return W(() => Console.WindowWidth).ToString();
+            }
+            """;
+        Assert.Empty(ScanForUnresolvedWidthReads(diag, "diag"));
+    }
+
+    [Fact]
+    public void Guard_FindsEveryOffendingLineNotJustTheFirst()
+    {
+        // 报一个就够？不：全列出来，用户才能一次改完
+        const string two = """
+            private static int A() => Console.WindowWidth;
+            private static int B() => Console.WindowWidth;
+            """;
+        var found = ScanForUnresolvedWidthReads(two, "two");
+        Assert.Equal(2, found.Count);
+    }
+
+    [Fact]
+    public void Guard_IgnoresCrlfWorkingCopies()
+    {
+        // Windows 上 core.autocrlf=true 的工作区是 CRLF；扫描必须先归一化
+        const string bad = "private static int BareRead()\r\n{\r\n    return Console.WindowWidth;\r\n}\r\n";
+        Assert.Single(ScanForUnresolvedWidthReads(bad, "crlf"));
     }
 
     private static string SourceRoot()

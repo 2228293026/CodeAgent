@@ -103,6 +103,36 @@ public class RenderGlyphGuardTests
         return string.Join("\n", kept);
     }
 
+    /// <summary>
+    /// 扫描一段渲染层代码，返回"直接写死的装饰性字符"清单（空 = 干净）。
+    ///
+    /// 抽成方法是为了让这条守卫**可证伪**：把真正的扫描逻辑做成纯函数之后，
+    /// 才能拿一段「故意加了违规字符的代码」喂进去，确认它确实会报——
+    /// 否则"守卫通过"和"守卫根本没在工作"在结果上无法区分。
+    /// </summary>
+    internal static List<string> ScanForHardcodedGlyphs(string code, string label)
+    {
+        var offenders = new List<string>();
+        for (var i = 0; i < code.Length; i++)
+        {
+            var cp = char.ConvertToUtf32(code, i);
+            if (char.IsHighSurrogate(code[i]))
+            {
+                if (IsAllowed(cp)) { i++; continue; }
+                var name = DecorativeName(cp);
+                if (name is not null)
+                    offenders.Add($"{label}: {name} U+{cp:X4}（应改用 SafeColor.Glyphs.*）");
+                i++;
+                continue;
+            }
+            if (IsAllowed(cp)) continue;
+            var what = DecorativeName(cp);
+            if (what is not null)
+                offenders.Add($"{label}: {what} U+{cp:X4} '{code[i]}'（应改用 SafeColor.Glyphs.*）");
+        }
+        return offenders;
+    }
+
     [Fact]
     public void NoDecorativeGlyphIsHardcodedInTheRenderLayer()
     {
@@ -112,27 +142,52 @@ public class RenderGlyphGuardTests
         {
             var path = Path.Combine(root, rel);
             Assert.True(File.Exists(path), $"渲染层文件不存在: {rel}");
-            var code = StripComments(File.ReadAllText(path));
-            for (var i = 0; i < code.Length; i++)
-            {
-                var cp = char.ConvertToUtf32(code, i);
-                if (char.IsHighSurrogate(code[i]))
-                {
-                    if (IsAllowed(cp)) { i++; continue; }
-                    var name = DecorativeName(cp);
-                    if (name is not null)
-                        offenders.Add($"{rel}: {name} U+{cp:X4}（应改用 SafeColor.Glyphs.*）");
-                    i++;
-                    continue;
-                }
-                if (IsAllowed(cp)) continue;
-                var what = DecorativeName(cp);
-                if (what is not null)
-                    offenders.Add($"{rel}: {what} U+{cp:X4} '{code[i]}'（应改用 SafeColor.Glyphs.*）");
-            }
+            offenders.AddRange(ScanForHardcodedGlyphs(StripComments(File.ReadAllText(path)), rel));
         }
         Assert.True(offenders.Count == 0,
             "渲染层仍有直接写死的装饰性字符（CODEAGENT_ASCII 无法覆盖它们）：\n  " + string.Join("\n  ", offenders.Distinct()));
+    }
+
+    [Fact]
+    public void Scan_CatchesAViolationAppendedToRealRenderLayerCode()
+    {
+        // 真·变异测试：拿**真实的渲染层文件**加一行违规，确认会被抓。
+        // 只喂一个合成的一行字符串，证明力弱得多——它绕过了 StripComments
+        // 和真实代码里的各种形态。
+        var root = SourceRoot();
+        var rel = RenderLayer[0];
+        var clean = StripComments(File.ReadAllText(Path.Combine(root, rel)));
+        Assert.Empty(ScanForHardcodedGlyphs(clean, rel)); // 前提：真实文件是干净的
+
+        var mutated = clean + "\n// x\nvar oops = \"◆ 硬塞进来的装饰符\";\n";
+        var found = ScanForHardcodedGlyphs(mutated, rel);
+        Assert.NotEmpty(found);
+        Assert.Contains(found, f => f.Contains("U+25C6"));
+    }
+
+    [Fact]
+    public void Scan_IgnoresViolationsInsideComments()
+    {
+        // 注释里可以写字符形说明（守卫自身的注释就写着这些符号），否则这条规则无法落地。
+        // 注意必须走完整流水线：注释剥离是**调用方**的一步，Scan 收的是剥离后的代码。
+        Assert.Empty(ScanForHardcodedGlyphs(StripComments("// 这里提到 ◆ ⚠ ✔ 只是说明\n"), "x"));
+        Assert.Empty(ScanForHardcodedGlyphs(StripComments("/* 块注释里的 → ✗ ✘ */\nvar x = 1;\n"), "x"));
+    }
+
+    [Fact]
+    public void StripComments_AloneDoesNotHideViolationsInCode()
+    {
+        // 反向：证明上��条不是因为"剥离得太狠、什么都不剩"而通过的
+        var stripped = StripComments("var a = 1; // 注释\nvar b = \"◆\";\n");
+        Assert.Contains("◆", stripped);
+        Assert.NotEmpty(ScanForHardcodedGlyphs(stripped, "x"));
+    }
+
+    [Fact]
+    public void Scan_AllowsCjkAndFullWidthPunctuation()
+    {
+        // 终端本来就能显示这些，不该被当成"装饰性字符"
+        Assert.Empty(ScanForHardcodedGlyphs("var s = \"已处理，剩 3 个（详见 /diag）。\";", "x"));
     }
 
     [Fact]
