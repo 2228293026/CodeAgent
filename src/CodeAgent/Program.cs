@@ -486,6 +486,12 @@ internal static class Program
                 await RunBangCommandAsync(bangCommand, config, Environment.CurrentDirectory);
                 continue;
             }
+            // 光一个叹号：本地给一行用法，别为一次手滑付一整轮模型往返
+            if (Program.IsBareBangLine(line))
+            {
+                Console.WriteLine(Program.FormatBareBangHint(ConsoleColumns()));
+                continue;
+            }
             if (line.StartsWith('/'))
             {
                 if (line.Equals("/retry", StringComparison.OrdinalIgnoreCase))
@@ -1839,6 +1845,27 @@ internal static class Program
             return false;
         command = t[1..].Trim();
         return command.Length > 0;
+    }
+
+    /// <summary>这一行是不是"只敲了一个叹号"（<c>!</c> 或 <c>!   </c>）。
+    ///
+    /// 它**不是**命令（见 <see cref="TryParseBangCommand"/>），但也不该被当成一条普通消息
+    /// 送去问模型：那是**整整一轮往返**——花 token、花时间，换来模型一句
+    /// 「看起来消息是空的（只有一个 !），我这边没收到具体任务，请告诉我你想做什么」。
+    /// 用户敲 <c>!</c> 几乎都是想执行命令时漏写了后半截，本地给一行提示即可，
+    /// 零成本、零延迟，说完他自然会重打。
+    /// </summary>
+    internal static bool IsBareBangLine(string line)
+    {
+        var t = line.Trim();
+        return t.Length >= 1 && t[0] == BangPrefix && t[1..].Trim().Length == 0;
+    }
+
+    /// <summary>裸叹号的用法提示（纯渲染，好测）。</summary>
+    internal static string FormatBareBangHint(int width = 0)
+    {
+        var body = $"{SafeColor.Glyphs.Warn} 叹号后面要接 shell 命令，例如：! dotnet build、! git status。只想输入叹号请直接用中文表述。";
+        return width > 0 ? FormatNoticeLine(body, width) : body;
     }
 
     /// <summary>bash 模式的执行行：<c>! ls -la</c>，命令过长时按宽度收敛。
