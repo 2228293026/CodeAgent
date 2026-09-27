@@ -436,12 +436,21 @@ public sealed partial class Agent
                 _ctx.StopRequested = false;
                 StreamedLastRun = _streamedThisCall;
                 StreamedOnLineBoundary = !_streamedThisCall || _renderer?.EndsOnLineBoundary != false;
-                if (resp.Text is null)
+                // 判空要看**用户实际看到了什么**，不是只看 Text 字段。
+                //
+                // 此前只判 `resp.Text is null`：不少 Provider 在"没有正文"时给的是空串而非
+                // null，于是**整个回合静默空白**——屏幕上一个字都没有，`LastTurnFailed`
+                // 还是 false（状态栏连红标都不亮），用户完全无从判断发生了什么。
+                // 空串和 null 在这里是一回事，都按"未返回内容"处理。
+                //
+                // 但**流式输出过的正文不能算空**：那些字符已经打到屏幕上了，
+                // 此时 Text 为空是正常的，报"未返回内容"反而是误报。
+                if (string.IsNullOrWhiteSpace(resp.Text) && !_streamedThisCall)
                 {
                     LastTurnFailed = true;
                     return "(模型未返回内容：可能是免费模型限额、上下文过长或速率限制，可 /retry 或换模型重试)";
                 }
-                return resp.Text;
+                return resp.Text ?? "";
             }
 
             // 模型在调用工具前若已流式输出文本，补一个换行，避免与后续输出粘连
@@ -496,7 +505,11 @@ public sealed partial class Agent
             var result = await CallWithRetryAsync(
                 () => _provider.ChatStreamAsync(_messages, ToolsForMode(), _ctx.Config.ThinkingEffort, delta =>
                 {
-                    if (!_streamedThisCall)
+                    // 只有**真有内容**的增量才算"已经流式输出"。
+                    // 此前第一个 delta 回调就置位，于是 Provider 发一个空/纯空白增量时
+                    // 也会被当成"用户已经看到正文"：spinner 被提前定格、下游的
+                    // "模型未返回内容"判空被误抑制——而屏幕上其实一个字都没有。
+                    if (!_streamedThisCall && !string.IsNullOrWhiteSpace(delta))
                     {
                         // 思考结束（首个文本到达）：定格"用时 · tokens"统计行，结论文本从下一行流式输出
                         FinalizeSpinner();
