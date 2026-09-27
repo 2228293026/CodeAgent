@@ -117,6 +117,61 @@ public sealed class ShowToolCallsVsDiffTests : IDisposable
         Assert.False(new AgentConfig { ShowToolCalls = false }.ShowToolCalls);
     }
 
+    [Fact]
+    public void ToolFailures_AreNotGatedByShowLog()
+    {
+        // **失败永远要报**。showToolCalls 管的是"念不念工具名"（噪音），不是"报不报失败"。
+        // 把失败也关掉的后果：关掉日志之后，一条失败的 dotnet build 在屏幕上
+        // 一个字都不会出现——而模型会换个思路继续，用户全程不知道刚才失败了。
+        // 安静的成功是尊重，安静的失败是欺骗。
+        var src = File.ReadAllText(Find());
+        Assert.Contains("if (showLog || isError)", src);
+    }
+
+    [Fact]
+    public void SuccessPath_IsStillGatedByShowLog()
+    {
+        // 反向：这次改的是"失败不受限"，不是"成功也开始刷屏"——
+        // 那正是 showToolCalls 这个开关存在的意义
+        var src = File.ReadAllText(Find());
+        var at = src.IndexOf("if (showLog || isError)", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        var window = src.Substring(at, Math.Min(3000, src.Length - at));
+        // 成功分支（Success 着色）必须仍在这个条件的 else 语义之外被控制：
+        // 简单地说，条件里不能出现"成功也进来看"的写法
+        Assert.DoesNotContain("showLog || isError || ", src);
+        Assert.Contains("SafeColor.Success", window);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task AFailedToolStillCompletesTheTurnAndReportsTheError()
+    {
+        // 端到端：失败路径没有被 if(showLog) 整个挡掉——工具照样执行、错误照样进消息历史，
+        // 模型才能据此换个思路，而不是"什么都没发生"。
+        var q = new Queue<CodeAgent.Providers.ProviderResponse>();
+        q.Enqueue(new CodeAgent.Providers.ProviderResponse
+        {
+            ToolCalls =
+            [
+                new CodeAgent.Providers.ToolCall
+                {
+                    Id = "f1",
+                    Name = "read_file",
+                    ArgumentsJson = """{"path":"definitely-missing-file.txt"}""",
+                },
+            ],
+        });
+        q.Enqueue(new CodeAgent.Providers.ProviderResponse { Text = "那个文件不存在。" });
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false, ShowToolCalls = false },
+            new FakeProvider { ResponseQueue = q },
+            ToolRegistry.CreateDefault());
+        await agent.RunAsync("读一下那个文件", System.Threading.CancellationToken.None);
+        Assert.Equal(1, agent.TurnToolCalls);
+        // 工具结果进了历史：模型看得见失败
+        Assert.Contains(agent.Messages, m => m.Role == MessageRole.Tool && (m.Content ?? "").Length > 0);
+    }
+
     private static string Find()
     {
         foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })

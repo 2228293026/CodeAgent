@@ -1399,7 +1399,14 @@ public sealed partial class Agent
             }
         }
 
-        if (showLog)
+        // **失败永远要报**，不受 showToolCalls 影响。
+        //
+        // showToolCalls 管的是"念不念工具名"（噪音），不是"报不报失败"。
+        // 把失败也关掉的后果：用户把工具日志关掉之后，一条失败的 dotnet build、
+        // 一次被沙箱拦下的写入，在屏幕上**一个字都不会出现**——
+        // 而模型会拿到失败结果、换个思路继续，用户全程不知道刚才那次尝试失败了。
+        // 安静的成功是尊重，安静的失败是欺骗。
+        if (showLog || isError)
         {
             lock (ConsoleLock)
             {
