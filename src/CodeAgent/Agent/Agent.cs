@@ -666,6 +666,11 @@ public sealed partial class Agent
     /// 写死 60 会在长标签（如「上下文超限，正在压缩历史… 已用时 1 分 23 秒」）后留下残字。</summary>
     private int _spinnerLastWidth;
 
+    /// <summary>本次调用是否真的画过 spinner。输出重定向时不画，
+    /// 此时 FinalizeSpinner **不能**去"定格"一个从没出现过的动画行——
+    /// 那会打出一行带残帧字形和 0 token 的假统计（重定向时 token 还没开始计）。</summary>
+    private bool _spinnerShown;
+
     /// <summary>清掉 spinner 行的控制序列：回到行首 → 填满该行实际宽度 → 再回行首。</summary>
     internal static string SpinnerClearSequence(int lastWidth)
     {
@@ -749,8 +754,21 @@ public sealed partial class Agent
     /// 先换到输入行下方独立一行（spinner 专属行），\r 只更新该行，不覆盖输入框。</summary>
     /// <param name="label">非空时该文案替换「用时/token」指示（如压缩历史）：非流式调用无 token
     /// 可计，改用 spinner 自己的秒表显示已进行时长（/compact 不在回合内，_turnSw 是上一回合的旧值）。</param>
+    /// <summary>当前是否应该画 spinner 动画（纯函数，好测）。
+    ///
+    /// 输出重定向时**不画**：spinner 每 ~200ms 写一帧，清理靠 <c>\r</c> + 空格 + <c>\r</c>，
+    /// 而那只对终端成立。重定向时 <c>\r</c> 不覆盖，帧会一路堆进管道：
+    /// <c>codeagent "改个错别字" &gt; out.txt</c> 出来的文件里夹着几百行
+    /// <c>o | \ | / - | 用时 3s | ↑ 0 tokens</c>，最后一条回复还会和最后半帧粘成一行。
+    /// 脚本化使用时管道里的东西是要被**读**的，动画帧是纯噪音——
+    /// 而脚本恰恰是最容易重定向的场景。
+    /// </summary>
+    internal static bool ShouldShowSpinner(bool outputRedirected) => !outputRedirected;
     private void ShowSpinner(string? label = null)
     {
+        if (!ShouldShowSpinner(Console.IsOutputRedirected))
+            return;
+        _spinnerShown = true;   // 供 FinalizeSpinner 判定"确实有 spinner 可定格"
         _spinnerSw.Restart();
         _streamTokens = 0;
         _spinnerCts = new System.Threading.CancellationTokenSource();
@@ -817,6 +835,13 @@ public sealed partial class Agent
         // 累加语义（同 ClearSpinner）：累加后 Reset 防止后续路径双计
         TurnThinkingSeconds += _spinnerSw.Elapsed.TotalSeconds;
         _spinnerSw.Reset();
+        // 从没画过 spinner（输出重定向）就别去"定格"一个不存在的动画行：
+        // 那会打出一行带残帧字形（`v 用时 4s | ↑ 0 tokens`）的假统计——
+        // 残帧是动画的残留，0 token 也是因为动画没跑、token 还没开始计。
+        // 管道里的内容是要被**读**的，这种行只会误导。
+        if (!_spinnerShown)
+            return;
+        _spinnerShown = false;
         // 本回合口径：与本回合摘要行/状态栏一致（会话累计见 /stats）
         var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
         var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
