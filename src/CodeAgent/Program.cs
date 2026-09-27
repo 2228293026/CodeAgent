@@ -770,6 +770,47 @@ internal static class Program
     }
 
     /// <summary>显示当前对话历史（系统提示不计入条数，内容截断）。</summary>
+    /// <summary>
+    /// 一次"只有工具调用、没有正文"的助手轮，在 <c>/history</c> 里显示成什么。
+    ///
+    /// 此前一律是 <c>[调用 stop]</c> —— **把参数全丢了**。而 <c>stop</c> 的
+    /// <c>reason</c> 恰恰是模型给用户的最终总结或**要问用户的问题**：
+    /// 系统提示写明"任务完成或需要提问时调用 stop"。于是回看历史时只看到
+    /// 「助手调用了 stop」，却不知道它到底说了什么、问了什么——
+    /// 对一个专门用来复盘"当时发生了什么"的视图来说，丢的正是最关键的那部分。
+    /// </summary>
+    internal static string FormatToolOnlyTurnLabel(IReadOnlyList<(string Name, string ArgsJson)> calls, int reasonWidth = 80)
+    {
+        var names = calls.Select(c => c.Name).ToList();
+        if (names.Count == 0)
+            return string.Empty;
+        var head = $"[调用 {string.Join(", ", names)}";
+        // 只带 stop 的理由：其它工具的参数要么在预览里看过（edit_file 的 diff），
+        // 要么是内部细节（路径、行号），塞进历史只会把这一行撑长。
+        var stopReason = calls
+            .Where(c => c.Name == "stop")
+            .Select(c => StopReason(c.ArgsJson))
+            .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
+        if (string.IsNullOrWhiteSpace(stopReason))
+            return head + "]";
+        var label = TextUtil.DisplayWidth(stopReason) > reasonWidth
+            ? TextUtil.TruncateLine(stopReason, reasonWidth)
+            : stopReason;
+        return $"{head} · {label}]";
+    }
+
+    /// <summary>取 stop 的 reason（尽力解析；参数不是合法 JSON 就返回 null）。
+    /// 展示用途，解析失败绝不该让 /history 整个挂掉。</summary>
+    private static string? StopReason(string argsJson)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(argsJson) is not System.Text.Json.Nodes.JsonObject o)
+                return null;
+            return o["reason"]?.GetValue<string>();
+        }
+        catch (Exception) { return null; }
+    }
     private static void PrintConversation(AgentClass agent, int? last = null)
     {
         var msgs = agent.Messages.Where(m => m.Role != MessageRole.System).ToList();
@@ -800,9 +841,11 @@ internal static class Program
             var content = m.Content ?? "";
             if (m.Role == MessageRole.Assistant && m.ToolCalls is { Count: > 0 })
             {
-                // 纯工具调用轮无文本：显示调用了哪些工具（否则 [助手] 后空白，像丢了消息）
-                var calls = string.Join(", ", m.ToolCalls.Select(tc => tc.Name));
-                content = (content.Length > 0 ? content + " " : "") + $"[调用 {calls}]";
+                // 纯工具调用轮无文本：显示调用了哪些工具（否则 [助手] 后空白，像丢了消息）。
+                // stop 的 reason 一并带出——它往往是模型给用户的总结或**要问的问题**，
+                // 丢掉就等于回看历史时只知道"它调用了 stop"，不知道它说了什么。
+                var calls = FormatToolOnlyTurnLabel(m.ToolCalls.Select(tc => (tc.Name, tc.ArgumentsJson)).ToList(), historyWidth);
+                content = (content.Length > 0 ? content + " " : "") + calls;
             }
             if (m.Role == MessageRole.Assistant && !string.IsNullOrEmpty(m.ThinkingText))
             {
