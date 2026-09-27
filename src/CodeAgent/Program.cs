@@ -1839,6 +1839,79 @@ internal static class Program
     internal const char BangPrefix = '!';
 
     /// <summary>
+    /// 为拼错的命令找出最接近的几个候选（纯函数，好测）。
+    ///
+    /// 此前只说「未知命令: /statuss（输入 /help 查看命令）」——而用户敲
+    /// <c>/statuss</c> 时要的就是 <c>/status</c>，命令列表就在 <c>/help</c> 里躺着，
+    /// 让他自己去找一遍纯属白费工夫。bash、git、Claude Code 都会直接给出最接近的那个。
+    ///
+    /// 距离用 Levenshtein：<c>/statuss</c>→<c>/status</c>、<c>/task</c>→<c>/tasks</c>、
+    /// <c>/undoo</c>→<c>/undo</c> 都是 1 次编辑。<c>//exit</c> 这种全角/双斜杠也一并归一。
+    ///
+    /// 宁可**不给**建议，也不给一个离谱的：阈值随长度放宽，但上限 3——
+    /// 「你是不是想输入 /history？」配一个八竿子打不着的命令，比不提示更让人困惑。
+    /// </summary>
+    internal static string[] SuggestCommands(string input, IEnumerable<string> commands, int maxSuggestions = 3)
+    {
+        var want = NormalizeCommandName(input);
+        if (want.Length == 0)
+            return [];
+        var budget = Math.Clamp(want.Length / 3, 1, 3);
+        var scored = new List<(int Distance, int IsPrefix, string Name)>();
+        foreach (var entry in commands)
+        {
+            // 一条帮助条目可能写成「/exit, /quit」：两个命令，提示时要能各自被选中
+            foreach (var part in entry.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var name = NormalizeCommandName(part);
+                if (name.Length == 0)
+                    continue;
+                var isPrefix = name.Length > want.Length && name.StartsWith(want, StringComparison.OrdinalIgnoreCase);
+                var d = isPrefix ? 0 : Levenshtein(want, name);
+                // 差得太多就不提：/zzzz 提示「你是不是想 /undo」是纯粹的噪音。
+                // 前缀匹配（/stat → /status）不算"差得远"——那是命令打到一半，不是拼错。
+                if (d > budget && !isPrefix)
+                    continue;
+                // 距离用归一化形式算（//exit 与 /exit 同义），显示必须带回斜杠：
+                // 用户要敲的是 /status，不是 status
+                scored.Add((d, isPrefix ? 1 : 0, part));
+            }
+        }
+        return scored
+            .OrderBy(s => s.Distance)
+            .ThenByDescending(s => s.IsPrefix)   // 同距离时前缀匹配更像用户想输的那个
+            .ThenBy(s => s.Name, StringComparer.Ordinal) // 再按字典序，保证结果稳定可测
+            .Select(s => s.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Max(1, maxSuggestions))
+            .ToArray();
+    }
+    /// <summary>命令名的比较用形式：去掉全部斜杠与首尾空白（<c>//exit</c> 与 <c>/exit</c> 同义）。</summary>
+    private static string NormalizeCommandName(string s) => s.Trim().Trim('/').Trim();
+
+    /// <summary>编辑距离（Levenshtein）。滚动两行实现，空间 O(min) 而不是 O(n·m)。</summary>
+    private static int Levenshtein(string a, string b)
+    {
+        if (a.Length == 0)
+            return b.Length;
+        if (b.Length == 0)
+            return a.Length;
+        var prev = new int[b.Length + 1];
+        var cur = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++)
+            prev[j] = j;
+        for (var i = 1; i <= a.Length; i++)
+        {
+            cur[0] = i;
+            for (var j = 1; j <= b.Length; j++)
+                cur[j] = Math.Min(
+                    Math.Min(cur[j - 1] + 1, prev[j] + 1),
+                    prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+            (prev, cur) = (cur, prev);
+        }
+        return prev[b.Length];
+    }
+    /// <summary>
     /// 判定一行输入是不是 bash 模式命令。
     /// 单独一个 <c>!</c>（后面没有内容）**不算**命令——那多半是想打叹号，
     /// 按命令处理会得到一个空命令和一句莫名其妙的错误。
@@ -3589,8 +3662,15 @@ internal static class Program
                 break;
 
             default:
-                Console.WriteLine(FormatNoticeLine(
-                    $"未知命令: {cmd}（输入 /help 查看命令，Tab 可补全）", ConsoleColumns()));
+                {
+                    // 拼错了就直接给出最接近的命令：/statuss → /status。
+                    // 让他自己去 /help 里翻一遍是白费工夫——命令列表就在那儿。
+                    var near = SuggestCommands(cmd, ReplCommands.Select(c => c.Command));
+                    var hint = near.Length > 0
+                        ? $"，你是不是想输入 {string.Join("、", near)}？"
+                        : "（输入 /help 查看命令，Tab 可补全）";
+                    Console.WriteLine(FormatNoticeLine($"未知命令: {cmd}{hint}", ConsoleColumns()));
+                }
                 break;
         }
         return suppressStatusBar;
