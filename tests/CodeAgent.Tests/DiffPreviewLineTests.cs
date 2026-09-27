@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using Xunit;
 
@@ -121,28 +122,69 @@ public sealed class DiffPreviewLineTests
     [Fact]
     public void ShowFilePreview_UsesTheBoundedRenderer()
     {
-        // 只测纯函数会漏掉"预览处根本没调它"——折行 bug 原样存在
-        var src = System.IO.File.ReadAllText(Find());
-        Assert.Contains("FormatDiffPreviewLine(", src);
-        Assert.DoesNotContain("Console.WriteLine(\"      \" + line)", src);
+        // 只测纯函数会漏掉"预览处根本没调它"——折行 bug 原样存在。
+        // 读的是 Agent.cs：渲染实现在 Program.cs，**调用**在 ShowFilePreview 里。
+        var caller = File.ReadAllText(Find(Path.Combine("Agent", "Agent.cs")));
+        Assert.Contains("FormatDiffPreviewLine(", caller);
+        Assert.DoesNotContain("Console.WriteLine(\"      \" + line)", caller);
     }
 
-    private static string Find()
+    [Fact]
+    public void Tint_AppliesOneSharedRule()
+    {
+        // 预览此前自己抄了一份配色：文件标题不高亮、上下文行一律压暗，
+        // 同一个 diff 在预览和 /diff 里长得不一样
+        Assert.Equal(SafeColor.Emphasis, Program.DiffLineTint("== src/x.cs =="));
+        Assert.Equal(SafeColor.Muted, Program.DiffLineTint("--- a/x.cs"));
+        Assert.Equal(SafeColor.Muted, Program.DiffLineTint("+++ b/x.cs"));
+        Assert.Equal(SafeColor.Accent, Program.DiffLineTint("@@ -1,2 +1,3 @@"));
+        Assert.Equal(SafeColor.Success, Program.DiffLineTint("+新增"));
+        Assert.Equal(SafeColor.Danger, Program.DiffLineTint("-删除"));
+    }
+
+    [Fact]
+    public void Tint_ContextLineKeepsTheDefaultColor()
+    {
+        // 上下文行压暗会让整段读起来像"全是删除"，比不高亮更误导
+        Assert.Null(Program.DiffLineTint("  var x = 1;"));
+        Assert.Null(Program.DiffLineTint("var x = 1;"));
+        Assert.Null(Program.DiffLineTint(""));
+    }
+
+    [Fact]
+    public void Tint_PlusAndMinusAreNeverConfused()
+    {
+        Assert.NotEqual(Program.DiffLineTint("+x"), Program.DiffLineTint("-x"));
+    }
+
+    [Fact]
+    public void BothDiffSurfacesUseTheSharedTint()
+    {
+        // 只测 DiffLineTint 会漏掉"某一处还在用自己那份"
+        var program = File.ReadAllText(Find("Program.cs"));
+        var agent = File.ReadAllText(Find(Path.Combine("Agent", "Agent.cs")));
+        Assert.Contains("Program.DiffLineTint(line)", agent);
+        Assert.Contains("DiffLineTint(line) is { } t", program);
+        // 预览里不该再有一份手抄的 StartsWith 配色链
+        Assert.DoesNotContain("SafeColor.Scope(tint)", agent);
+    }
+
+    private static string Find(string rel)
     {
         foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
         {
             var dir = start;
             for (var i = 0; i < 10 && dir.Length > 1; i++)
             {
-                var f = System.IO.Path.Combine(dir, "src", "CodeAgent", "Agent", "Agent.cs");
-                if (System.IO.File.Exists(f) && new System.IO.FileInfo(f).Length > 1000)
+                var f = Path.Combine(dir, "src", "CodeAgent", rel);
+                if (File.Exists(f) && new FileInfo(f).Length > 1000)
                     return f;
-                var parent = System.IO.Path.GetDirectoryName(dir.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+                var parent = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 if (string.IsNullOrEmpty(parent) || parent == dir)
                     break;
                 dir = parent;
             }
         }
-        throw new System.IO.FileNotFoundException("找不到 src/CodeAgent/Agent/Agent.cs");
+        throw new FileNotFoundException($"找不到 src/CodeAgent/{rel}");
     }
 }

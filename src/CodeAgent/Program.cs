@@ -1353,30 +1353,43 @@ internal static class Program
 
     /// <summary>按 diff 行首标记着色输出：+ 绿 / - 红 / @@ 青 / == 标题亮白 / ---+++ 文件头灰。
     /// 窄终端下按显示宽度裁剪：CJK 路径与长行会撑破终端。</summary>
+    /// <summary>
+    /// diff 行的着色规则（<c>/diff</c> 与工具执行前预览**共用**）。
+    ///
+    /// 两处此前各写一份，结果不用窄终端也能看出不一致：
+    /// · <c>== 路径 ==</c> 文件标题：/diff 高亮，预览落到默认灰
+    /// · 上下文行（空格开头或无前缀）：/diff 保持默认色，预览一律压暗
+    ///
+    /// 抽成一处不是为了少写几行，而是为了**同一个 diff 在两处必须长得一样**——
+    /// 用户在预览里看到的颜色，就是他在 /diff 里会看到的颜色。
+    /// </summary>
+    internal static ConsoleColor? DiffLineTint(string line)
+    {
+        if (line.StartsWith("== ", StringComparison.Ordinal))
+            return SafeColor.Emphasis;        // 文件标题
+        if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
+            return SafeColor.Muted;           // 文件头
+        if (line.StartsWith("@@", StringComparison.Ordinal))
+            return SafeColor.Accent;          // hunk 头
+        if (line.StartsWith('+'))
+            return SafeColor.Success;         // 新增
+        if (line.StartsWith('-'))
+            return SafeColor.Danger;          // 删除
+        return null;                           // 上下文行：保持默认色，别压暗
+    }
+
     internal static void PrintColoredDiff(string diff)
     {
         var width = ConsoleColumns();
         foreach (var line in DiffUtil.SplitLines(diff))
         {
-            // 作用域而非 Foreground/Reset 成对：FormatDiffLine 抛异常时若漏掉 Reset，
+            // 作用域而非 Foreground/Reset 成对：着色抛异常时若漏掉 Reset，
             // 循环会继续，于是**后面每一行 diff 都染上上一行的颜色**，
             // 而用户根本不知道出过错。
-            ConsoleColor? tint = null;
-            if (line.StartsWith("== ", StringComparison.Ordinal))
-                tint = SafeColor.Emphasis;         // 文件标题
-            else if (line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal))
-                tint = SafeColor.Muted;    // 文件头
-            else if (line.StartsWith("@@", StringComparison.Ordinal))
-                tint = SafeColor.Accent;        // hunk 头
-            else if (line.StartsWith('+'))
-                tint = SafeColor.Success;       // 新增
-            else if (line.StartsWith('-'))
-                tint = SafeColor.Danger;         // 删除
-            using var scope = tint is { } t ? SafeColor.Scope(t) : null;
+            using var scope = DiffLineTint(line) is { } t ? SafeColor.Scope(t) : null;
             Console.WriteLine(FormatDiffLine(line, width));
         }
     }
-
     /// <summary>diff 文件标题/文件头行：把中间/开头的路径按**尾部保留**缩短。
     /// 硬截尾部（`== src/very/long/Pa…`）会让人以为是另一个文件——路径最有信息量的是末段文件名。
     /// 形态不识别（既不是 `== p ==` 也不是 `--- p` / `+++ p`）时返回 null，交给调用方按普通行处理。</summary>

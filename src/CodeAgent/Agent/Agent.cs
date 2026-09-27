@@ -1182,18 +1182,11 @@ public sealed partial class Agent
                 return;
             foreach (var line in DiffUtil.SplitLines(text, ct))
             {
-                // 与 /diff（PrintColoredDiff）同款配色：文件头灰、hunk 头青、删除红、新增绿。
+                // 配色与 /diff **共用同一条规则**（Program.DiffLineTint）：
+                // 此前这里自己抄了一份，结果文件标题不高亮、上下文行被一律压暗，
+                // 同一个 diff 在预览和 /diff 里长得不一样。
                 // 作用域保证这一行中途抛异常也不会把颜色带到下一行。
-                var tint = line.StartsWith("---", StringComparison.Ordinal) || line.StartsWith("+++", StringComparison.Ordinal)
-                    ? SafeColor.Muted
-                    : line.StartsWith("@@", StringComparison.Ordinal)
-                        ? SafeColor.Accent
-                        : line.StartsWith('-')
-                            ? SafeColor.Danger
-                            : line.StartsWith('+')
-                                ? SafeColor.Success
-                                : SafeColor.Muted;
-                using var scope = SafeColor.Scope(tint);
+                using var scope = CodeAgent.Program.DiffLineTint(line) is { } t ? SafeColor.Scope(t) : null;
                 // 按宽度收口：diff 行折行后看不出 +/- 前缀，一行改动会被读成两条
                 var width = CodeAgent.Program.ConsoleColumnsForNotice();
                 Console.WriteLine(CodeAgent.Program.FormatDiffPreviewLine(line, width));
