@@ -492,6 +492,12 @@ internal static class Program
                 Console.WriteLine(Program.FormatBareBangHint(ConsoleColumns()));
                 continue;
             }
+            // 光一个 @：同样本地回。模型这边更糟——它会替用户猜一个任务并作答。
+            if (Program.IsBareAtLine(line))
+            {
+                Console.WriteLine(Program.FormatBareAtHint(ConsoleColumns()));
+                continue;
+            }
             if (line.StartsWith('/'))
             {
                 if (line.Equals("/retry", StringComparison.OrdinalIgnoreCase))
@@ -1865,6 +1871,26 @@ internal static class Program
     internal static string FormatBareBangHint(int width = 0)
     {
         var body = $"{SafeColor.Glyphs.Warn} 叹号后面要接 shell 命令，例如：! dotnet build、! git status。只想输入叹号请直接用中文表述。";
+        return width > 0 ? FormatNoticeLine(body, width) : body;
+    }
+
+    /// <summary>这一行是不是"只敲了一个 @"（<c>@</c> 或 <c>@   </c>）。
+    ///
+    /// 与裸叹号同源，但**后果更糟**：<c>@</c> 送去问模型时，模型不会说"你的消息是空的"，
+    /// 它会**替用户猜一个任务**并给出一段像模像样的回答（实测：「告诉我目标，我来先探索
+    /// 代码再动手」+ 一串建议）。手滑敲出一个 @，换回一段看着像真答案的输出——
+    /// 那比"消息是空的"有��害得多：用户可能以为它理解了某个没说出口的需求。
+    /// </summary>
+    internal static bool IsBareAtLine(string line)
+    {
+        var t = line.Trim();
+        return t.Length >= 1 && t[0] == '@' && t[1..].Trim().Length == 0;
+    }
+
+    /// <summary>裸 @ 的用法提示（纯渲染，好测）。</summary>
+    internal static string FormatBareAtHint(int width = 0)
+    {
+        var body = $"{SafeColor.Glyphs.Warn} @ 后面要接工作区里的文件或目录路径，例如：@src/Program.cs。Tab 可在列表里选。";
         return width > 0 ? FormatNoticeLine(body, width) : body;
     }
 
