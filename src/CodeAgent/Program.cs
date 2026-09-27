@@ -2818,7 +2818,13 @@ internal static class Program
                         reasoningProbe?.Restart(opts.Model, providerInst);
                         config.PersistedProvider = hit.Key; // 显式切换：用户明确选择，应持久化
                         var savePath = ConfigSavePath(configPath, config);
-                        AgentConfig.Save(config, savePath);
+                        // 走 SaveConfig 而不是直接 AgentConfig.Save：这里两者等价
+                        // （PersistedProvider 刚被设成 hit.Key，与 config.Provider 相同），
+                        // 但直接调 AgentConfig.Save 看着像**绕过了**会话级覆盖保护——
+                        // 将来有人把上面那行挪到保存之后（一个很自然的"整理顺序"），
+                        // CODEAGENT_PROVIDER 这类覆盖就会悄悄固化进配置文件。
+                        // 统一走 SaveConfig，规则就只剩一条，不靠记忆。
+                        SaveConfig(config, savePath);
                         try { Console.Title = $"CodeAgent · {agent.CurrentMode.Name} · {opts.Model}"; } catch { }
                         Console.WriteLine(FormatConfirmLine(FormatSettingSavedLine("已切换 Provider", $"{hit.Key}，模型 {opts.Model}", savePath, ConsoleColumns()), ConsoleColumns()));
                     }
