@@ -2121,7 +2121,11 @@ internal static class Program
         {
             var models = await provider.ListModelsAsync(CancellationToken.None);
             var rows = NumberedModels(models, filter);
-            Console.WriteLine($"可用模型（{provider.Name}，共 {models.Count} 个，显示 {rows.Count} 条{(filter is null ? "" : $"，过滤 “{filter.Trim()}”")}）:");
+            // 过滤词是**用户任意输入**，长度完全不受控：直接拼进来会在窄终端折行，
+            // 而这行后面紧跟模型列表——折行后"过滤了什么"与"列了什么"失去关联
+            Console.WriteLine(FormatResultLine(
+                $"可用模型（{provider.Name}，共 {models.Count} 个，显示 {rows.Count} 条{(filter is null ? "" : $"，过滤 “{filter.Trim()}”")}）:",
+                ConsoleColumns()));
             if (models.Count == 0)
             {
                 // 成功响应但空列表：常见于 baseUrl 指错端点或 Key 无列表权限——给出可行动的提示
@@ -2669,11 +2673,13 @@ internal static class Program
                 {
                     providerInst = ProviderFactory.Create(config);
                     agent.SetProvider(providerInst);
-                    Console.WriteLine($"已应用新配置: {config.Provider} / {opts.Model}");
+                    // provider 名与模型名都是用户可控的长串，走 WriteNotice 才不会折行顶走后续输出
+                    WriteNotice($"已应用新配置: {config.Provider} / {opts.Model}", SafeColor.Glyphs.Ok);
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"配置已保存，但 Provider 初始化失败（请检查 API Key）: {ex.Message}");
+                    // 异常消息可能带整条堆栈路径
+                    WriteNotice($"配置已保存，但 Provider 初始化失败（请检查 API Key）: {ex.Message}", SafeColor.Glyphs.Warn);
                 }
                 break;
 
@@ -3170,7 +3176,7 @@ internal static class Program
                         Console.WriteLine("本次会话还没有修改过文件。");
                     else
                     {
-                        Console.WriteLine($"本次会话修改过的文件（{paths.Count} 个，最近优先）:");
+                        Console.WriteLine(FormatResultLine($"本次会话修改过的文件（{paths.Count} 个，最近优先）:", ConsoleColumns()));
                         // 单列路径列表：深路径在窄终端硬折行后，续行会顶到行首与首行失去关联
                         Console.WriteLine(FormatPathList(
                             paths.Select(p => agent.Context.Workspace.ToRelative(p).Replace('\\', '/')),

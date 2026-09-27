@@ -187,4 +187,74 @@ public sealed class RenderWidthWiringTests
                 $"{needle} 仍未按宽度收口");
         }
     }
+
+    /// <summary>
+    /// 全仓扫描：把**用户可控长度内容**裸插值进 Console 输出的行，必须走宽度受限的渲染函数。
+    ///
+    /// 前几轮一个一个改（命令确认块 → 是/否确认 → 配置向导…），每改一处就担心下一处还在。
+    /// 这个扫描把"担心"变成断言：新增输出行时，若把 <c>{ex.Message}</c>/<c>{path}</c>/
+    /// <c>{model}</c> 这类内容直接拼进 WriteLine 而不走格式化函数，测试会指名报出来。
+    ///
+    /// 变量名清单是启发式，不是完备判定——写 <c>{x}</c> 之类的短名扫不到。
+    /// 它的价值是"挡住已知的长内容来源"，不是"证明没有任何一处超宽"。
+    /// </summary>
+    [Fact]
+    public void NoUnboundedUserContentInConsoleOutput()
+    {
+        var longContent = new[]
+        {
+            "path", "rel", "summary", "text", "body", "content", "line", "name",
+            "message", "ex.Message", "output", "value", "dir", "cwd", "model",
+            "prompt", "snippet", "msg", "err", "label", "question", "result",
+        };
+        var offenders = new List<string>();
+        foreach (var file in ProductionSources())
+        {
+            var lines = File.ReadAllLines(file).Select(l => l.Trim()).ToArray();
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var t = lines[i];
+                if (!t.StartsWith("Console.Write", StringComparison.Ordinal) || !t.Contains("$\"", StringComparison.Ordinal))
+                    continue;
+                if (!longContent.Any(k => t.Contains("{" + k, StringComparison.Ordinal) || t.Contains("." + k + "}", StringComparison.Ordinal)))
+                    continue;
+                var window = i + 1 < lines.Length ? t + " " + lines[i + 1] : t;
+                if (Bounded(writer: window))
+                    continue;
+                offenders.Add($"{Path.GetFileName(file)}:{i + 1} {t}");
+            }
+        }
+        Assert.True(offenders.Count == 0,
+            "这些输出行把用户可控内容裸插值进了 Console 写入（窄终端必折行）："
+            + string.Join(" | ", offenders.Take(10)));
+    }
+
+    private static bool Bounded(string writer) =>
+        writer.Contains("FitToWidth") || writer.Contains("WriteNotice")
+        || writer.Contains("FormatNoticeLine") || writer.Contains("FormatResultLine")
+        || writer.Contains("FormatHintLine") || writer.Contains("FormatConfirmLine")
+        || writer.Contains("FormatCancelLine") || writer.Contains("FormatKeyValueLine")
+        || writer.Contains("FormatPathList") || writer.Contains("FormatHelpList")
+        || writer.Contains("FormatBang") || writer.Contains("FormatConfirmCommandBlock")
+        || writer.Contains("FormatYesNoPrompt") || writer.Contains("FormatFieldLine")
+        || writer.Contains("FormatOptionLine") || writer.Contains("FormatStatusPanel")
+        || writer.Contains("FormatNoticeLines") || writer.Contains("ColumnsForNotice")
+        || writer.Contains("Program.Columns") || writer.Contains("Columns()");
+
+    [Fact]
+    public void RepoWideScan_ActuallyScansSomething()
+    {
+        // 反向保护：匹配规则一旦跟不上代码演进（换行、格式化、变量改名），
+        // 这个扫描会安静地扫到 0 行、永远通过——那比没有守卫更危险，
+        // 因为它占着"这里有防线"的位置。
+        var hits = 0;
+        foreach (var file in ProductionSources())
+            foreach (var raw in File.ReadAllLines(file))
+            {
+                var t = raw.Trim();
+                if (t.StartsWith("Console.Write", StringComparison.Ordinal) && t.Contains("$\"", StringComparison.Ordinal))
+                    hits++;
+            }
+        Assert.True(hits > 20, $"只扫到 {hits} 行 Console 写入，匹配规则大概率已失效");
+    }
 }
