@@ -198,15 +198,51 @@ public sealed class RenderWidthWiringTests
     /// 变量名清单是启发式，不是完备判定——写 <c>{x}</c> 之类的短名扫不到。
     /// 它的价值是"挡住已知的长内容来源"，不是"证明没有任何一处超宽"。
     /// </summary>
+    /// <summary>可能变长的内容变量名清单（全部小写，比较忽略大小写——C# 属性是 PascalCase）。</summary>
+    private static readonly string[] LongContentKeys =
+    [
+        "path", "rel", "summary", "text", "body", "content", "line", "name",
+        "message", "ex.message", "output", "value", "dir", "cwd", "model",
+        "prompt", "snippet", "msg", "err", "label", "question", "result",
+    ];
+
+    /// <summary>插值槽：<c>{...}</c> / <c>{x=...}</c> / <c>{x:格式}</c> / <c>{x,对齐}</c>。</summary>
+    private static readonly System.Text.RegularExpressions.Regex InterpolationSlot = new(
+        @"\{\s*[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*\s*[=:,}]",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>这一行是否把"可能变长的内容"裸插值进了 Console 写入。
+    ///
+    /// 两条判定都要，因为各漏一半：
+    /// · 单词边界：抓 <c>{opts.Model}</c>、<c>{path}</c>
+    /// · **后缀**：抓 <c>{modeName}</c>——驼峰复合名里 \b 前面紧挨着字母，词边界匹配不到。
+    ///   而 modeName 恰恰是用户敲进来的，最该抓。
+    /// 另需 \b 收尾，否则 <c>{TextUtil.FormatBytes(...)}</c> 里的 "text" 会被误判——
+    /// 报多了守卫就没人看了。</summary>
+    internal static bool HasLongContent(string line)
+    {
+        foreach (System.Text.RegularExpressions.Match m in InterpolationSlot.Matches(line))
+        {
+            var expr = m.Value.Trim('{', '}', ' ', '=', ',', ':');
+            if (LongContentKeys.Any(k =>
+                    expr.EndsWith(k, StringComparison.OrdinalIgnoreCase)
+                    || System.Text.RegularExpressions.Regex.IsMatch(expr, @"\b" + System.Text.RegularExpressions.Regex.Escape(k) + @"\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+                return true;
+        }
+        return false;
+    }
     [Fact]
     public void NoUnboundedUserContentInConsoleOutput()
     {
-        var longContent = new[]
-        {
-            "path", "rel", "summary", "text", "body", "content", "line", "name",
-            "message", "ex.Message", "output", "value", "dir", "cwd", "model",
-            "prompt", "snippet", "msg", "err", "label", "question", "result",
-        };
+        // 全部**小写**：正则带 IgnoreCase——C# 的属性是 PascalCase（<c>{opts.Model}</c>），
+        // 只匹配小写的话这条规则对属性名恒不命中。上一版正是因此漏掉了
+        // `当前模型: {opts.Model}`。
+        //
+        // 末尾的 \b 是为了不误报：<c>{TextUtil.FormatBytes(...)}</c> 里 "text" 后面还跟着
+        // "Util"，不是独立的 text 变量。少了它会把一串无害的调用全报出来，
+        // 报多了守卫就没人看了。
+
+
         var offenders = new List<string>();
         foreach (var file in ProductionSources())
         {
@@ -216,7 +252,7 @@ public sealed class RenderWidthWiringTests
                 var t = lines[i];
                 if (!t.StartsWith("Console.Write", StringComparison.Ordinal) || !t.Contains("$\"", StringComparison.Ordinal))
                     continue;
-                if (!longContent.Any(k => t.Contains("{" + k, StringComparison.Ordinal) || t.Contains("." + k + "}", StringComparison.Ordinal))
+                if (!HasLongContent(t)
                 && !(t.Contains("{line}", StringComparison.Ordinal) && t.StartsWith("Console.WriteLine(\"", StringComparison.Ordinal)))
                     continue;
                 var window = i + 1 < lines.Length ? t + " " + lines[i + 1] : t;
@@ -242,6 +278,22 @@ public sealed class RenderWidthWiringTests
         || writer.Contains("FormatNoticeLines") || writer.Contains("ColumnsForNotice")
         || writer.Contains("Program.Columns") || writer.Contains("Columns()");
 
+    /// <summary>规则的精度自检：既不能漏 PascalCase 属性，也不能把 {TextUtil...} 误报。
+    /// 这两条都是**真实踩过的**——上一版前者漏了 {opts.Model}，后者把无害调用全报了出来。
+    /// 报多了守卫就没人看了，漏了就等于没有。</summary>
+    [Theory]
+    [InlineData("""Console.WriteLine($"当前模型: {opts.Model}");""", true)]
+    [InlineData("""Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");""", true)]
+    [InlineData("""Console.WriteLine($"未知模式「{modeName}」");""", true)]
+    [InlineData("""Console.WriteLine($"路径 {path} 共 {count} 个");""", true)]
+    [InlineData("""Console.WriteLine($".codeagent 目录占用 {TextUtil.FormatBytes(totalBytes)}");""", false)]
+    [InlineData("""Console.WriteLine($"已用时 {sw.Elapsed}");""", false)]
+    [InlineData("""Console.WriteLine($"{a} {b}");`""", false)]
+    public void RepoWideScan_RecognisesRealLongContent(string line, bool expected)
+    {
+        var hit = HasLongContent(line);
+        Assert.True(hit == expected, $"{(hit ? "命中" : "未命中")}（期望 {(expected ? "命中" : "未命中")}）: {line}");
+    }
     [Fact]
     public void RepoWideScan_ActuallyScansSomething()
     {

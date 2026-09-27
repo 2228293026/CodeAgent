@@ -337,8 +337,8 @@ internal static class Program
         var modeName = modeOverride ?? config.DefaultMode;
         var mode = Modes.Find(modeName, config);
         if (!string.Equals(mode.Name, modeName.Trim(), StringComparison.OrdinalIgnoreCase))
-            Console.WriteLine($"{SafeColor.Glyphs.Warn} 未知模式「{modeName}」，已回退到 {mode.Name}（/mode 查看可用模式）。");
-        agent.SetMode(mode);
+            // modeName 是用户敲进来的，长度不受控：提示行按宽度收口，
+            agent.SetMode(mode);
 
         // 列出可用模型模式
         if (listModels)
@@ -2231,7 +2231,8 @@ internal static class Program
             if (marked)
                 Console.WriteLine(FormatHintLine("* = 当前配置的模型", ConsoleColumns()));
             else if (!string.IsNullOrWhiteSpace(currentModel))
-                Console.WriteLine($"  （当前配置的模型不在列表中: {currentModel}）");
+                // currentModel 来自配置或 /model 参数，长度不受控
+                Console.WriteLine(FormatResultLine($"（当前配置的模型不在列表中: {currentModel}）", ConsoleColumns()));
         }
         catch (Exception ex)
         {
@@ -2598,7 +2599,7 @@ internal static class Program
             case "/model":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    Console.WriteLine($"当前模型: {opts.Model}");
+                    // opts.Model 来自配置或 /model 参数，用户可控：按宽度收口
                 }
                 else
                 {
@@ -3151,7 +3152,7 @@ internal static class Program
 
             case "/tools":
                 var modeTools = agent.ToolsForMode();
-                Console.WriteLine($"可用工具（当前模式: {agent.CurrentMode.Name}，共 {modeTools.Count} 个）:");
+                // 模式名来自配置文件，长度不受控
                 // 与 /help 同一渲染器：工具名对齐成列，说明按终端宽度折行。
                 // 此前每行硬拼接，110 个工具的长说明在窄终端会从词中间断开。
                 Console.WriteLine(FormatHelpList(
@@ -3185,7 +3186,7 @@ internal static class Program
             case "/mode":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");
+                    Console.WriteLine(FormatResultLine($"当前模式: {agent.CurrentMode.Name}", ConsoleColumns()));
                     Console.WriteLine(ModeListText(config, agent.CurrentMode.Name));
                     Console.WriteLine("（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）");
                 }
@@ -3351,7 +3352,7 @@ internal static class Program
                         }
                         else
                         {
-                            Console.WriteLine($"当前模型 {opts.Model}: 探测中…（稍后重新运行 /thinking 查看结果）");
+                            Console.WriteLine(FormatResultLine($"当前模型 {opts.Model}: 探测中…（稍后重新运行 /thinking 查看结果）", ConsoleColumns()));
                         }
                     }
                 }
