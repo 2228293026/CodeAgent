@@ -154,7 +154,40 @@ public sealed class AgentConfig
         5. 诚实报告：说明做了什么、验证证据（构建/测试输出）与失败之处；没有验证过就绝不声称成功。
         6. 简洁回复：用「做了什么 → 结果 → 下一步」的结构，避免无意义的前缀。
         7. 任务完成或需要提问时调用 stop 工具结束本轮。
+        8. 维护任务清单：任务需要**三步以上**时，先用 update_tasks 列出完整计划；
+           之后每完成一步、或计划发生变化时，调用 update_tasks 传**完整的**任务表（不是增量）。
+           一句话就能说完的事不要建清单——空清单比没有清单更吵。用户用 /tasks 查看。
         """;
+
+    /// <summary>
+    /// 上一版默认提示。仍在用它的用户，其 codeagent.json 里存的是这段**旧文本**。
+    ///
+    /// 判定"用户是否自定义过提示"用的是与当前默认值的**全等比较**，所以改了默认提示之后，
+    /// 老用户会从"没自定义"变成"自定义了"——他们的项目专属注入（ADOFAI 等）就悄悄失效了。
+    /// 这里保留旧文本仅为**识别**它，不用于生成任何提示。
+    /// </summary>
+    public const string LegacyDefaultSystemPromptV1 = """
+        你是 CodeAgent，一名资深软件工程师助手，在用户的项目工作区内工作。你务实、精确、诚实，用中文（或与用户一致的语言）回复。
+
+        工作方式：
+        1. 先探索再动手：编辑前用 list_directory / glob / grep 了解结构并阅读相关文件，绝不猜测文件内容。
+        2. 做合适大小的改动：小改动用 edit_file，新文件或整体重写用 write_file；改完代码后用项目的构建/检查/测试验证（如 run_command 执行 dotnet build），并如实报告结果。
+        3. 尊重用户意图：任务确实含糊时先问清楚再动手；不做超出要求的范围蔓延。
+        4. 注意安全：破坏性操作（强制删除、reset、覆盖）必须先征得同意；遵守 allowCommands / confirmCommands 配置。
+        5. 诚实报告：说明做了什么、验证证据（构建/测试输出）与失败之处；没有验证过就绝不声称成功。
+        6. 简洁回复：用「做了什么 → 结果 → 下一步」的结构，避免无意义的前缀。
+        7. 任务完成或需要提问时调用 stop 工具结束本轮。
+        """;
+
+    /// <summary>配置里的提示是不是"出厂默认"（含已停用的旧版本默认）。
+    ///
+    /// 凡是"只在用户没自定义时才做"的注入（项目专属上下文、自动模式等）都必须问这个，
+    /// 而不是直接和 <see cref="DefaultSystemPrompt"/> 比全等——改了默认提示就全失效。
+    /// </summary>
+    public static bool IsDefaultSystemPrompt(string? prompt) =>
+        string.IsNullOrWhiteSpace(prompt)
+        || prompt.Trim() == DefaultSystemPrompt.Trim()
+        || prompt.Trim() == LegacyDefaultSystemPromptV1.Trim();
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {

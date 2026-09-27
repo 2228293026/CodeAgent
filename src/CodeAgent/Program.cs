@@ -246,7 +246,9 @@ internal static class Program
         // 仅当用户未自定义 systemPrompt 时追加知识；用户自定义的 modes 同名项优先保留。
         if (AdofaiContext.Detect(Environment.CurrentDirectory))
         {
-            if (config.SystemPrompt == AgentConfig.DefaultSystemPrompt)
+            // 必须用 IsDefaultSystemPrompt 而不是全等比较：改了默认提示之后，
+            // 存着旧默认的老用户会被判成"自定义过"，项目专属注入就悄悄失效了
+            if (AgentConfig.IsDefaultSystemPrompt(config.SystemPrompt))
             {
                 // 只写入会话级字段：/model、/thinking、/access 等命令会保存整个 config，
                 // 直接改 SystemPrompt 会把注入的 mod 上下文永久写进用户的 codeagent.json
