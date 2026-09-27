@@ -443,12 +443,18 @@ public sealed partial class Agent
                 // 还是 false（状态栏连红标都不亮），用户完全无从判断发生了什么。
                 // 空串和 null 在这里是一回事，都按"未返回内容"处理。
                 //
-                // 但**流式输出过的正文不能算空**：那些字符已经打到屏幕上了，
-                // 此时 Text 为空是正常的，报"未返回内容"反而是误报。
+                // 两种空白要分开说：
+                // · 一个字都没显示 → 没返回内容（限额/上下文过长/速率限制），重试或换模型
+                // · **显示了思考内容但没有结论** → 内容其实收到了，只是模型想完没答。
+                //   这时说"可能是免费模型限额"会把人引向错误的排查方向。
+                //
+                // 流式输出过的正文不能算空：那些字符已经打到屏幕上了。
                 if (string.IsNullOrWhiteSpace(resp.Text) && !_streamedThisCall)
                 {
                     LastTurnFailed = true;
-                    return "(模型未返回内容：可能是免费模型限额、上下文过长或速率限制，可 /retry 或换模型重试)";
+                    return _reasoningShown
+                        ? "(模型只输出了思考内容，没有给出结论。可再问一次，或用 /model 换一个更擅长推理的模型。)"
+                        : "(模型未返回内容：可能是免费模型限额、上下文过长或速率限制，可 /retry 或换模型重试)";
                 }
                 return resp.Text ?? "";
             }
@@ -520,7 +526,9 @@ public sealed partial class Agent
                 }, reason =>
                 {
                     // 思考内容：实时流式输出（暗色），而非缓冲到最后一次性显示
-                    if (!_reasoningShown)
+                    // 同 _streamedThisCall：只有**真有内容**才算"已显示思考"。
+                    // 空白增量不该定格/置位，否则下面的判空会把"只思考没结论"误判成"什么都没返回"。
+                    if (!_reasoningShown && !string.IsNullOrWhiteSpace(reason))
                     {
                         ClearSpinner(); // 思考内容开始显示：清掉 spinner 行
                         _reasoningShown = true;

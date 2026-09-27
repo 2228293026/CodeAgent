@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using CodeAgent.Providers;
 using CodeAgent.Tools;
 using Xunit;
@@ -108,6 +109,60 @@ public sealed class EmptyModelResponseTests
         // 报"未返回内容"反而是误报。FakeProvider 不走流式回调，
         // 所以这里直接验证"判空条件"本身，而不是整条链路。
         Assert.False(string.IsNullOrWhiteSpace("已经有流式输出"));
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task ReasoningOnlyTurn_GetsItsOwnDiagnosis()
+    {
+        // 模型只思考、没给结论：内容其实收到了，用户正看着那段暗色思考。
+        // 这时说"可能是免费模型限额"会把人引向错误的排查方向。
+        var agent = new AgentClass(
+            new AgentConfig { SaveSessions = false },
+            new ReasoningOnlyProvider(),
+            ToolRegistry.CreateDefault());
+        var out1 = await agent.RunAsync("把这个函数抽出来", System.Threading.CancellationToken.None);
+        Assert.Contains("思考", out1);
+        Assert.DoesNotContain("免费模型限额", out1);
+        // 仍然是失败回合：模型没给出可用答案
+        Assert.True(agent.LastTurnFailed);
+    }
+
+    [Fact]
+    public void TheTwoBlankDiagnosesAreDistinct()
+    {
+        var src = System.IO.File.ReadAllText(Find());
+        Assert.Contains("_reasoningShown", src);
+        // 两种提示都必须在
+        Assert.Contains("免费模型限额", src);
+        Assert.Contains("只输出了思考内容", src);
+    }
+
+    [Fact]
+    public void ReasoningFlagAlsoRequiresRealContent()
+    {
+        // 空白思考增量不该置位：否则下面的判空会把"只思考没结论"误判成"什么都没返回"
+        var src = System.IO.File.ReadAllText(Find());
+        Assert.Contains("!_reasoningShown && !string.IsNullOrWhiteSpace(reason)", src);
+    }
+
+    /// <summary>只吐思考、不给正文的 Provider，用来复现"想完没答"这一路。</summary>
+    private sealed class ReasoningOnlyProvider : IAgentProvider
+    {
+        public string Name => "reasoning-only";
+
+        public System.Threading.Tasks.Task<ProviderResponse> ChatAsync(IReadOnlyList<ProviderMessage> messages, IReadOnlyList<ToolSpec> tools, string thinkingEffort, CancellationToken ct)
+            => System.Threading.Tasks.Task.FromResult(new ProviderResponse { Text = "" });
+
+        public System.Threading.Tasks.Task<ProviderResponse> ChatStreamAsync(
+            IReadOnlyList<ProviderMessage> messages, IReadOnlyList<ToolSpec> tools, string thinkingEffort,
+            Action<string>? onText, Action<string>? onReasoning, Action<string>? onToolFragment, CancellationToken ct)
+        {
+            onReasoning?.Invoke("让我想想这个函数到底该怎么拆……");
+            return System.Threading.Tasks.Task.FromResult(new ProviderResponse { Text = "" });
+        }
+
+        public System.Threading.Tasks.Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct) =>
+            System.Threading.Tasks.Task.FromResult<IReadOnlyList<string>>(["fake-model"]);
     }
 
     [Fact]
