@@ -61,7 +61,10 @@ public class OutputEncodingSetupTests
     /// 于是在 46 个字符的路径里找签名，失败信息还看不出错在哪。</summary>
     private static string MethodBody(string signature)
     {
-        var source = File.ReadAllText(FindProgram());
+        // 归一化换行：Windows 上 core.autocrlf=true 的工作区检出的是 CRLF，
+        // 下面的按 \n 定位与切分会把 \r 算进行内容里（缩进比较虽然碰巧仍然相等，
+        // 但那是运气，不是设计）。见 CrossLineSourceScanTests。
+        var source = File.ReadAllText(FindProgram()).Replace("\r\n", "\n");
         var at = source.IndexOf(signature, StringComparison.Ordinal);
         Assert.True(at >= 0, $"源码里找不到 {signature}（Program.cs 共 {source.Length} 字符）");
         var lineEnd = source.IndexOf('\n', at);
