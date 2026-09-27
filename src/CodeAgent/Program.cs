@@ -3883,6 +3883,65 @@ internal static class Program
         new("@路径", $"引用工作区文件（Tab 或 {SafeColor.Glyphs.Arrow} 选入）"),
     ];
 
+    /// <summary>
+    /// <c>/help</c> 里的「用法 / 参数 / 快捷键」区块。
+    ///
+    /// 此前是一整段**原始字符串字面量**，有两个问题：
+    /// ①不受宽度约束——上面那半屏命令列表走 <see cref="FormatHelpList"/> 精心排版，
+    ///   下面这半屏却在 30 列终端上硬折行，一屏之内两种排版风格；
+    /// ②更糟的是**注释占位符漏进了输出**：原始字符串里 <c>{SafeColor.Glyphs.Arrow}</c>
+    ///   不是插值，用户实际看到的是
+    ///   <c>strict{SafeColor.Glyphs.Arrow}whitelist{…}full</c> —— 一串代码占位符。
+    ///
+    /// 改成数据表 + 复用 <see cref="FormatKeyValueLine"/>：与上半屏同一套排版与降级规则
+    /// （放不下时保键、截说明），也顺带让快捷键可被测试断言。
+    /// </summary>
+    internal static (string Key, string Desc)[] HelpUsageRows() =>
+    [
+        ("codeagent \"任务\"", "一次性任务（管道输入会附加到任务后）"),
+        ("codeagent", "进入交互模式"),
+    ];
+
+    internal static (string Key, string Desc)[] HelpOptionRows() =>
+    [
+        ("-c, --config <路径>", "指定配置文件"),
+        ("-p, --provider <名>", "切换 Provider（配置中的键）"),
+        ("-m, --model <模型>", "覆盖模型名"),
+        ("--cwd <目录>", "切换工作目录"),
+        ("--init", "生成示例配置 codeagent.json"),
+        ("--setup", "交互式配置供应商并生成 codeagent.json"),
+        ("--models", "列出当前 Provider 的可用模型"),
+        ("--continue", "恢复本项目最近一次会话（自动落盘到 .codeagent/sessions）"),
+        ("-v, --version", "显示版本号"),
+    ];
+
+    internal static (string Key, string Desc)[] HelpShortcutRows() =>
+    [
+        ("Esc", "撤回最近一轮对话（空输入时；连按逐轮回退）"),
+        ("Ctrl+C", "清空当前输入行（再按一次退出）"),
+        ("Ctrl+T", "切换思考强度（off / low / medium / high / auto 循环）"),
+        ("Tab", "切换下一个工作模式（/mode next）"),
+        ("Shift+Tab", $"切换文件访问权限模式（strict{SafeColor.Glyphs.Arrow}whitelist{SafeColor.Glyphs.Arrow}full）"),
+        ("Alt+M / Ctrl+Shift+M", "模式切换菜单"),
+        ("Alt+U / Ctrl+Shift+U", "撤销最近一次文件修改（/undo）"),
+        ("Alt+D / Ctrl+Shift+D", "查看最近修改的 diff（/diff）"),
+        ("Alt+N / Ctrl+Shift+N", "新建会话（/clear）"),
+        ("Ctrl+R", "反向搜索命令历史（再按跳更早命中）"),
+        ("Ctrl+L", "清屏"),
+    ];
+
+    /// <summary>把一张「键 — 说明」表渲染成对齐的键值行（与 /help 上半屏同一套规则）。</summary>
+    private static void PrintHelpTable(string title, (string Key, string Desc)[] rows)
+    {
+        Console.WriteLine(title);
+        if (rows.Length == 0)
+            return;
+        var width = ConsoleColumns();
+        var keyWidth = rows.Max(r => TextUtil.DisplayWidth(r.Key));
+        foreach (var (key, desc) in rows)
+            Console.WriteLine(FormatKeyValueLine(key, desc, keyWidth, width));
+    }
+
     private static void PrintReplHelp()
     {
         Console.WriteLine("命令:");
@@ -3891,35 +3950,10 @@ internal static class Program
         // 而补全只在输入 / 时弹出，塞一条非 / 开头的条目会污染菜单。
         Console.WriteLine("输入行:");
         Console.WriteLine(FormatHelpList(BangModeHelp, ConsoleColumns()));
-        Console.WriteLine("""
-            用法:
-              codeagent "帮我给项目写一个 README"  一次性任务（管道输入会附加到任务后：`type bug.log | codeagent "分析"`）
-              codeagent                           进入交互模式
-            参数:
-              -c, --config <路径>  指定配置文件
-              -p, --provider <名>  切换 Provider（配置中的键）
-              -m, --model <模型>   覆盖模型名
-              --cwd <目录>         切换工作目录
-              --init               生成示例配置 codeagent.json
-              --setup              交互式配置供应商并生成 codeagent.json
-              --models             列出当前 Provider 的可用模型
-              --continue           恢复本项目最近一次会话（会话自动落盘到 .codeagent/sessions）
-              -v, --version        显示版本号
-            快捷键:
-              Esc                   撤回最近一轮对话（空输入时；连按逐轮回退）
-              Ctrl+C                清空当前输入行（再按一次退出）
-              Ctrl+T                切换思考强度（off / low / medium / high / auto 循环）
-              Tab                    切换下一个工作模式（/mode next）
-              Shift+Tab              切换文件访问权限模式（strict{SafeColor.Glyphs.Arrow}whitelist{SafeColor.Glyphs.Arrow}full）
-              Alt+M / Ctrl+Shift+M   模式切换菜单
-              Alt+U / Ctrl+Shift+U   撤销最近一次文件修改（/undo）
-              Alt+D / Ctrl+Shift+D   查看最近修改的 diff（/diff）
-              Alt+N / Ctrl+Shift+N   新建会话（/clear）
-              Ctrl+R                 反向搜索命令历史（再按跳更早命中）
-              Ctrl+L                 清屏
-            """);
+        PrintHelpTable("用法:", HelpUsageRows());
+        PrintHelpTable("参数:", HelpOptionRows());
+        PrintHelpTable("快捷键:", HelpShortcutRows());
     }
-
     private static void PrintHelp()
     {
         Console.WriteLine($"""
