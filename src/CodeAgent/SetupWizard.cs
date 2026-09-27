@@ -49,13 +49,14 @@ public static class SetupWizard
             .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
+        var cols = Program.Columns();
         output.WriteLine($"{SafeColor.Glyphs.Rule2}{SafeColor.Glyphs.Rule2} CodeAgent 供应商配置向导 {new string(SafeColor.Glyphs.RuleChar, 14)}");
-        output.WriteLine($"将更新配置文件: {path}\n");
+        output.WriteLine(FormatFieldLine("将更新配置文件", path, cols) + "\n");
         output.WriteLine("请选择供应商:");
         for (int i = 0; i < Presets.Length; i++)
-            output.WriteLine($"  {i + 1}) {Presets[i].Label}");
+            output.WriteLine(FormatOptionLine(i + 1, Presets[i].Label, cols));
         for (int i = 0; i < extras.Count; i++)
-            output.WriteLine($"  {Presets.Length + i + 1}) {extras[i]}（已配置）");
+            output.WriteLine(FormatOptionLine(Presets.Length + i + 1, $"{extras[i]}（已配置）", cols));
         output.WriteLine();
 
         var idx = AskChoice(input, output, "选择", Presets.Length + extras.Count, 1);
@@ -257,7 +258,42 @@ public static class SetupWizard
         return hint + "\n" + field;
     }
 
-    /// <summary>带默认值的文本输入：回车使用默认值；输入被中断（EOF）时返回 null。</summary>
+    /// <summary>
+    /// 选项行的**纯渲染**：<c>  3) 供应商名（已配置）</c>。
+    ///
+    /// 此前直接 <c>WriteLine($"  {i+1}) {label}")</c>：label 里的自定义供应商名长度不受控，
+    /// 折行之后**编号与名称对不上**——而这个列表是靠编号选的（<c>AskChoice</c> 只收数字），
+    /// 用户数着「7」找到的却不是自己以为的那个 provider。
+    ///
+    /// 编号前缀**永不截断**：它是选择的依据。宽度不够时只截名称，并留省略号。
+    /// </summary>
+    internal static string FormatOptionLine(int number, string label, int width)
+    {
+        var prefix = $"  {number}) ";
+        var full = prefix + label;
+        if (width <= 0 || TextUtil.DisplayWidth(full) <= width)
+            return full;
+        var room = width - TextUtil.DisplayWidth(prefix);
+        if (room < 1)
+            return CodeAgent.InputLine.FitToWidth(prefix.TrimEnd(), Math.Max(1, width));
+        return prefix + CodeAgent.InputLine.FitToWidth(label, room);
+    }
+
+    /// <summary>「字段: 值」一行的渲染，值按剩余宽度收口（路径/名称可能很长）。</summary>
+    internal static string FormatFieldLine(string label, string value, int width)
+    {
+        var head = $"{label}: ";
+        var full = head + value;
+        if (width <= 0 || TextUtil.DisplayWidth(full) <= width)
+            return full;
+        var room = width - TextUtil.DisplayWidth(head);
+        if (room < 1)
+            return CodeAgent.InputLine.FitToWidth(head.TrimEnd(), Math.Max(1, width));
+        return head + CodeAgent.InputLine.FitToWidth(value, room);
+    }
+
+    /// <summary>
+    /// 带默认值的文本输入：回车使用默认值；输入被中断（EOF）时返回 null。</summary>
     private static string? Ask(TextReader input, TextWriter output, string prompt, string? defaultValue = null)
     {
         output.Write(FormatAskPrompt(prompt, defaultValue, Program.Columns()));
