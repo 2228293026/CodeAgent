@@ -3590,7 +3590,20 @@ internal static class Program
                 if (string.IsNullOrWhiteSpace(rest))
                 {
                     Console.WriteLine(FormatResultLine($"当前模式: {agent.CurrentMode.Name}", ConsoleColumns()));
-                    Console.WriteLine(ModeListText(config, agent.CurrentMode.Name));
+                    // 附上每个模式**实际可用**的工具数：切模式的收益一眼可见，
+                    // 而"这个模式能不能干这事"正是用户切模式时唯一要判断的事。
+                    var allToolNames = tools.ToToolSpecs().Select(t => t.Name).ToList();
+                    Console.WriteLine(ModeListText(config, agent.CurrentMode.Name, name =>
+                    {
+                        var mode = Modes.Build(config).FirstOrDefault(m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                        if (mode?.AllowedTools is not { } allowed)
+                            return allToolNames.Count;
+                        var set = new HashSet<string>(allowed, StringComparer.OrdinalIgnoreCase)
+                        {
+                            AgentClass.AlwaysAvailableTool,
+                        };
+                        return allToolNames.Count(n => set.Contains(n));
+                    }));
                     Console.WriteLine(FormatHintLine(
                         "（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）", ConsoleColumns()));
                 }
@@ -3915,14 +3928,29 @@ internal static class Program
     }
 
     /// <summary>模式列表文本（/mode 无参数用）：当前模式标 {SafeColor.Glyphs.Left}。
-    /// 与 /help、/tools 共用同一宽度自适应渲染器——模式说明是中文，窄终端同样需要折行。</summary>
-    internal static string ModeListText(AgentConfig config, string currentMode) =>
+    /// 与 /help、/tools 共用同一宽度自适应渲染器——模式说明是中文，窄终端同样需要折行。
+    ///
+    /// 每行附**该模式可用工具数**（<paramref name="toolCounts"/> 为空则不附）：
+    /// 231 个工具分给 8 种模式，用户问的却是"这个模式能不能干这事"。
+    /// 光看说明（「只读分析项目」）判断不出 plan 到底能不能跑命令——
+    /// 而这个差别直接决定了他该不该切过去。</summary>
+    internal static string ModeListText(AgentConfig config, string currentMode, Func<string, int>? toolCounts = null) =>
         FormatHelpList(
             Modes.Build(config)
                 .Select(m => new HelpEntry(m.Name,
-                    m.Description + (m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? $"  {SafeColor.Glyphs.Left}" : string.Empty)))
+                    m.Description + ToolCountSuffix(m.Name, toolCounts)
+                        + (m.Name.Equals(currentMode, StringComparison.OrdinalIgnoreCase) ? $"  {SafeColor.Glyphs.Left}" : string.Empty)))
                 .ToList(),
             ConsoleColumns());
+
+    /// <summary>模式行尾的「N 个工具」后缀（查不到就不加，避免显示 0 误导）。</summary>
+    private static string ToolCountSuffix(string mode, Func<string, int>? toolCounts)
+    {
+        if (toolCounts is null)
+            return string.Empty;
+        var n = toolCounts(mode);
+        return n <= 0 ? string.Empty : $"  · {n} 个工具";
+    }
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
     /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
     internal static bool IsSwitchCommand(string cmd, string rest) =>
