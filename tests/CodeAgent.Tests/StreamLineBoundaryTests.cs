@@ -79,15 +79,32 @@ public class StreamLineBoundaryTests
     }
 
     [Fact]
-    public void Renderer_FlushLeavesNothingPending()
+    public void Renderer_FlushLeavesNoPendingBufferButCursorMayStillBeMidLine()
     {
+        // 这里改过一次契约。原来断言"Flush 后一定停在行边界"——那是**错的**：
+        // Flush 把 _line 清空了，缓冲确实干净，但 EmitLine 写出去的是不带 \n 的半行，
+        // **控制台光标仍停在行中**。两者混为一谈的结果是：回合摘要条被粘在
+        // 正文最后一句后面，整段中文回复看起来像是以「-- ✓ 完成 1 轮」结尾的。
         var renderer = new ConsoleRenderer(true);
         Capture(() =>
         {
             renderer.Append("半行");
             renderer.Flush();
         });
-        Assert.True(renderer.EndsOnLineBoundary, "Flush 后不应再有挂起的半行");
+        Assert.False(renderer.EndsOnLineBoundary, "缓冲空了不等于光标在行尾——半行没换行就必须补");
+    }
+
+    [Fact]
+    public void Renderer_FlushAfterCompleteLineIsOnBoundary()
+    {
+        // 对照组：内容自带换行时，Flush 之后确实在行尾，不该多补一个换行
+        var renderer = new ConsoleRenderer(true);
+        Capture(() =>
+        {
+            renderer.Append("整行\n");
+            renderer.Flush();
+        });
+        Assert.True(renderer.EndsOnLineBoundary, "自带换行的内容，Flush 后就该在行尾");
     }
 
     [Fact]

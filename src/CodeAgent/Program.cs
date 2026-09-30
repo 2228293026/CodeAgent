@@ -557,7 +557,8 @@ internal static class Program
                 {
                     PrintResult(result, agent.StreamedLastRun, prefixNewline: true, agent.StreamedOnLineBoundary);
                 }
-                PrintTurnSummary(agent, sw.Elapsed, opts, FooterCtxText(agent.ContextTokens, EffectiveContextWindow()));
+                PrintTurnSummary(agent, sw.Elapsed, opts, FooterCtxText(agent.ContextTokens, EffectiveContextWindow()),
+                    agent.StreamedOnLineBoundary);
                 // 本轮改了哪些文件（学自 Claude Code 的 Modified files）：不另开命令，
                 // 用户不必为了确认"它到底动没动我的文件"再敲一次 /files。
                 // 任务进度一行结论：面板一次五个任务就是五行，回合摘要里只给一行
@@ -1227,7 +1228,10 @@ internal static class Program
             ? $"ctx {TextUtil.PercentOf(contextTokens, contextWindow)}%"
             : $"ctx {TextUtil.CompactTokenCount(contextTokens)}";
 
-    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts, string ctxText)
+    /// <param name="streamedOnLineBoundary">本轮流式输出是否**停在行尾**。
+    /// 摘要条是独立的 UI 元素（带分隔线），必须另起一行：粘在正文最后一句后面，
+    /// 整段中文回复看起来像是以「-- ✓ 完成 1 轮」结尾的，而那不是模型说的话。</param>
+    private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts, string ctxText, bool streamedOnLineBoundary = true)
     {
         var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
@@ -1239,6 +1243,11 @@ internal static class Program
         if (cost is { } c)
             costText = $" ≈${TextUtil.FormatCost(c)}";
         using var scope = SafeColor.Scope(SafeColor.Muted);
+        // 与 PrintResult 同一判据：流式输出没停在行尾就先补一个换行。
+        // 此前这里只顾自己写摘要，粘不粘在正文后面全看模型最后一段带不带换行——
+        // 实测 60 列下大多数回复都粘在一起。
+        if (!streamedOnLineBoundary)
+            Console.WriteLine();
         Console.WriteLine(BuildTurnSummary(
             agent.TurnRounds, agent.TurnToolCalls, TextUtil.FormatElapsed(elapsed),
             $"{agent.TurnInputTokens:N0} in / {agent.TurnOutputTokens:N0} out tok",

@@ -50,7 +50,14 @@ public sealed class ConsoleRenderer
     /// <summary>流结束时是否停在行边界（没有未输出的半行，也没有待冲刷的空行）。
     /// 调用方据此决定要不要补换行：模型最后一段已经带换行时再补一个会多出空行；
     /// 没有结束时必须补，否则后续的工具状态行/摘要行会粘在正文同一行。</summary>
-    public bool EndsOnLineBoundary => !_inCode && _line.Length == 0 && _pendingBlanks == 0;
+    /// <summary>最近一次真正写出去的内容**是否以换行收尾**。
+    /// 与 <see cref="_line"/> 的缓冲状态分开记：<see cref="Flush"/> 会把缓冲清空，
+    /// 但模型最后一段不带 \n 时写出去的就是半行，光标停在行中——
+    /// 缓冲看着"干净"，光标其实没在行尾。混为一谈会让调用方以为不用补换行。</summary>
+    private bool _lastEmitEndedWithNewline = true;
+
+    public bool EndsOnLineBoundary =>
+        !_inCode && _line.Length == 0 && _pendingBlanks == 0 && _lastEmitEndedWithNewline;
 
     public void Flush()
     {
@@ -275,6 +282,8 @@ public sealed class ConsoleRenderer
             {
                 for (var i = 0; i < lines.Length; i++)
                     EmitStyledLine(lines[i], color, i == 0 && hadNewline);
+                // 折行时只有**末段**决定光标位置；末段没带换行，光标就仍停在行中
+                _lastEmitEndedWithNewline = hadNewline;
                 return;
             }
         }
@@ -286,6 +295,7 @@ public sealed class ConsoleRenderer
         if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal) && plain == content)
         {
             Console.Write(content + (hadNewline ? "\n" : ""));
+            _lastEmitEndedWithNewline = hadNewline;
             return;
         }
 
@@ -297,6 +307,8 @@ public sealed class ConsoleRenderer
             EmitStyledParts(parts, color);
             Console.WriteLine();
         }
+        // 这一分支总是换行收尾
+        _lastEmitEndedWithNewline = true;
     }
 
     /// <summary>输出一行带样式的内容（行内代码 / 标题 / 引用配色）。</summary>
