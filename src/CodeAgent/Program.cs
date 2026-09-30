@@ -2359,7 +2359,14 @@ internal static class Program
         var ctx = contextWindow > 0
             ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(agent.ContextTokens, contextWindow)}%)"
             : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
-        var shownCwd = TruncatePathHead(Environment.CurrentDirectory);
+        // 路径传**完整**的，缩短交给 BuildStatusBar：它有整条状态栏的真实预算。
+        //
+        // 此处先用 TruncatePathHead 按固定 42 列截一刀，等于把路径的头部信息先扔掉，
+        // BuildStatusBar 再按自己算出的 pathBudget 缩短一次——**缩短两次**。
+        // 二次缩短作用在一个已经残缺的串上，就会出现「两个省略号夹着一个目录片段」：
+        // 实测 60 列下路径段渲染成 `...…a...`（ShortenPath 的 "..." + TruncatePathHead
+        // 留下的 "…" + 被硬截的末段尾巴）。既难看，也读不出是哪一层截的。
+        var shownCwd = Environment.CurrentDirectory;
         // git 分支段（非仓库整体省略）：多仓库/多分支工作流下快速确认当前所在位置
         var branch = CachedBranch(Environment.CurrentDirectory);
         using var scope = SafeColor.Scope(SafeColor.Muted);
