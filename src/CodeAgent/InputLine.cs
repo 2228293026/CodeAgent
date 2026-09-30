@@ -1805,7 +1805,13 @@ public static class InputLine
                         {
                             // ESC（空输入）：撤回最后一条已发送的消息。
                             // 二次确认防误触——连按 Esc 本会从"关菜单/清输入"一路滑到"撤回"（有副作用）
-                            var confirm = promptPlain + "(再按 Esc 撤回上一条消息，其他键继续)";
+                            //
+                            // 只用 **promptTail**：promptPlain 是「上边框 + 提示符」两行，
+                            // 在这里重打一遍等于把边框又塞进重绘块——用户随后敲任何一个字符，
+                            // 屏幕上就会多留一行边框和确认文字（与「敲一个字多出一行」同源）。
+                            // 其余快捷键（Alt+U / Alt+D …）都只 WriteLine 一行就返回，
+                            // 只有这条路径在重打整段提示符。
+                            var confirm = FormatRecallConfirm(promptTail);
                             if (ansiOk)
                                 Console.Write("\r\x1b[2K" + confirm);
                             else
@@ -2057,6 +2063,12 @@ public static class InputLine
 
     /// <summary>光标在输入块内的显示行（0-based，块首为 0）：折叠时第 2 行及以后都落在折叠行上（=2）。
     /// ResizeMenuSpace 的上移距离用它，与 ScrollInput 里 fold 感知的 lastCursorLine 口径一致。</summary>
+    /// <summary>ESC 二次确认行。**必须**只占提示符那一行（见调用处注释）。
+    /// 单独拆出来是为了能直接断言"不含换行、不含边框"——这条提示哪天要是又用回整段
+    /// <c>promptPlain</c>，测试会立刻红。</summary>
+    internal static string FormatRecallConfirm(string promptTail) =>
+        promptTail + "(再按 Esc 撤回上一条消息，其他键继续)";
+
     internal static int DisplayedCursorLine(bool expanded, string text, int cursor)
     {
         cursor = Math.Clamp(cursor, 0, text.Length);
