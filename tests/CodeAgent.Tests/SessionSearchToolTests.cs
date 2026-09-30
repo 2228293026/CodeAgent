@@ -176,7 +176,8 @@ public class SessionSearchToolTests : IDisposable
         var output = await tool.ExecuteAsync(
             new JsonObject { ["keyword"] = "keyword", ["max_files"] = 0 }, MakeContext(), CancellationToken.None);
 
-        Assert.Contains("匹配 1 个会话", output); // 0 → 1
+        Assert.Contains("显示前 1 个", output);
+        Assert.Equal(1, CountSessionBlocks(output)); // 0 → 1
     }
 
     [Fact]
@@ -192,8 +193,17 @@ public class SessionSearchToolTests : IDisposable
         var output = await tool.ExecuteAsync(
             new JsonObject { ["keyword"] = "keyword", ["max_files"] = 1 }, MakeContext(), CancellationToken.None);
 
-        Assert.Contains("匹配 1 个会话", output); // 收敛到 1
+        Assert.Contains("显示前 1 个", output);
+        Assert.Equal(1, CountSessionBlocks(output)); // 收敛到 1
     }
+
+
+    /// <summary>结果里实际列出的会话块数。每个块以「可恢复）:」结尾。
+    /// 用来断言 max_files 的**收敛**本身，而不是依赖计数文案的措辞——
+    /// 那句文案改过一次（更诚实了），但收敛行为不该跟着它一起变。</summary>
+    private static int CountSessionBlocks(string output) =>
+        System.Linq.Enumerable.Count(
+            System.Linq.Enumerable.Where(output.Split('\n'), l => l.Contains("可恢复）:")));
 
     [Fact]
     public async Task SessionSearch_MaxFilesOverCap_ClampsToTen()
@@ -208,7 +218,8 @@ public class SessionSearchToolTests : IDisposable
         var output = await tool.ExecuteAsync(
             new JsonObject { ["keyword"] = "keyword", ["max_files"] = 99 }, MakeContext(), CancellationToken.None);
 
-        Assert.Contains("匹配 10 个会话", output); // 收敛到上限 10
+        Assert.Contains("显示前 10 个", output);
+        Assert.Equal(10, CountSessionBlocks(output)); // 收敛到上限 10
     }
 
     [Fact]

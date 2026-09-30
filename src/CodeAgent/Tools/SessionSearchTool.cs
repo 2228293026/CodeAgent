@@ -56,9 +56,16 @@ public sealed class SessionSearchTool : ITool
 
         var sb = new StringBuilder();
         var printed = 0;
+        // **命中总数**与**已显示数**必须分开记：原来只有 printed（受 max_files 封顶），
+        // 于是 20 个会话命中、只显示 3 个时，模型被告知"匹配 3 个会话"——
+        // 它会照着这个数向用户复述，于是少报。REPL 那侧早有 moreAvailable 处理，这里没有。
+        var matched = 0;
         void Emit(string label, string restoreHint, List<(string Role, string Snippet)> hits)
         {
-            if (hits.Count == 0 || printed >= maxFiles)
+            if (hits.Count == 0)
+                return;
+            matched++;
+            if (printed >= maxFiles)
                 return;
             sb.AppendLine($"{label}（{restoreHint}）:");
             foreach (var (role, snippet) in hits)
@@ -108,8 +115,27 @@ public sealed class SessionSearchTool : ITool
         }
 
         ct.ThrowIfCancellationRequested();
-        return Task.FromResult(printed == 0
-            ? $"(历史会话中没有匹配 \"{keyword}\" 的内容)"
-            : $"匹配 {printed} 个会话:\n" + sb.ToString().TrimEnd());
+        if (printed == 0)
+        {
+            // 与 REPL 的 /find 同一件事：0 命中**不等于**没有这个字串。
+            // ASCII 关键字只出现在更长的词内部时会被词边界规则滤掉，
+            // 此时回一句「没有匹配」是**假话**——模型会照着它告诉用户"没找到"。
+            var interiorOnly = AgentClass.NeedsSearchWordBoundary(keyword)
+                && Directory.GetFiles(sessionDir, "*.jsonl").Where(HasNonEmptyFile)
+                    .Any(l => AgentClass.LogContainsSubstring(l, keyword, caseSensitive, ct));
+            return Task.FromResult(interiorOnly
+                ? $"(历史会话中有 \"{keyword}\"，但它只出现在更长的词内部（如 ColorThemeTests）——请改搜完整词)"
+                : $"(历史会话中没有匹配 \"{keyword}\" 的内容)");
+        }
+        // 封顶与否看的是**有没有用满 max_files**，不是 matched > printed：
+        // 没封顶时（printed < maxFiles）说明每个日志都读过了，matched 就是精确总数。
+        // 封顶时循环已经 break，后面的日志没读，matched 恒等于 printed——
+        // 此时报「匹配 3 个」是**少报**，模型会照着复述给用户。
+        // 为拿精确数字把整个会话目录读完代价不值；「≥N（显示前 N 个）」既诚实，
+        // 又与 REPL 的 moreAvailable 口径一致。
+        var head = printed >= maxFiles
+            ? $"匹配 ≥{printed} 个会话（显示前 {printed} 个）:"
+            : $"匹配 {matched} 个会话:";
+        return Task.FromResult(head + "\n" + sb.ToString().TrimEnd());
     }
 }

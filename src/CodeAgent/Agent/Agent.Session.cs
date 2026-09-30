@@ -525,17 +525,23 @@ public sealed partial class Agent
     internal static bool HasSubstringOccurrence(IEnumerable<(string Role, string Snippet)> hits, string? keyword) =>
         !string.IsNullOrEmpty(keyword) && hits.Any(h => h.Snippet.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>日志文件里是否存在该关键字的子串（忽略词边界）。命中即停。</summary>
-    internal static bool LogContainsSubstring(string path, string? keyword, CancellationToken ct = default)
+    /// <summary>日志文件里是否存在该关键字的子串（忽略词边界）。命中即停。
+    ///
+    /// <paramref name="caseSensitive"/> 必须传进来：调用方（模型侧的 session_search）
+    /// 允许显式要求区分大小写，而这里的探测若一律忽略大小写，会把
+    /// 「区分大小写搜 hello、正文只有 Hello」误判成"只出现在更长的词内部"——
+    /// 那是在**否定**用户明确要求的结果。</summary>
+    internal static bool LogContainsSubstring(string path, string? keyword, bool caseSensitive = false, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(keyword) || !File.Exists(path))
             return false;
+        var cmp = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         try
         {
             foreach (var line in ReadLogLines(path, ct))
             {
                 ct.ThrowIfCancellationRequested();
-                if (line.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                if (line.Contains(keyword, cmp))
                     return true;
             }
         }
