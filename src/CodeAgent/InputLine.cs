@@ -222,7 +222,7 @@ public static class InputLine
         ("/todos", "任务清单（/tasks 的别名）"),
         ("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         ("/retry", "重新执行上一条请求"),
-        ("/tools", "列出可用工具"),
+        ("/tools", "列出可用工具（可带关键字过滤）"),
         ("/providers", "列出已配置的 Provider"),
         ("/models", "列出可用模型（可过滤）"),
         ("/diag", "显示终端环境诊断"),

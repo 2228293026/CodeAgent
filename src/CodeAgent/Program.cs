@@ -2450,6 +2450,51 @@ internal static class Program
         string.IsNullOrWhiteSpace(filter) ? models : models.Where(m => m.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
 
     /// <summary>列出当前 Provider 的可用模型，并用 * 标记当前配置的模型。</summary>
+    /// <summary>
+    /// <c>/tools [关键字]</c> 的渲染：表头 + 工具列表（纯逻辑，好测）。
+    ///
+    /// 此前只有一份 700 多行的裸列表：**没有表头、没有总数、不能过滤**。
+    /// 231 个工具里想找一个，只能从顶上翻到底。而同类的 <c>/models [关键字]</c>
+    /// 早就有过滤与计数——两个命令列的是"可用的东西"，口径不该差这么多。
+    ///
+    /// 关键字同时匹配**工具名与说明**（与 <c>/models</c> 的过滤口径一致）：
+    /// 用户想找"能查依赖的"，多半不会记得工具叫 <c>dependency_lockfile_report</c>。
+    /// </summary>
+    internal static IReadOnlyList<HelpEntry> FilterTools(
+        IEnumerable<CodeAgent.Providers.ToolSpec> tools, string? filter, out int total)
+    {
+        var all = tools.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        total = all.Count;
+        var kw = string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
+        IEnumerable<CodeAgent.Providers.ToolSpec> picked = kw is null
+            ? all
+            : all.Where(t =>
+                t.Name.Contains(kw, StringComparison.OrdinalIgnoreCase)
+                || (t.Description?.Contains(kw, StringComparison.OrdinalIgnoreCase) ?? false));
+        return picked.Select(t => new HelpEntry(t.Name, t.Description)).ToList();
+    }
+
+    /// <summary>打表头：与 <c>/models</c> 同一句式（共 N 个 / 显示 M 条 / 过滤 “X”）。</summary>
+    internal static string FormatToolsHeader(int total, int shown, string? filter, string mode, int width = 0)
+    {
+        var scope = string.IsNullOrWhiteSpace(mode) ? "" : $"当前模式 {mode}，";
+        var filterText = string.IsNullOrWhiteSpace(filter) ? "" : $"，过滤 “{filter!.Trim()}”";
+        var body = $"可用工具（{scope}共 {total} 个，显示 {shown} 条{filterText}）:";
+        return width > 0 ? FormatResultLine(body, width) : body;
+    }
+
+    private static void PrintTools(IReadOnlyList<CodeAgent.Providers.ToolSpec> tools, string mode, string? filter)
+    {
+        var rows = FilterTools(tools, filter, out var total);
+        Console.WriteLine(FormatToolsHeader(total, rows.Count, filter, mode, ConsoleColumns()));
+        if (rows.Count == 0)
+        {
+            Console.WriteLine(FormatHintLine(
+                $"没有匹配「{filter?.Trim()}」的工具（当前模式 {mode} 共 {total} 个）。", ConsoleColumns()));
+            return;
+        }
+        Console.WriteLine(FormatHelpList(rows, ConsoleColumns()));
+    }
     private static async Task PrintModelsAsync(IAgentProvider provider, string? currentModel, string? filter = null)
     {
         try
@@ -3515,14 +3560,7 @@ internal static class Program
                 break;
 
             case "/tools":
-                var modeTools = agent.ToolsForMode();
-                // 模式名来自配置文件，长度不受控
-                // 与 /help 同一渲染器：工具名对齐成列，说明按终端宽度折行。
-                // 此前每行硬拼接，110 个工具的长说明在窄终端会从词中间断开。
-                Console.WriteLine(FormatHelpList(
-                    modeTools.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-                        .Select(t => new HelpEntry(t.Name, t.Description)).ToList(),
-                    ConsoleColumns()));
+                PrintTools(agent.ToolsForMode(), agent.CurrentMode.Name, rest);
                 break;
 
             case "/providers":
@@ -4231,7 +4269,7 @@ internal static class Program
         new("/todos", "任务清单（/tasks 的别名）"),
         new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         new("/retry", "重新执行上一条请求"),
-        new("/tools", "列出可用工具"),
+        new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),
         new("/models [关键字]", "列出/过滤模型（过滤时编号不变）"),
         new("/diag", "显示终端环境诊断"),
