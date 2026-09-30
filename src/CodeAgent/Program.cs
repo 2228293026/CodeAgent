@@ -2704,6 +2704,32 @@ internal static class Program
     /// 收口到一处还有一个好处：以后加取值项（比如新的 shell、新的权限档位）时，
     /// 格式跟着走，不需要在每个调用点重新想一遍标点。
     /// </summary>
+    /// <summary>
+    /// 「标签: 当前值（可选: a / b / c）」的**统一渲染**（纯函数，好测）。
+    ///
+    /// 此前 <c>/thinking</c> 与 <c>/shell</c> 各写一行裸插值：
+    ///     Console.WriteLine($"思考强度: {effort}（可选: …）");
+    ///     Console.WriteLine($"命令 shell: {current}（可选: …）");
+    /// 两者都**不受宽度约束**——40 列终端上实测分别溢出 8 列与 34 列，整行硬折行。
+    /// 而同类的非法取值提示（第 FormatInvalidValueLine 处）早已收口。
+    ///
+    /// 降级顺序与 <see cref="FormatSwitchedWithDetailLine"/> 一致：**值是主体**，
+    /// 说明是补充。放不下时先截「可选」列表；连它都放不下就整段丢掉它，
+    /// 只留「标签: 当前值」——用户刚敲了 <c>/thinking</c>，要看的正是当前档位。
+    /// </summary>
+    internal static string FormatSettingWithOptionsLine(string label, string value, IEnumerable<string> options, int width = 0)
+    {
+        var list = string.Join(" / ", options);
+        var head = $"{label}: {value}";
+        var suffix = string.IsNullOrEmpty(list) ? string.Empty : $"（可选: {list}）";
+        if (width <= 0)
+            return head + suffix;
+        if (TextUtil.DisplayWidth(head + suffix) <= width)
+            return head + suffix;
+        if (TextUtil.DisplayWidth(head) <= width)
+            return head; // 放不下可选列表：整段丢掉它，保留值
+        return InputLine.FitToWidth(head, width);
+    }
     internal static string FormatInvalidValueLine(string label, string given, IEnumerable<string> options, int width = 0)
     {
         var list = string.Join(" / ", options);
@@ -3621,8 +3647,11 @@ internal static class Program
             case "/thinking":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    Console.WriteLine($"思考强度: {config.ThinkingEffort}（可选: off / low / medium / high / auto）");
-                    Console.WriteLine("auto: 自动探测模型支持的档位并取最高可用（供应商声明支持 high 就用 high，只支持 low 就用 low）");
+                    Console.WriteLine(FormatSettingWithOptionsLine(
+                        "思考强度", config.ThinkingEffort, ThinkingEfforts, ConsoleColumns()));
+                    Console.WriteLine(FormatHintLine(
+                        "auto: 自动探测模型支持的档位并取最高可用（供应商声明支持 high 就用 high，只支持 low 就用 low）",
+                        ConsoleColumns()));
                     if (config.ThinkingEffort == "auto" && reasoningProbe is not null)
                     {
                         var t = reasoningProbe.Task;
@@ -3675,7 +3704,8 @@ internal static class Program
                     var current = string.IsNullOrWhiteSpace(config.Shell)
                         ? $"auto（当前生效: {(auto.Length == 0 ? "bash" : auto)}）"
                         : config.Shell;
-                    Console.WriteLine($"命令 shell: {current}（可选: cmd / powershell / pwsh / bash / sh / auto）");
+                    Console.WriteLine(FormatSettingWithOptionsLine(
+                        "命令 shell", current, ["cmd", "powershell", "pwsh", "bash", "sh", "auto"], ConsoleColumns()));
                 }
                 else
                 {
