@@ -1768,6 +1768,33 @@ internal static class Program
     /// <summary>操作提示行（解释"接下来能输入什么"）：两空格缩进 + 按显示宽度裁剪。
     /// 提示行此前都是裸字符串，`（服务未返回任何模型：检查 baseUrl 是否指向支持 /models 的端点…）`
     /// 这类长中文在 40 列终端上会硬折行，续行与上一条提示失去关联。</summary>
+    /// <summary>
+    /// 「小节标题行」的**统一渲染**：`标题（说明）:`（纯函数，好测）。
+    ///
+    /// /providers、/resume、/resume 列表等处此前各写一行裸插值：
+    ///     Console.WriteLine($"已配置的 Provider（当前: {p}，-p &lt;名&gt; 或改 provider 切换）:");
+    /// 40 列终端上实测 48~49 列，整行硬折行。
+    ///
+    /// 这些行之所以躲过了"用户内容会超宽"的仓库级扫描：括号里是**固定文案**，
+    /// 只有个别的名字/计数是变量——扫描器按设计只盯用户可控内容。
+    /// 但固定文案一样会长过窄屏，所以要在这里单独收口。
+    ///
+    /// 降级顺序与 <see cref="FormatSwitchedWithDetailLine"/> 同源：**标题是主体**，说明是补充。
+    /// 放不下时整段丢掉说明（连同括号），留下「标题:」——用户是奔着这个标题点进来的。
+    /// </summary>
+    internal static string FormatSectionHeaderLine(string title, string? note, int width = 0, bool indent = false)
+    {
+        var prefix = indent ? "  " : string.Empty;
+        var body = string.IsNullOrWhiteSpace(note)
+            ? $"{prefix}{title}:"
+            : $"{prefix}{title}（{note}）:";
+        if (width <= 0 || TextUtil.DisplayWidth(body) <= width)
+            return body;
+        var bare = $"{prefix}{title}:";
+        if (TextUtil.DisplayWidth(bare) <= width)
+            return bare; // 放不下说明：整段丢掉它，保留标题
+        return InputLine.FitToWidth(bare, Math.Max(1, width));
+    }
     internal static string FormatHintLine(string body, int width = 0) =>
         FormatResultLine("  " + body, width);
 
@@ -3006,11 +3033,18 @@ internal static class Program
                 break;
 
             case "/session":
+                // 路径**故意不做宽度收口**：/session 的全部意义就是把这条路径交给用户
+                // （贴进工单、另开终端、按名字找文件）。截掉尾巴就只剩一个用不了的半截路径，
+                // 折行则会让第一行看起来像另一条内容。
+                // 与 /prompt、/setup 的"可复制内容不截断"是同一条原则。
+                // 其余的说明/提示行一律走 FormatHintLine / FormatSectionHeaderLine 收口。
                 Console.WriteLine(agent.SessionPath ?? "会话日志未启用（config.SaveSessions=false）。");
                 {
                     var logs = RecentSessionLogs(config, int.MaxValue);
                     if (logs.Count > 0)
-                        Console.WriteLine($"目录内共 {logs.Count} 个会话日志（保留上限 maxSessionLogs={config.MaxSessionLogs}，滚动新日志时自动清理最旧的；0 = 不清理）。");
+                        Console.WriteLine(FormatHintLine(
+                            $"目录内共 {logs.Count} 个会话日志（保留上限 maxSessionLogs={config.MaxSessionLogs}，滚动新日志时自动清理最旧的；0 = 不清理）。",
+                            ConsoleColumns()));
                     // 磁盘占用速览：会话日志 + 命名快照 + 导出
                     try
                     {
@@ -3018,7 +3052,9 @@ internal static class Program
                         if (Directory.Exists(baseDir))
                         {
                             var totalBytes = TextUtil.GetDirectorySizeBytes(baseDir);
-                            Console.WriteLine($".codeagent 目录占用 {TextUtil.FormatBytes(totalBytes)}（/diag 可再次查看；整目录可安全删除）。");
+                            Console.WriteLine(FormatHintLine(
+                                $".codeagent 目录占用 {TextUtil.FormatBytes(totalBytes)}（/diag 可再次查看；整目录可安全删除）。",
+                                ConsoleColumns()));
                         }
                     }
                     catch { /* 统计失败不显示 */ }
@@ -3231,7 +3267,8 @@ internal static class Program
                         if (int.TryParse(rest.Trim(), out _))
                             Console.WriteLine($"{SafeColor.Glyphs.Warn} 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
                         else
-                            Console.WriteLine("最近的会话（输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次）:");
+                            Console.WriteLine(FormatSectionHeaderLine(
+                                "最近的会话", "输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次", ConsoleColumns()));
                         for (int i = 0; i < logs.Count; i++)
                         {
                             // 文件名只是时间戳：附上相对时间、首条用户消息预览与条数，才能认出哪个会话是哪段对话
@@ -3471,7 +3508,8 @@ internal static class Program
                 break;
 
             case "/providers":
-                Console.WriteLine($"已配置的 Provider（当前: {config.Provider}，-p <名> 或改 provider 切换）:");
+                Console.WriteLine(FormatSectionHeaderLine(
+                    "已配置的 Provider", $"当前: {config.Provider}，-p <名> 或改 provider 切换", ConsoleColumns()));
                 {
                     var providerEntries = new List<HelpEntry>();
                     foreach (var kv in config.Providers)

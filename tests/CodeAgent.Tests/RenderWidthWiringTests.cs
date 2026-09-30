@@ -276,7 +276,10 @@ public sealed class RenderWidthWiringTests
         || writer.Contains("FormatYesNoPrompt") || writer.Contains("FormatFieldLine")
         || writer.Contains("FormatOptionLine") || writer.Contains("FormatStatusPanel")
         || writer.Contains("FormatNoticeLines") || writer.Contains("ColumnsForNotice")
-        || writer.Contains("Program.Columns") || writer.Contains("Columns()");
+        || writer.Contains("Program.Columns") || writer.Contains("Columns()")
+        // 第 283/284 轮新增的两个收口器：不登记的话，将来"这里也统一收口一下"的一轮
+        // 会把它们当成没接收口，扫描器的词表就落后于代码了。
+        || writer.Contains("FormatSettingWithOptionsLine") || writer.Contains("FormatSectionHeaderLine");
 
     /// <summary>规则的精度自检：既不能漏 PascalCase 属性，也不能把 {TextUtil...} 误报。
     /// 这两条都是**真实踩过的**——上一版前者漏了 {opts.Model}，后者把无害调用全报了出来。
@@ -286,7 +289,8 @@ public sealed class RenderWidthWiringTests
     [InlineData("""Console.WriteLine($"当前模式: {agent.CurrentMode.Name}");""", true)]
     [InlineData("""Console.WriteLine($"未知模式「{modeName}」");""", true)]
     [InlineData("""Console.WriteLine($"路径 {path} 共 {count} 个");""", true)]
-    [InlineData("""Console.WriteLine($".codeagent 目录占用 {TextUtil.FormatBytes(totalBytes)}");""", false)]
+    [InlineData("""Console.WriteLine(FormatSectionHeaderLine("最近的会话", "输入 /resume <编号> 恢复", 40));""", false)]
+    [InlineData("""Console.WriteLine(FormatSettingWithOptionsLine("思考强度", effort, ThinkingEfforts, cols));""", false)]
     [InlineData("""Console.WriteLine($"已用时 {sw.Elapsed}");""", false)]
     [InlineData("""Console.WriteLine($"{a} {b}");`""", false)]
     public void RepoWideScan_RecognisesRealLongContent(string line, bool expected)
