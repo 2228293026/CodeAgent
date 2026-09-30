@@ -131,7 +131,7 @@ public sealed class FileMentionTests : IDisposable
     public void Items_ListsWorkspaceFilesWithForwardSlashes()
     {
         WriteFiles("src/CodeAgent/Program.cs", "README.md");
-        var items = InputLine.MentionItems(_dir, "", 50, CancellationToken.None);
+        var items = InputLine.MentionItems(_dir, "", 50, CancellationToken.None, out _);
         Assert.Contains(items, i => i.Name == "src/CodeAgent/Program.cs");
         Assert.Contains(items, i => i.Name == "README.md");
         // 路径分隔符统一成 /，跨平台显示一致
@@ -144,7 +144,7 @@ public sealed class FileMentionTests : IDisposable
         // 用户只打了 "Prog"，就该能命中 src/CodeAgent/Program.cs——
         // 按文件名匹配的话 @ 的价值（少打长路径）就没了
         WriteFiles("src/CodeAgent/Program.cs", "other/ProgramTests.cs");
-        var items = InputLine.MentionItems(_dir, "Prog", 50, CancellationToken.None);
+        var items = InputLine.MentionItems(_dir, "Prog", 50, CancellationToken.None, out _);
         Assert.Contains(items, i => i.Name == "src/CodeAgent/Program.cs");
     }
 
@@ -152,7 +152,7 @@ public sealed class FileMentionTests : IDisposable
     public void Items_RanksDeeperMatchesFirst()
     {
         WriteFiles("aaa/Prog.cs", "zzz/Program.cs");
-        var items = InputLine.MentionItems(_dir, "Prog", 50, CancellationToken.None);
+        var items = InputLine.MentionItems(_dir, "Prog", 50, CancellationToken.None, out _);
         // "aaa/Prog.cs" 命中更靠前
         Assert.Equal("aaa/Prog.cs", items[0].Name);
     }
@@ -161,7 +161,7 @@ public sealed class FileMentionTests : IDisposable
     public void Items_RespectsLimit()
     {
         WriteFiles("a1.cs", "a2.cs", "a3.cs", "a4.cs", "a5.cs");
-        var items = InputLine.MentionItems(_dir, "a", 3, CancellationToken.None);
+        var items = InputLine.MentionItems(_dir, "a", 3, CancellationToken.None, out _);
         Assert.True(items.Count <= 3);
     }
 
@@ -169,15 +169,15 @@ public sealed class FileMentionTests : IDisposable
     public void Items_NoMatchReturnsEmpty()
     {
         WriteFiles("a.cs");
-        Assert.Empty(InputLine.MentionItems(_dir, "zzzz", 50, CancellationToken.None));
+        Assert.Empty(InputLine.MentionItems(_dir, "zzzz", 50, CancellationToken.None, out _));
     }
 
     [Fact]
     public void Items_MissingRootReturnsEmptyInsteadOfThrowing()
     {
         // 目录没了不该让整个输入行崩掉
-        Assert.Empty(InputLine.MentionItems(Path.Combine(_dir, "no-such-dir"), "", 50, CancellationToken.None));
-        Assert.Empty(InputLine.MentionItems("", "", 50, CancellationToken.None));
+        Assert.Empty(InputLine.MentionItems(Path.Combine(_dir, "no-such-dir"), "", 50, CancellationToken.None, out _));
+        Assert.Empty(InputLine.MentionItems("", "", 50, CancellationToken.None, out _));
     }
 
     [Fact]
@@ -186,14 +186,14 @@ public sealed class FileMentionTests : IDisposable
         WriteFiles("a.cs");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
-        Assert.ThrowsAny<OperationCanceledException>(() => InputLine.MentionItems(_dir, "", 50, cts.Token));
+        Assert.ThrowsAny<OperationCanceledException>(() => InputLine.MentionItems(_dir, "", 50, cts.Token, out _));
     }
 
     [Fact]
     public void Items_SkipsIgnoredDirectories()
     {
         WriteFiles("keep.cs", "bin/generated.cs", "obj/generated.cs");
-        var items = InputLine.MentionItems(_dir, "", 50, CancellationToken.None);
+        var items = InputLine.MentionItems(_dir, "", 50, CancellationToken.None, out _);
         Assert.Contains(items, i => i.Name == "keep.cs");
         Assert.DoesNotContain(items, i => i.Name.StartsWith("bin/"));
         Assert.DoesNotContain(items, i => i.Name.StartsWith("obj/"));

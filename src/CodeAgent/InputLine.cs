@@ -546,9 +546,10 @@ public static class InputLine
     /// 按文件名匹配就得先打完整个 basename，@ 的价值就没有了。
     /// </summary>
     internal static List<(string Name, string Desc)> MentionItems(
-        string root, string prefix, int limit, CancellationToken ct)
+        string root, string prefix, int limit, CancellationToken ct, out int total)
     {
         var items = new List<(string Name, string Desc)>();
+        total = 0;
         if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
             return items;
         foreach (var file in SkipDirs.EnumerateFilesPruned(root, 8, includeIgnored: false, ct: ct, followSymlinks: false))
@@ -572,6 +573,9 @@ public static class InputLine
             var kb = int.Parse(b.Desc.Length == 0 ? "999999" : b.Desc);
             return ka != kb ? ka.CompareTo(kb) : string.CompareOrdinal(a.Name, b.Name);
         });
+        // total 必须**在截断前**记：limit 之外的项不是"滚下去就能看到"，
+        // 它们根本不会出现在菜单里（见 MentionCountNote 的说明）。
+        total = items.Count;
         return items.Take(Math.Max(1, limit)).ToList();
     }
 
@@ -583,13 +587,32 @@ public static class InputLine
     /// 提示与实际行为相反，用户会一直等一个不会到来的执行。
     /// 纯函数，好测：表头是纯展示，藏在这里就没有守卫会碰它。
     /// </summary>
-    internal static string BuildMenuHeader(bool modePicker, bool mentionActive)
+    internal static string BuildMenuHeader(bool modePicker, bool mentionActive, int mentionTotal = 0, int mentionShown = 0)
     {
         if (modePicker)
             return $"  Modes (up/down select, {SafeColor.Glyphs.Enter} switch, {SafeColor.Glyphs.Escape} close):";
         if (mentionActive)
-            return $"  Files (1-9 insert, up/down select, {SafeColor.Glyphs.Arrow} insert, {SafeColor.Glyphs.Enter} insert, {SafeColor.Glyphs.Escape} close):";
+            return $"  Files ({MentionCountNote(mentionTotal, mentionShown)}, 1-9 insert, up/down select, {SafeColor.Glyphs.Arrow} insert, {SafeColor.Glyphs.Enter} insert, {SafeColor.Glyphs.Escape} close):";
         return $"  Commands (1-9 run, up/down select, {SafeColor.Glyphs.Arrow} fill, {SafeColor.Glyphs.Enter} run, {SafeColor.Glyphs.Escape} close):";
+    }
+
+    /// <summary>@ 菜单表头里的条数说明。
+    ///
+    /// <c>MentionItems</c> 只取前 <c>limit</c>（200）个——大仓库里这一个子目录就有几百文件，
+    /// 被丢掉的那部分此前**一个字都没提**。用户翻到列表底部，看到的就是"全部"，
+    /// 于是认定某个文件不存在——它其实在，只是排在第 201 名之后。
+    ///
+    /// 列表里有滚动的 <c>... (+N more)</c>，但那是**窗口**滚过去的，不是被丢掉��，
+    /// 两回事：用户看到 <c>(+N more)</c> 就以为还有更多可滚动，实际已经到底了。
+    ///
+    /// 说实话比省三个字符重要：这里报一个假的"全部"会让用户去找不存在的问题。</summary>
+    internal static string MentionCountNote(int total, int shown)
+    {
+        if (total <= 0)
+            return "无匹配文件";
+        if (total > shown && shown > 0)
+            return $"{total} 个匹配，列出 {shown} 个（多打几个字缩小范围）";
+        return $"{total} 个匹配";
     }
 
     /// <summary>
@@ -835,6 +858,9 @@ public static class InputLine
                                          // 用 (start, prefix) 而不是 bool：选中时要知道把哪一段替换掉。
             var mention = (-1, (string?)null);
             const int MentionLimit = 200;
+            // @ 菜单**匹配到的总数**（截断前）。菜单只列前 MentionLimit 个，
+            // 表头要靠它说清"一共这么多、只列了这么多"——否则被丢掉的文件像是根本不存在。
+            var mentionTotal = 0;
 
             Console.Write(prompt);
             // 提示符可能占多行（BuildInputFrameTop 返回「上边框 + 提示符」）。但**边框是 chrome，
@@ -867,7 +893,7 @@ public static class InputLine
             // 菜单表头必须说清楚现在列的是什么。@ 引用菜单列的是**文件**，
             // 沿用 "Commands … Enter run" 会让人以为按回车会执行某个命令，
             // 实际上回车是在插入路径。
-            string Header() => BuildMenuHeader(modePicker, mention.Item1 >= 0);
+            string Header() => BuildMenuHeader(modePicker, mention.Item1 >= 0, mentionTotal, menuItems.Count);
 
             int CountNewlines(string s)
             {
@@ -1183,7 +1209,7 @@ public static class InputLine
                 List<(string Name, string Desc)> newItems;
                 if (mentionActive)
                 {
-                    newItems = MentionItems(root, mentionPrefix, MentionLimit, CancellationToken.None);
+                    newItems = MentionItems(root, mentionPrefix, MentionLimit, CancellationToken.None, out var mentionTotal);
                 }
                 else
                 {
