@@ -761,7 +761,10 @@ public static class InputLine
         // 提示符可能占多行（BuildInputFrameTop 的「上边框 + 提示符」）。光标列只能按
         // **最后一行**的宽度算——按整段算会把上边框那几十列也加进去，光标被推到行外，
         // 终端折行后又和下一次重绘叠加，表现为「敲一个字就多出一行」。
-        var promptTail = promptPlain[(promptPlain.LastIndexOf('\n') + 1)..];
+        // 走 Program.BuildInputTextTail 这个**唯一**的切法：这里内联展开过同样的
+        // "最后一个 \n 之后"逻辑，两份切法迟早会走偏一份，而走偏的后果正是
+        // 「边框混进重绘块 → 敲一个字多一行」。
+        var promptTail = Program.BuildInputTextTail(promptPlain);
         var searching = false;      // Ctrl+R 反向搜索模式：输入进 query，输入行显示命中的历史条目
         var searchQuery = new StringBuilder();
         var searchFrom = -1;        // 当前命中的 session 下标（-1 = 无命中）
