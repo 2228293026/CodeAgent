@@ -512,6 +512,43 @@ public sealed partial class Agent
     ///
     /// 中文关键字仍走纯子串：中文没有词边界，硬套只会搜不到东西。
     /// </summary>
+    /// <summary>
+    /// 会话日志里是否**存在**该关键字的子串（不做词边界判断），命中即返回 true（纯函数，好测）。
+    ///
+    /// 存在的理由：<see cref="FindOccurrence"/> 对 ASCII 关键字会跳过「严格长在词中间」的命中
+    /// （搜 the 命中 PathEscape 是噪音）。但如果用户搜的词**只**以这种形态出现，
+    /// 结果就是 0——而此时若还打「没有匹配「X」的内容」，那句话是**假的**：
+    /// 内容里有 X，只是被词边界规则滤掉了。用户会以为是自己记错了。
+    ///
+    /// 所以 0 命中时要先问一句"是不是只差在词边界上"，再决定说什么。
+    /// </summary>
+    internal static bool HasSubstringOccurrence(IEnumerable<(string Role, string Snippet)> hits, string? keyword) =>
+        !string.IsNullOrEmpty(keyword) && hits.Any(h => h.Snippet.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>日志文件里是否存在该关键字的子串（忽略词边界）。命中即停。</summary>
+    internal static bool LogContainsSubstring(string path, string? keyword, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(keyword) || !File.Exists(path))
+            return false;
+        try
+        {
+            foreach (var line in ReadLogLines(path, ct))
+            {
+                ct.ThrowIfCancellationRequested();
+                if (line.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return false; // 损坏/不可读按"没有"处理，不影响搜索主流程
+        }
+        return false;
+    }
     internal static int FindOccurrence(string content, string keyword, int from, StringComparison cmp)
     {
         if (string.IsNullOrEmpty(keyword) || from < 0 || from >= content.Length)

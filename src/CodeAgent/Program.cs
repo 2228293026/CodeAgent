@@ -3389,9 +3389,26 @@ internal static class Program
                         printed++;
                     }
                     if (printed == 0)
+                    {
+                        // 0 命中**不等于**没有这个字串：ASCII 关键字只出现在更长的词内部时
+                        // 会被词边界规则滤掉（搜 the 命中 PathEscape 是噪音，宁可不要）。
+                        // 此时若还说「没有匹配「X」的内容」，那句话是**假的**——内容里有 X，
+                        // 用户会以为自己记错了。实测搜 lorTheme：grep 得到内容里确实有，
+                        // /find 却回"没有匹配"。
+                        var interiorOnly = AgentClass.NeedsSearchWordBoundary(kw)
+                            && logs.Any(l => AgentClass.LogContainsSubstring(l, kw));
+                        // 两个case必须**各说各的话**：都套「没有匹配」会自相矛盾
+                        // （"没有匹配「X」…但它只出现在…"——既说没有又说有）。
+                        // after 是紧跟关键字的**尾巴**（含收尾的「」），由 FitQueryLine 拼接；
+                        // 它同时负责窄终端下保住关键字不被切掉。
+                        var before = interiorOnly ? "词边界：只找到「" : "历史会话中没有匹配「";
+                        var after = interiorOnly
+                            ? "」出现在更长的词内部（如 ColorThemeTests），请改搜完整词。"
+                            : "」的内容。";
                         Console.WriteLine(FormatResultLine(
-                            FitQueryLine("历史会话中没有匹配「", kw, "」的内容。", ConsoleColumns())
-                            ?? $"历史会话中没有匹配「{kw}」的内容。", ConsoleColumns()));
+                            FitQueryLine(before, kw, after, ConsoleColumns())
+                            ?? $"{before}{kw}{after}", ConsoleColumns()));
+                    }
                     else if (moreAvailable)
                         Console.WriteLine(FormatResultLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）", ConsoleColumns()));
 
