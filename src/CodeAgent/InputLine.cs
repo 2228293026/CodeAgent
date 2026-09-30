@@ -742,6 +742,12 @@ public static class InputLine
             var line = Console.ReadLine();
             if (line is null)
                 return null;
+            // 必须收尾换行，否则调用方紧接着写的输入框下边框会**粘在提示符后面**：
+            //   [code|model] CodeAgent> ------------------------
+            // 边框的宽度是按整行算的，粘上去就变成「提示符长 + 边框长」的双倍宽，
+            // 框的形状整个坏掉。交互路径的每个提交分支都写了这一行，只有重定向这条漏了。
+            // 管道里不回落显用户输入（内容来自 stdin，没什么可回显），但换行是排版必需的。
+            Console.WriteLine();
             Remember(line);
             return line;
         }

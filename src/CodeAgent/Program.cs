@@ -2119,11 +2119,35 @@ internal static class Program
     }
 
     /// <summary>读取终端宽度：0 = 未知（输出重定向或读取失败）。
-    /// 读取失败时沿用上一次成功读到的值，避免单次抖动打回"不截断"。</summary>
+    /// 读取失败时沿用上一次成功读到的值，避免单次抖动打回"不截断"。
+    ///
+    /// 输出被重定向时回退到 <c>COLUMNS</c> 环境变量（POSIX 惯例，bash/gnu 工具都认）。
+    /// 此前一律返回 0，代价是**所有宽度预算在重定向下彻底失效**——不只是管道：
+    /// <c>script</c>、多数容器 exec、某些终端复用器都会重定向 stdout 却**确实有**一个已知宽度，
+    /// 那时全部输出按"宽度未知、不截断"处理，长行直接折行糊掉。
+    /// 顺带这也是唯一能让整套渲染在指定宽度下**端到端跑起来**的办法（CI 里复现窄屏问题）。</summary>
+    /// <summary>从 <c>COLUMNS</c> 环境变量取宽度（纯函数，好测）。
+    ///
+    /// 解析失败、非数字、**或小于 <see cref="MinPlausibleColumns"/>** 一律返回 0（未知）——
+    /// 沿用与 <see cref="ResolveColumns"/> 相同的口径：宽度不可信时**不猜**，
+    /// 否则一个随手设错的 <c>COLUMNS=1</c> 就会把每一行都压成 1 列。
+    /// 设了无效值时不回退 <c>_lastGoodColumns</c>：重定向下压根没量过宽度，
+    /// 那时"上一次的好值"并不存在。
+    /// </summary>
+    internal static int ColumnsFromEnv(string? value = null)
+    {
+        var raw = value ?? Environment.GetEnvironmentVariable("COLUMNS");
+        if (string.IsNullOrWhiteSpace(raw))
+            return 0;
+        if (!int.TryParse(raw.Trim(), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var cols))
+            return 0;
+        return cols >= MinPlausibleColumns ? Math.Clamp(cols, 0, 300) : 0;
+    }
     private static int ConsoleColumns()
     {
         if (Console.IsOutputRedirected)
-            return 0;
+            return ColumnsFromEnv();
         try
         {
             var width = Console.WindowWidth;

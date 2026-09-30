@@ -770,7 +770,9 @@ public sealed partial class Agent
     private static int ConsoleColumns()
     {
         if (Console.IsOutputRedirected)
-            return 0;
+            // 与 Program.ConsoleColumns 同一回退：重定向下若 COLUMNS 给了宽度就照它算，
+            // 否则 spinner 帧会按"宽度未知"渲染而超宽。解析口径也共用同一个纯函数。
+            return Program.ColumnsFromEnv();
         try
         {
             var width = Console.WindowWidth;
