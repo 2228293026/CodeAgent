@@ -198,8 +198,8 @@ internal static class Program
             }
             AgentConfig.WriteExample(target);
             Console.WriteLine($"已生成示例配置: {target}");
-            Console.WriteLine("提示: 也可运行 codeagent --setup 用向导快速配置供应商。");
-            Console.WriteLine("请填入 API Key（或设置对应环境变量），然后运行 codeagent。");
+            Console.WriteLine(FormatResultLine("提示: 也可运行 codeagent --setup 用向导快速配置供应商。", ConsoleColumns()));
+            Console.WriteLine(FormatResultLine("请填入 API Key（或设置对应环境变量），然后运行 codeagent。", ConsoleColumns()));
             return 0;
         }
 
@@ -330,7 +330,7 @@ internal static class Program
             else if (logs.Count > 0)
                 target = logs[0];
             if (target is null)
-                Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+                Console.WriteLine(FormatResultLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。", ConsoleColumns()));
             else if (agent.LoadSessionLog(target))
                 Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), SafeColor.Glyphs.Retry));
             else
@@ -388,7 +388,7 @@ internal static class Program
 
         // 交互式 REPL
         if (NeedsGitignoreHint(Environment.CurrentDirectory))
-            Console.WriteLine("提示: .codeagent/ 未被 .gitignore 忽略——会话日志含代码内容，建议加入 .gitignore");
+            Console.WriteLine(FormatResultLine("提示: .codeagent/ 未被 .gitignore 忽略——会话日志含代码内容，建议加入 .gitignore", ConsoleColumns()));
         PrintBanner(config, opts, agent);
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
 
@@ -831,7 +831,7 @@ internal static class Program
         var msgs = agent.Messages.Where(m => m.Role != MessageRole.System).ToList();
         if (msgs.Count == 0)
         {
-            Console.WriteLine("对话历史为空（还没有对话消息，直接输入内容开始对话）。");
+            Console.WriteLine(FormatResultLine("对话历史为空（还没有对话消息，直接输入内容开始对话）。", ConsoleColumns()));
             return;
         }
         // /history N 只看最近 N 条：长对话全量打印会刷屏
@@ -2946,7 +2946,7 @@ internal static class Program
                             knownModels = providerInst.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
                             if (knownModels.Count == 0)
                             {
-                                Console.WriteLine("模型列表为空（服务可能不支持 /models）：直接输入完整模型名即可。");
+                                Console.WriteLine(FormatResultLine("模型列表为空（服务可能不支持 /models）：直接输入完整模型名即可。", ConsoleColumns()));
                                 break;
                             }
                             if (idx <= knownModels.Count)
@@ -3054,7 +3054,9 @@ internal static class Program
                 // 折行则会让第一行看起来像另一条内容。
                 // 与 /prompt、/setup 的"可复制内容不截断"是同一条原则。
                 // 其余的说明/提示行一律走 FormatHintLine / FormatSectionHeaderLine 收口。
-                Console.WriteLine(agent.SessionPath ?? "会话日志未启用（config.SaveSessions=false）。");
+                // 路径不收口（见上）；会话日志没开时打的是一句**提示**，那一句该收口
+                if (agent.SessionPath is { Length: > 0 } sessionPath) Console.WriteLine(sessionPath);
+                else Console.WriteLine(FormatResultLine("会话日志未启用（config.SaveSessions=false）。", ConsoleColumns()));
                 {
                     var logs = RecentSessionLogs(config, int.MaxValue);
                     if (logs.Count > 0)
@@ -3172,7 +3174,7 @@ internal static class Program
                 }
                 else
                 {
-                    Console.WriteLine("用法: /undo [N|list|clear] —— N = 撤销最近 N 次, list = 列出历史, clear = 清空撤销记录");
+                    Console.WriteLine(FormatResultLine("用法: /undo [N|list|clear] —— N = 撤销最近 N 次, list = 列出历史, clear = 清空撤销记录", ConsoleColumns()));
                 }
                 break;
 
@@ -3190,7 +3192,7 @@ internal static class Program
                 {
                     var diffText = agent.Context.Undo.AllDiffs();
                     if (diffText is null)
-                        Console.WriteLine("没有可显示的改动（先让 agent 修改过文件）。");
+                        Console.WriteLine(FormatResultLine("没有可显示的改动（先让 agent 修改过文件）。", ConsoleColumns()));
                     else
                         PrintColoredDiff(diffText); // 着色输出：+/绿、-/红、@@/青、标题/亮白、文件头/灰
                 }
@@ -3229,7 +3231,7 @@ internal static class Program
                     var sessions = SavedSessions(Path.Combine(Environment.CurrentDirectory, config.SessionDir));
                     if (sessions.Count == 0)
                     {
-                        Console.WriteLine("没有已保存的会话（用 /save <会话名> 保存当前对话）。");
+                        Console.WriteLine(FormatResultLine("没有已保存的会话（用 /save <会话名> 保存当前对话）。", ConsoleColumns()));
                     }
                     else
                     {
@@ -3263,7 +3265,7 @@ internal static class Program
                     var logs = ResumableLogs(agent, config);
                     if (logs.Count == 0)
                     {
-                        Console.WriteLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。");
+                        Console.WriteLine(FormatResultLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。", ConsoleColumns()));
                         break;
                     }
                     if (int.TryParse(rest.Trim(), out var ridx) && ridx >= 1 && ridx <= logs.Count)
@@ -3551,7 +3553,8 @@ internal static class Program
                 {
                     Console.WriteLine(FormatResultLine($"当前模式: {agent.CurrentMode.Name}", ConsoleColumns()));
                     Console.WriteLine(ModeListText(config, agent.CurrentMode.Name));
-                    Console.WriteLine("（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）");
+                    Console.WriteLine(FormatHintLine(
+                        "（提示: 按 Alt+M 弹出模式菜单，Shift+Tab 快速切换下一个模式）", ConsoleColumns()));
                 }
                 else if (rest.Trim().Equals("next", StringComparison.OrdinalIgnoreCase))
                 {
