@@ -1080,14 +1080,34 @@ public sealed partial class Agent
         }
     }
 
-    /// <summary>diff 文本截断：最多 15 行、每行 200 字符，超出提示总行数。</summary>
+    /// <summary>diff 文本截断：最多 15 行、每行 200 字符。
+    ///
+    /// 两个维度都要披露，缺一个都不行：
+    ///   行数 —— 超过 15 行时注明总数
+    ///   字符 —— 每行被裁到 200 字符。此前**只报行数**，于是一条 20 行、每行 400 字符的
+    ///           diff 逐行裁掉 200 字符、10 行被整行丢掉，脚注里**一个字都没提字符**。
+    ///           模型读到的是 15 行残缺内容，却以为看到了完整 diff。
+    /// </summary>
     internal static string CapDiff(string diff, CancellationToken ct = default)
     {
         var lines = DiffUtil.SplitLines(diff, ct);
         const int maxLines = 15;
-        var shown = lines.Take(maxLines).Select(l => TextUtil.TruncateLine(l, 200)).ToList();
+        const int maxLineChars = 200;
+        var charsLost = 0L;
+        var shown = lines.Take(maxLines).Select(l =>
+        {
+            if (l.Length <= maxLineChars)
+                return l;
+            charsLost += l.Length - maxLineChars;
+            return TextUtil.TruncateLine(l, maxLineChars);
+        }).ToList();
+        var notes = new List<string>();
         if (lines.Length > maxLines)
-            shown.Add($"…(diff 共 {lines.Length} 行，仅显示前 {maxLines})");
+            notes.Add($"共 {lines.Length} 行，仅显示前 {maxLines}");
+        if (charsLost > 0)
+            notes.Add($"每行裁到 {maxLineChars} 字符，已丢弃 {charsLost:N0}");
+        if (notes.Count > 0)
+            shown.Add($"…(diff {string.Join("，", notes)})");
         return string.Join('\n', shown);
     }
 
