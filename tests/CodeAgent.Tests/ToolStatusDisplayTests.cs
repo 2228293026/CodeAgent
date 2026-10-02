@@ -117,8 +117,8 @@ public class ToolStatusDisplayTests
     {
         // 失败路径经过 8 行 + 字符预算双重收敛，最坏情况不会再整屏刷出
         var raw = string.Join('\n', Enumerable.Range(0, 500).Select(i => new string((char)('a' + i % 26), 200)));
-        var (rawPreview, rawTotal) = AgentClass.BuildToolOutputPreview(raw);
-        var preview = AgentClass.FormatToolOutputPreview(rawPreview, trueTotalLines: rawTotal);
+        var (rawPreview, rawTotal, rawChars) = AgentClass.BuildToolOutputPreview(raw);
+        var preview = AgentClass.FormatToolOutputPreview(rawPreview, trueTotalLines: rawTotal, trueTotalChars: rawChars);
         Assert.True(preview.Length <= AgentClass.ToolOutputPreviewChars + 40);
     }
 }

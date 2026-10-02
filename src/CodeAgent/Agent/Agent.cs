@@ -1075,7 +1075,7 @@ public sealed partial class Agent
     ///
     /// 所以真实的行数必须**在这里**留下。返回 (文本, 真实总行数)，
     /// 由调用方交给脚注——不能再让它从被截断的文本里数。</summary>
-    internal static (string Text, int TotalLines) BuildToolOutputPreview(string output, CancellationToken ct = default)
+    internal static (string Text, int TotalLines, int TotalChars) BuildToolOutputPreview(string output, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         const int keep = 8;
@@ -1089,7 +1089,9 @@ public sealed partial class Agent
             if (lines.Count < keep)
                 lines.Add(line);
         }
-        return (string.Join('\n', lines), total);
+        // 字符数直接取**原始** output.Length：已经在上面被逐行累加的 totalChars
+        // 是同一个东西，留着只会让人以为有两个来源。output.Length 也涵盖结尾换行。
+        return (string.Join('\n', lines), total, output.Length);
     }
 
     /// <summary>工具输出预览的字符预算（成功与失败共用）。
@@ -1227,16 +1229,18 @@ public sealed partial class Agent
     /// 而 800 个汉字占 1600 **列**——在 80 列终端上会把屏幕冲烂，
     /// 逐行硬折还会把源码行拦腰折断、看起来像语法错误。
     /// 因此这里按行裁而不是折行，并在末尾注明有几行被裁。</summary>
-    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars, int width = 0, int? trueTotalLines = null)
+    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars, int width = 0, int? trueTotalLines = null, int? trueTotalChars = null)
     {
         if (maxChars <= 0)
             return string.Empty;
         // 总数必须**在截断前**记下来：截断后再数，两边都是同一个数，
         // 提示会变成「共 8 行，已保留 8 行」——谎报什么都没丢。
-        // trueTotalLines 用于**上游已经截过**的情况（如 BuildToolOutputPreview 的 8 行上限）：
-        // 那时 text 里的行数已经不是真实的，光靠数文本只能得到一个更小的假数。
+        // trueTotalLines / trueTotalChars 用于**上游已经截过**的情况
+        // （如 BuildToolOutputPreview 的 8 行上限）：那时 text 里的行数与字符数
+        // 都不是真实的，光靠数文本只能得到一个更小的假数。
+        // 实测：一条 1563 字符的输出，脚注写「868 字符」——真实值被上游吃掉了。
         var totalLines = trueTotalLines ?? DiffUtil.CountLines(text);
-        var totalChars = text.Length;
+        var totalChars = trueTotalChars ?? text.Length;
         var truncatedByChars = false;
         if (text.Length > maxChars)
         {
@@ -1532,9 +1536,9 @@ public sealed partial class Agent
                         using (SafeColor.Scope(SafeColor.Warning))
                         {
                             // 一次调用取两个值：调两次等于把输出重读一遍
-                            var (failPreview, failTotalLines) = BuildToolOutputPreview(output, ct);
+                            var (failPreview, failTotalLines, failTotalChars) = BuildToolOutputPreview(output, ct);
                             Console.WriteLine(TextUtil.IndentBlock(
-                                FormatToolOutputPreview(failPreview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: failTotalLines), ToolPreviewIndent));
+                                FormatToolOutputPreview(failPreview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: failTotalLines, trueTotalChars: failTotalChars), ToolPreviewIndent));
                         }
                     }
                 }
@@ -1548,8 +1552,8 @@ public sealed partial class Agent
                     if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
                         using var previewScope = SafeColor.Scope(SafeColor.Muted);
-                        var (preview, previewTotalLines) = BuildToolOutputPreview(output, ct);
-                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: previewTotalLines), ToolPreviewIndent));
+                        var (preview, previewTotalLines, previewTotalChars) = BuildToolOutputPreview(output, ct);
+                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: previewTotalLines, trueTotalChars: previewTotalChars), ToolPreviewIndent));
                     }
                 }
             }
