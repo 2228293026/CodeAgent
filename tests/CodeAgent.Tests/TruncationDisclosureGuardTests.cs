@@ -74,13 +74,15 @@ public sealed class TruncationDisclosureGuardTests
     /// 所以这里只保留真正改写文本长度的形状。</summary>
     private static readonly string[] CapShapes =
     [
-        // 把一段文本截短：必须披露丢了多少字符/行
         // 把一段文本逐行截短：必须披露丢了多少字符。
         // 这个形状跟着实现改过一次——原来是 `TruncateLine(l, 200)`，
         // 第 310 轮重写 CapDiff 时改成了带计数的形式，旧形状就**再也匹配不到**，
         // 而"匹配不到的形状"和"没有守卫"看起来一模一样（全绿）。
         // 所以下面用 `sites == CapShapes.Length` 钉住：形状失效会立刻失败。
         "TruncateLine(l, maxLineChars)",
+        // 第 311 轮：管道进来的日志此前是**单次**截断（只留开头），
+        // 21 万字符里最关键的报错与堆栈全在末尾被切掉。
+        // 旧写法已下线，不再是"要扫描的形状"，改列进 RegressionMarkers 由单独一条钉住。
         // 注意这一处是**跨文件**的：调用点（Agent.cs）附近没有披露措辞，
         // 说明写在 TextUtil.TruncateToolOutput 内部（Util.cs）。
         // 早期版本只往调用点前后看 12 行，于是把它报成"违规"——又一个误报。
@@ -88,6 +90,14 @@ public sealed class TruncationDisclosureGuardTests
         // 「工具输出过长，已截断：原 N 字符，保留头 X 与尾 Y，中间省略」。它是合规的。
         // 因此这一条**豁免**，理由写在这里而不是悄悄删掉。
         "TruncateToolOutput(output, 24_000)",
+    ];
+
+    /// <summary>已下线的写法：只用于**反向**断言（它不该再出现在代码里）。
+    /// 放进 CapShapes 会让 <c>sites == CapShapes.Length</c> 永远不成立——
+    /// 那是"形状失效"该报的错，不是这个场景。</summary>
+    private static readonly string[] RegressionMarkers =
+    [
+        "Truncate(stdin.TrimEnd(), 100_000)",
     ];
 
     /// <summary>豁免清单：<c>形状</c> → 为什么不查。豁免必须有理由，不能只是"扫不到"。</summary>
@@ -183,6 +193,21 @@ public sealed class TruncationDisclosureGuardTests
     }
 
     [Fact]
+    public void ThePipedStdinRegressionMarkerStaysAbsent()
+    {
+        // 反向守卫：第 311 轮把管道日志从"单次截断"改成"头尾都保留"。
+        // 上面的形状列表里仍留着旧写法，但它**不应该再出现在代码里**——
+        // 一旦有人改回去，这条会立刻失败，并指着旧写法说清楚为什么不行。
+        var program = File.ReadAllText(FindSource("Program.cs")).Replace("\r\n", "\n");
+        foreach (var marker in RegressionMarkers)
+        {
+            Assert.False(program.Contains(marker, StringComparison.Ordinal),
+                $"已下线的写法又回来了：{marker}——管道日志必须是头尾都保留的（见 PipedStdinKeepsTheTailTests）");
+        }
+        Assert.Contains("TruncateHeadTail(body, cap)", program);
+    }
+
+    [Fact]
     public void EveryExemptionStatesItsReason()
     {
         // 豁免本身也要被管：一条没有理由的豁免，等于给自己开了一扇没人看得见的门。
@@ -237,5 +262,9 @@ public sealed class TruncationDisclosureGuardTests
         // 反向保护：形状列表本身不能为空，否则"扫不到任何东西"会被当成"没有截断"
         Assert.Equal(2, CapShapes.Length);
         Assert.True(Markers.Length >= 5);
+        // 回归标记不能混进形状列表（否则形状计数永远对不上），
+        // 也不能为空（那这条反向守卫等于没写）
+        Assert.True(RegressionMarkers.Length >= 1);
+        Assert.Empty(CapShapes.Intersect(RegressionMarkers, StringComparer.Ordinal));
     }
 }

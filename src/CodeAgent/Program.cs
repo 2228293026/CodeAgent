@@ -2752,12 +2752,27 @@ internal static class Program
         return null;
     }
     /// <summary>一次性任务 + 管道输入：type bug.log | codeagent "分析" 的 stdin 内容附在任务后。
-    /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。</summary>
+    /// stdin 为空（未管道）原样返回任务；超长截断避免撑爆上下文。
+    ///
+    /// **截断位置很重要**：单次截断保留的是**开头**，而日志最关键的内容（真正的
+    /// 报错、堆栈、复现步骤）几乎总在**末尾**。实测 318,893 字符的日志进去，
+    /// 出来的 100,000 字符尾部是一句 <c>line 1</c> 然后就断了——
+    /// 模型看到的是"只有开头那点内容"，21 万字符凭空消失。
+    /// 所以改成头尾都保留，并把截断说明放在**开头**（放末尾会被当成日志的最后一行）。</summary>
     internal static string ComposeTaskWithStdin(string task, string stdin)
     {
         if (string.IsNullOrWhiteSpace(stdin))
             return task;
-        return task + "\n\n[stdin 输入]\n" + TextUtil.Truncate(stdin.TrimEnd(), 100_000);
+        const int cap = 100_000;
+        var body = stdin.TrimEnd();
+        var kept = TextUtil.TruncateHeadTail(body, cap);
+        if (body.Length <= cap)
+            return task + "\n\n[stdin 输入]\n" + kept;
+        return string.Format(
+            System.Globalization.CultureInfo.InvariantCulture,
+            "{0}\n\n[stdin 输入：原始 {1:N0} 字符，已保留头部与尾部共 {2:N0} 字符，中间省略——"
+            + "日志的报错与堆栈通常在末尾，需要更完整内容请让用户分段提供]\n{3}",
+            task, body.Length, kept.Length, kept);
     }
     /// <summary>有效上下文窗口：contextWindow 配置 > 内置模型表 > /models 元数据探测（仅对探测时模型有效）。
     /// 0 = 未知（显示层退回绝对值）。REPL 状态栏与 /stats 共用。</summary>
