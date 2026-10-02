@@ -1280,6 +1280,10 @@ public sealed partial class Agent
             text = kept.TrimEnd();
         }
         var widthCutLines = 0;
+        // 按宽度裁掉的**字符数**也要计入披露：实测一条单行错误在 80 列下
+        // 只丢了字符、没丢行数，而脚注当时只报行数——「已保留 1 行」，
+        // 看起来什么都没丢。
+        var widthCutChars = 0L;
         if (width > 0)
         {
             text = string.Join("\n", text.Split('\n').Select(line =>
@@ -1287,6 +1291,7 @@ public sealed partial class Agent
                 if (TextUtil.DisplayWidth(line) <= width)
                     return line;
                 widthCutLines++;
+                widthCutChars += line.Length - InputLine.FitToWidth(line, width).Length;
                 return InputLine.FitToWidth(line, width);
             }));
         }
@@ -1298,14 +1303,26 @@ public sealed partial class Agent
                 : text;
         var keptLines = DiffUtil.CountLines(text);
         var widthNote = widthCutLines > 0 ? $"，{widthCutLines} 行按宽度裁剪" : "";
-        var note = $"…（共 {totalLines:N0} 行 / {totalChars:N0} 字符，已保留 {keptLines:N0} 行{widthNote}）";
+        // 「已保留 N 行」在**只丢了字符**时会误导：实测一条 99 字符的单行错误，
+        // 按宽度裁掉一截后脚注写成「共 1 行 / 99 字符，已保留 1 行，1 行按宽度裁剪」——
+        // 行数确实没少，可字符被裁了，而"按宽度裁剪"没说裁了多少。
+        // 字符口径要**对照真实总字符数**，不是对照裁剪后的长度（那个必然更小）。
+        var charsLost = widthCutChars + (truncatedByChars ? Math.Max(0, totalChars - text.Length - widthCutChars) : 0);
+        var charNote = charsLost > 0
+            ? $"（字符已裁掉 {charsLost:N0}）"
+            : "";
+        var note = $"…（共 {totalLines:N0} 行 / {totalChars:N0} 字符，已保留 {keptLines:N0} 行{widthNote}{charNote}）";
         if (width <= 0)
             return text + note;
         // 注记必须**独占一行**：拼在最后一行内容后面会把它顶出宽度，
         // 而且注记是元信息、不是内容，混进内容里容易被当成输出的一部分。
         // 放不下完整句就只留最关键的事实：保留了多少行 / 一共多少行。
         if (TextUtil.DisplayWidth(note) > width)
-            note = InputLine.FitToWidth($"…(保留 {keptLines}/{totalLines} 行)", width);
+            // 放不下完整句时只留最关键的事实。行数与字符是两个口径，**优先字符**：
+            // 只丢了字符时"保留几行"常常是"保留了全部行"，那等于没提示。
+            note = charsLost > 0
+                ? InputLine.FitToWidth($"…(裁掉 {charsLost:N0}/{totalChars:N0} 字符)", width)
+                : InputLine.FitToWidth($"…(保留 {keptLines}/{totalLines} 行)", width);
         return text + "\n" + note;
     }
 

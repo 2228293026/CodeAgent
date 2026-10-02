@@ -62,8 +62,10 @@ public class ToolOutputPreviewWidthTests
     {
         var text = string.Concat(Enumerable.Repeat("一行很长的中文输出内容", 40));
         var result = AgentClass.FormatToolOutputPreview(text, maxChars: AgentClass.ToolOutputPreviewChars, width: 30);
-        // 窄屏上完整注记放不下，只保留最关键的事实：保留了多少行 / 一共多少行
-        Assert.Contains("保留 1/1 行", result);
+        // 窄屏上完整注记放不下，只留最关键的事实。
+        // 这一行是**单行**输出：按宽度裁只丢字符、不丢行，
+        // 所以"保留 1/1 行"等于没提示——第 308 轮起这里报的是字符口径。
+        Assert.Contains("字符)", result);
         // 被按宽度裁的行都带省略号
         Assert.EndsWith("…", Lines(result)[0]);
     }
@@ -99,8 +101,10 @@ public class ToolOutputPreviewWidthTests
         var result = AgentClass.FormatToolOutputPreview(text, maxChars: 120, width: 30);
         foreach (var line in Lines(result))
             Assert.True(TextUtil.DisplayWidth(line) <= 30, $"超宽：{line}");
-        // 注记独占一行：混进内容行会把那一行顶出宽度
-        Assert.Contains("行)", result);
+        // 注记独占一行：混进内容行会把那一行顶出宽度。
+        // 这里同时存在字符上限与宽度上限，两者都命中时优先报**字符**
+        // （按宽度裁往往丢的是字符，而"保留了几行"可能一句都没少）。
+        Assert.True(result.Contains("字符)") || result.Contains("行)"), $"注记没出现：{result}");
     }
 
     [Fact]
