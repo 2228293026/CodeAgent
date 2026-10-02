@@ -101,6 +101,9 @@ public sealed class DuplicateCodeReportTool : ITool
         output.AppendLine($"同名常量重复定义: {dupConsts.Count} 处");
         foreach (var pair in dupConsts.Take(maxResults))
             output.AppendLine($"  {pair.Key}: {string.Join(" · ", pair.Value)}");
+        // 上面那行报的是**全部**重复常量数，列出来的只有 maxResults 条——不说等于告诉模型"就这些"
+        if (dupConsts.Count > maxResults)
+            output.AppendLine($"  …（另有 {dupConsts.Count - maxResults} 处未显示，调大 max_results 可看全）");
         if (dupFragments.Count == 0 && dupConsts.Count == 0)
             output.AppendLine("未发现重复代码");
         return output.ToString().TrimEnd();

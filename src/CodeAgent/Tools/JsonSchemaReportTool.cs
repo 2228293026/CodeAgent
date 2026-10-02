@@ -79,6 +79,9 @@ public sealed class JsonSchemaReportTool : ITool
             output.AppendLine($"解析失败: {invalid.Count:N0} 个");
             foreach (var file in invalid.Take(maxResults))
                 output.AppendLine($"  {file}");
+            // 上面报的是**全部**解析失败数，只列了 maxResults 条——不说等于告诉模型"就这些"
+            if (invalid.Count > maxResults)
+                output.AppendLine($"…（另有 {invalid.Count - maxResults} 个未显示）");
         }
         return output.ToString().TrimEnd();
     }

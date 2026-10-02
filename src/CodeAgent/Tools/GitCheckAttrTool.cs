@@ -57,6 +57,9 @@ public sealed class GitCheckAttrTool : ITool
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         var output = new StringBuilder();
         var processed = 0;
+        // 按上限截断必须说明：丢掉的不提，模型会以为只检查了处理过的那几个路径
+        if (requested.Count > maxPaths)
+            output.AppendLine($"（另有 {requested.Count - maxPaths} 个路径未检查，共收到 {requested.Count} 个）");
         foreach (var requestedPath in requested.Take(maxPaths))
         {
             ct.ThrowIfCancellationRequested();

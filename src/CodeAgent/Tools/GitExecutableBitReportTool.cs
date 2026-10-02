@@ -73,10 +73,15 @@ public sealed class GitExecutableBitReportTool : ITool
             output.AppendLine($"符号链接（120000）: {symlinks.Count:N0}");
             foreach (var file in symlinks.OrderBy(f => f, StringComparer.Ordinal).Take(maxResults))
                 output.AppendLine($"  {file}");
+            // 上面报的是**全部**符号链接数，只列了 maxResults 条——不说等于告诉模型"就这些"
+            if (symlinks.Count > maxResults)
+                output.AppendLine($"…（另有 {symlinks.Count - maxResults} 个未显示）");
         }
         output.AppendLine($"子模块（160000）: {gitlinks.Count:N0}");
         foreach (var file in gitlinks.OrderBy(f => f, StringComparer.Ordinal).Take(maxResults))
             output.AppendLine($"  {file}");
+        if (gitlinks.Count > maxResults)
+            output.AppendLine($"…（另有 {gitlinks.Count - maxResults} 个未显示）");
         return output.ToString().TrimEnd();
     }
 }

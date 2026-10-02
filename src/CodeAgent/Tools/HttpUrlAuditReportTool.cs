@@ -79,6 +79,9 @@ public sealed class HttpUrlAuditReportTool : ITool
             output.AppendLine($"占位地址: {unique.Count:N0} 处（example.com / localhost 等，确认是否为遗留样例）");
             foreach (var line in unique.Take(maxResults))
                 output.AppendLine(line);
+            // 上面报的是**全部**占位地址数，只列了 maxResults 条——不说等于告诉模型"就这些"
+            if (unique.Count > maxResults)
+                output.AppendLine($"…（另有 {unique.Count - maxResults} 处未显示）");
         }
         output.AppendLine("明细:");
         foreach (var entry in urls.OrderBy(u => u.Url, StringComparer.Ordinal).ThenBy(u => u.File, StringComparer.Ordinal).Take(maxResults))

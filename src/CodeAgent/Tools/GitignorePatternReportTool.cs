@@ -32,11 +32,28 @@ public sealed class GitignorePatternReportTool : ITool
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 8), 0, 30);
         var maxFiles = Math.Clamp(ToolArgs.GetInt(args, "max_files", 100), 1, 1_000);
         var maxPatterns = Math.Clamp(ToolArgs.GetInt(args, "max_patterns", 200), 1, 5_000);
-        var files = SkipDirs.EnumerateFilesPruned(root, depth, includeIgnored: false, ct: ct, followSymlinks: false)
-            .Where(file => Path.GetFileName(file).Equals(".gitignore", StringComparison.OrdinalIgnoreCase))
-            .Take(maxFiles).ToList();
+        // 文件数在**截断前**记：此前直接报 files.Count（已被 Take 截到 max_files），
+        // 150 个 .gitignore 的仓库会说"100 个文件"——**少报**，模型据此认为
+        // 剩下的文件不存在，可能据此给出"已全部检查过"的结论。
+        var filesCapped = false;
+        var files = new List<string>();
+        foreach (var f in SkipDirs.EnumerateFilesPruned(root, depth, includeIgnored: false, ct: ct, followSymlinks: false)
+                     .Where(file => Path.GetFileName(file).Equals(".gitignore", StringComparison.OrdinalIgnoreCase)))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (files.Count >= maxFiles)
+            {
+                filesCapped = true;
+                break;
+            }
+            files.Add(f);
+        }
         var output = new StringBuilder();
-        output.AppendLine($"Gitignore 模式报告: {files.Count:N0} 个文件");
+        // 封顶时用「≥」而不是编一个精确数：枚举到第 maxFiles+1 个就停了，
+        // 后面还有多少**不知道**。报 101 是假的——与 session_search 同一口径。
+        output.AppendLine(filesCapped
+            ? $"Gitignore 模式报告: ≥{files.Count + 1:N0} 个文件（达到 max_files={maxFiles} 上限，仅检查前 {files.Count} 个）"
+            : $"Gitignore 模式报告: {files.Count:N0} 个文件");
         var total = 0;
         foreach (var file in files)
         {
@@ -65,6 +82,10 @@ public sealed class GitignorePatternReportTool : ITool
             output.AppendLine($"  {Path.GetRelativePath(root, file).Replace('\\', '/')}: {patterns.Count:N0} 个模式");
             foreach (var pattern in patterns.Take(maxPatterns))
                 output.AppendLine($"    {pattern.Value} [{(pattern.Negated ? "否定" : "忽略")}{(pattern.Directory ? ",目录" : "")}{(pattern.Anchored ? ",锚定" : "")}{(pattern.Wildcard ? ",通配" : "")}]");
+            // 单个文件的模式也可能超上限：上面那行报的是 patterns.Count（未截断），
+            // 列出来的只有 maxPatterns 条——不说就等于让人以为列全了
+            if (patterns.Count > maxPatterns)
+                output.AppendLine($"    …（另有 {patterns.Count - maxPatterns} 个模式未显示，调大 max_patterns 可看全）");
         }
         output.AppendLine($"总模式数: {total:N0}");
         return output.ToString().TrimEnd();

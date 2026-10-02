@@ -34,6 +34,7 @@ public sealed class DuplicateLogicReportTool : ITool
         var maxDepth = Math.Clamp(ToolArgs.GetInt(args, "max_depth", 10), 1, 32);
         var duplicateValues = new List<string>();
         var duplicateBodies = new List<string>();
+        string? dupBodiesNote = null;
         var magicNumbers = new List<string>();
         var files = 0;
         var valueSites = new Dictionary<string, List<(string File, int Line, string Name)>>(StringComparer.Ordinal);
@@ -118,8 +119,13 @@ public sealed class DuplicateLogicReportTool : ITool
         }
         foreach (var (v, sites) in valueSites.Where(kv => kv.Value.Count > 1))
             duplicateValues.Add($"同一个字面量给了 {sites.Count} 个不同的常量名（{string.Join(", ", sites.Select(s => s.Name))}）——改一处漏一处");
-        foreach (var (key, sites) in bodySites.Where(kv => kv.Value.Count > 1).Take(maxResults))
+        var dupBodies = bodySites.Where(kv => kv.Value.Count > 1).ToList();
+        foreach (var (key, sites) in dupBodies.Take(maxResults))
             duplicateBodies.Add($"除名字外完全相同的方法体：{string.Join(", ", sites.Select(s => $"{s.Name}@{s.File}:{s.Line}"))}");
+        // 被上限截掉的必须说明：Report 那一行报的是**全部**重复方法体数，
+        // 列出来的只有 maxResults 条——不说就等于告诉模型"就这些"。
+        // 提示走单独的变量，不能塞进 duplicateBodies：那是要当**条目**渲染的列表。
+        dupBodiesNote = dupBodies.Count > maxResults ? $"（另有 {dupBodies.Count - maxResults} 处未显示，调大 max_results 可看全）" : null;
         foreach (var (n, sites) in numberSites.Where(kv => kv.Value.Count >= 3))
             magicNumbers.Add($"裸数字 {n} 出现 {sites.Count} 次（{string.Join(", ", sites.Take(3).Select(s => $"{s.File}:{s.Line}"))}）——应提成命名常量");
         if (files == 0)
@@ -128,6 +134,7 @@ public sealed class DuplicateLogicReportTool : ITool
         output.AppendLine($"重复逻辑报告: {files} 个 .cs 文件");
         Report(output, "同一字面量多个常量名", duplicateValues, maxResults);
         Report(output, "复制粘贴的方法体", duplicateBodies, maxResults);
+        if (dupBodiesNote is not null) output.AppendLine($"  {dupBodiesNote}");
         Report(output, "散落的魔法数字", magicNumbers, maxResults);
         if (duplicateValues.Count == 0 && duplicateBodies.Count == 0 && magicNumbers.Count == 0)
             output.AppendLine("未发现重复逻辑");

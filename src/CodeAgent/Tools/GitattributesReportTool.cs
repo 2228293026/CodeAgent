@@ -32,11 +32,30 @@ public sealed class GitattributesReportTool : ITool
         var depth = Math.Clamp(ToolArgs.GetInt(args, "depth", 8), 0, 30);
         var maxFiles = Math.Clamp(ToolArgs.GetInt(args, "max_files", 100), 1, 1_000);
         var maxRules = Math.Clamp(ToolArgs.GetInt(args, "max_rules", 200), 1, 5_000);
-        var files = SkipDirs.EnumerateFilesPruned(root, depth, includeIgnored: false, ct: ct, followSymlinks: false)
-            .Where(file => Path.GetFileName(file).Equals(".gitattributes", StringComparison.OrdinalIgnoreCase))
-            .Take(maxFiles).ToList();
+        // 文件数在**截断前**记：此前直接报 files.Count（已被 Take 截到 max_files），
+        // 150 个 .gitattributes 的仓库会说"100 个文件"——**少报**，模型据此认为
+        // 剩下的文件不存在，可能据此给出"已全部检查过"的结论。
+        var allFiles = SkipDirs.EnumerateFilesPruned(root, depth, includeIgnored: false, ct: ct, followSymlinks: false)
+            .Where(file => Path.GetFileName(file).Equals(".gitattributes", StringComparison.OrdinalIgnoreCase));
+        var filesCapped = false;
+        var files = new List<string>();
+        foreach (var f in allFiles)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (files.Count >= maxFiles)
+            {
+                filesCapped = true;
+                break;
+            }
+            files.Add(f);
+        }
         var output = new StringBuilder();
-        output.AppendLine($"Gitattributes 报告: {files.Count:N0} 个文件");
+        // 封顶时用「≥」而不是编一个精确数：枚举到第 maxFiles+1 个就停了，
+        // 后面还有多少**不知道**。报 101 是假的（150 个仓库会说 101），
+        // 模型会照着这个假数字认为只剩 1 个文件没查。与 session_search 同一口径。
+        output.AppendLine(filesCapped
+            ? $"Gitattributes 报告: ≥{files.Count + 1:N0} 个文件（达到 max_files={maxFiles} 上限，仅检查前 {files.Count} 个）"
+            : $"Gitattributes 报告: {files.Count:N0} 个文件");
         var total = 0;
         foreach (var file in files)
         {
@@ -67,6 +86,10 @@ public sealed class GitattributesReportTool : ITool
                     || attribute.StartsWith("export-ignore", StringComparison.OrdinalIgnoreCase)).ToArray();
                 output.AppendLine($"    {rule} [{(tags.Length == 0 ? "未分类" : string.Join(", ", tags))}]");
             }
+            // 单个文件的规则也可能超上限。表头那行报的是 rules.Count（未截断），
+            // 列出来的却只有 maxRules 条——不说的话，等于让人以为列全了。
+            if (rules.Count > maxRules)
+                output.AppendLine($"    …（另有 {rules.Count - maxRules} 条规则未显示，调大 max_rules 可看全）");
         }
         output.AppendLine($"总规则数: {total:N0}");
         return output.ToString().TrimEnd();
