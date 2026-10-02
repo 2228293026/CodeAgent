@@ -168,10 +168,13 @@ public class AgentEdgeTests : IDisposable
         // output.Split('\n').Take(8)，当输出以 \n 结尾且不足 8 行时，trailing empty string
         // 被 Take(8) 收入，string.Join 后 preview 末尾多出 \n，多打一行空行。
         var output = "line1\nline2\nline3\nline4\nline5\nline6\nline7\n";
-        var preview = AgentClass.BuildToolOutputPreview(output);
+        var (preview, totalLines) = AgentClass.BuildToolOutputPreview(output);
         // preview 不应以 \n 结尾（否则 Console.WriteLine 会多输出一个空行）
         Assert.DoesNotMatch(@"\n$", preview);
         Assert.Equal(7, preview.Split('\n').Length);
+        // 真实总行数必须在截断**前**记下：只有 7 行时两者相等，
+        // 但上面那句「已保留 N 行」的口径要求它来自真实值而不是数文本
+        Assert.Equal(7, totalLines);
     }
 
     [Fact]

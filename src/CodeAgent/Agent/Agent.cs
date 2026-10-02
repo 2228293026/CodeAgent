@@ -1066,18 +1066,30 @@ public sealed partial class Agent
         return string.Join('\n', shown);
     }
 
-    /// <summary>命令类工具输出预览：最多 8 行，超出截断。</summary>
-    internal static string BuildToolOutputPreview(string output, CancellationToken ct = default)
+    /// <summary>命令类工具输出预览：最多 8 行，超出截断。
+    ///
+    /// 这一层**已经把行数截到 8**，所以 <see cref="FormatToolOutputPreview"/> 拿到的文本里
+    /// 永远只有 8 行，它的「共 N 行」于是恒等于 8——**谎报什么都没丢**。
+    /// 实测：一条 12 行的输出，脚注写成「共 8 行 / 190 字符，已保留 8 行」，
+    /// 而实际有 12 行。用户（和模型）会以为命令只输出了 8 行。
+    ///
+    /// 所以真实的行数必须**在这里**留下。返回 (文本, 真实总行数)，
+    /// 由调用方交给脚注——不能再让它从被截断的文本里数。</summary>
+    internal static (string Text, int TotalLines) BuildToolOutputPreview(string output, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var lines = new List<string>(8);
+        const int keep = 8;
+        var lines = new List<string>(keep);
         using var reader = new StringReader(output);
-        while (lines.Count < 8 && reader.ReadLine() is { } line)
+        var total = 0;
+        while (reader.ReadLine() is { } line)
         {
             ct.ThrowIfCancellationRequested();
-            lines.Add(line);
+            total++;
+            if (lines.Count < keep)
+                lines.Add(line);
         }
-        return string.Join('\n', lines);
+        return (string.Join('\n', lines), total);
     }
 
     /// <summary>工具输出预览的字符预算（成功与失败共用）。
@@ -1215,13 +1227,15 @@ public sealed partial class Agent
     /// 而 800 个汉字占 1600 **列**——在 80 列终端上会把屏幕冲烂，
     /// 逐行硬折还会把源码行拦腰折断、看起来像语法错误。
     /// 因此这里按行裁而不是折行，并在末尾注明有几行被裁。</summary>
-    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars, int width = 0)
+    internal static string FormatToolOutputPreview(string text, int maxChars = ToolOutputPreviewChars, int width = 0, int? trueTotalLines = null)
     {
         if (maxChars <= 0)
             return string.Empty;
         // 总数必须**在截断前**记下来：截断后再数，两边都是同一个数，
         // 提示会变成「共 8 行，已保留 8 行」——谎报什么都没丢。
-        var totalLines = DiffUtil.CountLines(text);
+        // trueTotalLines 用于**上游已经截过**的情况（如 BuildToolOutputPreview 的 8 行上限）：
+        // 那时 text 里的行数已经不是真实的，光靠数文本只能得到一个更小的假数。
+        var totalLines = trueTotalLines ?? DiffUtil.CountLines(text);
         var totalChars = text.Length;
         var truncatedByChars = false;
         if (text.Length > maxChars)
@@ -1248,7 +1262,11 @@ public sealed partial class Agent
             }));
         }
         if (!truncatedByChars && widthCutLines == 0)
-            return text;
+            return totalLines > DiffUtil.CountLines(text)
+                // 上游（BuildToolOutputPreview）已按行截过：文本本身没再被裁，
+                // 但真实行数确实更多——必须说明，否则脚注会显示"什么都没丢"
+                ? text + $"…（共 {totalLines:N0} 行，仅显示前 {DiffUtil.CountLines(text):N0} 行）"
+                : text;
         var keptLines = DiffUtil.CountLines(text);
         var widthNote = widthCutLines > 0 ? $"，{widthCutLines} 行按宽度裁剪" : "";
         var note = $"…（共 {totalLines:N0} 行 / {totalChars:N0} 字符，已保留 {keptLines:N0} 行{widthNote}）";
@@ -1513,8 +1531,10 @@ public sealed partial class Agent
                         // 与成功路径同一预算：失败信息再长也不能整屏刷掉对话
                         using (SafeColor.Scope(SafeColor.Warning))
                         {
+                            // 一次调用取两个值：调两次等于把输出重读一遍
+                            var (failPreview, failTotalLines) = BuildToolOutputPreview(output, ct);
                             Console.WriteLine(TextUtil.IndentBlock(
-                                FormatToolOutputPreview(BuildToolOutputPreview(output, ct), width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
+                                FormatToolOutputPreview(failPreview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: failTotalLines), ToolPreviewIndent));
                         }
                     }
                 }
@@ -1528,8 +1548,8 @@ public sealed partial class Agent
                     if (tc.Name is "run_command" or "bash" or "powershell" && output.Length > 0)
                     {
                         using var previewScope = SafeColor.Scope(SafeColor.Muted);
-                        var preview = BuildToolOutputPreview(output, ct);
-                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns())), ToolPreviewIndent));
+                        var (preview, previewTotalLines) = BuildToolOutputPreview(output, ct);
+                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: previewTotalLines), ToolPreviewIndent));
                     }
                 }
             }
