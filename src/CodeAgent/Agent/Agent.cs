@@ -136,14 +136,26 @@ public sealed partial class Agent
     /// （含系统提示与全部历史）；Provider 未返回 usage 时为 0，显示层退回估算。</summary>
     public int LastInputTokens { get; private set; }
 
+    /// <summary>最近一次请求里命中缓存的那部分 token。与 <see cref="LastInputTokens"/> 配对使用：
+    /// 两者相加才是模型**实际收到**的 prompt 规模（见 <see cref="ContextTokens"/>）。</summary>
+    public int LastCachedTokens { get; private set; }
+
     /// <summary>当前上下文 token 规模（状态栏 ctx 显示用）：
-    /// 优先取最近一次请求的真实 prompt_tokens，否则按消息字符数 / 4 估算。</summary>
+    /// 优先取最近一次请求的真实 prompt_tokens，否则按消息字符数 / 4 估算。
+    ///
+    /// **必须把缓存加回来**：第 298 轮起 <c>LastInputTokens</c> 只是"未命中的新 token"，
+    /// 而这一栏要回答的是"模型现在背着多少对话还能聊多久"。
+    /// 命中 99% 缓存时 prompt_tokens 有 4 万多、归一化后只剩 2，
+    /// 直接用会显示成 <c>ctx 2/1.0M (0%)</c>——**上下文占用看起来是空的**，
+    /// 而它其实已经占了几十 k。那是用户判断"该 /compact 了"的唯一依据。
+    ///
+    /// 估算口径（无 usage 时）本就按内容算，天然包含缓存部分，两条路径口径一致。</summary>
     public int ContextTokens
     {
         get
         {
             if (LastInputTokens > 0)
-                return LastInputTokens;
+                return LastInputTokens + LastCachedTokens;
             // 估算口径：无 usage 时按消息内容/工具参数/工具名与调用 Id 的 token 估算
             long total = 0;
             foreach (var m in _messages)
@@ -171,6 +183,7 @@ public sealed partial class Agent
     {
         _provider = provider;
         LastInputTokens = 0; // 换模型/供应商后旧 prompt_tokens 失效：ctx 退回估算口径，避免显示旧模型的上下文
+        LastCachedTokens = 0; // 配对清零：留着上一轮模型的缓存数会让 ctx 凭空变大
     }
 
     /// <summary>运行时切换文件访问模式（strict | whitelist | full）：同步更新配置与工作区沙箱，Shift+Tab / /access 用。</summary>
@@ -195,6 +208,7 @@ public sealed partial class Agent
         TurnCachedTokens = 0;
         TurnThinkingSeconds = 0;
         LastInputTokens = 0; // 上下文回到仅系统提示，ctx 退回估算口径
+        LastCachedTokens = 0; // 配对清零
         LastPrompt = null; // 对话已清空：/retry 不应把旧问题复活进新会话
         LastTurnFailed = false; // 新会话不应残留上一回合的失败状态：状态栏红标会误导
         StreamedLastRun = false; // 新会话不应残留上一轮的流式输出状态
@@ -252,6 +266,7 @@ public sealed partial class Agent
             return null; // 防御：起点已越界（消息被压缩/移除），丢弃该层
         _messages.RemoveRange(start, _messages.Count - start);
         LastInputTokens = 0; // 撤回后历史变短：真实 prompt_tokens 已过期，ctx 退回估算
+        LastCachedTokens = 0; // 配对清零：上一轮的缓存数属于被撤回的那份历史
         // 撤回同步落盘：滚动新日志并重写剩余消息，否则 --continue 会把已撤回的轮次带回来
         RollSessionLog();
         foreach (var m in _messages)
@@ -421,6 +436,7 @@ public sealed partial class Agent
             if (resp.CachedTokens is int cTokT)
                 TurnCachedTokens += cTokT;
             LastInputTokens = resp.InputTokens ?? 0; // 本轮无 usage 则归零，ctx 退回估算口径
+            LastCachedTokens = resp.CachedTokens ?? 0; // 与上一行配对：本轮的缓存部分也要计入 ctx
             // 输出被 max_tokens 截断：必须提示（否则模型话说一半、工具参数残缺，用户不知原因）
             if (resp.FinishReason is "length" or "max_tokens")
             {
@@ -1818,6 +1834,7 @@ public sealed partial class Agent
             foreach (var m in _messages)
                 LogMessage(m);
             LastInputTokens = 0; // 压缩后上下文大幅缩小：旧 prompt_tokens 过期，ctx 退回估算
+            LastCachedTokens = 0; // 配对清零：上一轮的缓存数属于被压缩掉的那份历史
             Console.WriteLine($"{SafeColor.Glyphs.Ok} 历史已压缩，继续执行。");
             return true;
         }
