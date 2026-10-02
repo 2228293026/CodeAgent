@@ -712,6 +712,19 @@ public static class TextUtil
         return SafeCut(s, head) + marker + s[tailStart..];
     }
 
+    /// <summary>单行截断，**按字符数**（<paramref name="max"/> 是字符数，**不是**显示列数）。
+    ///
+    /// 单元必须与调用方的口径一致，否则同一个数字在两端表示两件事：
+    ///   <c>read_file</c> / <c>grep</c> 的 <c>max_line_length</c>（说明写"单行截断阈值"）
+    ///   是给**模型**估 token 的预算，字符数才是它要的单位；<c>CapDiff</c> 的
+    ///   「每行裁到 200 字符」脚注里那个 <c>charsLost</c> 也按字符记账。
+    ///   这两类调用方继续用本函数。
+    ///
+    /// 而**终端显示**方向的调用方要的是列数：中文一字符占 2 列，
+    /// <c>TruncateLine("中"×60, 60)</c> 实测占 **120 列**——按 60 列算好的版式全部失效，
+    /// 后半句（「到剪贴板。」这类确认语）被折到第二行。
+    /// 那边一律用 <see cref="InputLine.FitToWidth"/>（它按列切，且 ASCII 退回时
+    /// 省略号从 1 列变 3 列也会自动跟随）。别把本函数填进列数预算。</summary>
     public static string TruncateLine(string s, int max)
     {
         if (max <= 0)

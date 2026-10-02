@@ -12,3 +12,5 @@ TestResults/
 dist/
 # 个人笔记（勿提交）
 docs/persona_cetacea_loli.md
+# meow-memory 的运行时状态（SQLite 库 + 会话日志 + 调试日志，均为本地数据）
+.dsh-meow/

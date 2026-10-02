@@ -522,7 +522,9 @@ internal static class Program
                         Console.WriteLine("没有可重试的请求。");
                         continue;
                     }
-                    Console.WriteLine($"{SafeColor.Glyphs.Retry} 重试上一条请求: {TextUtil.TruncateLine(agent.LastPrompt, 60)}");
+                    // 60 是**显示列数**预算（这一行要占满终端宽度），所以按列截。
+                    // TruncateLine 按字符切，中文会切出 120 列的一行。
+                    Console.WriteLine($"{SafeColor.Glyphs.Retry} 重试上一条请求: {InputLine.FitToWidth(agent.LastPrompt, 60)}");
                     line = agent.LastPrompt; // 作为普通请求重新执行
                 }
                 else
@@ -821,8 +823,12 @@ internal static class Program
             .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r));
         if (string.IsNullOrWhiteSpace(stopReason))
             return head + "]";
+        // 两端必须是同一个单位。此前这里拿 DisplayWidth 判断"超没超"，
+        // 却拿 TruncateLine（按**字符**切）去裁——中文下判断会误判成"放得下"
+        // 而根本不裁；即便裁了，裁出来的 40 字是 80 列，比预算宽一倍。
+        // 判定与裁剪都必须按显示列数。
         var label = TextUtil.DisplayWidth(stopReason) > reasonWidth
-            ? TextUtil.TruncateLine(stopReason, reasonWidth)
+            ? InputLine.FitToWidth(stopReason, reasonWidth)
             : stopReason;
         return $"{head} · {label}]";
     }
@@ -3387,7 +3393,10 @@ internal static class Program
                             var countText = capped ? $"≥{count} 条" : $"{count} 条"; // 封顶后是下限，不是精确值
                             var detail = preview is null
                                 ? $"{label}（{age}，{countText}）"
-                                : $"{label} · {age} · {TextUtil.TruncateLine(preview, 50)}（{countText}）";
+                                // 预览要的是**终端上读起来的那一串**，所以按显示列数截断
+                                // （TruncateLine 按字符切：中文预览 50 字 = 100 列，
+                                // 编号列与说明折行后这一列就散了）
+                                : $"{label} · {age} · {InputLine.FitToWidth(preview, 50)}（{countText}）";
                             // 编号列对齐 + 说明按宽度折行（与 /models、/tools 同一渲染器）
                             resumeEntries.Add(new HelpEntry($"{i + 1})", detail));
                         }
@@ -3738,7 +3747,10 @@ internal static class Program
                     }
                     var ok = TryCopyToClipboardAsync(lastReply.Content!).GetAwaiter().GetResult(); // HandleCommand 同步上下文
                     Console.WriteLine(ok
-                        ? $"已复制最近一条回复（{TextUtil.TruncateLine(lastReply.Content!, 40)}…）到剪贴板。"
+                        // 只回显**开头一点**当预览，所以整行要留在终端宽度内：按显示列数截。
+                        // 另注意旧写法的 `…` 是多余的——FitToWidth 自己会补省略号，
+                        // 拼上第二个只会让人以为预览被截了两刀。
+                        ? $"已复制最近一条回复（{InputLine.FitToWidth(lastReply.Content!, 40)}）到剪贴板。"
                         : $"{SafeColor.Glyphs.Warn} 无法访问剪贴板（需要 clip.exe / pbcopy / xclip）。");
                 }
                 break;
