@@ -2259,13 +2259,18 @@ internal static class Program
 
     internal static string BuildStatusBar(
         string mode, string model, string cwd, string? branch,
-        string turnIn, string turnOut, string ctxText, string thinkText, int width)
+        string turnIn, string turnOut, string ctxText, string thinkText, int width,
+        string turnCached = "")
     {
         bool showBranch = !string.IsNullOrEmpty(branch);
         var showTurn = true;
         var showCtx = true;
         var showThink = !string.IsNullOrEmpty(thinkText);
         var shownPath = string.Empty;
+        // in 已**不含**命中缓存的部分（第 298 轮起）。只写「X in」会让人以为那就是
+        // 整个 prompt 的大小——命中 99% 缓存时这两个数能差四个数量级。
+        // 有缓存就补一个命中率段，空间不够时它与思考档一起先丢（见下面的 drops）。
+        var cachedNote = string.IsNullOrEmpty(turnCached) ? "" : $" {turnCached} cached";
 
         string Render()
         {
@@ -2273,7 +2278,7 @@ internal static class Program
             var path = shownPath.Length > 0 ? shownPath : cwd;
             var location = showBranch ? $"{path} ({branch})" : path;
             var parts = new List<string> { $"{SafeColor.Glyphs.StatusMark} {mode}{SafeColor.Glyphs.SegmentSeparator}{model}", location };
-            if (showTurn) parts.Add($"{turnIn} in / {turnOut} out");
+            if (showTurn) parts.Add($"{turnIn} in / {turnOut} out{cachedNote}");
             if (showCtx) parts.Add(ctxText);
             if (showThink) parts.Add(thinkText);
             return string.Join(SafeColor.Glyphs.SegmentSeparator, parts);
@@ -2296,7 +2301,7 @@ internal static class Program
         // 否则缩完还是超宽，ctx 白白被牺牲。（head 已含路径前的分隔符，不再重复扣。）
         var head = $"{SafeColor.Glyphs.StatusMark} {mode}{SafeColor.Glyphs.SegmentSeparator}{model}{SafeColor.Glyphs.SegmentSeparator}";
         var others = new List<string>();
-        if (showTurn) others.Add($"{turnIn} in / {turnOut} out");
+        if (showTurn) others.Add($"{turnIn} in / {turnOut} out{cachedNote}");
         if (showCtx) others.Add(ctxText);
         if (showThink) others.Add(thinkText);
         var othersWidth = others.Sum(TextUtil.DisplayWidth) + others.Count * 3;
@@ -2379,7 +2384,11 @@ internal static class Program
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,
             TextUtil.CompactTokenCount(agent.TurnInputTokens), TextUtil.CompactTokenCount(agent.TurnOutputTokens),
-            ctx, think, ConsoleColumns()));
+            ctx, think, ConsoleColumns(),
+            // 命中率与摘要行同口径（in + cached 为分母）；为 0 时不显示这一段
+            (agent.TurnInputTokens + agent.TurnCachedTokens) > 0
+                ? $"{TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens + agent.TurnCachedTokens)}%"
+                : ""));
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
@@ -3556,16 +3565,23 @@ internal static class Program
                     var ctxText = win > 0
                         ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)} ({TextUtil.PercentOf(agent.ContextTokens, win)}%)"
                         : $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}";
-                    var avg = agent.ProviderCalls > 0
-                        ? (agent.TotalInputTokens + agent.TotalOutputTokens) / agent.ProviderCalls
-                        : 0;
+                    // 平均必须与上面两行**同一套 token**：加上 cached，否则
+                    // 「新输入 42,954 + 输出 9 = 42,963」和「平均每次 42,963」对不上账，
+                    // 用户会以为程序算错了。（第 298 轮归一化之后 cached 不再含在 in 里。）
+                    var avgBase = agent.TotalInputTokens + agent.TotalOutputTokens + agent.TotalCachedTokens;
+                    var avg = agent.ProviderCalls > 0 ? avgBase / agent.ProviderCalls : 0;
                     // 曾是一整句 100+ 列的中文，80 列终端必折行，扫读时找不到某个数字。
                     // 拆成键值行后每项独立成行，窄终端也不会把数字甩到行尾。
                     var statRows = new List<(string Key, string Value)>
                     {
                         ("模型", opts.Model),
                         ("请求次数", $"{agent.ProviderCalls:N0}"),
-                        ("输入 tokens", $"{agent.TotalInputTokens:N0}"),
+                        // 「新输入」而不是「输入」：第 298 轮起 TotalInputTokens 已**不含**
+                        // 命中缓存的部分（与 Anthropic 的 input_tokens 对齐）。仍叫「输入」
+                        // 会让人拿它和缓存那一行相加去对账——加起来才是真正的 prompt 大小。
+                        ("新输入 tokens", $"{agent.TotalInputTokens:N0}"),
+                        // 输出含 Anthropic extended thinking 的思考 token（thinking 计入
+                        // output_tokens），所以这里不再单列思考部分——那会重复计数。
                         ("输出 tokens", $"{agent.TotalOutputTokens:N0}"),
                     };
                     if (agent.ProviderCalls > 0)
