@@ -46,13 +46,33 @@ public sealed class TaskList
     public void Clear() => _tasks.Clear();
 
     /// <summary>整表替换。空表合法——模型做完所有事会把清单清空。</summary>
-    public void Replace(IEnumerable<AgentTask> tasks)
+    ///
+    /// 超过 <see cref="MaxTasks"/> 的部分会被丢弃，**必须让调用方知道丢了多少**：
+    /// 任务面板是用户唯一能看见"模型正在做什么"的地方，
+    /// 而回执里的「N 项」是**保留后**的数——模型提交 60 项、清单只剩 50 项时，
+    /// 回执说的是「50 项」，用户与模型都会以为全部记下了。
+    /// 被丢掉的那 10 项恰恰可能是模型排在后面的、还没开始做的活。
+    /// </summary>
+    public int Replace(IEnumerable<AgentTask> tasks)
     {
         _tasks.Clear();
-        foreach (var t in tasks.Take(MaxTasks))
+        var dropped = 0;
+        foreach (var t in tasks)
+        {
+            if (_tasks.Count >= MaxTasks)
+            {
+                dropped++;
+                continue;
+            }
             if (!string.IsNullOrWhiteSpace(t.Content))
                 _tasks.Add(t with { Content = t.Content.Trim() });
+        }
+        LastDropped = dropped;
+        return dropped;
     }
+
+    /// <summary>最近一次 <see cref="Replace"/> 丢弃的条目数（超出上限的部分）。</summary>
+    public int LastDropped { get; private set; }
 
     /// <summary>纯函数：把模型给的 JSON 解析成任务表。
     ///
@@ -148,7 +168,16 @@ public sealed class UpdateTasksTool : ITool
             : $"已记录 {parsed.Count} 条任务（{parsed.Count(t => t.Status == TaskStatus.Completed)} 项完成）。");
     }
 
-    internal static string RenderAck(TaskList tasks) => tasks.IsEmpty
-        ? "任务清单已清空。"
-        : $"任务清单已更新：{tasks.Count} 项（完成 {tasks.CompletedCount}，进行中 {tasks.InProgressCount}）。";
+    internal static string RenderAck(TaskList tasks)
+    {
+        if (tasks.IsEmpty)
+            return "任务清单已清空。";
+        // 丢弃的部分必须出现在回执里：模型刚提交的那份表里有多少根本没进来，
+        // 它自己不知道，而它后面会按"我记下了 60 项"来安排工作。
+        var dropped = tasks.LastDropped;
+        var dropNote = dropped > 0
+            ? $"，另有 {dropped} 项超出上限 {TaskList.MaxTasks} 未记录"
+            : "";
+        return $"任务清单已更新：{tasks.Count} 项（完成 {tasks.CompletedCount}，进行中 {tasks.InProgressCount}）{dropNote}。";
+    }
 }
