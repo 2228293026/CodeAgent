@@ -977,12 +977,20 @@ public static class TextUtil
     public static int PercentOf(long part, long total) =>
         total <= 0 ? 0 : (int)Math.Clamp(part * 100.0 / total, 0, 100);
 
-    /// <summary>token 成本（美元）：单价按每百万 token 计；任一单价 ≤ 0 时返回 null（不显示费用）。</summary>
-    public static double? UsdCost(long inputTokens, long outputTokens, double pricePerMillionInput, double pricePerMillionOutput)
+    /// <summary>token 成本（美元）：单价按每百万 token 计；任一单价 <= 0 时返回 null（不显示费用）。
+    ///
+    /// <paramref name="cachedTokens"/> 必须**单独**传进来：第 298 轮把 OpenAI 的
+    /// <c>prompt_tokens</c> 归一化成「不含 cached」之后，命中缓存的那部分不再出现在
+    /// <paramref name="inputTokens"/> 里。不把它加回来，命中 99% 缓存的一轮会报
+    /// 约 $0.0004——**费用少报两个数量级**，而用户正是靠这行判断该继续还是该换模型。
+    ///
+    /// 缓存读写按**常规输入价**计（各家 cache_read 都有折扣，但比例不同且可能可配；
+    /// 用输入价是保守估计，宁可略高不可略低——少报会让用户以为很便宜而继续烧钱）。</summary>
+    public static double? UsdCost(long inputTokens, long outputTokens, double pricePerMillionInput, double pricePerMillionOutput, long cachedTokens = 0)
     {
         if (pricePerMillionInput <= 0 || pricePerMillionOutput <= 0)
             return null;
-        return inputTokens * pricePerMillionInput / 1_000_000.0
+        return (inputTokens + cachedTokens) * pricePerMillionInput / 1_000_000.0
          + outputTokens * pricePerMillionOutput / 1_000_000.0;
     }
 

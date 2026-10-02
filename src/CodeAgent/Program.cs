@@ -1239,9 +1239,12 @@ internal static class Program
         var cache = cacheBase > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, cacheBase)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
         // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
+        // cachedTokens 必须传：TurnInputTokens 已不含命中缓存的那部分，
+        // 漏掉它 → 一轮 99% 缓存的对话只按 1 个输入 token 计费，费用少报两个数量级
         var cost = TextUtil.UsdCost(agent.TurnInputTokens, agent.TurnOutputTokens,
             opts.PricePerMillionInput > 0 ? opts.PricePerMillionInput : agent.Context.Config.PricePerMillionInput,
-            opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : agent.Context.Config.PricePerMillionOutput);
+            opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : agent.Context.Config.PricePerMillionOutput,
+            agent.TurnCachedTokens);
         string costText = "";
         if (cost is { } c)
             costText = $" ≈${TextUtil.FormatCost(c)}";
@@ -3543,9 +3546,12 @@ internal static class Program
             case "/stats":
                 {
                     // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
+                    // cachedTokens 必须传：归一化后 TotalInputTokens 已不含缓存部分，
+                    // 漏掉它会让累计费用少报两个数量级
                     var cost = TextUtil.UsdCost(agent.TotalInputTokens, agent.TotalOutputTokens,
                         opts.PricePerMillionInput > 0 ? opts.PricePerMillionInput : config.PricePerMillionInput,
-                        opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : config.PricePerMillionOutput);
+                        opts.PricePerMillionOutput > 0 ? opts.PricePerMillionOutput : config.PricePerMillionOutput,
+                        agent.TotalCachedTokens);
                     var win = EffectiveContextWindow(config, opts, ctxProbe);
                     var ctxText = win > 0
                         ? $"ctx {TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)} ({TextUtil.PercentOf(agent.ContextTokens, win)}%)"
