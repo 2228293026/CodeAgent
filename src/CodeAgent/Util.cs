@@ -770,6 +770,12 @@ public static class TextUtil
         return string.Join("\n", lines);
     }
 
+    /// <summary>折行时正文预算装不下任何一个完整字符的交代行（第 314 轮）。
+    /// 只在**确实丢了字符**时出现一次，让用户知道是终端太窄而不是模型没说完——
+    /// 静默吞掉内容比排版难看严重得多：排版难看看得见，内容消失看不见。</summary>
+    internal static string DropNotice(int width) =>
+        $"…（正文宽度仅 {width} 列，装不下一整个字符，已省略未显示的内容；请加宽终端或缩小缩进）";
+
     /// <summary>按显示宽度折行；width &lt;= 0（宽度未知）时原样返回，不做任何猜测性折行。
     /// **width 是正文预算，indent 是额外加在每行前面的**——最终行宽 = indent 宽度 + width。
     /// 想要「整行不超过 N 列」时必须传 width = N - DisplayWidth(indent)，
@@ -779,6 +785,7 @@ public static class TextUtil
         if (string.IsNullOrEmpty(text) || width <= 0)
             return text;
         var output = new List<string>();
+        var dropped = false; // 是否有字符因装不下而被丢弃（第 314 轮：静默丢弃 = 假装说完了）
         foreach (var paragraph in text.Replace("\r\n", "\n").Split('\n'))
         {
             var line = new StringBuilder();
@@ -809,15 +816,47 @@ public static class TextUtil
                     // token 本身就比整行还宽：按显示宽度硬拆，先填满当前行
                     var head = TakeDisplayWidth(rest, width);
                     if (head.Length == 0)
-                        break; // 宽度装不下任何完整字符（如半个全角字），不无限循环
+                    {
+                        // 连一个完整字符都装不下（如正文只剩 1 列却要塞 2 列的汉字）。
+                        // 原实现在这里 break 后**继续处理下一个 token**，等于把这个字符丢掉：
+                        // 1 列预算下每个汉字都走这条路 → 正文被清空且屏幕上毫无交代。
+                        // 现在只标记有损，不落盘空行（空行会把屏幕刷满），
+                        // 直接吃掉这个不可显示的原子，继续下一个。
+                        dropped = true;
+                        rest = rest[ClusterLength(rest)..];
+                        continue;
+                    }
                     output.Add(head);
                     rest = rest[head.Length..];
                 }
             }
             output.Add(line.ToString().TrimEnd());
         }
+        // 交代行只加**一次**缩进：下面统一 Select 时还会再加一次，这里加就会变成双倍缩进
+        if (dropped)
+            output.Add(DropNotice(width));
         return string.Join("\n", output.Select(l => indent + l));
     }
+
+    /// <summary>字符串开头的**显示原子**字符数：代理对/ZWJ/零宽合成整体算一个不可拆单元。</summary>
+    private static int ClusterLength(string s)
+    {
+        if (s.Length == 0)
+            return 0;
+        var i = 0;
+        while (i < s.Length && IsClusterExtender(s[i]))
+            i++;
+        if (i + 1 < s.Length && char.IsHighSurrogate(s[i]) && char.IsLowSurrogate(s[i + 1]))
+            i += 2;
+        else if (i < s.Length)
+            i += 1;
+        while (i < s.Length && IsClusterExtender(s[i]))
+            i++;
+        return i;
+    }
+
+    private static bool IsClusterExtender(char c) =>
+        c is '\u200D' or '\uFE0E' or '\uFE0F'; // ZWJ / 变体选择符
 
     /// <summary>折行原子：CJK 单字独立成词（中文排版允许字间断行），ASCII 单词整体不拆，代理对保持完整。</summary>
     private static IEnumerable<string> TokenizeForWrap(string paragraph)

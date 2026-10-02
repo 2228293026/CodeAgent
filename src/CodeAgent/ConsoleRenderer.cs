@@ -271,17 +271,28 @@ public sealed class ConsoleRenderer
         // 否则首行会出现 "- - 内容" 这样的重复标记。
         // 宽度未知（0）或不够折行时保持原样，交回终端软换行。
         var hanging = HangingIndentFor(content);
-        if (hanging.Length > 0 && _width > hanging.Length)
+        var hangingCols = hanging.Length > 0 ? TextUtil.DisplayWidth(hanging) : 0;
+        // 判定必须同单位：_width 是**列数**，hanging.Length 是**字符数**。
+        // `- ` / `> ` 恰好两者相等所以一直没暴露，但全角空格缩进的列表项
+        // （`　- x`）标记是 3 字符 / 4 列，4 > 3 会误判成"折得下"，
+        // 于是 budget = 0，一条 14 列的内容被塞进 4 列终端。
+        if (hangingCols > 0 && _width > hangingCols)
         {
-            var body = content[hanging.Length..];
+            var body = content[hanging.Length..]; // 子串下标只能按字符数切
             // WrapDisplay 的 width 是正文预算：这里要扣掉每行都要加的悬挂缩进
-            var budget = _width - TextUtil.DisplayWidth(hanging);
+            var budget = _width - hangingCols;
             var wrapped = TextUtil.WrapDisplay(body, budget, hanging);
             var lines = DiffUtil.SplitLines(wrapped, CancellationToken.None);
             if (lines.Length > 1)
             {
                 for (var i = 0; i < lines.Length; i++)
-                    EmitStyledLine(lines[i], color, i == 0 && hadNewline);
+                {
+                    // 换行标志必须给**除末段外的每一段**，不是只给首段。
+                    // 快速路径按这个标志决定要不要写 \n；原实现只传首段，
+                    // 于是「三段以上」的列表项/引用从第 2 段起就没有换行，
+                    // 被粘成 "- 中文- 文" 这样的残行——内容被拼错，用户只看到一句乱码。
+                    EmitStyledLine(lines[i], color, i < lines.Length - 1 || hadNewline);
+                }
                 // 折行时只有**末段**决定光标位置；末段没带换行，光标就仍停在行中
                 _lastEmitEndedWithNewline = hadNewline;
                 return;
