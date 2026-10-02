@@ -50,18 +50,49 @@ public sealed class ContextTokensIncludeCacheTests
     {
         // 漏清一处 = ctx 凭空变大（拿上一轮的历史缓存数加到新的、更短的历史上）。
         // 这正是「N 个调用点只改一个」那类错误，必须按**配对**来查，而不是按记忆。
-        var lines = ReadSource(FindAgent()).Split('\n');
-        var resets = lines
-            .Select((text, i) => (text, i))
-            .Where(x => x.text.Contains("LastInputTokens = 0;", StringComparison.Ordinal))
-            .ToList();
-        Assert.True(resets.Count >= 4, $"只找到 {resets.Count} 处清零，规则退化了");
-        foreach (var (text, i) in resets)
+        //
+        // 扫描范围是整个 src/CodeAgent 而不只是 Agent.cs：**首版只扫了 Agent.cs**，
+        // 于是 /load 与 /resume 那两处（都在 Agent.Session.cs）全部漏掉——
+        // 而那两处恰好是"换一整份历史"，残留的缓存数影响最大。
+        // 教训：按**文件**划定扫描范围，等于把别的文件里的同类错误直接放过去。
+        var total = 0;
+        foreach (var file in Sources())
         {
-            var next = string.Join('\n', lines.Skip(i + 1).Take(2));
-            Assert.True(next.Contains("LastCachedTokens = 0;", StringComparison.Ordinal),
-                $"第 {i + 1} 行清零了 LastInputTokens，但后面两行没清 LastCachedTokens → [{text.Trim()}]");
+            var lines = ReadSource(file).Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (!lines[i].Contains("LastInputTokens = 0;", StringComparison.Ordinal))
+                    continue;
+                total++;
+                var next = string.Join('\n', lines.Skip(i + 1).Take(2));
+                Assert.True(next.Contains("LastCachedTokens = 0;", StringComparison.Ordinal),
+                    $"{Path.GetFileName(file)}:{i + 1} 清零了 LastInputTokens，但后面两行没清 LastCachedTokens → [{lines[i].Trim()}]");
+            }
         }
+        Assert.True(total >= 6, $"只扫到 {total} 处清零，扫描范围退化了（应有 /clear、/load、/resume、撤回、压缩、换模型 六处）");
+    }
+
+    private static System.Collections.Generic.IEnumerable<string> Sources()
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Environment.CurrentDirectory })
+        {
+            var d = start;
+            for (var i = 0; i < 10 && d.Length > 1; i++)
+            {
+                var dir = Path.Combine(d, "src", "CodeAgent");
+                if (Directory.Exists(dir))
+                {
+                    foreach (var f in Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories))
+                        yield return f;
+                    yield break;
+                }
+                var parent = Path.GetDirectoryName(d.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrEmpty(parent) || parent == d)
+                    break;
+                d = parent;
+            }
+        }
+        throw new FileNotFoundException("找不到 src/CodeAgent");
     }
 
     [Fact]

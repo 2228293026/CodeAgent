@@ -57,6 +57,7 @@ public sealed partial class Agent
         TurnCachedTokens = 0;
         TurnThinkingSeconds = 0;
         LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
+        LastCachedTokens = 0; // 配对清零：上一会话的缓存数不属于这份历史
         LastPrompt = null;   // 加载前的「上一条请求」不应被 /retry 复活进加载的对话
         // 同 /clear：换了一份对话就换了一份任务清单。加载的是别人的历史，
         // 而清单是**当前这次工作**的进度——留着上一会话的待办只会误导。
@@ -249,6 +250,7 @@ public sealed partial class Agent
             _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) };
         _turnStarts.Clear(); // 恢复的会话没有「上一轮」可撤回
         LastInputTokens = 0; // 上下文变为恢复的历史：退回估算口径
+        LastCachedTokens = 0; // 配对清零：上一会话的缓存数不属于这份历史
         Tasks.Clear(); // 同上：换对话就换任务清单，上一会话的待办不该跟着过来
 
         RollSessionLog(ct);
