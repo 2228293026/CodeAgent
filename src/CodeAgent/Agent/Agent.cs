@@ -1296,11 +1296,24 @@ public sealed partial class Agent
             }));
         }
         if (!truncatedByChars && widthCutLines == 0)
-            return totalLines > DiffUtil.CountLines(text)
-                // 上游（BuildToolOutputPreview）已按行截过：文本本身没再被裁，
-                // 但真实行数确实更多——必须说明，否则脚注会显示"什么都没丢"
-                ? text + $"…（共 {totalLines:N0} 行，仅显示前 {DiffUtil.CountLines(text):N0} 行）"
-                : text;
+        {
+            var keptRows = DiffUtil.CountLines(text);
+            if (totalLines <= keptRows)
+                return text;
+            // 上游（BuildToolOutputPreview）已按行截过：文本本身没再被裁，
+            // 但真实行数确实更多——必须说明，否则脚注会显示"什么都没丢"。
+            //
+            // 字符口径同样要给：丢掉 32 行就是丢掉上千字符，只说"仅显示前 8 行"
+            // 会让人以为剩下的 8 行差不多就是全部。实测一条 40 行/2310 字符的输出，
+            // 脚注只有「共 40 行，仅显示前 8 行」——1685 个字符一个字都没提。
+            //
+            // **没有真实字符数时不能写「/ 0 字符」**：那比不写更糟，
+            // 它会断言"整个输出 0 字符"，而屏幕上明明摆着 8 行内容。
+            var charsPart = trueTotalChars is int tc && tc > 0 ? $" / {tc:N0} 字符" : "";
+            var charsGone = trueTotalChars is int tc2 ? Math.Max(0, tc2 - text.Length) : 0;
+            var rowCapCharNote = charsGone > 0 ? $"，已丢弃 {charsGone:N0} 字符" : "";
+            return text + $"…（共 {totalLines:N0} 行{charsPart}，仅显示前 {keptRows:N0} 行{rowCapCharNote}）";
+        }
         var keptLines = DiffUtil.CountLines(text);
         var widthNote = widthCutLines > 0 ? $"，{widthCutLines} 行按宽度裁剪" : "";
         // 「已保留 N 行」在**只丢了字符**时会误导：实测一条 99 字符的单行错误，
