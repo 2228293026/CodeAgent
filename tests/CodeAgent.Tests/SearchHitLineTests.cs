@@ -25,8 +25,9 @@ public class SearchHitLineTests
             $"历史会话中没有匹配「{new string('词', 200)}」的内容。",
             $"快照 {new string('名', 200)} · 3 分钟前（/load {new string('名', 200)} 恢复）:",
             $"{new string('f', 200)} · 2 小时前（/resume 可恢复）:",
-            "用法: /find <关键字> —— 在历史会话日志里搜索内容（与 /resume 同源，最新在前）",
-            "…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）",
+            "用法: /find <关键字> —— 在历史会话日志与已保存快照里搜索内容（与 /resume、/load 同源，最新在前）",
+            Program.FindLogTruncationNote(),
+            Program.FindSnapshotTruncationNote(),
         };
         foreach (var body in bodies)
         {

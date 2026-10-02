@@ -687,6 +687,179 @@ internal static class Program
             .ToList();
     }
 
+    /// <summary>/find 的扫描与打印：先扫完**两类来源**再下结论，最后才打印。
+    ///
+    /// 回归点：结论曾按「日志命中数」下，而快照扫描发生在结论打印**之后**，
+    /// 于是只在快照里命中时，同一屏上先打「历史会话中没有匹配「X」的内容。」
+    /// 紧接着又打出含 X 的快照——自相矛盾，且用户会以为自己记错了。
+    /// 两类来源现在一起扫描、一起计数，结论只在**全部扫完**后出现。
+    /// 上限（5 个日志 / 3 个快照）一律显式交代，不静默截断。
+    /// </summary>
+    /// <summary>/find 的一处命中：标题 + 该条目内的命中明细。</summary>
+    internal sealed record FindHitGroup(string Title, List<(string Role, string Snippet)> Hits);
+
+    /// <summary>/find 扫描完两类来源之后的结果快照（纯数据，好测）。</summary>
+    internal sealed record FindScanResult(
+        List<FindHitGroup> LogHits,
+        List<FindHitGroup> SnapshotHits,
+        bool LogTruncated,
+        bool SnapshotTruncated,
+        List<string> InteriorWhere);
+
+    /// <summary>把 /find 的扫描结果渲染成要打印的行（**纯函数**，好测）。
+    ///
+    /// 回归点：结论曾按「日志命中数」下，而快照扫描发生在结论打印**之后**，
+    /// 于是只在快照里命中时，同一屏先打「历史会话中没有匹配「X」的内容。」
+    /// 紧接着又打出含 X 的快照——自相矛盾，且用户会以为自己记错了。
+    /// 渲染与扫描彻底分开后，「结论只能出现在全部结果之后」由本函数保证。
+    /// 上限（5 个日志 / 3 个快照）一律显式交代，不静默截断。
+    /// </summary>
+    internal static List<string> FindResultLines(FindScanResult scan, string keyword, int width)
+    {
+        var lines = new List<string>();
+        // 结论只在这里、且只在**两类来源都没有命中**时出现
+        if (scan.LogHits.Count == 0 && scan.SnapshotHits.Count == 0)
+        {
+            lines.Add(FindNoMatchLine(keyword, scan.InteriorWhere.Count > 0, width));
+            foreach (var where in scan.InteriorWhere)
+                lines.Add(FormatResultLine($"  只出现在更长的词内部：{where}", width));
+            return lines;
+        }
+
+        foreach (var group in scan.LogHits)
+        {
+            lines.Add(FormatResultLine(group.Title, width));
+            lines.AddRange(group.Hits.Select(h => FormatSearchHitLine(h.Role, h.Snippet, width, keyword)));
+        }
+        foreach (var group in scan.SnapshotHits)
+        {
+            lines.Add(FormatResultLine(group.Title, width));
+            lines.AddRange(group.Hits.Select(h => FormatSearchHitLine(h.Role, h.Snippet, width, keyword)));
+        }
+
+        // 有多少**说了多少**：只要被上限截过就交代，绝不静默丢内容
+        if (scan.LogTruncated)
+            lines.Add(FormatResultLine(FindLogTruncationNote(), width));
+        if (scan.SnapshotTruncated)
+            lines.Add(FormatResultLine(FindSnapshotTruncationNote(), width));
+        return lines;
+    }
+
+    /// <summary>/find：扫完日志与快照两类来源，再交给 <see cref="FindResultLines"/> 渲染。
+    ///
+    /// 快照必须**一起**扫：只按日志数命中的话，只有快照的用户会被告知
+    /// 「没有匹配「X」的内容。」而屏幕上正躺着含 X 的快照。
+    /// </summary>
+    private static void PrintFindResults(AgentClass agent, AgentConfig config, string keyword)
+    {
+        var logs = ResumableLogs(agent, config);
+        var snapshotDir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
+        var snapshots = SavedSessions(snapshotDir);
+        if (logs.Count == 0 && snapshots.Count == 0)
+        {
+            Console.WriteLine(FormatResultLine("没有可搜索的会话记录（先正常对话过一次，或检查 saveSessions 配置）。", ConsoleColumns()));
+            return;
+        }
+
+        var logHits = new List<FindHitGroup>();
+        var snapshotHits = new List<FindHitGroup>();
+        var logTruncated = false;
+        var snapshotTruncated = false;
+        // 关键字在**词内部**出现的位置：用来把「压根没有」与「只差在词边界上」分开
+        var interiorWhere = new List<string>();
+
+        foreach (var log in logs)
+        {
+            if (logHits.Count >= 5)
+            {
+                // 用与正式搜索**同一套**匹配规则探路（含词边界），否则「超过 5 个」这句话
+                // 会把「只出现在词内部」也算成命中——那就成了另一种形式的谎报。
+                if (!logTruncated)
+                    logTruncated = AgentClass.SearchSessionLog(log, keyword, maxHits: 1).Count > 0;
+                if (logTruncated)
+                    break; // 已确定被截断，剩下的不必再读（省下大量重复 IO）
+                continue;
+            }
+            var hits = AgentClass.SearchSessionLog(log, keyword);
+            if (hits.Count == 0)
+            {
+                if (AgentClass.NeedsSearchWordBoundary(keyword)
+                    && AgentClass.LogContainsSubstring(log, keyword))
+                    interiorWhere.Add($"日志 {Path.GetFileNameWithoutExtension(log)}");
+                continue;
+            }
+            var label = Path.GetFileNameWithoutExtension(log);
+            var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
+            logHits.Add(new FindHitGroup($"{label} · {age}（/resume 可恢复）:", hits));
+        }
+
+        foreach (var (name, age) in snapshots)
+        {
+            var path = Path.Combine(snapshotDir, name + ".json");
+            if (snapshotHits.Count >= 3)
+            {
+                if (!snapshotTruncated)
+                    snapshotTruncated = AgentClass.SearchSnapshot(path, keyword, maxHits: 1).Count > 0;
+                if (snapshotTruncated)
+                    break;
+                continue;
+            }
+            var hits = AgentClass.SearchSnapshot(path, keyword);
+            if (hits.Count == 0)
+            {
+                if (AgentClass.NeedsSearchWordBoundary(keyword)
+                    && SnapshotContainsSubstring(path, keyword))
+                    interiorWhere.Add($"快照 {name}");
+                continue;
+            }
+            snapshotHits.Add(new FindHitGroup($"快照 {name} · {age}（/load {name} 恢复）:", hits));
+        }
+
+        var scan = new FindScanResult(logHits, snapshotHits, logTruncated, snapshotTruncated, interiorWhere);
+        foreach (var line in FindResultLines(scan, keyword, ConsoleColumns()))
+            Console.WriteLine(line);
+    }
+
+    /// <summary>0 命中时该说的那句话（纯逻辑，好测）。
+    ///
+    /// 0 命中**不等于**没有这个字串：ASCII 关键字只出现在更长的词内部时会被词边界规则
+    /// 滤掉（搜 the 命中 PathEscape 是噪音，宁可不要）。此时若还说「没有匹配「X」的内容」，
+    /// 那句话是**假的**——内容里有 X，用户会以为自己记错了。实测搜 lorTheme：grep 得到内容里
+    /// 确实有，/find 却回"没有匹配"。两个 case 必须**各说各的话**：都套「没有匹配」会自相矛盾。
+    /// </summary>
+    internal static string FindNoMatchLine(string keyword, bool interiorFound, int width)
+    {
+        var before = interiorFound ? "词边界：只找到「" : "历史会话中没有匹配「";
+        var after = interiorFound
+            ? "」出现在更长的词内部（如 ColorThemeTests），请改搜完整词。"
+            : "」的内容。";
+        // after 是紧跟关键字的**尾巴**（含收尾的「」），由 FitQueryLine 拼接；
+        // 它同时负责窄终端下保住关键字不被切掉。
+        return FormatResultLine(FitQueryLine(before, keyword, after, width) ?? $"{before}{keyword}{after}", width);
+    }
+
+    /// <summary>日志命中超过展示上限时的交代句。静默截断会让用户以为那就是全部。</summary>
+    internal static string FindLogTruncationNote() =>
+        "…（日志命中超过 5 个文件，上面只显示最新的 5 个；更精确的关键字可减少噪音）";
+
+    /// <summary>快照命中超过展示上限时的交代句。</summary>
+    internal static string FindSnapshotTruncationNote() =>
+        "…（快照命中超过 3 个，上面只显示最新的 3 个；/load <名称> 可直接恢复）";
+
+    /// <summary>命名快照文件里是否存在该关键字的子串（忽略词边界，与日志侧的探测同口径）。
+    /// 快照损坏/读不到一律按没有。</summary>
+    internal static bool SnapshotContainsSubstring(string path, string keyword)
+    {
+        if (string.IsNullOrEmpty(keyword) || !File.Exists(path))
+            return false;
+        try
+        {
+            return File.ReadAllText(path).Contains(keyword, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+    }
+
     internal static ProviderOptions EnsureSelectedProvider(AgentConfig config)
     {
         config.Providers ??= new Dictionary<string, ProviderOptions>(StringComparer.OrdinalIgnoreCase);
@@ -3415,73 +3588,13 @@ internal static class Program
                     var kw = rest.Trim();
                     if (kw.Length == 0)
                     {
-                        Console.WriteLine(FormatResultLine("用法: /find <关键字> —— 在历史会话日志里搜索内容（与 /resume 同源，最新在前）", ConsoleColumns()));
+                        Console.WriteLine(FormatResultLine("用法: /find <关键字> —— 在历史会话日志与已保存快照里搜索内容（与 /resume、/load 同源，最新在前）", ConsoleColumns()));
                         break;
                     }
-                    var logs = ResumableLogs(agent, config);
-                    if (logs.Count == 0)
-                    {
-                        Console.WriteLine(FormatResultLine("没有可搜索的会话记录（先正常对话过一次，或检查 saveSessions 配置）。", ConsoleColumns()));
-                        break;
-                    }
-                    var printed = 0;
-                    var moreAvailable = false;
-                    foreach (var log in logs)
-                    {
-                        if (printed >= 5)
-                        {
-                            moreAvailable = true; // 还有未展示的日志：提示缩小关键字
-                            break;
-                        }
-                        var hits = AgentClass.SearchSessionLog(log, kw);
-                        if (hits.Count == 0)
-                            continue;
-                        var label = Path.GetFileNameWithoutExtension(log);
-                        var age = TextUtil.RelativeTime(File.GetLastWriteTimeUtc(log), DateTime.UtcNow);
-                        Console.WriteLine(FormatResultLine($"{label} · {age}（/resume 可恢复）:", ConsoleColumns()));
-                        foreach (var (role, snippet) in hits)
-                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns(), kw));
-                        printed++;
-                    }
-                    if (printed == 0)
-                    {
-                        // 0 命中**不等于**没有这个字串：ASCII 关键字只出现在更长的词内部时
-                        // 会被词边界规则滤掉（搜 the 命中 PathEscape 是噪音，宁可不要）。
-                        // 此时若还说「没有匹配「X」的内容」，那句话是**假的**——内容里有 X，
-                        // 用户会以为自己记错了。实测搜 lorTheme：grep 得到内容里确实有，
-                        // /find 却回"没有匹配"。
-                        var interiorOnly = AgentClass.NeedsSearchWordBoundary(kw)
-                            && logs.Any(l => AgentClass.LogContainsSubstring(l, kw));
-                        // 两个case必须**各说各的话**：都套「没有匹配」会自相矛盾
-                        // （"没有匹配「X」…但它只出现在…"——既说没有又说有）。
-                        // after 是紧跟关键字的**尾巴**（含收尾的「」），由 FitQueryLine 拼接；
-                        // 它同时负责窄终端下保住关键字不被切掉。
-                        var before = interiorOnly ? "词边界：只找到「" : "历史会话中没有匹配「";
-                        var after = interiorOnly
-                            ? "」出现在更长的词内部（如 ColorThemeTests），请改搜完整词。"
-                            : "」的内容。";
-                        Console.WriteLine(FormatResultLine(
-                            FitQueryLine(before, kw, after, ConsoleColumns())
-                            ?? $"{before}{kw}{after}", ConsoleColumns()));
-                    }
-                    else if (moreAvailable)
-                        Console.WriteLine(FormatResultLine("…（仅显示前 5 个命中文件，更精确的关键字可减少噪音）", ConsoleColumns()));
-
-                    // 命名快照（/save 的 .json）也纳入搜索：快照是用户显式保存的，命中价值高
-                    var snapshotDir = Path.Combine(Environment.CurrentDirectory, config.SessionDir);
-                    var snapshotPrinted = 0;
-                    foreach (var (name, age) in SavedSessions(snapshotDir))
-                    {
-                        if (snapshotPrinted >= 3)
-                            break;
-                        var hits = AgentClass.SearchSnapshot(Path.Combine(snapshotDir, name + ".json"), kw);
-                        if (hits.Count == 0)
-                            continue;
-                        Console.WriteLine(FormatResultLine($"快照 {name} · {age}（/load {name} 恢复）:", ConsoleColumns()));
-                        foreach (var (role, snippet) in hits)
-                            Console.WriteLine(FormatSearchHitLine(role, snippet, ConsoleColumns(), kw));
-                        snapshotPrinted++;
-                    }
+                    // 「没有可搜索的记录」这句话由 PrintFindResults 统一下：
+                    // 它要**同时**看日志与快照，只看日志时只有快照的用户会被
+                    // 挡在门外，明明有可搜的内容却收到「没有可搜索的会话记录」。
+                    PrintFindResults(agent, config, kw);
                 }
                 break;
 

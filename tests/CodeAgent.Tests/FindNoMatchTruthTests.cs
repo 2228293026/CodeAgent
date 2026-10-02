@@ -79,10 +79,15 @@ public sealed class FindNoMatchTruthTests
     [Fact]
     public void TheInteriorBranchIsGatedOnTheWordBoundaryRule()
     {
-        // 中文关键字不走词边界，那种情形根本不会出现，别白扫一遍磁盘
+        // 中文关键字不走词边界，那种情形根本不会出现，别白扫一遍磁盘。
+        // 日志与快照**两条路径都要扫**：只有快照的用户同样会撞上"词内出现"，
+        // 只扫日志的话那种人只会收到一句"没有匹配"，而内容明明在。
         var src = ReadSource(FindProgram());
-        Assert.Contains("AgentClass.NeedsSearchWordBoundary(kw)", src);
-        Assert.Contains("AgentClass.LogContainsSubstring(l, kw)", src);
+        Assert.Contains("AgentClass.NeedsSearchWordBoundary(keyword)", src);
+        Assert.Contains("AgentClass.LogContainsSubstring(log, keyword)", src);
+        Assert.Contains("SnapshotContainsSubstring(path, keyword)", src);
+        // 且这个"只在词内部"的交代句必须跟着结论一起出现，不能自己先跑
+        Assert.Contains("FindNoMatchLine(keyword, scan.InteriorWhere.Count > 0, width)", src);
     }
 
     private static string ReadSource(string p) => File.ReadAllText(p).Replace("\r\n", "\n");

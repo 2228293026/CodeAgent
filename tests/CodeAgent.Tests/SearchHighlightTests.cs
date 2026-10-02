@@ -114,10 +114,13 @@ public sealed class SearchHighlightTests
     [Fact]
     public void FindPassesTheKeywordThrough()
     {
-        // 只测纯函数会漏掉"/find 没把关键字传进来"——那正是原来命中处看不见的原因
+        // 只测纯函数会漏掉"/find 没把关键字传进来"——那正是原来命中处看不见的原因。
+        // 两条路径（日志与快照）各一处；参数名从旧的 kw 改成了 keyword，匹配时按"实参形如
+        // 关键字变量"来数，别把关键字字面量钉死。
         var src = System.IO.File.ReadAllText(Find());
-        var calls = Occurrences(src, "FormatSearchHitLine(role, snippet, ConsoleColumns(), kw)");
+        var calls = Occurrences(src, "FormatSearchHitLine(h.Role, h.Snippet, width, keyword)");
         Assert.Equal(2, calls); // 会话日志与命名快照两条路径
+        Assert.Equal(0, Occurrences(src, "FormatSearchHitLine(h.Role, h.Snippet, width)"));
     }
 
     private static int Occurrences(string haystack, string needle)
