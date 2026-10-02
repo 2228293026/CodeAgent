@@ -209,6 +209,15 @@ public sealed partial class Agent
         TurnThinkingSeconds = 0;
         LastInputTokens = 0; // 上下文回到仅系统提示，ctx 退回估算口径
         LastCachedTokens = 0; // 配对清零
+        // 会话累计也必须归零：否则 /stats 会把**被清掉的那段对话**算进「请求次数」
+        // 「新输入 tokens」「平均每次」——而上面每一项都已经是新会话的数了，
+        // 同一块面板里混着两段时间的统计，任何一行都读不出意义。
+        // （此前刻意不清零，理由是"统计的是会话进程本身"；
+        //   但 /clear 的语义就是开始新对话，留着旧累计与它自相矛盾。）
+        ProviderCalls = 0;
+        TotalInputTokens = 0;
+        TotalOutputTokens = 0;
+        TotalCachedTokens = 0;
         LastPrompt = null; // 对话已清空：/retry 不应把旧问题复活进新会话
         LastTurnFailed = false; // 新会话不应残留上一回合的失败状态：状态栏红标会误导
         StreamedLastRun = false; // 新会话不应残留上一轮的流式输出状态

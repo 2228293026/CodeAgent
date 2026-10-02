@@ -58,6 +58,15 @@ public sealed partial class Agent
         TurnThinkingSeconds = 0;
         LastInputTokens = 0; // 上下文变为加载的历史：退回估算口径
         LastCachedTokens = 0; // 配对清零：上一会话的缓存数不属于这份历史
+        // 会话累计同样归零：加载的是**别人的**对话，
+        // 把它和当前会话的请求次数/token 加在一起毫无意义
+        // （与 /clear 的 Reset() 同一口径：换了一整份对话，累计就重新开始）。
+        // 代价是"这一天总共花了多少钱"不再可查——但那个数字本来就没地方存，
+        // 而混着两段对话的数字只会误导。
+        ProviderCalls = 0;
+        TotalInputTokens = 0;
+        TotalOutputTokens = 0;
+        TotalCachedTokens = 0;
         LastPrompt = null;   // 加载前的「上一条请求」不应被 /retry 复活进加载的对话
         // 同 /clear：换了一份对话就换了一份任务清单。加载的是别人的历史，
         // 而清单是**当前这次工作**的进度——留着上一会话的待办只会误导。
@@ -251,6 +260,10 @@ public sealed partial class Agent
         _turnStarts.Clear(); // 恢复的会话没有「上一轮」可撤回
         LastInputTokens = 0; // 上下文变为恢复的历史：退回估算口径
         LastCachedTokens = 0; // 配对清零：上一会话的缓存数不属于这份历史
+        ProviderCalls = 0; // 同上：累计统计重新开始（与 /load、/clear 一致）
+        TotalInputTokens = 0;
+        TotalOutputTokens = 0;
+        TotalCachedTokens = 0;
         Tasks.Clear(); // 同上：换对话就换任务清单，上一会话的待办不该跟着过来
 
         RollSessionLog(ct);

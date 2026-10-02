@@ -347,17 +347,22 @@ public class AgentEdgeTests : IDisposable
     }
 
     [Fact]
-    public async Task Reset_KeepsSystemAndClearsStats_ButNotTotal()
+    public async Task Reset_KeepsSystemAndClearsStats_IncludingTotals()
     {
         var provider = new FakeProvider { NextResponse = new ProviderResponse { Text = "ok", InputTokens = 10 } };
         var agent = MakeAgent(provider);
         await agent.RunAsync("x", CancellationToken.None);
         Assert.Equal(10, agent.TotalInputTokens);
+        Assert.Equal(1, agent.ProviderCalls);
 
         agent.Reset();
         Assert.Equal(1, agent.MessageCount); // 仅 system
         Assert.Equal(MessageRole.System, agent.Messages[0].Role);
-        Assert.Equal(10, agent.TotalInputTokens); // 会话级累计不清零（/stats 口径）
+        // /clear 的语义是"开始新对话"，会话累计也必须重新开始。
+        // 此前这里**刻意不清零**，理由是"/stats 口径"——但那会让同一块面板
+        // 混着两段时间：回合摘要是新对话的，请求次数/累计 token 是被清掉的那段的。
+        Assert.Equal(0, agent.TotalInputTokens);
+        Assert.Equal(0, agent.ProviderCalls);
     }
 
     [Fact]

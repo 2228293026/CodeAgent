@@ -14,8 +14,18 @@ internal static class Program
 
     /// <summary>回合被用户取消的哨兵返回（区别于模型回复文本：模型内容可能含"已取消"字样）。</summary>
     private const string CancelledTurnMarker = "\u001bCANCELLED_TURN";
-    /// <summary>会话总时长（/stats 显示用；从进程启动计）。/clear 不重置——统计的是会话进程本身。</summary>
+    /// <summary>会话总时长（/stats 显示用）。
+    ///
+    /// <c>/clear</c> 会**重置**：它已经清掉了回合 token、上下文与任务清单，
+    /// 而这一行的标签是「会话时长」——同一块面板里，
+    /// 「请求次数 3」「新输入 129」说的是新会话，「会话时长 20s」却包含被清掉的那段，
+    /// 三个数字不是同一段时间的。用户无法从中得出任何结论。
+    ///
+    /// 统计的应该是**当前这次对话**，不是进程存活时间。</summary>
     private static readonly System.Diagnostics.Stopwatch SessionStopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+    /// <summary>/clear 后重新计时；/load 与 /resume 也调用（换了一整份对话）。</summary>
+    private static void RestartSessionTimer() => SessionStopwatch.Restart();
 
     /// <summary>判断结果是否为「用户取消」哨兵（精确匹配，防止模型文本含"已取消"被误判）。</summary>
     internal static bool IsCancelledTurn(string? result) => result == CancelledTurnMarker;
@@ -332,7 +342,10 @@ internal static class Program
             if (target is null)
                 Console.WriteLine(FormatResultLine("没有可恢复的会话记录（先正常对话过一次，或检查 saveSessions 配置）。", ConsoleColumns()));
             else if (agent.LoadSessionLog(target))
+            {
+                RestartSessionTimer(); // --continue 恢复的是一段旧对话，计时从现在起算
                 Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), SafeColor.Glyphs.Retry));
+            }
             else
                 Console.WriteLine($"{SafeColor.Glyphs.Warn} 会话日志无法恢复（文件可能损坏）。");
         }
@@ -2865,6 +2878,7 @@ internal static class Program
 
             case "/clear":
                 agent.Reset();
+                RestartSessionTimer(); // 换了对话，「会话时长」必须与其它统计同一段时间
                 Console.WriteLine("已清空对话历史。");
                 break;
 
@@ -3307,6 +3321,7 @@ internal static class Program
                     try
                     {
                         agent.LoadSession(rest.Trim());
+                        RestartSessionTimer(); // 换了对话：累计统计与时长都重新开始
                         Console.WriteLine(FormatConfirmLine($"已恢复会话: {rest.Trim()}", ConsoleColumns()));
                         PrintConversation(agent, 20); // 显示恢复的最近 20 条（全量打印长会话会刷屏）
                     }
@@ -3332,6 +3347,7 @@ internal static class Program
                     {
                         if (agent.LoadSessionLog(logs[ridx - 1]))
                         {
+                            RestartSessionTimer(); // 换了对话：累计统计与时长都重新开始
                             Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(logs[ridx - 1])}", ConsoleColumns(), SafeColor.Glyphs.Retry));
                             PrintConversation(agent, 20);
                         }
