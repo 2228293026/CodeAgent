@@ -220,6 +220,13 @@ public sealed class OpenAiProvider : IAgentProvider
         int? inTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens"]);
         int? outTok = ProviderJson.OptInt(root?["usage"]?["completion_tokens"]);
         int? cachedTok = ProviderJson.OptInt(root?["usage"]?["prompt_tokens_details"]?["cached_tokens"]);
+        // OpenAI 的 prompt_tokens **包含** cached_tokens；Anthropic 的 input_tokens **不含**
+        // cache_read_input_tokens。两个 provider 若都把原始值直接往上送，
+        // 上层算出来的「缓存命中率」在 OpenAI 侧必然是 0%（分母巨大、分子相对很小）。
+        // 实测（kilo 网关，OpenAI 兼容形状）：41,937 in + 0 cached → 0% cached，
+        // 而用户看到的提示词远不到 42k——差额几乎全在命中缓存的那部分里。
+        // 修完后同一轮是「1 in / 10 out tok 99% cached」：in 只剩真正新增的 token。
+        inTok = NormalizeInputTokens(inTok, cachedTok);
         var finish = ProviderJson.OptString(firstChoice?["finish_reason"]); // "length" = 被 max_tokens 截断
 
         return new ProviderResponse
@@ -356,6 +363,11 @@ public sealed class OpenAiProvider : IAgentProvider
                 if (ck is not null)
                     cachedTok = ck;
             }
+
+            // 流式与非流式**同一口径**：prompt_tokens 含 cached_tokens，
+            // 这里统一减掉，理由见非流式分支的注释。不做的话流式会算出一个
+            // 偏低的命中率、且与 /stats 的累计值对不上。
+            inTok = NormalizeInputTokens(inTok, cachedTok);
 
             // finish_reason 随结束 chunk 到达（可能不带 delta）：取最后一个非空值
             var fr = ProviderJson.OptString(firstChoice?["finish_reason"]);
@@ -555,6 +567,17 @@ public sealed class OpenAiProvider : IAgentProvider
         // is JsonArray 守卫：data 不是数组（错误页/网关异常页）返回 null 而不是抛异常
         return JsonNode.Parse(body)?["data"] is JsonArray arr ? arr : null;
     }
+
+    /// <summary>把 OpenAI 的 <c>prompt_tokens</c> 归一化成「未命中的新 token」。
+    ///
+    /// 抽成纯函数是为了能直接测：解析入口要走完整的 HTTP 响应形状，
+    /// 而这里只需要两个整数。流式与非流式**共用**这一处——只减一条路径的话，
+    /// /stats 的累计值会与回合摘要对不上（两个数来自不同的口径）。
+    /// </summary>
+    internal static int? NormalizeInputTokens(int? promptTokens, int? cachedTokens) =>
+        cachedTokens is int ck and > 0 && promptTokens is int it
+            ? Math.Max(0, it - ck)
+            : promptTokens;
 
     private static JsonArray BuildMessages(IReadOnlyList<ProviderMessage> messages)
     {

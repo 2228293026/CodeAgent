@@ -86,7 +86,9 @@ public class OpenAiProviderStreamTests
             [], "off", null, null, null, CancellationToken.None);
 
         Assert.Equal("hi", resp.Text);
-        Assert.Equal(12, resp.InputTokens);
+        // prompt_tokens=12 里含 cached=2，归一化后「新的输入 token」是 10。
+        // 流式与非流式必须**同一口径**，否则 /stats 的累计与回合摘要会互相打架。
+        Assert.Equal(10, resp.InputTokens);
         Assert.Equal(5, resp.OutputTokens);
         Assert.Equal(2, resp.CachedTokens);
     }

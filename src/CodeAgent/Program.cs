@@ -1233,7 +1233,10 @@ internal static class Program
     /// 整段中文回复看起来像是以「-- ✓ 完成 1 轮」结尾的，而那不是模型说的话。</param>
     private static void PrintTurnSummary(AgentClass agent, TimeSpan elapsed, ProviderOptions opts, string ctxText, bool streamedOnLineBoundary = true)
     {
-        var cache = agent.TurnInputTokens > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens)}% cached" : "";
+        // 分母 = 新 token + 命中缓存，两者缺一都会把比率算错：
+        // 只用 TurnInputTokens（Anthropic 口径，已不含 cached），OpenAI 侧会永远显示 0%。
+        var cacheBase = agent.TurnInputTokens + agent.TurnCachedTokens;
+        var cache = cacheBase > 0 ? $" {TextUtil.PercentOf(agent.TurnCachedTokens, cacheBase)}% cached" : "";
         var think = agent.TurnThinkingSeconds > 0 ? $" 思考 {agent.TurnThinkingSeconds:F1}s" : "";
         // 单价优先取当前 provider 的配置，未配置回退全局（多 provider 切换时全局价曾算错费用）
         var cost = TextUtil.UsdCost(agent.TurnInputTokens, agent.TurnOutputTokens,
@@ -3562,7 +3565,13 @@ internal static class Program
                     if (agent.ProviderCalls > 0)
                         statRows.Add(("平均每次", $"{avg:N0} tokens"));
                     if (agent.TotalCachedTokens > 0)
-                        statRows.Add(("缓存命中", $"{agent.TotalCachedTokens:N0} tokens"));
+                    {
+                        // 命中率一并给出：只报绝对值的话用户得自己拿 TotalInputTokens 做除法，
+                        // 而分母到底该不该含 cached 正是此前说不清的地方。
+                        var base2 = agent.TotalInputTokens + agent.TotalCachedTokens;
+                        statRows.Add(("缓存命中", $"{agent.TotalCachedTokens:N0} tokens"
+                            + (base2 > 0 ? $"（{TextUtil.PercentOf(agent.TotalCachedTokens, base2)}%）" : "")));
+                    }
                     statRows.Add(("当前上下文", ctxText));
                     statRows.Add(("会话时长", TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)));
                     if (cost is { } c)

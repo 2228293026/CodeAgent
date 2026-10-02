@@ -503,7 +503,10 @@ public class OpenAiProviderTests
             [], "off", CancellationToken.None);
 
         Assert.Equal("ok", resp.Text);
-        Assert.Equal(12, resp.InputTokens);
+        // prompt_tokens=12 里含 cached=5，归一化后「新的输入 token」是 7。
+        // 这条测试的意图是**字符串形式的计数要能解析**（不是取整型），
+        // 顺带把归一化后的口径钉住：in 不含 cached，与 Anthropic 对齐。
+        Assert.Equal(7, resp.InputTokens);
         Assert.Equal(34, resp.OutputTokens);
         Assert.Equal(5, resp.CachedTokens);
     }
