@@ -89,7 +89,11 @@ public sealed class InvalidValueLineTests
             "没有模式「{wanted}」",
         })
             Assert.DoesNotContain(handRolled, src);
-        Assert.True(Count(src, "FormatInvalidValueLine(") >= 5, "四个调用点 + 定义");
+        // Round 316 起取值报错拆成两行（第一行列可选值，第二行点名候选），
+        // 所以「无效值 / 无效权限模式」走的是 FormatInvalidValueLines 入口。
+        // 锚定新入口，而不是那句已经被替换掉的一行式调用。
+        Assert.True(Count(src, "FormatInvalidValueLine(") >= 2, "定义 + 至少一个调用点");
+        Assert.True(Count(src, "FormatInvalidValueLines(") >= 4, "定义 + 三个取值命令调用点");
     }
 
     private static int Count(string haystack, string needle)

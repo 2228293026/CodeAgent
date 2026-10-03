@@ -2062,6 +2062,13 @@ internal static class Program
     /// 单一来源：两处各写一份数组，迟早会一边加了档位另一边没加。</summary>
     internal static readonly string[] ThinkingEfforts = ["off", "low", "medium", "high", "auto"];
 
+    /// <summary>命令 shell 取值（含 auto）：<c>/shell</c> 的展示、可选列表与候选提示共用同一份，
+    /// 此前三处各写一份字面量，改选项时必有一处漏掉——而漏掉的那处会让"可选"与实际可设值对不上。</summary>
+    internal static readonly string[] ShellNames = ["cmd", "powershell", "pwsh", "bash", "sh", "auto"];
+
+    /// <summary>文件访问权限档位（<c>/access</c>）。同样收口，避免展示与校验分叉。</summary>
+    internal static readonly string[] FileAccessModes = ["strict", "whitelist", "full"];
+
     /// <summary>Ctrl+T 把思考强度切到下一档（学自 Claude Code）。
     ///
     /// 末档回到第一档，<b>不</b>停在末档：用户连按 Ctrl+T 是"越来越用力"的意思，
@@ -2086,6 +2093,15 @@ internal static class Program
     ///
     /// 宁可**不给**建议，也不给一个离谱的：阈值随长度放宽，但上限 3——
     /// 「你是不是想输入 /history？」配一个八竿子打不着的命令，比不提示更让人困惑。
+    ///
+    /// 阈值原本是 <c>len/3</c>（上限 3），于是 4~5 个字母的词预算只有 1，
+    /// 而**相邻字母换位**在 Levenshtein 下算 **2 次**编辑——用户手指最常见的一种打错
+    /// （deubg→debug、plna→plan、basj→bash 里的换位）被静默丢弃，一个候选都不给。
+    /// 现实是 3~4% 的人天生把相邻字母打反，这不是"离得远"，是"打错了"。
+    /// 因此额外认下「Damerau 距离 ≤ 1」，即**只差一次相邻换位**：
+    /// 它比任何距离 2 的插入/删除都更像一次手误，而距离 2 的其它形态仍然不认，
+    /// 噪音边界不变。<see cref="SuggestValues"/>（取值提示）也用这一条，
+    /// 于是 <c>/mode deubg</c> 与 <c>/moddeubg</c> 口径一致。
     /// </summary>
     internal static string[] SuggestCommands(string input, IEnumerable<string> commands, int maxSuggestions = 3)
     {
@@ -2103,7 +2119,9 @@ internal static class Program
                 if (name.Length == 0)
                     continue;
                 var isPrefix = name.Length > want.Length && name.StartsWith(want, StringComparison.OrdinalIgnoreCase);
-                var d = isPrefix ? 0 : Levenshtein(want, name);
+                // 相邻换位的距离记成 1：它只在「本来就只差一次」时才被采纳，
+                // 不会放宽整体阈值（距离 2 的换位依旧在 budget 之外）
+                var d = isPrefix ? 0 : Levenshtein(want, name, transpositionCostsOneEdit: true);
                 // 差得太多就不提：/zzzz 提示「你是不是想 /undo」是纯粹的噪音。
                 // 前缀匹配（/stat → /status）不算"差得远"——那是命令打到一半，不是拼错。
                 if (d > budget && !isPrefix)
@@ -2125,8 +2143,39 @@ internal static class Program
     /// <summary>命令名的比较用形式：去掉全部斜杠与首尾空白（<c>//exit</c> 与 <c>/exit</c> 同义）。</summary>
     private static string NormalizeCommandName(string s) => s.Trim().Trim('/').Trim();
 
-    /// <summary>编辑距离（Levenshtein）。滚动两行实现，空间 O(min) 而不是 O(n·m)。</summary>
-    private static int Levenshtein(string a, string b)
+    /// <summary>
+    /// 取值类参数（模式名 / shell 名 / 思考强度）的**拼写候选**，与 <c>/命令</c> 的
+    /// <see cref="SuggestCommands"/> 同源，但去掉了前导斜杠那一层。
+    ///
+    /// 此前只有 <c>/mode</c> 写了候选逻辑，而且判据是<strong>双向包含</strong>——
+    /// 「候选名含有输入，或输入含有候选名」。于是 <c>/mode refactr</c>（差一个 r）、
+    /// <c>/mode deubg</c>（字母换位）、<c>/shell basj</c>、<c>/thinking higj</c>
+    /// 全部**一个字都不提示**，只打一句「可选: code / plan / …」让用户自己在八个值里猜；
+    /// 而同一个错误输入写成 <c>/mod refactr</c> 时「你是不是想 /mode」的引擎却能命中。
+    /// 同一份「用户打错字」的善意，用在了命令名上、没用在取值上。
+    /// 修法：共用同一套编辑距离 + 前缀优先的判据，两边口径从此一致。
+    /// </summary>
+    internal static string[] SuggestValues(string input, IEnumerable<string> values, int maxSuggestions = 3)
+    {
+        var want = input.Trim();
+        if (want.Length == 0)
+            return [];
+        // 取值（模式/shell/强度）全是小写标识符，输入统一小写后再比——
+        // Levenshtein 本身区分大小写，/mode CODE 曾被当成差 4 个字符的真拼错。
+        return SuggestCommands(want.ToLowerInvariant(), values.Select(v => v.ToLowerInvariant()))
+            .Select(s => s.TrimStart('/'))
+            .ToArray();
+    }
+
+    /// <summary>编辑距离。滚动缓冲，空间 O(min) 而不是 O(n·m)。
+    ///
+    /// <paramref name="transpositionCostsOneEdit"/> = true 时改用 Damerau 口径：相邻换位算 1 次编辑。
+    /// 换位要回看第 <c>i-2</c> 行，所以滚动缓冲是**三**行而不是两行——第一版沿用了两行，
+    /// 换位分支读到的其实是第 <c>i-1</c> 行，于是 <c>deubg</c>→<c>debug</c> 仍算 2 而被阈值丢弃，
+    /// 功能看起来「改了但没生效」，真机也没能看出来。
+    /// **滚动缓冲的行数必须匹配回看跨度**，别按惯性写两行。
+    /// </summary>
+    internal static int Levenshtein(string a, string b, bool transpositionCostsOneEdit = false)
     {
         if (a.Length == 0)
             return b.Length;
@@ -2134,16 +2183,26 @@ internal static class Program
             return a.Length;
         var prev = new int[b.Length + 1];
         var cur = new int[b.Length + 1];
+        // 第三行只在换位口径下被读到，但热路径（每个候选算一次）不值得为此开分支
+        var prev2 = transpositionCostsOneEdit ? new int[b.Length + 1] : prev;
         for (var j = 0; j <= b.Length; j++)
             prev[j] = j;
         for (var i = 1; i <= a.Length; i++)
         {
             cur[0] = i;
             for (var j = 1; j <= b.Length; j++)
+            {
                 cur[j] = Math.Min(
                     Math.Min(cur[j - 1] + 1, prev[j] + 1),
                     prev[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
-            (prev, cur) = (cur, prev);
+                if (transpositionCostsOneEdit && i > 1 && j > 1 &&
+                    a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1])
+                    cur[j] = Math.Min(cur[j], prev2[j - 2] + 1); // 换位一次即可（读第 i-2 行）
+            }
+            if (transpositionCostsOneEdit)
+                (prev2, prev, cur) = (prev, cur, prev2);
+            else
+                (prev, cur) = (cur, prev);
         }
         return prev[b.Length];
     }
@@ -3048,6 +3107,35 @@ internal static class Program
             : $"{label}: {given}（可选: {list}）";
         return width > 0 ? FormatNoticeLine(body, width) : body;
     }
+
+    /// <summary>
+    /// 「无效取值」的两行渲染：一句交代**错在哪/能用什么**，一句点名**最接近的取值**。
+    ///
+    /// 此前只打第一行，于是 <c>/shell basj</c>、<c>/thinking higj</c>、<c>/mode refactr</c>
+    /// 这类拼错只得到一句「可选: cmd / powershell / pwsh / bash / sh / auto」——
+    /// 六个值全列出来，用户得自己在脑子里做编辑距离；而同一份数据在
+    /// <c>/model</c> 与 <c>/mode</c> 上是会给候选的。同一个错误，三种表现。
+    /// 候选为空的输入行个别的情形（真的离所有取值都很远）**不加**这一行，
+    /// 免得给出八竿子打不着的建议——那比不提示更让人困惑。
+    /// </summary>
+    internal static IReadOnlyList<string> FormatInvalidValueLines(string label, string given, IEnumerable<string> options, int width = 0)
+    {
+        var opts = options as IList<string> ?? options.ToList();
+        return FormatInvalidValueLines(label, given, opts, SuggestValues(given, opts), width);
+    }
+
+    /// <summary>候选已算好时的重载（<c>/mode</c> 自带自定义模式列表，复用同一个判据）。</summary>
+    internal static IReadOnlyList<string> FormatInvalidValueLines(string label, string given, IList<string> options, string[] near, int width)
+    {
+        var lines = new List<string> { FormatInvalidValueLine(label, given, options, width) };
+        // 剔掉用户自己刚敲的那个：距离为 0 的候选在纯函数里是必然产物，
+        // 而「无效值: basj」配一句「你是不是想: basj」是在拿错误搪塞错误。
+        // 真的离所有取值都很远时，剔完就空了，也就自然不打这一行。
+        var usable = near.Where(n => !string.Equals(n, given.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (usable.Length > 0)
+            lines.Add(width > 0 ? FormatNoticeLine($"  你是不是想: {string.Join("、", usable)}", width) : $"  你是不是想: {string.Join("、", usable)}");
+        return lines;
+    }
     private static bool HandleCommand(
         string line,
         AgentConfig config,
@@ -3132,7 +3220,7 @@ internal static class Program
                 else if (!string.IsNullOrWhiteSpace(rest))
                 {
                     var mode = rest.Trim().ToLowerInvariant();
-                    if (mode is "strict" or "whitelist" or "full")
+                    if (FileAccessModes.Contains(mode, StringComparer.Ordinal))
                     {
                         if (mode == "full" && !ConfirmFullAccess(Console.In, Console.Out))
                             break; // 用户取消：保持当前模式
@@ -3143,7 +3231,8 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice(FormatInvalidValueLine("无效权限模式", rest, ["strict", "whitelist", "full"], ConsoleColumns()));
+                        foreach (var l in FormatInvalidValueLines("无效权限模式", rest, FileAccessModes, ConsoleColumns()))
+                            WriteNotice(l);
                     }
                 }
                 else
@@ -3833,10 +3922,11 @@ internal static class Program
                     {
                         Console.WriteLine(FormatInvalidValueLine(
                             "没有模式", wanted, modes.Select(m => m.Name), ConsoleColumns()));
-                        var near = modes.Where(m => m.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase)
-                                                    || wanted.Contains(m.Name, StringComparison.OrdinalIgnoreCase))
-                                        .Select(m => m.Name).Take(3).ToList();
-                        if (near.Count > 0)
+                        // 候选判据与 /model、/命令 共用（编辑距离 + 前缀优先）：
+                        // 原来的双向 Contains 让 refactr/deubg 这类打错**一个候选都不给**，
+                        // 而 /mode 若被当成命令名（/mod refactr）反而能提示。
+                        var near = SuggestValues(wanted, modes.Select(m => m.Name));
+                        if (near.Length > 0)
                             WriteNotice($"  相近的模式: {string.Join("、", near)}");
                     }
                     else
@@ -4002,7 +4092,8 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice(FormatInvalidValueLine("无效值", rest, ThinkingEfforts, ConsoleColumns()));
+                        foreach (var l in FormatInvalidValueLines("无效值", rest, ThinkingEfforts, ConsoleColumns()))
+                            WriteNotice(l);
                     }
                 }
                 break;
@@ -4017,12 +4108,14 @@ internal static class Program
                         ? $"auto（当前生效: {(auto.Length == 0 ? "bash" : auto)}）"
                         : config.Shell;
                     Console.WriteLine(FormatSettingWithOptionsLine(
-                        "命令 shell", current, ["cmd", "powershell", "pwsh", "bash", "sh", "auto"], ConsoleColumns()));
+                        "命令 shell", current, ShellNames, ConsoleColumns()));
                 }
                 else
                 {
                     var v = rest.Trim().ToLowerInvariant();
-                    if (v is "cmd" or "powershell" or "pwsh" or "bash" or "sh" or "auto")
+                    // 用 ShellNames 判合法，而不是另写一份字面量：展示的「可选」列表、
+                    // 这里的校验、报错时的候选提示必须是同一份，否则三处会各说各话
+                    if (ShellNames.Contains(v, StringComparer.Ordinal))
                     {
                         config.Shell = v == "auto" ? "" : v;
                         // 持久化到配置文件，重启后仍然生效
@@ -4039,7 +4132,8 @@ internal static class Program
                     }
                     else
                     {
-                        WriteNotice(FormatInvalidValueLine("无效值", rest, ["cmd", "powershell", "pwsh", "bash", "sh", "auto"], ConsoleColumns()));
+                        foreach (var l in FormatInvalidValueLines("无效值", rest, ShellNames, ConsoleColumns()))
+                            WriteNotice(l);
                     }
                 }
                 break;
@@ -4156,11 +4250,13 @@ internal static class Program
         return n <= 0 ? string.Empty : $"  · {n} 个工具";
     }
     /// <summary>命令是否为模式/权限切换。必须与 HandleCommand 的切换分支保持一致
-    /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。</summary>
+    /// （切换命令恰好输出一行确认并跳过状态栏，原地覆盖按「消息+空行+提示符」三行计算）。
+    /// 权限档位走 <see cref="FileAccessModes"/>：此前这里写着一份字面量，而 HandleCommand
+    /// 校验的是另一份——改选项只改一处时，<c>/access</c> 会切成功却不更新状态栏（多刷三行）。</summary>
     internal static bool IsSwitchCommand(string cmd, string rest) =>
         rest.Trim().Equals("next", StringComparison.OrdinalIgnoreCase) && cmd is "/mode" or "/access"
         || cmd == "/mode" && !string.IsNullOrWhiteSpace(rest)
-        || cmd == "/access" && rest.Trim().ToLowerInvariant() is "strict" or "whitelist" or "full";
+        || cmd == "/access" && FileAccessModes.Contains(rest.Trim().ToLowerInvariant(), StringComparer.Ordinal);
 
     /// <summary>帮助条目：命令/参数 + 说明。</summary>
     internal readonly record struct HelpEntry(string Command, string Description);

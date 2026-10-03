@@ -90,8 +90,10 @@ public class UnboundedNoticeLineTests
         var source = File.ReadAllText(FindSource("Program.cs"));
         foreach (var echo in new[]
         {
-            "FormatInvalidValueLine(\"无效值\"",
-            "FormatInvalidValueLine(\"无效权限模式\"",
+            // Round 316 起取值报错走两行入口 FormatInvalidValueLines（自带候选行）
+            "FormatInvalidValueLines(\"无效值\", rest, ThinkingEfforts",
+            "FormatInvalidValueLines(\"无效值\", rest, ShellNames",
+            "FormatInvalidValueLines(\"无效权限模式\", rest, FileAccessModes",
             "模型列表中没有「{modelArg}」",
             "切换失败: {ex.Message}",
             "保存失败: {ex.Message}",
