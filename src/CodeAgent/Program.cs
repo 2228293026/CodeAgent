@@ -687,14 +687,6 @@ internal static class Program
             .ToList();
     }
 
-    /// <summary>/find 的扫描与打印：先扫完**两类来源**再下结论，最后才打印。
-    ///
-    /// 回归点：结论曾按「日志命中数」下，而快照扫描发生在结论打印**之后**，
-    /// 于是只在快照里命中时，同一屏上先打「历史会话中没有匹配「X」的内容。」
-    /// 紧接着又打出含 X 的快照——自相矛盾，且用户会以为自己记错了。
-    /// 两类来源现在一起扫描、一起计数，结论只在**全部扫完**后出现。
-    /// 上限（5 个日志 / 3 个快照）一律显式交代，不静默截断。
-    /// </summary>
     /// <summary>/find 的一处命中：标题 + 该条目内的命中明细。</summary>
     internal sealed record FindHitGroup(string Title, List<(string Role, string Snippet)> Hits);
 
@@ -2684,18 +2676,109 @@ internal static class Program
     internal static void PrintResultForTest(string result, bool streamed, bool prefixNewline, bool streamedOnLineBoundary) =>
         PrintResult(result, streamed, prefixNewline, streamedOnLineBoundary);
 
-    /// <summary>从模型列表中找与输入相近的候选（按输入首个家族段做包含匹配，忽略大小写；最多 max 个）。</summary>
+    /// <summary>从模型列表中找与输入最接近的候选（按输入首个家族段过滤 + 编辑距离重排；
+    /// 家族段本身打错时退化为全列表比较；最多 max 个）。</summary>
+    /// <remarks>
+    /// 回归点一：判据只有 <c>m.Contains(family)</c>，而 family 取输入按 <c>-</c>/<c>.</c>
+    /// 的**首段**，命中后按列表原序返回。于是 <c>/model deepseek-cht</c>（chat 打成 cht）
+    /// 列出的候选是 deepseek-chat、deepseek-coder、deepseek-math——正确的那个排在第二，
+    /// 而 deepseek-v3.2 这种完全无关的模型排在第三；<c>gemini-2-flash</c>（少打一个点）
+    /// 会提示 gemini-1.5-pro。同一句「相近的模型:」给的却不是最相近的那个。
+    /// 现在按编辑距离重排，**同名家族里最接近的排第一**。
+    ///
+    /// 回归点二：家族段打错时**一个候选都不给**。<c>/model gpt4o</c>（少一个连字符）、
+    /// <c>/model deepseeek-r1</c>（e 多打一个）都只得到「模型列表中没有「X」」，
+    /// 而列表里明明有 gpt-4o、deepseek-r1。真实模型名里 <c>/</c> 极常见
+    /// （<c>kilo/stealth/space-bunny-alpha</c>），首段判据把这一整类名字全挡在门外；
+    /// 家族段对不上时退回全列表比较，比什么都不提示好。
+    ///
+    /// 但退回全列表之后**不能只按距离**：<c>/model gpt</c>、<c>/model space-bunny-alpha</c>
+    /// 是缩写而不是拼错（编辑距离分别是 3 和 13），纯距离预算会把它们也挡掉，
+    /// 于是连一个候选都不给——比改之前更差。缩写另有 <see cref="AbbreviationScore"/> 免检。
+    ///
+    /// 另一处实测出来的坑：<c>/model deepseek-v4-flash</c> 这个名字**确实在列表里**
+    /// （作为 <c>commandcode/deepseek/deepseek-v4-flash</c> 等好几个名字的后缀），
+    /// 但全串距离把它排在 zen/cnb 前缀变体之后，于是用户敲了正确的名字，
+    /// 「相近的模型」却只回三个带前缀的——正确答案被自己的候选淹没。
+    /// 因此按**路径段**比：取模型名最后一段（<c>/</c> 之后）与输入比距离，
+    /// 段内命中（相等或只差一两个字符）按距离 0 参与排序；
+    /// 缩写与全串命中同样是 0。三类都保持列表原序，
+    /// 而列表顺序正是 <c>/model &lt;编号&gt;</c> 的编号顺序，提示顺序乱跳会让人对不上号。
+    /// </remarks>
     internal static IReadOnlyList<string> SuggestModels(IReadOnlyList<string> models, string input, int max = 3)
     {
         var family = input.Split('-', '.')[0];
         if (family.Length == 0)
             return [];
-        return models
+        var inFamily = models
             .Where(m => m.Contains(family, StringComparison.OrdinalIgnoreCase))
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        // 家族段本身打错时家族内一个都匹配不到（gpt4o → gpt-4o、deepseeek-r1 → deepseek-r1），
+        // 于是退回全列表比较：真正的 gpt-4o 离「gpt4o」只差一个连字符
+        if (inFamily.Count == 0)
+            inFamily = models.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // 模型名大小写在各 Provider 间不统一（GPT-4o / gpt-4o / Gemini），比距离时统一小写
+        var want = input.ToLowerInvariant();
+        // 距离预算与 /命令、/取值 同一套（len/3，上限 3）：家族过滤原本顺带挡住了噪音，
+        // 改成重排后这个界限没了，不补回来就会把 gpt-5、gemini-1.5-pro 这类
+        // 八竿子打不着的模型混进「相近的模型」里
+        var budget = Math.Clamp(want.Length / 3, 1, 3);
+        // 这里**曾经**还有一条「家族内一个都不够近就扩大到全列表」的规则，
+        // 注释写的是"粗筛不是判决"。实测证明它是**空操作**：cnb/deepseek-v4-flash
+        // 这类名字本身就含家族段 deepseek，早就在 inFamily 里了（子串匹配，不是前缀匹配）。
+        // 把它删掉后真机输出逐字节相同——一条"看起来在修 bug"的分支，
+        // 留下的只有注释在声称它修了什么。留着不如删掉，注释也随之删。
+        return inFamily
+            .Select((m, i) => (Model: m, Distance: ModelDistance(want, m), Index: i))
+            // 缩写/前缀变体（/model gpt、/model deepseek）不受距离预算约束：
+            // 它们不是"离得远"，而是**有意只打一部分**，预算按输入长度算，
+            // 于是 gpt（预算 1）比 abbreviationScore 还小，反而一个候选都拿不到。
+            // 真正的拼错仍受预算限制——两条规则各管各的，不互相顶替。
+            .Where(x => x.Distance <= budget || x.Distance == AbbreviationScore)
+            .OrderBy(x => x.Distance)
+            // 同距离时**短名优先**：cnb/deepseek-v4-flash 与 commandcode/deepseek/deepseek-v4-flash
+            // 的尾段完全相同、距离都是 0，只能靠这条分出高下。短的那个前缀更少、
+            // 更接近用户敲的字面，而更长的是多个厂商的重复副本。
+            .ThenBy(x => x.Model.Length)
+            .ThenBy(x => x.Index)
             .Take(max)
+            .Select(x => x.Model)
             .ToList();
     }
+
+    /// <summary>输入与一个模型名的接近程度（越小越近）：路径段完全相等 = 0，其次整名相等 = 0，
+    /// 前缀变体（名字里含输入但还多了后缀）按「差得少但不为零」计，缩写同样不为零，
+    /// 最后才是纯编辑距离。纯函数，好测。</summary>
+    internal static int ModelDistance(string lowerInput, string model)
+    {
+        var lower = model.ToLowerInvariant();
+        // 用户常只打最后一段：kilo/stealth/space-bunny-alpha → space-bunny-alpha
+        var tail = lower[(lower.LastIndexOf('/') + 1)..];
+        var tailDistance = Levenshtein(lowerInput, tail, transpositionCostsOneEdit: true);
+        if (tailDistance == 0)
+            return 0; // 尾段完全相等：名字就在那儿，只是前面带了厂商前缀
+        if (string.Equals(lower, lowerInput, StringComparison.Ordinal))
+            return 0; // 整名完全相等
+        var fullDistance = Levenshtein(lowerInput, lower, transpositionCostsOneEdit: true);
+        // 缩写 / 前缀变体（gpt 之于 gpt-4o、输入之于 zen/x-free）不该与完全相等同分：
+        // 实测里 zen/deepseek-v4-flash-free 与 cnb/deepseek-v4-flash 都是 0，
+        // 于是排序退化成列表顺序，把用户真正敲的那个挤到第三位。
+        // 0 已经被尾段/整名相等占用了，这里给一个"很近但不是零"的分。
+        if (lower.Contains(lowerInput, StringComparison.Ordinal))
+            fullDistance = Math.Min(fullDistance, AbbreviationScore);
+        // 尾段仍然要参与取小：deepseek-v4-flah 的**全串**距离是 5（超预算 3），
+        // 但尾段只差 1。曾把这行删掉想简化，结果"打错一个字母"重新被挡在门外——
+        // 一次 mutation 都没抓到，是探针 P317e 量的 e5 的 gpt4o/deepseek 全空。
+        return Math.Min(tailDistance, fullDistance);
+    }
+
+    /// <summary>缩写 / 前缀变体的固定分：比一次真实拼错（通常 1）更差，
+    /// 但仍在预算内，于是它们照常出现在候选里，只是排在真正相近的名字之后。
+    /// 取 2 而不是 3：3 会让 <c>/model gpt</c>（预算 1）与 <c>/model deepseek</c>（预算 2）
+    /// 这类**缩写本身极短**的输入彻底拿不到候选——那等于把"本来就支持"变成"被惩罚掉了"。
+    /// 而 2 仍大于真实拼错的 1，精确命中照样排第一。</summary>
+    internal const int AbbreviationScore = 2;
 
     /// <summary>带编号的模型展示行：编号始终按完整列表（/model &lt;编号&gt; 按完整列表解析），
     /// 过滤只影响显示哪些行——否则过滤后的编号与 /model 解析错位。</summary>

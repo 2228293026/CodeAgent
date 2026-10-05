@@ -181,15 +181,13 @@ public class PathDisplayTests
     public void SuggestModels_FamilyPrefix_FindsCandidates()
     {
         var models = new[] { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "deepseek-chat", "deepseek-reasoner" };
-        // 输入 gpt4o（拼错的家族名）：按首段 gpt4o 匹配 → 无；用 gpt 匹配的调用方语义
-        Assert.Empty(Program.SuggestModels(models, "gpt4o"));
-        // 正确家族段：gpt → 前 3 个 gpt 系
-        var gpt = Program.SuggestModels(models, "gpt-4o-min");
-        Assert.Equal(3, gpt.Count);
-        Assert.All(gpt, m => Assert.StartsWith("gpt", m));
+        // 输入 gpt4o（家族名打错：少一个连字符）：旧判据按首段 Contains 匹配 → 无候选。
+        // Round 317 起家族段对不上会退回全列表比较，gpt-4o 离它只差一个连字符。
+        Assert.Contains("gpt-4o", Program.SuggestModels(models, "gpt4o"));
+        // 正确家族段：gpt 系，但按编辑距离重排后 gpt-4o-mini（少打一个 i）比 gpt-4o 更近
+        Assert.Equal("gpt-4o-mini", Program.SuggestModels(models, "gpt-4o-min")[0]);
         // deepseek 家族
-        var ds = Program.SuggestModels(models, "deepseek-cht"); // 拼错 chat → cht
-        Assert.Equal(2, ds.Count);
+        Assert.Equal("deepseek-chat", Program.SuggestModels(models, "deepseek-cht")[0]);
     }
 
     [Fact]
