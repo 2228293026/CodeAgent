@@ -322,6 +322,9 @@ public sealed class ConsoleRenderer
                 // EmitLine 不带表格冲刷，漏了会把表格渲染到代码块之后甚至丢失），进入代码模式
                 FlushPendingBlanks();
                 FlushTable();
+                // 围栏前若正挂着正文预览（模型把 ``` 和正文写在同一批增量里），
+                // 代码行会接在预览尾巴后面——先擦掉，光标回到行首再进代码块。
+                ClearPreview();
                 _line.Clear(); // 不输出围栏分隔符本身（``` 是 Markdown 语法，不是内容）
                 _inCode = true;
                 _tickRun = 0;
