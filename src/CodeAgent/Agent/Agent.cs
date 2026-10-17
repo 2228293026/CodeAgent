@@ -707,7 +707,12 @@ public sealed partial class Agent
         if (panel.Length == 0)
             return; // 模型把清单清空了：没有面板可画，也不必解释
         lock (ConsoleLock)
+        {
+            // 与工具状态行同理：面板不经过渲染器，写之前先擦掉可能挂着的预览，
+            // 否则面板第一行会接在预览尾巴后面。
+            _renderer?.ClearLivePreview();
             Console.WriteLine(panel);
+        }
     }
 
     public IReadOnlyList<ToolSpec> ToolsForMode()
@@ -847,7 +852,12 @@ public sealed partial class Agent
         var cts = _spinnerCts;
         var frame = 0;
         lock (ConsoleLock)
+        {
+            // spinner 要独占光标行做原地动画：先让渲染器知道，它会停掉预览并擦干净，
+            // 否则两边都用 \r 重写同一行，屏幕上会闪出两段内容的碎片。
+            _renderer?.SetCursorLineBusy(true);
             Console.WriteLine(); // 输入行下方新行：spinner 独立显示，避免与输入框/输出混在一起
+        }
         _ = Task.Run(async () =>
         {
             try
@@ -896,6 +906,8 @@ public sealed partial class Agent
         {
             Console.Write(SpinnerClearSequence(_spinnerLastWidth));
             _spinnerLastWidth = 0;
+            // 清行后光标回到行首：把光标行交还给渲染器，逐字预览可以继续。
+            _renderer?.SetCursorLineBusy(false);
         }
     }
 
@@ -931,6 +943,8 @@ public sealed partial class Agent
             var frozen = $"{SafeColor.Glyphs.Ok} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}{SafeColor.Glyphs.Up} {tok} tokens";
             var frozenWidth = CodeAgent.Program.ConsoleColumnsForNotice();
             Console.WriteLine(frozenWidth > 0 ? InputLine.FitToWidth(frozen, frozenWidth) : frozen);
+            // 定格行以换行收尾、光标回到行首：光标行交还渲染器，正文可以继续逐字长出来。
+            _renderer?.SetCursorLineBusy(false);
         }
     }
 

@@ -271,6 +271,22 @@ public class LivePreviewStreamTests
     }
 
     [Fact]
+    public void SpinnerOwnershipSuspendsThePreview()
+    {
+        // spinner 每 120ms 用 \r 原地重写同一行。若此时照常画预览，两边会互相覆盖：
+        // 预览的 \r + ESC[2K 先清掉 spinner 那一帧，动画看起来在闪，屏幕上留下碎片。
+        var r = Renderer(livePreview: true);
+        Capture(() => r.Append("正文"));
+        // 交出光标行：先把已有的预览擦掉，之后不再画
+        Assert.Equal(ClearLine, Capture(() => r.SetCursorLineBusy(true)));
+        Assert.Equal("", Capture(() => r.Append("更多")));
+        // 交还之后恢复：否则一轮回复的后半段会彻底失去逐字效果
+        Capture(() => r.SetCursorLineBusy(false));
+        var resumed = Capture(() => r.Append("后续"));
+        Assert.Contains("更多后续", resumed, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EveryFrameIsClearableByOneLineErase()
     {
         // 不变式：一帧一帧重绘必须**始终只有一行高**。

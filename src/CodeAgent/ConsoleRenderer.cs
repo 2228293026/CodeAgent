@@ -48,7 +48,23 @@ public sealed class ConsoleRenderer
     /// 原样写出去，光标停在行中；此时画预览，下一帧的 <c>\r</c> + ESC[2K 会把刚写出去的
     /// **正式内容**一起擦掉——用户会看到答案的最后半句凭空消失。
     /// 只在行首重绘才安全：那一行上除了预览没有别人的东西。</summary>
-    private bool CanPreview => LivePreview && _width > 0 && _lastEmitEndedWithNewline;
+    private bool CanPreview => LivePreview && _width > 0 && _lastEmitEndedWithNewline && !_cursorLineBusy;
+
+    /// <summary>光标行是否被渲染器之外的东西占着（目前只有 spinner 动画）。
+    ///
+    /// spinner 每 120ms 用 <c>\r</c> 原地重写同一行。此时若画预览，下一帧的
+    /// <c>\r</c> + ESC[2K 会先清掉 spinner 那一帧——动画看起来在闪，而且 spinner
+    /// 自己的「清行 + 重画」会与预览互相覆盖，屏幕上留下两段内容的碎片。
+    /// 占用期间一律不预览，交还控制权后自动恢复。</summary>
+    private bool _cursorLineBusy;
+
+    /// <summary>告知渲染器「光标行被别人占了 / 还给你了」。</summary>
+    public void SetCursorLineBusy(bool busy)
+    {
+        _cursorLineBusy = busy;
+        if (busy)
+            ClearPreview(); // 交出去之前先把自己的预览擦掉，别留在别人的行上
+    }
 
     /// <summary>是否该启用逐字预览（纯函数，好测——与 <c>Agent.ShouldShowSpinner</c> 同一手法）。
     ///
