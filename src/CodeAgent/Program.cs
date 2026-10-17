@@ -1994,8 +1994,13 @@ internal static class Program
             return bare; // 放不下说明：整段丢掉它，保留标题
         return InputLine.FitToWidth(bare, Math.Max(1, width));
     }
+    /// <summary>提示行自带的缩进列数。有人要给提示行预先算好预算（如
+    /// <see cref="FormatAccessRow"/> 的补充行），必须减掉这个数——
+    /// 让常量与 <see cref="FormatHintLine"/> 里的字面量各写一份，改一处就会偏两列。</summary>
+    internal const int HintIndentWidth = 2;
+
     internal static string FormatHintLine(string body, int width = 0) =>
-        FormatResultLine("  " + body, width);
+        FormatResultLine(new string(' ', HintIndentWidth) + body, width);
 
     /// <summary>查询词在结果行里能占的列数上限（占整行的比例）。
     /// 用户输入的长度不受控，`/find 「很长很长…」` 曾经把整行撑爆并把查询词切掉一半——
@@ -3454,7 +3459,6 @@ internal static class Program
                         : KnownContextWindows.TryGet(opts.Model) is { } known && known == effWin ? $"{known:N0}（按模型名自动识别）"
                         : $"{effWin:N0}（/models 元数据探测）"
                         : "未知（可配置 contextWindow）";
-                    var roDirs = config.ReadOnlyDirs.Count == 0 ? "" : $"{config.FileAccess}（只读白名单: {string.Join(", ", config.ReadOnlyDirs)}）";
                     // 一行一项：此前多个设置挤在一行（MaxIter/MaxHistory/ContextWindow 三个一列），
                     // 且键列手数空格补齐后被中文键（工具日志/界面/目录）撑歪。
                     var configRows = new List<(string Key, string Value)>
@@ -3479,12 +3483,28 @@ internal static class Program
                         ("默认模式", config.DefaultMode),
                         ("会话目录", config.SessionDir),
                         ("导出目录", config.ExportDir),
-                        ("Access", roDirs),
+                        ("Access", ""),
                     };
                     var configKeyWidth = configRows.Max(r => TextUtil.DisplayWidth(r.Key));
                     var configWidth = ConsoleColumns();
+                    // 键列宽度要先按**完整**键表算出来，值预算才是 Access 行真正能用的列数。
+                    // Access 是列表型值：整条塞进普通截断会让安全相关的白名单只剩前两项
+                    // 半路径、还不交代后面有多少（见 FormatAccessRow / FormatListValue）。
+                    var accessIndex = configRows.FindIndex(r => r.Key == "Access");
+                    var access = FormatAccessRow(
+                        config.FileAccess,
+                        config.ReadOnlyDirs,
+                        KeyValueValueBudget(configWidth, configKeyWidth),
+                        configWidth);
+                    configRows[accessIndex] = ("Access", access.Value);
                     foreach (var (key, value) in configRows)
                         Console.WriteLine(FormatKeyValueLine(key, value, configKeyWidth, configWidth));
+                    // 目录没塞进 Access 行时（未生效 / 太窄）走 hint 层级补一行。
+                    // 不用键值行：它不是一项设置，冒充配置键会让用户以为“只读白名单”
+                    // 是个可改的键，而真正的键名是 readOnlyDirs。
+                    // 它自己缩进的扣除在 FormatAccessRow 里做了（那里才知道 hint 的内容）。
+                    if (access.Hint is { } hint)
+                        Console.WriteLine(FormatHintLine(hint, configWidth));
                 }
                 break;
 
@@ -4414,6 +4434,186 @@ internal static class Program
         if (width <= 0)
             return 0;
         return Math.Max(1, (int)(width * KeyColumnMaxRatio));
+    }
+
+    /// <summary>键值行里，某个键的**值**能拿到的列数（与 <see cref="FormatKeyValueLine"/> 同一套算法）。
+    /// 自己收口的值（列表型）必须知道预算，否则会算错一次、又被通用截断削第二次。</summary>
+    internal static int KeyValueValueBudget(int width, int keyWidth)
+    {
+        if (width <= 0)
+            return 0; // 宽度未知 = 不做收口（这条语义反复被栽）
+        const string indent = "  ";
+        const string separator = " : ";
+        var keyBudget = width - indent.Length - separator.Length;
+        if (keyBudget <= 0)
+            return 0;
+        var columnCap = Math.Min(Math.Max(keyWidth, 0), Math.Max(1, KeyColumnBudget(width)));
+        var head = indent + new string(' ', Math.Min(columnCap, keyBudget)) + separator;
+        return width - TextUtil.DisplayWidth(head);
+    }
+
+    /// <summary>
+    /// /config 的 Access 行：值 + 可选的补充行（<c>Hint</c> 为 null 表示不需要）。
+    ///
+    /// <para><b>为什么是一个函数而不是"值一个、补充行一个"</b>：两者共享同一份判断——
+    /// 「目录有没有在值里列全」。拆成两个函数时，预算判定与渲染各持一份推理，
+    /// 改一处就会出现「值里说见下行、下行却什么也没有」或者反过来的双份列表。
+    /// 这个仓库已经因为"判定与裁剪各写一份"栽过（见 TruncateLineColumnBudgetTests），
+    /// 这里一开始就不再给它机会。</para>
+    ///
+    /// <para><b>语义修正（这一行原本会误导用户）</b>：<c>readOnlyDirs</c> **只在
+    /// fileAccess=whitelist 时才生效**——<see cref="Tools.Workspace"/> 的
+    /// <c>_whitelistEnabled</c> 只在这一档置位。而旧代码无条件写成
+    /// 「full（只读白名单: A, B）」，本机恰好是 <c>full</c> + 三个白名单目录，
+    /// 读起来就像那三个目录正受只读保护，实际上 full 放行一切、白名单一条都没在管。
+    /// <b>把没生效的护栏画在屏幕上，比不画更危险</b>：用户会据此认为某个目录是安全的。
+    /// 所以非 whitelist 档只写「未生效」，目录挪到补充行并标明未生效。</para>
+    ///
+    /// <para><b>降级阶梯（宽度不够时先丢什么）</b>：
+    /// 完整列表 → 尾部 N 项 + 「另有 M 项未显示」 → 模式名 + 「共 N 个，见下行」+ 补充行 → 只剩模式名。
+    /// <b>模式名在任何一档都必须完整</b>：这一行首先要回答"我现在是哪一档"，
+    /// 而那不是靠下面几行路径推得出来的。反过来，路径可以挪行，模式名不能。</para>
+    ///
+    /// <paramref name="lineWidth"/> 是整行（给补充行用：它由
+    /// <see cref="FormatHintLine"/> 渲染并自带 <see cref="HintIndentWidth"/> 列缩进）；
+    /// <paramref name="valueBudget"/> 是值那一格能用的列数。两者都 ≤ 0 表示宽度未知，
+    /// 此时原样给全、不猜折行位置。
+    /// </summary>
+    internal static (string Value, string? Hint) FormatAccessRow(
+        string fileAccess, IReadOnlyList<string> readOnlyDirs, int valueBudget, int lineWidth)
+    {
+        var mode = string.IsNullOrWhiteSpace(fileAccess) ? "strict" : fileAccess;
+        if (readOnlyDirs.Count == 0)
+            return (mode, null);
+        var active = string.Equals(mode, "whitelist", StringComparison.OrdinalIgnoreCase);
+        // 补充行给的是**整行**宽度，但 FormatHintLine 会自己加两格缩进：
+        // 不在这里扣掉，列表就会以为多两列可用，把「另有 N 项未显示」挤出预算。
+        var hintWidth = lineWidth <= 0 ? 0 : Math.Max(1, lineWidth - HintIndentWidth);
+
+        if (!active)
+        {
+            // 未生效：这一步只交代状态。目录是"备查"而不是"护栏"，放补充行。
+            var text = $"{mode}（只读白名单未生效）";
+            var value = valueBudget <= 0 || TextUtil.DisplayWidth(text) <= valueBudget ? text : mode;
+            return (value, FormatListValue("配置了但未生效: ", readOnlyDirs, "", hintWidth));
+        }
+
+        var head = $"{mode}（只读白名单: ";
+        var all = $"{head}{string.Join(", ", readOnlyDirs)}）";
+        if (valueBudget <= 0 || TextUtil.DisplayWidth(all) <= valueBudget)
+            return (all, null);
+
+        // 收口：至少保住「模式名 + 前缀 + 最后一项 + 计数」。放得下就把尾部列出来，
+        // 放不下则整段挪到补充行——但模式名照样留在值里。
+        var oneTail = $"{SafeColor.Glyphs.Ellipsis}{readOnlyDirs[^1]}，{ListHiddenNote(readOnlyDirs.Count - 1)}）";
+        if (TextUtil.DisplayWidth(head + oneTail) <= valueBudget)
+            return (FormatListValueCompact(head, readOnlyDirs, "）", valueBudget), null);
+
+        var counted = $"{mode}（{readOnlyDirs.Count} 个只读目录，见下行）";
+        var hint = FormatListValue("只读目录: ", readOnlyDirs, "", hintWidth);
+        return (valueBudget <= 0 || TextUtil.DisplayWidth(counted) <= valueBudget ? counted : mode, hint);
+    }
+
+    /// <summary>
+    /// 键值行里「列表型」值的收尾：放不下时**保住尾部**，并交代前面丢了几项。
+    ///
+    /// /config 的 Access 行是典型受害者和典型受益者：
+    /// 值是 <c>whitelist（只读白名单: A, B, C, …）</c>，而路径每项都可能有 40+ 列。
+    /// 此前整条值走 <see cref="FormatKeyValueLine"/> 的普通截断，于是屏幕上是
+    /// <c>D:/Projects/adofai-libs, D:/Projects/JipperKeyViewer, D:/Pr…</c>——
+    /// **既没告诉用户后面还有多少个目录，也没让他看见最后一个是什么**。
+    /// 而这一行恰恰是安全相关的：白名单里有哪些目录，决定了 agent 能读工作区外的什么。
+    /// 用户据此判断权限是否合适，却只看到前两个半路径。
+    ///
+    /// 规则：能整条放下就原样给（不无端加标记）；放不下时按**显示列**收口，
+    /// 优先保**尾部**（最后几项同样是白名单的一部分，不比前面不重要），
+    /// 并写明「另有 N 项未显示」——丢了内容却不说，用户会以为看到的是全部。
+    ///
+    /// 三个曾经踩过、各自有测试钉住的坑：
+    /// ① 判定与裁剪的单位必须是**列**（见 TruncateLineColumnBudgetTests），
+    ///    这里全程用 <see cref="TextUtil.DisplayWidth"/>，不碰字符数；
+    /// ② 省略号宽度**不是常数**（ASCII 退回时 1 列 → 3 列），预算里一律用
+    ///    <see cref="SafeColor.Glyphs.EllipsisWidth"/> 量，写死 1 会让结果超宽；
+    /// ③ 一项都放不下时不能原样返回——那等于把这个函数存在的理由（不溢出）
+    ///    交给调用方去兜，实测 6 个宽度里 5 个会溢出。
+    ///
+    /// <paramref name="budget"/> ≤ 0 表示宽度未知：不猜测折行位置，原样返回。
+    /// </summary>
+    internal static string FormatListValue(string prefix, IReadOnlyList<string> items, string suffix, int budget)
+    {
+        if (items.Count == 0)
+            return "";
+        var full = $"{prefix}{string.Join(", ", items)}{suffix}";
+        if (budget <= 0 || TextUtil.DisplayWidth(full) <= budget)
+            return full;
+        var dots = SafeColor.Glyphs.Ellipsis;
+        // 从尾部往前挑：candidate 是「要保留的那几项」，按原序展示。
+        var kept = new List<string>();
+        for (var take = 1; take <= items.Count; take++)
+        {
+            var candidate = new List<string>(kept.Count + 1);
+            // 尾部 take 项，按原序（先补前一项，结果自然有序）
+            for (var i = items.Count - take; i < items.Count; i++)
+                candidate.Add(items[i]);
+            var hidden = items.Count - candidate.Count;
+            // 计数句与省略号一起进预算：先写后判会把结果顶出预算一截
+            var note = hidden > 0 ? "，" + ListHiddenNote(hidden) : "";
+            var composed = $"{prefix}{dots}{string.Join(", ", candidate)}{note}{suffix}";
+            if (TextUtil.DisplayWidth(composed) > budget)
+                break;
+            kept = candidate;
+        }
+        if (kept.Count == 0)
+        {
+            // 连一项都放不下。**不能默默退回头部截断**：那正是这一轮要修的形态——
+            // 屏幕上是「只读目录: D:/A, D:/B, D…」，读者既不知道有几项、也不知道被切了。
+            // 分两档交代：先给带理由的整句，再退到只剩数量（数量是底线信息），
+            // 两者都放不下才硬截——而那时连数量也保不住，已无更好的选择。
+            var counted = $"{prefix}共 {items.Count} 项（太窄，未展开）{suffix}";
+            if (TextUtil.DisplayWidth(counted) <= budget)
+                return counted;
+            var bare = $"{prefix}共 {items.Count} 项{suffix}";
+            if (TextUtil.DisplayWidth(bare) <= budget)
+                return bare;
+            return InputLine.FitToWidth(bare, Math.Max(1, budget));
+        }
+        var hiddenCount = items.Count - kept.Count;
+        var tailNote = hiddenCount > 0 ? "，" + ListHiddenNote(hiddenCount) : "";
+        return $"{prefix}{dots}{string.Join(", ", kept)}{tailNote}{suffix}";
+    }
+
+    /// <summary>列表被收口时那句「还有多少没显示」。
+    /// 单独抽出来是因为**预算判定**也要用它的宽度（见 <see cref="FormatAccessRow"/>）：
+    /// 判定与渲染各写一份字面量，改一处就会让判定偏宽、结果顶出预算。</summary>
+    internal static string ListHiddenNote(int hidden) => $"另有 {hidden} 项未显示";
+
+    /// <summary>
+    /// 同 <see cref="FormatListValue"/>，但预算不够放下「前缀 + 至少一项」时**先丢前缀**。
+    ///
+    /// 真机实测：60 列终端上 <c>full（只读白名单: </c> 就占 21 列，
+    /// 留给路径的只剩 18——**连一个目录名都装不下**，屏幕上就出现过
+    /// <c>full（只读白名单: D:/Projects/adofai-…</c> 这种"有前缀、没内容"的句子。
+    /// 前缀是修饰、内容是主体：主体放不下时该丢的是前缀。
+    /// 键名 <c>Access</c> 与 <c>/access</c> 已经交代了这行是什么，读者不会迷失。
+    ///
+    /// 判定必须把**两项同时**纳入预算：至少一项内容 + 省略号 + 计数句。
+    /// 只比「一项内容」的话，恰好放得下内容时也会带上前缀，再把计数句挤出预算——
+    /// 而那正是这条函数要保的东西。
+    /// </summary>
+    internal static string FormatListValueCompact(string prefix, IReadOnlyList<string> items, string suffix, int budget)
+    {
+        if (items.Count == 0)
+            return "";
+        if (budget <= 0)
+            return $"{prefix}{string.Join(", ", items)}{suffix}"; // 宽度未知：不猜
+        // 丢前缀后能拿到的空间：一项内容 + 省略号 + 最长的计数句
+        var noteWidth = TextUtil.DisplayWidth("，" + ListHiddenNote(items.Count - 1));
+        var contentWidth = TextUtil.DisplayWidth(items[^1]) + SafeColor.Glyphs.EllipsisWidth
+                           + (items.Count > 1 ? noteWidth : 0);
+        var withPrefixWidth = contentWidth + TextUtil.DisplayWidth(prefix) + TextUtil.DisplayWidth(suffix);
+        if (withPrefixWidth > budget)
+            return FormatListValue("", items, "", budget);
+        return FormatListValue(prefix, items, suffix, budget);
     }
 
     /// <summary>键值行统一格式：两空格缩进 + 键列按**显示宽度**对齐 + " : " + 值。

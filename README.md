@@ -147,6 +147,8 @@ CODEAGENT_MODEL=gpt-4o codeagent        # 只换模型（-m 优先；兼容旧�
 
 `readOnlyDirs` 用于 mod 开发等场景——需要读取兄弟项目（如 `adofai-libs` 反编译库）但绝不允许改动它。路径可为绝对路径，相对路径按工作区解析。
 
+注意：白名单**只在 `fileAccess=whitelist` 时生效**。`strict` 档下读工具仍限工作区，`full` 档下完全放开——这两种档位配置了 `readOnlyDirs` 也不会启用（`/config` 的 Access 行会明确标注「未生效」，并把配了哪些目录另起一行列出，避免把没生效的护栏误读成正在保护）。
+
 #### ADOFAI mod 项目自动适配
 
 当工作目录被识别为 ADOFAI（A Dance of Fire and Ice）mod 项目（根目录存在 `Info.json` 且含 `AssemblyName`/`EntryMethod`，或存在 `Assembly-CSharp.dll`）时，会自动：

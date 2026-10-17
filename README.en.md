@@ -140,6 +140,8 @@ File tools are sandboxed to the workspace by default (`fileAccess: "strict"`). T
 
 Switch live (persisted back to the config): `/access next` cycles strict → whitelist → full; `/access whitelist` sets directly; Shift+Tab in the REPL cycles too.
 
+`readOnlyDirs` is **only active when `fileAccess=whitelist`**. Under `strict` reads stay workspace-only, and under `full` everything is allowed — a configured allowlist does nothing in either case. `/config` says so explicitly (the Access row reads "not active") and lists the configured dirs on a separate line, so a dormant allowlist is never mistaken for one that is protecting something.
+
 ## Usage
 
 ### One-shot tasks
