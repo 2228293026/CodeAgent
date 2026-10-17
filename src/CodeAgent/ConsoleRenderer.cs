@@ -75,6 +75,27 @@ public sealed class ConsoleRenderer
         Console.Write("\r\x1b[2K");
     }
 
+    /// <summary>渲染器**之外**的代码要直接写控制台时，在写之前调用：擦掉预览，
+    /// 并告知那次写入是否以换行收尾。
+    ///
+    /// 为什么必须打招呼：渲染器只包得住自己的写入。工具状态行、思考文本、spinner
+    /// 定格行、回合摘要都是 <see cref="CodeAgent.Agent.Agent"/> 直接写的。模型最后一段
+    /// 不带换行时预览还挂在光标行上——不擦，那些行会接在预览尾巴后面留一截残字；
+    /// 擦了却不说「这段写完后光标在行中」，下一帧 <c>\r</c> + ESC[2K 会回到行首，
+    /// 把刚写出去的正文一起抹掉。两种错都只在真终端可见。
+    ///
+    /// <paramref name="endedWithNewline"/> 为 false 时预览只是**暂停**：等下一次带换行的
+    /// 正式输出落地、光标回到行首，它自动恢复。
+    /// </summary>
+    public void NotifyExternalWrite(bool endedWithNewline)
+    {
+        ClearPreview();
+        _lastEmitEndedWithNewline = endedWithNewline;
+    }
+
+    /// <summary>外部写入以换行收尾时的简写（工具状态行、摘要行都是这种）。</summary>
+    public void ClearLivePreview() => NotifyExternalWrite(endedWithNewline: true);
+
     /// <summary>所有正式输出的唯一出口：写之前先擦预览。
     /// 收口成一处是因为「哪条路径忘了擦」的后果是残字留在屏幕上，而这类遗漏
     /// 在代码块、表格、折行、徽标、提示行上各有一条独立的写路径。</summary>

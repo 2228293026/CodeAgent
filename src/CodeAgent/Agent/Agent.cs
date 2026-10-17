@@ -603,6 +603,9 @@ public sealed partial class Agent
                     _streamTokens += TextUtil.EstimateTokens(reason); // 估算已生成 token（spinner ↑ 显示）
                     lock (ConsoleLock)
                     {
+                        // 思考文本是逐段裸写的、不带换行：不打招呼的话预览会挂在它后面，
+                        // 下一帧 \r + ESC[2K 回行首把这段思考一起擦掉。
+                        _renderer?.NotifyExternalWrite(endedWithNewline: reason.EndsWith('\n'));
                         using var scope = SafeColor.Scope(SafeColor.Muted);
                         Console.Write(reason);
                     }
@@ -1604,6 +1607,9 @@ public sealed partial class Agent
         {
             lock (ConsoleLock)
             {
+                // 工具行不经过渲染器：模型最后一段没带换行时预览还挂在光标行上，
+                // 直接写会把状态行接在预览尾巴后面，留一截擦不掉的残字。
+                _renderer?.ClearLivePreview();
                 // 必须传宽度：工具摘要含文件名/参数，窄终端上不裁剪必然折行
                 var status = FormatToolStatusLine(summary, isError, sw.Elapsed, CodeAgent.Program.ConsoleColumnsForNotice());
                 if (isError)

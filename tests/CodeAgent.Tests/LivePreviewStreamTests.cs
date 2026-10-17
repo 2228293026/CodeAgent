@@ -226,6 +226,51 @@ public class LivePreviewStreamTests
     }
 
     [Fact]
+    public void ExternalWritersCanEraseThePreviewFirst()
+    {
+        // 渲染器只包得住自己的写入。工具状态行、回合摘要都是 Agent 直接 Console.WriteLine 的，
+        // 模型最后一段不带换行时预览还挂在光标行上——不先擦，那些行会接在预览尾巴后面，
+        // 屏幕留下一截永远擦不掉的残字（只在真终端可见）。
+        var r = Renderer(livePreview: true);
+        Capture(() => r.Append("半行答案"));
+        var cleared = Capture(() => r.ClearLivePreview());
+        Assert.Equal(ClearLine, cleared);
+        // 幂等：没有预览时一个字节都不写，否则调用方每写一行都会多吐一次清行序列
+        Assert.Equal("", Capture(() => r.ClearLivePreview()));
+    }
+
+    [Fact]
+    public void ExternalMidLineWritePausesThePreview()
+    {
+        // 思考文本是逐段裸写的、不带换行。擦掉预览却不告诉渲染器「光标现在在行中」，
+        // 下一帧就会 \r 回行首，把刚写出去的思考文本一起抹掉。
+        var r = Renderer(livePreview: true);
+        Capture(() => r.Append("半行正文"));
+        // 外部写入一段不带换行的思考文本
+        Assert.Equal(ClearLine, Capture(() => r.NotifyExternalWrite(endedWithNewline: false)));
+        // 之后**不能**再画预览：光标不在行首，重绘会擦掉那段思考
+        Assert.Equal("", Capture(() => r.Append("新内容")));
+    }
+
+    [Fact]
+    public void PreviewResumesAfterALineLands()
+    {
+        // 暂停必须是暂时的：下一行正式内容落地、光标回到行首后，预览要自动恢复，
+        // 否则一次思考文本就会让整轮回复失去逐字效果。
+        var r = Renderer(livePreview: true);
+        Capture(() => r.NotifyExternalWrite(endedWithNewline: false));
+        Assert.Equal("", Capture(() => r.Append("新内容"))); // 行中：不预览
+        Capture(() => r.Append("\n"));                        // 换行落地，光标回行首
+        var after = Capture(() => r.Append("后面"));
+        // 恢复预览：新一行开始重绘。首帧没有上一帧要擦，所以这里不该有清除序列——
+        // 有的话反而说明它在擦一个不存在的预览（多吐一次 ESC[2K）。
+        Assert.Equal("后面", after);
+        // 真正的证据是「第二帧开始逐字覆盖」：这只有在预览恢复后才发生
+        var third = Capture(() => r.Append("再续"));
+        Assert.Equal(ClearLine + "后面再续", third);
+    }
+
+    [Fact]
     public void EveryFrameIsClearableByOneLineErase()
     {
         // 不变式：一帧一帧重绘必须**始终只有一行高**。

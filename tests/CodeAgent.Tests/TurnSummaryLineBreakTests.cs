@@ -60,7 +60,9 @@ public sealed class TurnSummaryLineBreakTests
         // 4 = 声明 + 三条行级路径；再加三个写入包装器（Write / 两个 WriteLine）：
         // 逐字预览（LivePreview）要求所有正式写入都经过包装器，而包装器必须如实记账
         // 「光标是否在行首」，否则预览会在半行之后覆盖掉刚写出去的正式内容。
-        Assert.Equal(7, Count(src, "_lastEmitEndedWithNewline ="));
+        // 再 +1 = NotifyExternalWrite：渲染器之外的裸写（思考文本、工具状态行）
+        // 也必须把写入后的光标位置告诉渲染器，否则预览会擦掉别人的内容。
+        Assert.Equal(8, Count(src, "_lastEmitEndedWithNewline ="));
     }
 
     [Fact]
