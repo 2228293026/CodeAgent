@@ -287,6 +287,21 @@ public class LivePreviewStreamTests
     }
 
     [Fact]
+    public void UnclosedFenceDoesNotLeakIntoTheNextTurn()
+    {
+        // 模型被取消 / 截断时，围栏可能永远不闭合。Flush 把已收到的代码吐出去之后
+        // 必须把代码状态收干净——否则同一个渲染器实例（REPL 每轮复用）下一轮的
+        // 每一个字都会被当成代码处理，整段回复套着代码块样式输出。
+        var r = Renderer(livePreview: false);
+        Capture(() => { r.Append("```cs\nvar x = 1;"); r.Flush(); });
+        // 下一轮：普通正文，不该带代码徽标、也不该继续按代码染色
+        var next = Capture(() => { r.Append("下一轮正文\n"); r.Flush(); });
+        Assert.Contains("下一轮正文", next, StringComparison.Ordinal);
+        // 没有颜色时不可能出现代码围栏标记
+        Assert.DoesNotContain("```", next, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EveryFrameIsClearableByOneLineErase()
     {
         // 不变式：一帧一帧重绘必须**始终只有一行高**。

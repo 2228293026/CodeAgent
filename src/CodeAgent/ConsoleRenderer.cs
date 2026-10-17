@@ -238,6 +238,14 @@ public sealed class ConsoleRenderer
             EmitCode(_code.ToString());
             _codeLang.Clear(); // 语言标注只属于当前代码块，用完即弃（否则下一块会带上上一块的语言）
             _code.Clear();
+            // 围栏没闭合流就结束了（模型被取消/截断）：
+            // 状态必须在这里收干净，否则下一轮的每一个字都会被当成代码处理——
+            // 整段回复套着代码块样式输出，且 _codeHeaderDrawn 残留会让表头判断错乱。
+            _inCode = false;
+            _codeHeaderDrawn = false;
+            _tickRun = 0;
+            _skipCodeIntro = false;
+            _codeOverlongLines = 0;
         }
         else if (_line.Length > 0)
         {
