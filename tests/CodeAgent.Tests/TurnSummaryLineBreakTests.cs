@@ -57,7 +57,10 @@ public sealed class TurnSummaryLineBreakTests
         var src = File.ReadAllText(FindRenderer());
         Assert.Contains("private bool _lastEmitEndedWithNewline", src);           // 1 处声明
         Assert.Equal(2, Count(src, "_lastEmitEndedWithNewline = hadNewline"));  // 折行 / 原样两条路径
-        Assert.Equal(4, Count(src, "_lastEmitEndedWithNewline ="));              // 声明 + 三条路径
+        // 4 = 声明 + 三条行级路径；再加三个写入包装器（Write / 两个 WriteLine）：
+        // 逐字预览（LivePreview）要求所有正式写入都经过包装器，而包装器必须如实记账
+        // 「光标是否在行首」，否则预览会在半行之后覆盖掉刚写出去的正式内容。
+        Assert.Equal(7, Count(src, "_lastEmitEndedWithNewline ="));
     }
 
     [Fact]

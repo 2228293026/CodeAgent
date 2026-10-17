@@ -25,6 +25,130 @@ public sealed class ConsoleRenderer
     /// <summary>设置折行宽度（0 = 不折行）。</summary>
     public void SetWidth(int width) => _width = width;
 
+    /// <summary>流式「逐字长出来」的原地重绘。**默认关闭**：关闭时输出与旧版逐字节相同
+    /// （测试、重定向、管道全走这条路）；只有真终端上的 Agent 才打开。
+    ///
+    /// 背景：<see cref="Append"/> 把字符攒进行缓冲，**凑齐一整行才写出去**。模型是逐字
+    /// 返回的，于是屏幕一直不动，直到整行结束才「啪」地蹦出一整行——最基础的字符动态都没有。
+    /// 打开后未完成的行以预览形式原地重绘，每来一个字就覆盖上一帧；收行时清掉预览、
+    /// 再按最终样式整行输出一次（所以预览永远不会成为正式内容的一部分）。
+    ///
+    /// 预览**必须不折行**：清行只用 <c>\r</c> + ESC[2K，只作用一行，一次折行就会留下
+    /// 擦不掉的残字。因此宽度未知（&lt;= 0）时不预览。
+    /// </summary>
+    public bool LivePreview { get; set; }
+
+    /// <summary>当前光标行上是否正显示着预览（决定要不要先擦掉）。</summary>
+    private bool _previewShown;
+
+    /// <summary>能否画预览：开关打开、宽度已知（宽度未知时无法保证不折行），
+    /// 且光标**在行首**。
+    ///
+    /// 最后一条是「擦掉别人的内容」的守卫：<see cref="Flush"/> 会把不以换行结尾的半行
+    /// 原样写出去，光标停在行中；此时画预览，下一帧的 <c>\r</c> + ESC[2K 会把刚写出去的
+    /// **正式内容**一起擦掉——用户会看到答案的最后半句凭空消失。
+    /// 只在行首重绘才安全：那一行上除了预览没有别人的东西。</summary>
+    private bool CanPreview => LivePreview && _width > 0 && _lastEmitEndedWithNewline;
+
+    /// <summary>是否该启用逐字预览（纯函数，好测——与 <c>Agent.ShouldShowSpinner</c> 同一手法）。
+    ///
+    /// 三个前提缺一不可：
+    /// <list type="bullet">
+    /// <item>Markdown 渲染开着：关掉时 <see cref="Append"/> 直接 <c>Console.Write</c>，本来就逐字；</item>
+    /// <item>输出**不是**重定向：<c>\r</c> + ESC[2K 对管道无意义，帧会一路堆进文件；</item>
+    /// <item>TUI ANSI 开着：用户关掉 ANSI 说明终端不吃控制序列，原地重绘会变成一屏残帧。</item>
+    /// </list>
+    ///
+    /// 抽成纯函数是因为 <c>Console.IsOutputRedirected</c> 在测试宿主里**恒为 true**，
+    /// 端到端测试永远走不到预览路径——不抽出来，这条判定的真值表就没有任何测试能碰。
+    /// </summary>
+    internal static bool ShouldLivePreview(bool renderMarkdown, bool tuiAnsi, bool outputRedirected) =>
+        renderMarkdown && tuiAnsi && !outputRedirected;
+
+    /// <summary>擦掉正在显示的预览行。幂等——没有预览时一个字节都不写。
+    /// <c>\r</c> 先把光标拉回行首，ESC[2K 再清空整行：只写其一都会把上一帧的尾巴留在屏幕上。</summary>
+    private void ClearPreview()
+    {
+        if (!_previewShown)
+            return;
+        _previewShown = false;
+        Console.Write("\r\x1b[2K");
+    }
+
+    /// <summary>所有正式输出的唯一出口：写之前先擦预览。
+    /// 收口成一处是因为「哪条路径忘了擦」的后果是残字留在屏幕上，而这类遗漏
+    /// 在代码块、表格、折行、徽标、提示行上各有一条独立的写路径。</summary>
+    private void Write(string text)
+    {
+        ClearPreview();
+        Console.Write(text);
+        // 光标位置是预览的安全前提（见 CanPreview）：每次正式写入都要如实记账，
+        // 否则一次「不换行收尾」会让后面的预览永久失效，或者更糟——照常预览、把正式内容擦掉。
+        if (text.Length > 0)
+            _lastEmitEndedWithNewline = text[^1] == '\n';
+    }
+
+    private void WriteLine()
+    {
+        ClearPreview();
+        Console.WriteLine();
+        _lastEmitEndedWithNewline = true;
+    }
+
+    private void WriteLine(string text)
+    {
+        ClearPreview();
+        Console.WriteLine(text);
+        _lastEmitEndedWithNewline = true;
+    }
+
+    /// <summary>把当前半行以**预览**形式画在光标行上（原地重绘上一帧）。
+    ///
+    /// 只有「还停在行中」时才画：整行已经在 <see cref="EmitLine"/> 里落地了再画一遍，
+    /// 屏幕上就会出现两份同一行内容。
+    ///
+    /// 预览走**纯文本**而不是 Markdown 解析：这是还没写完的一句话，
+    /// `**加粗` 此刻只有一个星号，解析它只会得到「闪来闪去的样式」。
+    /// 收行时正式输出会按完整语法重新渲染，预览的斤两只有「让字先长出来」。
+    /// </summary>
+    private void PaintPreview()
+    {
+        if (!CanPreview)
+            return;
+        var partial = _line.ToString();
+        if (partial.Length == 0)
+        {
+            ClearPreview();
+            return;
+        }
+        // 换行已经在 HandleTextChar 里被消费掉了，这里的 _line 一定是半行；
+        // 但防御性地再剥一次 \r / \n：把带换行的内容画成预览会把光标推下去，
+        // 之后再清行只会清掉最后一行的开头。
+        var text = partial.Replace("\r", "").Replace("\n", " ");
+        // 预览**不能折行**：清行只作用一行。超宽部分截掉，剩余内容在正式收行时完整出现。
+        // 预留 1 列给光标：正好占满整行时部分终端的自动换行会把光标推到下一行。
+        var budget = _width - 1;
+        if (budget <= 0)
+            return;
+        text = PreviewPlainText(text);
+        text = TextUtil.TakeDisplayWidth(text, budget);
+        ClearPreview();
+        Console.Write(text);
+        _previewShown = true;
+    }
+
+    /// <summary>取半行文本在**收行后会显示成什么**（只取文字，不带样式）。
+    ///
+    /// 预览是逐字长出来的：`**加粗` 在闭合的 `**` 到达之前只是一个开标记，
+    /// 原样画出去屏幕上会先闪出 `**加粗`、收行时再跳成 `加粗`——每次加粗都闪一下。
+    ///
+    /// 复用 <see cref="ParseInline"/> 而不是自己数标记：它本来就把未闭合的开标记
+    /// 当样式开关消费掉（`**` 翻转样式、结尾不补回来），得到的结果与最终渲染同一套规则。
+    /// 各写一份的后果是预览和正式输出对不上——预览显示 `**x`，收行后变成 `x`。
+    /// </summary>
+    internal static string PreviewPlainText(string text) =>
+        string.Concat(ParseInline(text).Select(p => p.text));
+
     /// <summary>流式追加文本；完整行 / 完整代码块立即输出。</summary>
     public void Append(string text)
     {
@@ -44,6 +168,12 @@ public sealed class ConsoleRenderer
             else
                 HandleTextChar(ch);
         }
+        // 整段喂完后才画一次预览：逐字符重绘会在一次 Append 里画出几十帧中间状态，
+        // 白白闪屏。Append 的入参已经是模型一次吐出的一个增量。
+        if (_inCode)
+            PaintCodePreview();
+        else
+            PaintPreview();
     }
 
     /// <summary>结束输出：刷出剩余缓冲。</summary>
@@ -120,7 +250,7 @@ public sealed class ConsoleRenderer
     {
         var blanks = Math.Min(_pendingBlanks, MaxBlankRun);
         for (var i = 0; i < blanks; i++)
-            Console.WriteLine();
+            WriteLine();
         _pendingBlanks = 0;
     }
 
@@ -206,6 +336,8 @@ public sealed class ConsoleRenderer
             if (ch == '\n')
             {
                 _skipCodeIntro = false;
+                // 语言标注到此收齐：边界先画出来，后面的代码行才有地方落
+                EmitCodeHeader();
                 return;
             }
             // 语言标注此前被直接丢弃——读者只能靠猜。现在留下来单独成行。
@@ -223,7 +355,9 @@ public sealed class ConsoleRenderer
                 // 围栏结束：移除末尾属于分隔符的两个反引号（避免 ``` 泄漏进代码内容）
                 if (_code.Length >= 2)
                     _code.Length -= 2;
-                EmitCode(_code.ToString());
+                EmitCodeHeader();      // 空代码块（```\n``` ）：边界一次都还没画过
+                EmitCodeLine(_code.ToString());
+                EmitCodeFooter();
                 _codeLang.Clear(); // 围栏一关就要清：同一次 Append 里可能有多个代码块，
                                    // 只在 Flush 清会让第二块带上第一块的语言（▌csjson）
                 _code.Clear();
@@ -235,7 +369,49 @@ public sealed class ConsoleRenderer
             return;
         }
         _tickRun = 0;
+        if (ch == '\n')
+        {
+            // 一整行代码到齐：**立刻**输出。
+            //
+            // 此前整块攒到围栏关闭才吐，于是屏幕上代码块是「等半天，然后整块蹦出来」——
+            // 生成 60 行代码时用户前 59 行都看不到任何动静，与逐字的正文完全是两种体验。
+            // 行尾 \n 没有进 _code（它正是本分支的触发条件），必须显式补回：
+            // 少了它，代码行会粘成一行，代码块里的空行也会整个消失。
+            var codeLine = _code.ToString() + "\n";
+            _code.Clear();
+            EmitCodeHeader(); // 幂等：正常路径已在围栏行画过
+            EmitCodeLine(codeLine);
+            return;
+        }
         _code.Append(ch);
+    }
+
+    /// <summary>把代码块里的**半行**也画成预览：正文能逐字长出来、代码却要等整行到齐，
+    /// 长行（base64、长路径）在屏幕上就是「卡一下，然后跳出整行」。
+    ///
+    /// 与正文预览分开成两个函数，是因为两者取缓冲的位置不同（_line 与 _code），
+    /// 且代码行不能做 Markdown 剥标记——代码里的 `*` 是乘号，剥掉就是改内容。
+    /// </summary>
+    private void PaintCodePreview()
+    {
+        if (!CanPreview || !_codeHeaderDrawn)
+            return;
+        var partial = _code.ToString();
+        if (partial.Length == 0)
+        {
+            ClearPreview();
+            return;
+        }
+        var text = partial.Replace("\r", "").Replace("\n", " ");
+        var budget = _width - 1;
+        if (budget <= 0)
+            return;
+        // Tab 展开后再算宽度：代码里的 Tab 在终端占 4 列，按 1 列算会画超、进而折行。
+        text = TextUtil.TakeDisplayWidth(ExpandCodeTabs(text), budget);
+        ClearPreview();
+        using (SafeColor.Scope(SafeColor.Success))
+            Console.Write(text);
+        _previewShown = true;
     }
 
     /// <summary>列表项 / 块引用的悬挂缩进：续行对齐到正文起始列。
@@ -252,6 +428,9 @@ public sealed class ConsoleRenderer
 
     private void EmitLine(string line)
     {
+        // 正式行落地前必须擦掉预览：否则最终样式会接在预览尾巴后面，
+        // 屏幕上留下「预览 + 正式」两份同一行内容。
+        ClearPreview();
         // 剥离行尾 \r（Windows 换行残留）：否则终端把 \r 当回车，光标跳回行首覆盖本行
         var hadNewline = line.EndsWith('\n');
         var content = hadNewline ? line[..^1] : line;
@@ -305,7 +484,7 @@ public sealed class ConsoleRenderer
         var plain = string.Concat(parts.Select(p => p.text));
         if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal) && plain == content)
         {
-            Console.Write(content + (hadNewline ? "\n" : ""));
+            Write(content + (hadNewline ? "\n" : ""));
             _lastEmitEndedWithNewline = hadNewline;
             return;
         }
@@ -329,7 +508,7 @@ public sealed class ConsoleRenderer
         var plain = string.Concat(parts.Select(p => p.text));
         if (color is null && parts.Count <= 1 && parts.All(p => p.style == InlineStyleToken.Normal) && plain == content)
         {
-            Console.Write(content + (hadNewline ? "\n" : ""));
+            Write(content + (hadNewline ? "\n" : ""));
             return;
         }
         using (SafeColor.Scope(color ?? SafeColor.Muted))
@@ -603,19 +782,27 @@ public sealed class ConsoleRenderer
         return width > 0 && TextUtil.DisplayWidth(badge) > width ? string.Empty : badge;
     }
 
-    private void EmitCode(string code)
+    /// <summary>代码块的边界（开围栏 / 语言徽标）是否已经画过。
+    /// 逐行输出时边界只能画一次：每行都画会变成几十个徽标。</summary>
+    private bool _codeHeaderDrawn;
+
+    /// <summary>本块已输出的代码行里，显示宽度超过终端的行数（块尾一次性交代）。</summary>
+    private int _codeOverlongLines;
+
+    /// <summary>画代码块的开头（围栏行 / 语言徽标）。幂等：正常路径在围栏行画一次，
+    /// 空代码块与「围栏行没收到换行」的边缘路径靠这个幂等性兜住。</summary>
+    private void EmitCodeHeader()
     {
-        if (code.Length == 0)
+        if (_codeHeaderDrawn)
             return;
+        _codeHeaderDrawn = true;
+        _codeOverlongLines = 0;
         var lang = _codeLang.ToString();
-        // 没有颜色时代码块只剩一个「▌cs」徽标当边界，代码与散文**完全无法区分**——
-        // 一段输出到底是代码还是段落，读者无从判断。还原 Markdown 围栏（```lang … ```）：
-        // 这是用户当初写下的原文，既标明了语言，也给出了明确的起止。
         var fence = !SafeColor.Enabled;
         if (fence)
         {
             using var openScope = SafeColor.Scope(SafeColor.Muted);
-            Console.WriteLine("```" + InputLine.FitToWidth(lang, MaxCodeLangChars));
+            WriteLine("```" + InputLine.FitToWidth(lang, MaxCodeLangChars));
         }
         else
         {
@@ -623,24 +810,52 @@ public sealed class ConsoleRenderer
             if (badge.Length > 0)
             {
                 using var badgeScope = SafeColor.Scope(SafeColor.Muted);
-                Console.WriteLine(badge);
+                WriteLine(badge);
             }
         }
-        var overlong = CountOverlongCodeLines(code, _width);
+    }
+
+    /// <summary>输出一行代码（已含行尾 \n）。逐行落地而不是整块攒着，
+    /// 是让代码和正文一样**随着模型生成一行行长出来**。</summary>
+    private void EmitCodeLine(string codeLine)
+    {
+        var normalized = NormalizeCodeBlock(codeLine);
+        if (normalized.Length > 0 && _width > 0 && TextUtil.DisplayWidth(normalized) > _width)
+            _codeOverlongLines++;
         using (SafeColor.Scope(SafeColor.Success))
-        {
-            Console.Write(NormalizeCodeBlock(code));
-        }
-        if (fence)
+            Write(normalized);
+    }
+
+    /// <summary>画代码块的收尾（关围栏 + 折行交代）。</summary>
+    private void EmitCodeFooter()
+    {
+        if (!SafeColor.Enabled)
         {
             using var closeScope = SafeColor.Scope(SafeColor.Muted);
-            Console.WriteLine("```");
+            WriteLine("```");
         }
-        if (overlong > 0)
+        if (_codeOverlongLines > 0)
         {
             using var noteScope = SafeColor.Scope(SafeColor.Muted);
-            Console.WriteLine(CodeWrapNote(overlong, _width));
+            WriteLine(CodeWrapNote(_codeOverlongLines, _width));
         }
+        _codeOverlongLines = 0;
+        _codeHeaderDrawn = false;
+    }
+
+    /// <summary>整块渲染（Flush 路径）：代码已全部到齐时一次性输出。
+    /// 与逐行路径共用表头/表尾，避免两条路径的徽标与折行交代出现差异。</summary>
+    private void EmitCode(string code)
+    {
+        if (code.Length == 0)
+            return;
+        EmitCodeHeader();
+        _codeOverlongLines = CountOverlongCodeLines(code, _width);
+        using (SafeColor.Scope(SafeColor.Success))
+        {
+            Write(NormalizeCodeBlock(code));
+        }
+        EmitCodeFooter();
     }
 
     /// <summary>行内样式（internal 以便测试断言样式序列）。</summary>
@@ -857,15 +1072,15 @@ public sealed class ConsoleRenderer
                 var cell = InputLine.FitToWidth(r[i], widths[i]);
                 cells[i] = isSep ? new string(SafeColor.Glyphs.Rule, widths[i]) : PadToWidth(cell, widths[i]);
             }
-            Console.WriteLine("  " + string.Join(" " + SafeColor.Glyphs.ColumnSeparator + " ", cells));
+            WriteLine("  " + string.Join(" " + SafeColor.Glyphs.ColumnSeparator + " ", cells));
         }
         // 截断提示本身也要受宽度约束：解释截断的那一行**溢出**终端比不解释更糟。
         // budget <= 0 表示宽度未知，此时不做猜测性裁剪（既有约定）。
         var noteWidth = budget - 2;
         if (droppedCols > 0)
-            Console.WriteLine("  " + Note(TableDroppedColsNote(totalCols, keep, noteWidth), noteWidth));
+            WriteLine("  " + Note(TableDroppedColsNote(totalCols, keep, noteWidth), noteWidth));
         if (truncated)
-            Console.WriteLine("  " + Note(TableDroppedRowsNote(_tableBuf.Count, MaxTableRows, noteWidth), noteWidth));
+            WriteLine("  " + Note(TableDroppedRowsNote(_tableBuf.Count, MaxTableRows, noteWidth), noteWidth));
         _tableBuf.Clear();
     }
 

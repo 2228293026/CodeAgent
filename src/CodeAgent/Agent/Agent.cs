@@ -416,6 +416,13 @@ public sealed partial class Agent
         var effectivePrompt = await ExpandMentions(_ctx.Workspace, _ctx.Config.MaxHistoryChars / 8, userPrompt, ct);
         _renderer = new ConsoleRenderer(_ctx.Config.RenderMarkdown);
         _renderer.SetWidth(CodeAgent.Program.ConsoleColumnsForNotice());
+        // 逐字预览（字随模型流式输出一个个长出来）。前提条件与真值表见
+        // ConsoleRenderer.ShouldLivePreview——抽在那边是为了让判定本身可测。
+        // 重定向状态走 SafeColor.IsRedirected 这个注入点而不是直接读
+        // Console.IsOutputRedirected：测试宿主里输出**恒被重定向**，直接读会让
+        // 端到端测试永远进不了预览分支，等于这段代码没有测试能碰。
+        _renderer.LivePreview = ConsoleRenderer.ShouldLivePreview(
+            _ctx.Config.RenderMarkdown, _ctx.Config.TuiAnsi, SafeColor.IsRedirected());
         TurnRounds = 0;
         _turnToolCalls = 0;
         TurnInputTokens = 0;
