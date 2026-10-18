@@ -576,8 +576,13 @@ public sealed partial class Agent
                     // "模型未返回内容"判空被误抑制——而屏幕上其实一个字都没有。
                     if (!_streamedThisCall && !string.IsNullOrWhiteSpace(delta))
                     {
-                        // 思考结束（首个文本到达）：定格"用时 · tokens"统计行，结论文本从下一行流式输出
-                        FinalizeSpinner();
+                        // 顺序要紧：**先断行，再定格统计行**。
+                        //
+                        // 反过来的话，统计行接在思考文本的行尾：
+                        //   我选择直接简洁回复。✓ 用时 11s · ↑ 163 tokens
+                        // 思考是裸写的、末尾不带换行，FinalizeSpinner 的 WriteLine
+                        // 就落在那一行的行尾——统计行看起来成了思考的最后一句话。
+                        // 先断行（并告知渲染器光标已回行首），统计行才是独立的一行。
                         // 思考与正文之间必须换行。
                         //
                         // 此前思考（暗色）与正文共用一行：
@@ -587,16 +592,23 @@ public sealed partial class Agent
                         // 和最终答案混成一段，分不清哪句是给人看的。
                         if (_reasoningShown)
                         {
+                            // 有思考：思考文本是裸写的、末尾不带换行，光标还停在它那一行的行尾。
+                            // 顺序：断行 → 定格统计行。反过来统计行就被写进思考的行尾。
                             lock (ConsoleLock)
                             {
-                                // 思考文本是裸写的，渲染器可能仍以为光标在行中（思考末尾没换行）。
-                                // 这里补的换行把光标送回了行首——不告诉渲染器，它就会一直认为
-                                // 还在行中，CanPreview 恒为 false，**整段答案都不再逐字长出来**。
-                                // 开着 thinkingEffort 时这一步几乎每轮都会走，漏了等于修复没生效。
+                                // 告知渲染器光标已回行首：不说的话它会一直以为还在行中，
+                                // CanPreview 恒为 false，**整段答案都不再逐字长出来**。
+                                // 开着 thinkingEffort 时这一步几乎每轮都会走。
                                 _renderer?.ClearLivePreview();
                                 Console.WriteLine();
+                                EmitFrozenLine();
                             }
                             _reasoningShown = false; // 行已断开，别让后面再补一次
+                        }
+                        else
+                        {
+                            // 没思考：spinner 动画行还占着光标行，先清掉残帧再定格
+                            FinalizeSpinner();
                         }
                         _streamedThisCall = true;
                     }
@@ -821,7 +833,7 @@ public sealed partial class Agent
     /// 终端最小化/拖拽时 <c>Console.WindowWidth</c> 会抖到 1~2 列，直接用会让整行折行。</summary>
     private static int ConsoleColumns()
     {
-        if (Console.IsOutputRedirected)
+        if (IsOutputRedirected())
             // 与 Program.ConsoleColumns 同一回退：重定向下若 COLUMNS 给了宽度就照它算，
             // 否则 spinner 帧会按"宽度未知"渲染而超宽。解析口径也共用同一个纯函数。
             return Program.ColumnsFromEnv();
@@ -853,9 +865,18 @@ public sealed partial class Agent
     /// 而脚本恰恰是最容易重定向的场景。
     /// </summary>
     internal static bool ShouldShowSpinner(bool outputRedirected) => !outputRedirected;
+
+    /// <summary>spinner 相关的"是否重定向"读数。<b>必须可注入</b>：
+    ///
+    /// <c>Console.IsOutputRedirected</c> 在测试宿主里**恒为 true**，直接读会让
+    /// 「spinner 动画行 → 定格统计行」这条路径永远跑不到——而那正是统计行
+    /// 曾经接在思考末尾、读起来像思考最后一句话的地方。
+    /// 这类"测不到的分支"与没有实现无法区分，所以读数收口到这里，
+    /// 与 <see cref="SafeColor.IsRedirected"/> 同一个套路。</summary>
+    internal static Func<bool> IsOutputRedirected = () => Console.IsOutputRedirected;
     private void ShowSpinner(string? label = null)
     {
-        if (!ShouldShowSpinner(Console.IsOutputRedirected))
+        if (!ShouldShowSpinner(IsOutputRedirected()))
             return;
         _spinnerShown = true;   // 供 FinalizeSpinner 判定"确实有 spinner 可定格"
         _spinnerSw.Restart();
@@ -938,9 +959,6 @@ public sealed partial class Agent
         if (!_spinnerShown)
             return;
         _spinnerShown = false;
-        // 本回合口径：与本回合摘要行/状态栏一致（会话累计见 /stats）
-        var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
-        var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
         lock (ConsoleLock)
         {
             if (!_reasoningShown)
@@ -949,15 +967,28 @@ public sealed partial class Agent
                 Console.Write(SpinnerClearSequence(_spinnerLastWidth));
                 _spinnerLastWidth = 0;
             }
-            // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
-            // 必须按宽度收口：用时最长到「1 分 23 秒」、token 到「128.4K」，
-            // 拼起来 30 多列；窄终端上不收口就折行，把接下来的正文顶走。
-            var frozen = $"{SafeColor.Glyphs.Ok} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}{SafeColor.Glyphs.Up} {tok} tokens";
-            var frozenWidth = CodeAgent.Program.ConsoleColumnsForNotice();
-            Console.WriteLine(frozenWidth > 0 ? InputLine.FitToWidth(frozen, frozenWidth) : frozen);
-            // 定格行以换行收尾、光标回到行首：光标行交还渲染器，正文可以继续逐字长出来。
-            _renderer?.SetCursorLineBusy(false);
+            EmitFrozenLine();
         }
+    }
+
+    /// <summary>statistics 行本身（不含 spinner 收尾）。
+    ///
+    /// 抽出来是为了让「思考→正文」那条路径能**先断行、再定格**：
+    /// 两者顺序反了，统计行就接在思考文本的行尾，读起来像思考的最后一句话。
+    /// 调用方必须自己保证光标已在行首。</summary>
+    private void EmitFrozenLine()
+    {
+        // 本回合口径：与本回合摘要行/状态栏一致（会话累计见 /stats）
+        var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
+        var tok = total >= 1000 ? $"{total / 1000.0:F1}K" : total.ToString();
+        // 定格统计行并换行：思考结束后的用时与 token 可见，结论文本从下一行流式输出
+        // 必须按宽度收口：用时最长到「1 分 23 秒」、token 到「128.4K」，
+        // 拼起来 30 多列；窄终端上不收口就折行，把接下来的正文顶走。
+        var frozen = $"{SafeColor.Glyphs.Ok} 用时 {TextUtil.FormatSessionTime(_turnSw.Elapsed)}{SafeColor.Glyphs.SegmentSeparator}{SafeColor.Glyphs.Up} {tok} tokens";
+        var frozenWidth = CodeAgent.Program.ConsoleColumnsForNotice();
+        Console.WriteLine(frozenWidth > 0 ? InputLine.FitToWidth(frozen, frozenWidth) : frozen);
+        // 定格行以换行收尾、光标回到行首：光标行交还渲染器，正文可以继续逐字长出来。
+        _renderer?.SetCursorLineBusy(false);
     }
 
     /// <summary>工具名的**动词形态**：<c>read_file</c> → <c>Read</c>、<c>edit_file</c> → <c>Edit</c>。

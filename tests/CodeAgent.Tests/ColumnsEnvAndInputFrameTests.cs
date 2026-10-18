@@ -60,11 +60,14 @@ public sealed class ColumnsEnvAndInputFrameTests
     [Fact]
     public void TheFallbackIsWiredIntoBothWidthReaders()
     {
-        // Program 与 Agent 各有一份 ConsoleColumns；只改一处会让 spinner 帧超宽
+        // Program 与 Agent 各有一份 ConsoleColumns；只改一处会让 spinner 帧超宽。
+        // Agent 侧的重定向读数走可注入的 IsOutputRedirected()（测试宿主里
+        // Console.IsOutputRedirected 恒为 true，直接读会让 spinner 分支测不到），
+        // 但**回退口径必须一致**：仍然落到 Program.ColumnsFromEnv()。
         var program = File.ReadAllText(FindSource("src", "CodeAgent", "Program.cs"));
         var agent = File.ReadAllText(FindSource("src", "CodeAgent", "Agent", "Agent.cs"));
         Assert.Contains("if (Console.IsOutputRedirected)\n            return ColumnsFromEnv();", program.Replace("\r\n", "\n"));
-        Assert.Contains("if (Console.IsOutputRedirected)\n            // 与 Program.ConsoleColumns 同一回退", agent.Replace("\r\n", "\n"));
+        Assert.Contains("if (IsOutputRedirected())\n            // 与 Program.ConsoleColumns 同一回退", agent.Replace("\r\n", "\n"));
         Assert.Contains("return Program.ColumnsFromEnv();", agent);
     }
 

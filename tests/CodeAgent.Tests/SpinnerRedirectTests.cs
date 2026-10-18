@@ -30,9 +30,11 @@ public sealed class SpinnerRedirectTests
     [Fact]
     public void ShowSpinner_ConsultsThePredicate()
     {
-        // 只测谓词会漏掉"ShowSpinner 压根没用它"——那正是原来每帧都画的原因
+        // 只测谓词会漏掉"ShowSpinner 压根没用它"——那正是原来每帧都画的原因。
+        // 读数走可注入的 IsOutputRedirected()（测试宿主里 Console.IsOutputRedirected
+        // 恒为 true，直接读就永远进不了 spinner 分支，那条路径等于测不到）。
         var src = File.ReadAllText(Find());
-        Assert.Contains("ShouldShowSpinner(Console.IsOutputRedirected)", src);
+        Assert.Contains("if (!ShouldShowSpinner(IsOutputRedirected()))", src);
     }
 
     [Fact]
@@ -49,7 +51,7 @@ public sealed class SpinnerRedirectTests
     {
         // 提前返回必须发生在 _spinnerSw.Restart() 之前，否则空转的秒表照样在计
         var src = File.ReadAllText(Find());
-        var at = src.IndexOf("ShouldShowSpinner(Console.IsOutputRedirected)", StringComparison.Ordinal);
+        var at = src.IndexOf("if (!ShouldShowSpinner(IsOutputRedirected()))", StringComparison.Ordinal);
         Assert.True(at > 0);
         var window = src.Substring(at, Math.Min(300, src.Length - at));
         Assert.True(window.IndexOf("_spinnerSw.Restart()", StringComparison.Ordinal) > 0);

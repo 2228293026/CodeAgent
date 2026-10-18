@@ -220,6 +220,49 @@ public class StreamCharDynamicsTests
         Assert.True(ConsoleRenderer.ShouldLivePreview(true, true, false));
     }
 
+    [Fact]
+    public void StatsLineIsNotGluedToTheEndOfReasoning()
+    {
+        // 真机症状（用户贴出来的输出）：
+        //   我选择直接简洁回复。✓ 用时 11s · ↑ 163 tokens
+        // 统计行接在思考文本的行尾，读起来像思考的最后一句话。
+        //
+        // 根因是顺序：FinalizeSpinner 排在「思考↔正文断行」之前。
+        // 思考是裸写的、末尾不带换行，于是统计行的 WriteLine 落在了那一行行尾。
+        //
+        // 必须伪造非重定向，否则 spinner 根本不画，统计行走的是另一条路径。
+        var prevRedirected = SafeColor.IsRedirected;
+        var prevSpinnerRedirected = AgentCore.IsOutputRedirected;
+        var prevColumns = Environment.GetEnvironmentVariable("COLUMNS");
+        SafeColor.IsRedirected = () => false;
+        AgentCore.IsOutputRedirected = () => false;
+        Environment.SetEnvironmentVariable("COLUMNS", "80");
+        try
+        {
+            var outp = Capture(() => MakeAgent(new ReasoningThenCharProvider())
+                .RunAsync("说点什么", CancellationToken.None));
+            var screen = ReplayTerminal(outp);
+
+            var reasoningAt = screen.IndexOf("思考内容", StringComparison.Ordinal);
+            var statsAt = screen.IndexOf("用时", StringComparison.Ordinal);
+            Assert.True(reasoningAt >= 0, $"应有思考文本: {screen}");
+            Assert.True(statsAt >= 0, $"应有定格统计行: {screen}");
+            // 思考与统计行之间必须**已经换行**：直接拼在一起就是真机那个症状
+            var between = screen[reasoningAt..statsAt];
+            Assert.Contains("\n", between);
+            // 统计行不能在思考那一行上
+            var reasoningLine = screen[..reasoningAt].Split('\n').Length;
+            var statsLine = screen[..statsAt].Split('\n').Length;
+            Assert.True(statsLine > reasoningLine, $"统计行必须独占总行: [{screen}]");
+        }
+        finally
+        {
+            SafeColor.IsRedirected = prevRedirected;
+            AgentCore.IsOutputRedirected = prevSpinnerRedirected;
+            Environment.SetEnvironmentVariable("COLUMNS", prevColumns);
+        }
+    }
+
     private static string StripControls(string s)
     {
         var sb = new StringBuilder();
