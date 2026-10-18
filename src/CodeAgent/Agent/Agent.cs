@@ -515,7 +515,12 @@ public sealed partial class Agent
 
             // 模型在调用工具前若已流式输出文本，补一个换行，避免与后续输出粘连
             if (_streamedThisCall)
+            {
+                // 这一行是渲染器之外直接写的：不通知的话，若 Flush 收尾停在行中，
+                // 渲染器会一直以为光标还在行中，工具之后那整段正文都不会再逐字长出来。
+                _renderer?.ClearLivePreview();
                 Console.WriteLine();
+            }
 
             // 执行本轮全部工具调用：默认并行；确认模式或同路径写冲突时顺序执行
             List<ProviderMessage> results;
