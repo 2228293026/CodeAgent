@@ -69,6 +69,42 @@ public static class SafeColor
         /// <summary>表格分隔行的填充字符。</summary>
         public static char Rule => AsciiEnabled ? '-' : '─';
 
+        // —— 表格框线 ——
+        //
+        // 表格默认画完整外框（┌┬┐ ├┼┤ └┴┘），而不是只靠竖线分隔。
+        // 只有竖线时，列再多也读成「一堆并排的字」；有了外框，表头/数据/分隔
+        // 三段的边界是**画出来**的，扫一眼就知道哪块是表头。
+        //
+        // 退回 ASCII 时统一用 `+` 做角与交叉、`-` 做横线（+---+ 形态）：
+        // 老代码页里制表符会变问号，而**框线错位比没有框线更糟**。
+
+        /// <summary>框线上边左角。</summary>
+        public static string TableTopLeft => AsciiEnabled ? "+" : "┌";
+
+        /// <summary>框线上边中间接头（每列一个）。</summary>
+        public static string TableTopMid => AsciiEnabled ? "+" : "┬";
+
+        /// <summary>框线上边右角。</summary>
+        public static string TableTopRight => AsciiEnabled ? "+" : "┐";
+
+        /// <summary>框线左边中接头（表头与数据之间等）。</summary>
+        public static string TableMidLeft => AsciiEnabled ? "+" : "├";
+
+        /// <summary>框线中间十字接头。</summary>
+        public static string TableMidMid => AsciiEnabled ? "+" : "┼";
+
+        /// <summary>框线右边中接头。</summary>
+        public static string TableMidRight => AsciiEnabled ? "+" : "┤";
+
+        /// <summary>框线下边左角。</summary>
+        public static string TableBottomLeft => AsciiEnabled ? "+" : "└";
+
+        /// <summary>框线下边中间接头。</summary>
+        public static string TableBottomMid => AsciiEnabled ? "+" : "┴";
+
+        /// <summary>框线下边右角。</summary>
+        public static string TableBottomRight => AsciiEnabled ? "+" : "┘";
+
         /// <summary>省略号。注意 ASCII 版是 3 个字符，会**改变显示宽度**——
         /// 调用方必须把它喂给 TextUtil.DisplayWidth 计算，不能按 1 列算。
         /// 预算相关处请直接用 <see cref="EllipsisWidth"/>，别再写死 1。</summary>
@@ -223,6 +259,12 @@ public static class SafeColor
         /// 省略号换成长 3 的 <c>...</c>，与 <see cref="Ellipsis"/> 保持一致——
         /// 调用方仍须把结果喂给 <c>TextUtil.DisplayWidth</c>，不能按 1 列算。</summary>
         public static string Substitute(string text) => !AsciiEnabled ? text : text
+            // 框线的角与接头：全部落到 `+`，横线与竖线落到 `-` / `|`（+---+ 形态）。
+            // 这两个 Replace 必须排在 '─' / '│' 之前吗？不需要——框线字符与它们不重叠，
+            // 但顺序写在这里是为了让"框线整族一起处理"这件事在源码上看得见。
+            .Replace('┌', '+').Replace('┬', '+').Replace('┐', '+')
+            .Replace('├', '+').Replace('┼', '+').Replace('┤', '+')
+            .Replace('└', '+').Replace('┴', '+').Replace('┘', '+')
             .Replace('│', '|').Replace('▌', '|').Replace('─', '-').Replace('▸', '>')
             .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v').Replace('✓', 'v')
             .Replace('❗', '!').Replace('⚠', '!').Replace('⏵', '>').Replace('◆', '*')

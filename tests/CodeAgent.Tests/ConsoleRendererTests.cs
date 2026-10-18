@@ -325,16 +325,20 @@ public class ConsoleRendererTests : IDisposable
     {
         // 回归：中文按 2 列宽对齐，短单元格应补齐空格使竖线对齐
         var output = Render("| 名称 | size |\n|------|------|\n| 中文 | 10 |\n");
-        var line3 = output.Split('\n')[2]; // 数据行
-        // 2 列表格只有 1 条竖线分隔符；"中文"(宽4) 与 "10" 需按列宽补齐
-        var pipe = line3.IndexOf("│", StringComparison.Ordinal);
-        Assert.True(pipe > 0, $"数据行应有竖线: {line3}");
-        Assert.False(line3[(pipe + 1)..].Contains("│"), $"2 列表格不应有第二条竖线: {line3}");
-        // 表头、分隔行、数据行的竖线列应对齐
-        var headPipe = output.Split('\n')[0].IndexOf("│", StringComparison.Ordinal);
-        var sepPipe = output.Split('\n')[1].IndexOf("│", StringComparison.Ordinal);
-        Assert.True(Math.Abs(headPipe - pipe) <= 2, $"竖线列应对齐（表头 {headPipe} vs 数据 {pipe}）");
-        Assert.True(Math.Abs(sepPipe - pipe) <= 2, $"竖线列应对齐（分隔 {sepPipe} vs 数据 {pipe}）");
+        var lines = output.Split('\n');
+        var header = lines.First(l => l.Contains('│') && l.Contains("名称"));
+        var data = lines.First(l => l.Contains('│') && l.Contains("中文"));
+        // 2 列表格：外框两条竖线 + 内部分隔一条，共 3 条
+        Assert.Equal(3, CountPipes(data));
+        // 内部分隔竖线在表头与数据行必须落在**同一列**——CJK 按 2 列宽补齐才做得到
+        Assert.Equal(InnerPipeAt(header), InnerPipeAt(data));
+    }
+
+    /// <summary>第二条竖线的列位置（0 = 外框左边，1 = 内部分隔）。</summary>
+    private static int InnerPipeAt(string line)
+    {
+        var first = line.IndexOf("│", StringComparison.Ordinal);
+        return line.IndexOf("│", first + 1, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -365,7 +369,8 @@ public class ConsoleRendererTests : IDisposable
         Assert.Contains("-", output); // 数据 - 保留
         Assert.Contains(":", output); // 数据 : 保留
         Assert.Contains("│", output); // 数据行仍有分隔竖线（非横线）
-        var dataLine = output.TrimEnd('\n').Split('\n')[^1];
+        // 取数据行：末行现在是框线，不能取 Split[^1]
+        var dataLine = output.Split('\n').First(l => l.Contains("-   "));
         Assert.DoesNotContain("──", dataLine); // 数据行不应渲染成横线
     }
 
@@ -386,7 +391,9 @@ public class ConsoleRendererTests : IDisposable
         Assert.Contains("b", output);
         Assert.Contains("1", output);
         Assert.Contains("2", output);
-        Assert.DoesNotContain("──", output); // 无横线（两行都是数据）
+        // 无分隔行 → 只有外框上下两条线，**中间没有**接头行（├┼┤）
+        Assert.DoesNotContain("├", output);
+        Assert.DoesNotContain("┼", output);
     }
 
     [Fact]
@@ -419,10 +426,11 @@ public class ConsoleRendererTests : IDisposable
 
         Assert.Contains("│", output); // 表格对齐竖线
         Assert.DoesNotContain("| a.cs | 10 |", output); // 原始未对齐形式不出现
-        var lastLine = output.TrimEnd('\n').Split('\n')[^1];
-        Assert.StartsWith("  ", lastLine); // 表格行有缩进前缀
-        Assert.Contains("a.cs", lastLine);
-        Assert.Contains("10", lastLine);
+        // 数据行不能取末行（末行是框线）
+        var dataLine = output.Split('\n').First(l => l.Contains("a.cs"));
+        Assert.StartsWith("  ", dataLine); // 表格行有缩进前缀
+        Assert.Contains("a.cs", dataLine);
+        Assert.Contains("10", dataLine);
     }
 
     [Fact]
@@ -492,9 +500,11 @@ public class ConsoleRendererTests : IDisposable
         // 回归：\| 是表格内转义竖线，曾被当作单元格分隔劈开成多余列，且内容残留反斜杠
         var output = Render("| cmd | desc |\n|---|---|\n| grep a \\| b | find |\n");
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var data = lines[^1].Trim();
-        // 仍应是 2 列：数据行只有 1 条分隔竖线，且竖线数与表头一致
-        var headPipes = CountPipes(lines[0]);
+        // 末行是框线，数据行要按内容找，不能取 lines[^1]
+        var header = lines.First(l => l.Contains("cmd"));
+        var data = lines.First(l => l.Contains("grep")).Trim();
+        // 仍应是 2 列：数据行的竖线数（外框 2 + 内分隔 1）与表头一致
+        var headPipes = CountPipes(header);
         var dataPipes = CountPipes(data);
         Assert.Equal(headPipes, dataPipes);
         Assert.Contains("grep a | b", data); // 转义还原为字面 |，不带反斜杠

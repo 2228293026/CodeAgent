@@ -107,12 +107,20 @@ public class AsciiGlyphTests : IDisposable
         }
         finally { Console.SetOut(stdout); }
         var lines = ConsoleRendererTests.OutputLines(writer.ToString().Replace("\r\n", "\n")).Where(l => l.Trim().Length > 0).ToArray();
-        Assert.Equal(3, lines.Length);
+        // 带外框后是 5 行：顶边 / 表头 / 接头 / 数据 / 底边
+        Assert.Equal(5, lines.Length);
+        // 框线行用 `+`，数据行用 `|`——两者都必须真的存在，
+        // 才能证明 ASCII 退回**同时**覆盖了框线和列分隔（只查一个的话，
+        // 框线漏了退回、留下 ??? 也能蒙混过关）。
+        Assert.All(lines.Where(l => l.Contains('+')), l => Assert.DoesNotContain('?', l));
+        Assert.Equal(3, lines.Count(l => l.Contains('+'))); // 顶边、接头、底边
+        Assert.Equal(2, lines.Count(l => l.Contains('|'))); // 表头、数据
         foreach (var line in lines)
         {
             Assert.DoesNotContain('?', line);
             Assert.DoesNotContain('│', line);
-            Assert.Contains('|', line);
+            Assert.DoesNotContain('├', line);
+            Assert.DoesNotContain('┌', line);
         }
     }
 

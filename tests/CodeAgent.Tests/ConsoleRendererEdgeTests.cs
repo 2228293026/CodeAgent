@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using CodeAgent;
 using Xunit;
 using static CodeAgent.ConsoleRenderer;
@@ -140,7 +141,9 @@ public class ConsoleRendererEdgeTests : IDisposable
     {
         // 表格可省略末尾外层 |；此时结尾的 \| 是单元格内容，不能当作外层分隔符删掉。
         var output = Render("| a\\|\n");
-        Assert.Equal("a|", output.Trim());
+        // 单列表格现在带外框：取含内容的那一行判定
+        var data = output.Split('\n').First(l => l.Contains('a')).Trim();
+        Assert.Equal("│ a| │", data);
     }
 
     [Fact]
@@ -148,7 +151,10 @@ public class ConsoleRendererEdgeTests : IDisposable
     {
         // 两个连续反斜杠后的 | 是分隔符；仅奇数个反斜杠才转义竖线。
         var output = Render("| a\\\\| b |\n");
-        Assert.Equal("a\\\\ │ b", output.Trim());
+        // 带外框后取数据行判定；两个反斜杠后的 | 仍是分隔符 → 两列
+        var data = output.Split('\n').First(l => l.Contains("a\\\\")).Trim();
+        Assert.Contains("a\\\\", data);
+        Assert.Equal(3, data.Split("│").Length - 1); // 外框 2 + 内分隔 1
     }
 
     [Fact]

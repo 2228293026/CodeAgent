@@ -995,6 +995,14 @@ public sealed class ConsoleRenderer
     /// <summary>表格列宽收缩下限：低于此值内容已不可读，宁可让表格换行也不继续削。</summary>
     internal const int MinTableColWidth = 3;
 
+    /// <summary>表格外框额外吃掉的列数：左边 <c>│ </c> 与右边 <c> │</c> 各 2 列。
+    ///
+    /// 列宽收敛必须先把这 4 列扣掉。按"无框"算出来的列宽是贴着终端宽度顶格的，
+    /// 一加上外框正好超宽 4 列——整行折行，框线全断，比不画框还难看。
+    /// 这个数依赖 <see cref="SafeColor.Glyphs"/> 里框线字形都是 **1 列宽**：
+    /// 换字形时若宽度变了，这里要跟着改。</summary>
+    internal const int TableFrameWidth = 4;
+
     /// <summary>表格总宽预算下的收敛：先夹到单列上限，再对最宽的一批列削峰，直到总宽不超过 budget。
     /// 总宽 = 缩进 2 + Σ列宽 + 3 × (列数-1)（" │ " 分隔）。
     /// 旧实现只限单列 40 列：宽表在窄终端上仍会整行折行，列对齐彻底看不出对应关系。
@@ -1095,7 +1103,9 @@ public sealed class ConsoleRenderer
                 natural[i] = Math.Min(MaxTableColWidth, Math.Max(natural[i], DisplayWidth(r[i])));
         // 窄终端下收敛总宽（削最宽的一批列），否则宽表整行折行、列对应关系全丢
         var budget = TableBudget();
-        var keep = MaxReadableColumns(natural, budget);
+        // 裁列与削宽必须用**同一个**口径（缩进 2 + 外框 4），否则会出现
+        // 「裁列时以为放得下、真画出来超宽 4 列」的折行破版。
+        var keep = MaxReadableColumns(natural, budget, indent: 2 + TableFrameWidth);
         var droppedCols = cols - keep;
         // 原始列数必须在这里留下：下面 `cols = keep` 会把它覆盖掉，
         // 而截断提示要报的是**总数**。用覆盖后的值会打印成
@@ -1107,21 +1117,32 @@ public sealed class ConsoleRenderer
             natural = natural.Take(keep).ToArray();
             cols = keep;
         }
-        var widths = FitColumnWidths(natural, budget);
+        var widths = FitColumnWidths(natural, budget, indent: 2 + TableFrameWidth);
+        // 画完整外框：顶边 → 行 → 底边。
+        // 外框不只是好看，它把「表头 / 分隔 / 数据」三段边界画了出来——
+        // 只靠竖线时，列一多就退化成一堆并排的字，扫不出哪行是表头。
+        WriteLine(FrameRow(SafeColor.Glyphs.TableTopLeft, SafeColor.Glyphs.TableTopMid, SafeColor.Glyphs.TableTopRight, widths));
         foreach (var r in rows)
         {
             // 分隔行判定需精确：Markdown 分隔行单元格形如 ---、:---、---:、:---:
             // （可选冒号 + 至少 3 个 -），否则单字符数据行（如 - 或 :）会被误判为分隔行而丢失
             var isSep = r.Count > 0 && r.All(c => SepRe.IsMatch(c));
-            var cells = new string[Math.Min(r.Count, cols)];
-            for (int i = 0; i < cells.Length; i++)
+            if (isSep)
+            {
+                // 分隔行不再画一槽横线当数据，而是画成表头与数据之间的框线接头
+                WriteLine(FrameRow(SafeColor.Glyphs.TableMidLeft, SafeColor.Glyphs.TableMidMid, SafeColor.Glyphs.TableMidRight, widths));
+                continue;
+            }
+            var cells = new string[cols];
+            for (int i = 0; i < cols; i++)
             {
                 // 超宽单元格先截断到列宽（FitToWidth 代理对安全并补省略号），再补空格对齐
-                var cell = InputLine.FitToWidth(r[i], widths[i]);
-                cells[i] = isSep ? new string(SafeColor.Glyphs.Rule, widths[i]) : PadToWidth(cell, widths[i]);
+                var text = i < r.Count ? r[i] : "";
+                cells[i] = PadToWidth(InputLine.FitToWidth(text, widths[i]), widths[i]);
             }
-            WriteLine("  " + string.Join(" " + SafeColor.Glyphs.ColumnSeparator + " ", cells));
+            WriteLine(CellRow(cells));
         }
+        WriteLine(FrameRow(SafeColor.Glyphs.TableBottomLeft, SafeColor.Glyphs.TableBottomMid, SafeColor.Glyphs.TableBottomRight, widths));
         // 截断提示本身也要受宽度约束：解释截断的那一行**溢出**终端比不解释更糟。
         // budget <= 0 表示宽度未知，此时不做猜测性裁剪（既有约定）。
         var noteWidth = budget - 2;
@@ -1155,6 +1176,42 @@ public sealed class ConsoleRenderer
         var arrow = SafeColor.Glyphs.Arrow;
         var full = $"{dots}(表格共 {total} 行，仅显示前 {keep} 行)";
         return width > 0 && TextUtil.DisplayWidth(full) > width ? $"{dots}({total} 行 {arrow} {keep} 行)" : full;
+    }
+
+    /// <summary>画一条框线：<c>┌──┬──┐</c>。
+    ///
+    /// 每段的横线长度是 <c>width + 2</c>——数据行里一列实际占「空格 + 内容 + 空格」
+    /// 共 <c>width + 2</c> 列，框线必须逐列对上去，否则接头正好错开一两格，
+    /// 画出来的框是歪的。这不是审美问题：歪掉的框会让人以为列边界就在错位处。
+    /// </summary>
+    private static string FrameRow(string left, string mid, string right, int[] widths)
+    {
+        var rule = SafeColor.Glyphs.Rule;
+        var sb = new StringBuilder("  ");
+        sb.Append(left);
+        for (var i = 0; i < widths.Length; i++)
+        {
+            if (i > 0)
+                sb.Append(mid);
+            sb.Append(rule, widths[i] + 2);
+        }
+        sb.Append(right);
+        return sb.ToString();
+    }
+
+    /// <summary>画一行数据：<c>│ 内容 │ 内容 │</c>。</summary>
+    private static string CellRow(string[] cells)
+    {
+        var sb = new StringBuilder("  ");
+        sb.Append(SafeColor.Glyphs.ColumnSeparator);
+        for (var i = 0; i < cells.Length; i++)
+        {
+            if (i > 0)
+                sb.Append(SafeColor.Glyphs.ColumnSeparator);
+            sb.Append(' ').Append(cells[i]).Append(' ');
+        }
+        sb.Append(SafeColor.Glyphs.ColumnSeparator);
+        return sb.ToString();
     }
 
     private static List<string> SplitCells(string row)
