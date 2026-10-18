@@ -37,6 +37,32 @@ public sealed class CharByCharProvider : IAgentProvider
         Task.FromResult<IReadOnlyList<string>>(["char-by-char"]);
 }
 
+/// <summary>先吐一段不带换行的思考，再逐字吐正文：复现 thinkingEffort 开启时的真实顺序。</summary>
+public sealed class ReasoningThenCharProvider : IAgentProvider
+{
+    public string Name => "reasoning-then-char";
+
+    public Task<ProviderResponse> ChatAsync(
+        IReadOnlyList<ProviderMessage> messages, IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort, CancellationToken ct) =>
+        Task.FromResult(new ProviderResponse { Text = "逐字答案" });
+
+    public Task<ProviderResponse> ChatStreamAsync(
+        IReadOnlyList<ProviderMessage> messages, IReadOnlyList<ToolSpec> tools,
+        string thinkingEffort, Action<string>? onText, Action<string>? onReasoning,
+        Action<string>? onToolFragment, CancellationToken ct)
+    {
+        // 关键：思考不带换行（真实模型的 reasoning 增量就是这样）
+        onReasoning?.Invoke("思考内容");
+        foreach (var ch in "逐字答案")
+            onText?.Invoke(ch.ToString());
+        return Task.FromResult(new ProviderResponse { Text = "逐字答案" });
+    }
+
+    public Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<string>>(["reasoning-then-char"]);
+}
+
 /// <summary>
 /// 逐字动态：模型每吐一个字，屏幕上就要跟着长一个字。
 ///
@@ -114,6 +140,36 @@ public class StreamCharDynamicsTests
             // 而且最终画面上内容完整、没有叠加残字
             var screen = ReplayTerminal(outp);
             Assert.Contains("慢慢长出来", screen, StringComparison.Ordinal);
+        }
+        finally
+        {
+            SafeColor.IsRedirected = prevRedirected;
+            Environment.SetEnvironmentVariable("COLUMNS", prevColumns);
+        }
+    }
+
+    [Fact]
+    public void AnswerAfterReasoningStillStreamsCharByChar()
+    {
+        // 用户实际的主路径：thinkingEffort=high 时几乎每轮都先出思考、再出正文。
+        // 思考文本是裸写的（不带换行），渲染器会记下「光标在行中」；
+        // 若「思考→正文」那个补换行不通知渲染器，CanPreview 会一直 false——
+        // 也就是说**整段答案都不会再逐字长出来**，本轮修复等于没生效。
+        var prevRedirected = SafeColor.IsRedirected;
+        var prevColumns = Environment.GetEnvironmentVariable("COLUMNS");
+        SafeColor.IsRedirected = () => false;
+        Environment.SetEnvironmentVariable("COLUMNS", "80");
+        try
+        {
+            var outp = Capture(() => MakeAgent(new ReasoningThenCharProvider())
+                .RunAsync("说点什么", CancellationToken.None));
+
+            // 正文必须逐字重绘：输出里要出现原地重绘序列
+            Assert.Contains("\x1b[2K", outp, StringComparison.Ordinal);
+            // 而且思考与正文确实分开成了两行
+            var plain = StripControls(outp);
+            Assert.Contains("思考内容", plain, StringComparison.Ordinal);
+            Assert.Contains("逐字答案", plain, StringComparison.Ordinal);
         }
         finally
         {

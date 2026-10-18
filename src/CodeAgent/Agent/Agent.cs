@@ -588,7 +588,14 @@ public sealed partial class Agent
                         if (_reasoningShown)
                         {
                             lock (ConsoleLock)
+                            {
+                                // 思考文本是裸写的，渲染器可能仍以为光标在行中（思考末尾没换行）。
+                                // 这里补的换行把光标送回了行首——不告诉渲染器，它就会一直认为
+                                // 还在行中，CanPreview 恒为 false，**整段答案都不再逐字长出来**。
+                                // 开着 thinkingEffort 时这一步几乎每轮都会走，漏了等于修复没生效。
+                                _renderer?.ClearLivePreview();
                                 Console.WriteLine();
+                            }
                             _reasoningShown = false; // 行已断开，别让后面再补一次
                         }
                         _streamedThisCall = true;
