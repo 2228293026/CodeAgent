@@ -259,6 +259,28 @@ public sealed class EditableLine
         Cursor = nl < 0 ? text.Length : nl;
     }
 
+    /// <summary>删到**本行**行尾（Ctrl+K 的 readline 语义）。返回是否删掉了东西。</summary>
+    ///
+    /// 刻意不越过换行：readline 里 Ctrl+K 在行尾按两次会删掉换行、把下一行接上来，
+    /// 那是「kill ring」体系的一部分，而这里没有 kill ring——只删掉换行的话，
+    /// 用户看到的是「按了一下 Ctrl+K，两行合成一行」，比不做更意外。
+    /// 多行输入里想删下一行，光标在行尾再按 Delete 语义更清楚。
+    public bool DeleteToLineEnd()
+    {
+        var text = _text.ToString();
+        var nl = text.IndexOf('\n', Cursor);
+        var end = nl < 0 ? text.Length : nl;
+        if (end <= Cursor)
+            return false;
+        // 代理对保护：截断点落在低代理上时，其前的高代理属于同一码点，整对一起删
+        if (end < text.Length && char.IsLowSurrogate(text[end]) && char.IsHighSurrogate(text[end - 1]))
+            end--;
+        if (end <= Cursor)
+            return false;
+        _text.Remove(Cursor, end - Cursor);
+        return true;
+    }
+
     public void End() => Cursor = _text.Length;
 
     public void Clear()

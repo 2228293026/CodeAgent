@@ -1465,6 +1465,35 @@ public static class InputLine
                     // 由 Program 负责改配置并打印确认行——输入行不碰配置。
                     case ConsoleKey.T when (key.Modifiers & ConsoleModifiers.Control) != 0:
                         return ThinkingMarker;
+                    // Ctrl+A / Ctrl+E：行首 / 行尾（Emacs 与 readline 的老约定）。
+                    // Home/End 已经有了，但在**长行**上手指要离开主键区——
+                    // 而提示符行正是最容易变长的地方。
+                    case ConsoleKey.A when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        if (!menuOpen)
+                        {
+                            buf.LineHome(); // 多行输入：到当前行行首，与 Home 一致
+                            RedrawInput();
+                        }
+                        break;
+                    case ConsoleKey.E when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        if (!menuOpen)
+                        {
+                            buf.LineEnd(); // 多行输入：到当前行行尾，与 End 一致
+                            RedrawInput();
+                        }
+                        break;
+                    // Ctrl+K：删到行尾（readline 的约定）。光标在行尾时无动作——
+                    // 不做「删除整行」那种附带效果，那会让人误删下一行。
+                    case ConsoleKey.K when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        if (!menuOpen && buf.DeleteToLineEnd())
+                            OnTextChanged();
+                        break;
+                    // Ctrl+W：删前一个单词（比 Ctrl+Backspace 更早在肌肉记忆里）。
+                    // 两者走同一个方法：同一件事在两条路上给出不同结果，是最难查的那类 bug。
+                    case ConsoleKey.W when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        if (!menuOpen && buf.DeleteWordBackward())
+                            OnTextChanged();
+                        break;
                     // Ctrl+O：展开最近一次被折叠的工具输出（学自 Claude Code）。
                     // 与 Ctrl+T 同一套约定：输入行不碰输出缓冲，只回报按键。
                     case ConsoleKey.O when (key.Modifiers & ConsoleModifiers.Control) != 0:
