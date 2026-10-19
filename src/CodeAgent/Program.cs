@@ -5084,7 +5084,12 @@ internal static class Program
         ("Alt+U / Ctrl+Shift+U", "撤销最近一次文件修改（/undo）"),
         ("Alt+D / Ctrl+Shift+D", "查看最近修改的 diff（/diff）"),
         ("Alt+N / Ctrl+Shift+N", "新建会话（/clear）"),
-        ("Ctrl+R", "反向搜索命令历史（再按跳更早命中）"),
+        ("Ctrl+R", "反向搜索命令历史（再按跳更早命中，显示第 n/M 条）"),
+        ("Ctrl+O", "展开最近一次被折叠的工具输出"),
+        ("Ctrl+A / Ctrl+E", "跳到行首 / 行尾"),
+        ("Ctrl+K", "删到本行行尾（不越行）"),
+        ("Ctrl+W / Ctrl+Backspace", "删前一个单词"),
+        ("Ctrl+Left / Ctrl+Right", "按单词移动光标"),
         ("Ctrl+L", "清屏"),
     ];
 
