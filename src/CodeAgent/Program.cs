@@ -1780,23 +1780,48 @@ internal static class Program
     {
         if (width <= 0)
             return prompt;
+        // 提示符自带的**前导换行**是「上一轮输出」与「输入框」之间的空行。
+        // 它必须落在边框**上方**：夹在边框和提示符之间就是框里的一个空洞——
+        // 屏幕上表现为一条框线、一行空白、再一行提示符，框看起来是破的。
+        var lead = prompt[..(prompt.Length - prompt.TrimStart('\n').Length)];
+        var body = prompt[lead.Length..];
         var hint = rightHint ?? string.Empty;
         var hintWidth = TextUtil.DisplayWidth(hint);
-        // 提示前留 1 列；只留 1 而不是 2——框线左侧不留白（贴左边更满格）。
-        var ruleWidth = width - hintWidth - 1;
-        if (ruleWidth < 4)
-        {
-            // 窄到放不下提示时：丢掉提示，但**保持「边框在上、提示符在下」的形状**。
-            // 此前这里返回「提示符 + 换行 + 边框」，两个分支形状不一致，于是
-            // 「最后一行就是输入行」这个前提在窄终端下不成立——光标列按边框宽度算，
-            // 光标被推出行宽，敲一个字符就折行。
-            return new string(SafeColor.Glyphs.RuleChar, Math.Max(1, width)) + "\n" + InputLine.FitToWidth(prompt, width);
-        }
-        var line = new string(SafeColor.Glyphs.RuleChar, ruleWidth) + " " + hint;
+        // 提示放不下就整段丢掉，但**保持「边框在上、提示符在下」的形状**。
+        // 此前这里返回「提示符 + 换行 + 边框」，两个分支形状不一致，于是
+        // 「最后一行就是输入行」这个前提在窄终端下不成立——光标列按边框宽度算，
+        // 光标被推出行宽，敲一个字符就折行。
+        var line = BuildFrameRule(SafeColor.Glyphs.FrameTopLeft, SafeColor.Glyphs.FrameTopRight, hint, width);
         // 提示符**必须**按 width 收敛。此前两个分支都没做，于是提示符比终端宽时
         // 必然折行——这正是「敲一个字就多出一行」的直接成因：
         // 折行把输入块撑高，而重绘基线仍按 1 行算，之后每次按键都再错一行。
-        return line + "\n" + InputLine.FitToWidth(prompt, width);
+        return lead + line + "\n" + InputLine.FitToWidth(body, width);
+    }
+
+    /// <summary>
+    /// 一行圆角框线：
+    /// <c>╭─…─ &lt;hint&gt;╮</c>（上）或 <c>╰────╯</c>（下）。
+    ///
+    /// 上下边框必须**共用**这一处宽度算式：两份各算一遍必然走偏，
+    /// 而走偏的表现就是上下两条线不等宽、框歪着。
+    ///
+    /// <paramref name="hint"/> 放不下时整段丢弃（宁可少一段提示，也不能把线画超宽）；
+    /// 宽度连两个角都放不下时退化成纯横线——绝不越界。
+    /// </summary>
+    private static string BuildFrameRule(string left, string right, string hint, int width)
+    {
+        if (width >= 2)
+        {
+            var inner = width - 2; // 左右各占 1 列
+            var hintWidth = TextUtil.DisplayWidth(hint);
+            // 提示前留 1 列空格；留不出就整段丢掉提示——绝不能把线画超宽。
+            // 提示为空时**不能**补那 1 列空格（否则每行凭空多 1 列，必越界）。
+            if (hintWidth > 0 && inner - hintWidth - 1 >= 1)
+                return left + new string(SafeColor.Glyphs.RuleChar, inner - hintWidth - 1) + " " + hint + right;
+            return left + new string(SafeColor.Glyphs.RuleChar, inner) + right;
+        }
+        // width <= 1：连两个角都放不下，只画横线（框已经没意义，但不能越界）
+        return new string(SafeColor.Glyphs.RuleChar, Math.Max(0, width));
     }
 
     /// <summary>输入框下边框。输入提交后打印，把已发出的这行封进框里。</summary>
@@ -1804,7 +1829,7 @@ internal static class Program
     {
         if (width <= 0)
             return string.Empty;
-        return new string(SafeColor.Glyphs.RuleChar, Math.Max(1, width));
+        return BuildFrameRule(SafeColor.Glyphs.FrameBottomLeft, SafeColor.Glyphs.FrameBottomRight, string.Empty, width);
     }
 
     /// <summary>提示符文本：完整形态为 `[模式|模型] 目录&gt; `。

@@ -105,6 +105,33 @@ public static class SafeColor
         /// <summary>框线下边右角。</summary>
         public static string TableBottomRight => AsciiEnabled ? "+" : "┘";
 
+        // —— 输入框圆角 ——
+        //
+        // 输入框用**圆角**（╭╮╰╯）而不是直角：直角与表格框线是同一族字形，
+        // 一屏里出现两种语义不同却长得一样的框，读者会以为输入框也是张表。
+        // 圆角一眼就能区分「这是我打字的地方」与「这是模型产出的表格」。
+        //
+        // 退回 ASCII 时用 `+`：与表格框线同一套退路，老代码页里不至于变问号。
+
+        /// <summary>输入框左上角。</summary>
+        public static string FrameTopLeft => AsciiEnabled ? "+" : "╭";
+
+        /// <summary>输入框右上角。</summary>
+        public static string FrameTopRight => AsciiEnabled ? "+" : "╮";
+
+        /// <summary>输入框左下角。</summary>
+        public static string FrameBottomLeft => AsciiEnabled ? "+" : "╰";
+
+        /// <summary>输入框右下角。</summary>
+        public static string FrameBottomRight => AsciiEnabled ? "+" : "╯";
+
+        /// <summary>输入框左右两侧的竖线（贯穿输入行）。</summary>
+        public static string FrameSide => ColumnSeparator;
+
+        /// <summary>输入提示符（Claude Code 同款 <c>❯</c>）。
+        /// 用 1 列宽的几何符号，ASCII 退回为 <c>&gt;</c>。</summary>
+        public static string PromptChevron => AsciiEnabled ? ">" : "❯";
+
         /// <summary>省略号。注意 ASCII 版是 3 个字符，会**改变显示宽度**——
         /// 调用方必须把它喂给 TextUtil.DisplayWidth 计算，不能按 1 列算。
         /// 预算相关处请直接用 <see cref="EllipsisWidth"/>，别再写死 1。</summary>
@@ -265,7 +292,10 @@ public static class SafeColor
             .Replace('┌', '+').Replace('┬', '+').Replace('┐', '+')
             .Replace('├', '+').Replace('┼', '+').Replace('┤', '+')
             .Replace('└', '+').Replace('┴', '+').Replace('┘', '+')
+            // 输入框圆角：与直角框线同一套退路（都是角，都落 `+`）
+            .Replace('╭', '+').Replace('╮', '+').Replace('╰', '+').Replace('╯', '+')
             .Replace('│', '|').Replace('▌', '|').Replace('─', '-').Replace('▸', '>')
+            .Replace('❯', '>')
             .Replace('⏷', '[').Replace('↓', 'v').Replace('✔', 'v').Replace('✓', 'v')
             .Replace('❗', '!').Replace('⚠', '!').Replace('⏵', '>').Replace('◆', '*')
             .Replace('→', '-').Replace('←', '-').Replace('↑', '^').Replace('↩', 'v')

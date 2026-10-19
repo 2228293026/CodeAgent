@@ -90,7 +90,7 @@ public sealed class InputFrameNarrowBranchRedrawTests
         var framed = Program.BuildInputFrameTop(Prompt, Program.InputModeHint("high"), 10);
         var lines = framed.Split('\n');
         Assert.Equal(2, lines.Length);
-        Assert.StartsWith(new string(SafeColor.Glyphs.RuleChar, 1), lines[0], StringComparison.Ordinal);
+        Assert.StartsWith(SafeColor.Glyphs.FrameTopLeft, lines[0], StringComparison.Ordinal);
         // 提示符在窄屏下会被收口，只要求它是提示符的前缀
         Assert.StartsWith(lines[1].TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
     }

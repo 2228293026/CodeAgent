@@ -50,9 +50,9 @@ public class InputFrameTests
         var lines = Lines(text);
         Assert.Equal(2, lines.Length);
         Assert.Equal("[code] D:\\P> ", lines[1]);
-        // 上边框是满宽的规则线（右侧挂了档位提示，所以不是纯规则）
+        // 上边框是满宽的**圆角**框线（右侧挂了档位提示，所以不是纯规则）
         Assert.Equal(60, TextUtil.DisplayWidth(lines[0]));
-        Assert.Matches("^─+ ◈ high · /thinking$", lines[0]);
+        Assert.Matches("^╭─+ ◈ high · /thinking╮$", lines[0]);
     }
 
     [Fact]
@@ -62,7 +62,8 @@ public class InputFrameTests
         var text = Program.BuildInputFrameTop("> ", hint, 60);
         var top = Lines(text)[0];
         Assert.Equal(60, TextUtil.DisplayWidth(top));
-        Assert.EndsWith(" " + hint, top);
+        // 提示贴着右边的圆角（`╮` 占走最后 1 列）
+        Assert.EndsWith(" " + hint + SafeColor.Glyphs.FrameTopRight, top);
     }
 
     [Fact]
@@ -73,7 +74,9 @@ public class InputFrameTests
         var hint = Program.InputModeHint("高");
         var top = Lines(Program.BuildInputFrameTop("> ", hint, 60))[0];
         Assert.Equal(60, TextUtil.DisplayWidth(top));
-        Assert.Equal(hint, top[(TextUtil.DisplayWidth(top) - TextUtil.DisplayWidth(hint))..].TrimStart());
+        // 提示必须**整段**出现在右端：按显示宽度实现时 width 恰好 60，
+        // 按 Length 实现时会超宽，上面那条断言先炸。
+        Assert.EndsWith(" " + hint + SafeColor.Glyphs.FrameTopRight, top);
     }
 
     [Fact]
@@ -94,10 +97,12 @@ public class InputFrameTests
     }
 
     [Fact]
-    public void BottomFrameIsAFullWidthRule()
+    public void BottomFrameIsAFullWidthRoundedRule()
     {
-        Assert.Equal(60, TextUtil.DisplayWidth(Program.BuildInputFrameBottom(60)));
-        Assert.Matches("^─+$", Program.BuildInputFrameBottom(60));
+        var bottom = Program.BuildInputFrameBottom(60);
+        Assert.Equal(60, TextUtil.DisplayWidth(bottom));
+        // 与上边框同形：左右圆角夹满宽横线（上下不等宽的框会歪）
+        Assert.Matches("^╰─+╯$", bottom);
     }
 
     [Fact]
@@ -109,10 +114,42 @@ public class InputFrameTests
             SafeColor.ReadEnv = n => n == "CODEAGENT_ASCII" ? "1" : null;
             var top = Lines(Program.BuildInputFrameTop("> ", Program.InputModeHint("high"), 60))[0];
             Assert.DoesNotContain("─", top);
-            Assert.Matches("^-+ # high \\| /thinking$", top);
-            Assert.Matches("^-+$", Program.BuildInputFrameBottom(60));
+            // ASCII 下圆角落 `+`、横线落 `-`
+            Assert.Matches("^\\+-+ # high \\| /thinking\\+$", top);
+            Assert.Matches("^\\+-+\\+$", Program.BuildInputFrameBottom(60));
         }
         finally { SafeColor.ReadEnv = saved; }
+    }
+
+    [Fact]
+    public void LeadingBlankLineStaysAboveTheFrameNotInsideIt()
+    {
+        // 用户截图里的形状：一条框线、一行空白、再一行提示符——框看起来是破的。
+        // 成因是 PromptFor 返回的提示符自带前导 `\n`（那本该是「输出」与「输入框」
+        // 之间的空行），被原样夹进了「边框」与「提示符」中间。
+        var framed = Program.BuildInputFrameTop("\n[code] D:\\P> ", "◈ high", 60);
+        var lines = Lines(framed);
+        Assert.Equal(3, lines.Length);
+        Assert.Equal(string.Empty, lines[0]);          // 空行在最上面
+        Assert.StartsWith("╭", lines[1], StringComparison.Ordinal); // 然后是边框
+        Assert.Equal("[code] D:\\P> ", lines[2]);     // 提示符紧跟边框
+    }
+
+    [Fact]
+    public void EveryWidthFromZeroUpwardsStaysInBudget()
+    {
+        // 圆角占 2 列，窄到极限时曾多画 1 列（width=8 出 9 列）。
+        // 这里把 0..80 全扫一遍：越界一次就够把终端撑折行。
+        for (var w = 0; w <= 80; w++)
+        {
+            var bottom = Program.BuildInputFrameBottom(w);
+            Assert.True(TextUtil.DisplayWidth(bottom) <= Math.Max(0, w),
+                $"宽度 {w}：下边框 {TextUtil.DisplayWidth(bottom)} 列越界 → [{bottom}]");
+            var framed = Program.BuildInputFrameTop("\n> ", "◈ high · /thinking", w);
+            foreach (var line in Lines(framed))
+                Assert.True(TextUtil.DisplayWidth(line) <= Math.Max(0, w) || w == 0,
+                    $"宽度 {w}：上边框行 {TextUtil.DisplayWidth(line)} 列越界 → [{line}]");
+        }
     }
 
     [Fact]
