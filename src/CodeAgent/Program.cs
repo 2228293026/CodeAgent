@@ -644,6 +644,11 @@ internal static class Program
             }
         }
 
+        // EOF（Ctrl+Z / Ctrl+D）退出：与 /exit 同一份小结。
+        // 两条出口若各写一份，必然有一份被忘掉——而「打开了这么久，到底做了多少」
+        // 这个问题在两条路上是同一个。
+        if (FormatFarewellSummary(agent, SessionStopwatch.Elapsed, ConsoleColumns()) is { Length: > 0 } eofFarewell)
+            Console.WriteLine(eofFarewell);
         agent.Close();
         return 0;
     }
@@ -1170,6 +1175,26 @@ internal static class Program
             sb.AppendLine(width <= 0 ? prefix + body : InputLine.FitToWidth(prefix + body, width));
         }
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// 退出小结：一句话交代这次会话做了多少。<c>本次 3 轮 · 12 次工具调用 · 4m20s</c>。
+    ///
+    /// 只报**真正花过时间**的会话：一次都没请求过就退出的（打开看看、或者只是敲了 /help），
+    /// 打一行「0 轮 · 0 次工具调用」纯属噪音。
+    /// </summary>
+    internal static string FormatFarewellSummary(AgentClass agent, TimeSpan elapsed, int width)
+    {
+        if (agent.ProviderCalls <= 0)
+            return string.Empty;
+        var parts = new List<string>
+        {
+            $"本次 {agent.ProviderCalls} 轮",
+            $"{agent.TurnToolCalls} 次工具调用",
+            TextUtil.FormatSessionTime(elapsed),
+        };
+        var line = string.Join(SafeColor.Glyphs.SegmentSeparator, parts);
+        return width > 0 && TextUtil.DisplayWidth(line) > width ? InputLine.FitToWidth(line, width) : line;
     }
 
     /// <summary>回合结束后的单行任务进度：<c>🎯 重构渲染层 · ⏵ 3/5 · 1m20s</c>。
@@ -3381,6 +3406,11 @@ internal static class Program
         switch (cmd)
         {
             case "/exit" or "/quit":
+                // 退出小结：一次会话可能持续几小时、跑过几十次请求，
+                // 之前退出只丢下一句「再见」——花了多少、做了多少一个字都没有，
+                // 用户想核对只能赶在退出前先敲 /stats（而那时往往已经想走了）。
+                if (FormatFarewellSummary(agent, SessionStopwatch.Elapsed, ConsoleColumns()) is { Length: > 0 } farewell)
+                    Console.WriteLine(farewell);
                 Console.WriteLine("再见！");
                 agent.Close(); // Flush and close the session log before exiting
                 Environment.Exit(0);
