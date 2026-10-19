@@ -34,7 +34,10 @@ public sealed class GitLogTool : ITool
             throw new ToolException($"目录不存在: {requestedPath}");
         var maxCommits = Math.Clamp(ToolArgs.GetInt(args, "max_commits", 20), 1, 200);
         var maxOutput = Math.Clamp(ToolArgs.GetInt(args, "max_output_chars", 30_000), 1_000, 200_000);
-        var timeoutSeconds = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 10), 1, 60);
+        // 30 秒而不是 10：git log 要遍历历史，在冷缓存 / 大仓库 / CI 那种挤满
+        // 并行任务的机器上轻松超过 10 秒。实测 CI 上两个提交的仓库跑了 16 秒——
+        // 超时后工具只会失败一次，而它本来只是**读**操作，多等一会儿远好过重跑。
+        var timeoutSeconds = Math.Clamp(ToolArgs.GetInt(args, "timeout_seconds", 30), 1, 60);
         var scope = Path.GetRelativePath(ctx.Workspace.Root, root)
             .Replace('\\', '/')
             .TrimEnd('/');

@@ -94,6 +94,10 @@ public sealed class GitStatusTool : ITool
         catch (OperationCanceledException)
         {
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            // 这里**区分不了**「用户按 ESC」与「调用方自建的 CancelAfter 超时」：
+            // 传进来的本来就是 CreateLinkedTokenSource 的链接令牌，两种情况它都已被请求。
+            // 判别放在 Agent 层——只有那里握有回合自己的 ct（详见
+            // Agent.ExecuteToolCallAsync 的 OperationCanceledException 分支）。
             throw;
         }
         return new GitResult(process.ExitCode, await stdout, await stderr);

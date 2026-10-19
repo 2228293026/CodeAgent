@@ -1876,6 +1876,25 @@ public sealed partial class Agent
             output = $"工具错误: {ex.Message}";
             isError = true;
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // 工具**自己**超时了，不是用户取消。
+            //
+            // 此前两者共用同一个 OperationCanceledException、一律向上传播，
+            // 于是 Agent 层把它当成「用户按了 ESC」：整个回合被掐断、
+            // 撤回本轮消息、草稿回填输入框——而模型永远收不到「git log 超时」这个结果，
+            // 也就不会据此缩小范围或换个命令重试。一次慢 git 直接废掉一整轮对话。
+            //
+            // 真实故障（CI 上抓到）：GitLog_FiltersByMessageKeyword 在 CI 上跑了 16 秒，
+            // 内部 10 秒超时触发，整轮被判成「已取消」。
+            //
+            // 判别只需看 ct 自己：它是**回合**的令牌，用户按 ESC 时才会被请求。
+            // 工具内部用的是 CreateLinkedTokenSource(ct) + CancelAfter，
+            // 那种取消不会让 ct 本身变成已请求状态。（所以这个判别只能在 Agent 层做——
+            // 工具里拿到的是链接令牌，两种情况下它都已是已请求状态，区分不了。）
+            output = $"工具超时（{tc.Name}）：已中止。可增大 timeout_seconds 或缩小范围后重试。";
+            isError = true;
+        }
         catch (OperationCanceledException)
         {
             // 用户取消（ESC / Ctrl+C）应立即中止整轮并向上传播——
