@@ -241,6 +241,76 @@ public sealed class EditableLine
         return true;
     }
 
+    /// <summary>光标上下移到相邻行，**保持列位置**（↑↓ 的编辑语义）。返回是否移动。
+    ///
+    /// 与 <see cref="MoveLineUp"/>/<see cref="MoveLineDown"/> 的区别：那两个只跳到行首/行尾，
+    /// 适合「快速跳到某行的开头」，但不适合**在行间游走**——
+    /// 多行粘贴进来想改中间某行时，按 ↑↓ 却每次都落到行首，
+    /// 等于每换一行都要重新数着按 →，实际根本没法用键盘改多行内容。
+    ///
+    /// 列按**码点**计（不是 UTF-16 单元）：一列 = 一个显示字符，
+    /// 中文/emoji 一行里占一个语义位置。用 UTF-16 偏移会在一行有 emoji 时错位。
+    /// 目标行比当前列短时落到行尾（不越界，也不回填到上一行）。
+    /// </summary>
+    /// <param name="up">true 上移，false 下移。</param>
+    public bool MoveLinePreservingColumn(bool up)
+    {
+        var text = _text.ToString();
+        if (text.IndexOf('\n') < 0)
+            return false; // 单行：交给外层当历史浏览用
+
+        var lineStart = Cursor > 0 ? text.LastIndexOf('\n', Cursor - 1) + 1 : 0;
+        var col = CountClusters(text, lineStart, Cursor);
+
+        int targetStart;
+        if (up)
+        {
+            if (lineStart == 0)
+                return false; // 已在首行
+            targetStart = text.LastIndexOf('\n', lineStart - 2) + 1;
+        }
+        else
+        {
+            var lineEnd = text.IndexOf('\n', Cursor);
+            if (lineEnd < 0)
+                return false; // 已在末行
+            targetStart = lineEnd + 1;
+        }
+
+        var targetEnd = text.IndexOf('\n', targetStart);
+        if (targetEnd < 0)
+            targetEnd = text.Length;
+        Cursor = SkipClusters(text, targetStart, targetEnd, col);
+        return true;
+    }
+
+    /// <summary>[from, to) 内的码点数（代理对算一个）。</summary>
+    private static int CountClusters(string text, int from, int to)
+    {
+        var n = 0;
+        for (var i = from; i < to; i++)
+        {
+            if (i + 1 < to && char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))
+                i++; // 代理对整体算一个
+            n++;
+        }
+        return n;
+    }
+
+    /// <summary>从 start 起前进 count 个码点，最多到 end（不跨行）。</summary>
+    private static int SkipClusters(string text, int start, int end, int count)
+    {
+        var i = start;
+        for (var n = 0; n < count && i < end; n++)
+        {
+            if (i + 1 < end && char.IsHighSurrogate(text[i]) && char.IsLowSurrogate(text[i + 1]))
+                i += 2;
+            else
+                i++;
+        }
+        return i;
+    }
+
     public void Home() => Cursor = 0;
 
     /// <summary>光标移到当前行行首（多行输入的 Home 语义；单行时等价 Home）。</summary>

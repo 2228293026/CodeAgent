@@ -1956,11 +1956,23 @@ public static class InputLine
                         }
                         else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
                         {
-                            // 多行输入且未在浏览历史：↑ 只做行内上移（已在首行行首则不移动）。
+                            // 多行输入且未在浏览历史：↑ 在行间上移，**保持列位置**。
                             // 正在浏览历史时（idx < session.Count）必须继续回溯历史，
                             // 即使历史条目是多行文本——否则多行条目会把 ↑ 劫持成光标移动（回归）
-                            if (buf.MoveLineUp())
+                            //
+                            // 已在首行时退回历史浏览：否则多行草稿会把 ↑ 彻底吃掉，
+                            // 用户想翻上一条历史却按什么都没反应（连提示都没有）。
+                            if (buf.MoveLinePreservingColumn(up: true))
                                 RedrawInput();
+                            else if (idx > 0)
+                            {
+                                if (draft is null)
+                                    draft = buf.Text; // 记住浏览历史前的草稿
+                                idx--;
+                                SetBuf(session, buf, idx);
+                                inputExpanded = false;
+                                RedrawInput();
+                            }
                         }
                         else
                         {
@@ -1986,12 +1998,20 @@ public static class InputLine
                         }
                         else if (idx >= session.Count && 1 + CountNewlines(buf.Text) > 1)
                         {
-                            // 多行输入且未在浏览历史：↓ 在行内下移光标（不切换历史——历史切换会替换整个输入）。
+                            // 多行输入且未在浏览历史：↓ 在行间下移，**保持列位置**
+                            // （不切换历史——历史切换会替换整个输入）。
                             // 正在浏览历史时（idx < session.Count）↓ 一律前进历史，即使条目是多行文本
                             if (!inputExpanded && SkipDirs.CountLines(buf.Text) > 3)
+                            {
                                 inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
-                            else
-                                buf.MoveLineDown();
+                            }
+                            else if (!buf.MoveLinePreservingColumn(up: false))
+                            {
+                                // 已在末行：没有更下面的行了。
+                                // 这里**不能**前进历史：能进这个分支就说明 idx 已经等于 session.Count
+                                // （草稿位），再前进就越界了——判断本身无处可去，所以什么都不做。
+                                // 但下面照样 RedrawInput()：光标停在末行是稳定状态，不用提示。
+                            }
                             RedrawInput();
                         }
                         else
