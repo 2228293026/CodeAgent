@@ -1116,6 +1116,14 @@ public sealed partial class Agent
         var cts = new CancellationTokenSource();
         _toolProgressCts = cts;
         var watch = Stopwatch.StartNew();
+        lock (ConsoleLock)
+        {
+            // 与 spinner 同一条约定：这行动画要独占光标行原地重写，
+            // 必须先让渲染器知道，它会停掉逐字预览并擦干净。
+            // 少了这一步，模型最后一个字没带换行时，渲染器仍会往同一行写预览，
+            // 两边都用 \r 抢同一行，屏幕上会闪出两段内容的碎片。
+            _renderer?.SetCursorLineBusy(true);
+        }
         _ = Task.Run(async () =>
         {
             try
@@ -1165,6 +1173,10 @@ public sealed partial class Agent
                 Console.Write(SpinnerClearSequence(_toolProgressWidth));
                 _toolProgressWidth = 0;
             }
+            // 清行后光标回到行首：把光标行交还给渲染器，工具结果与后续正文可以继续。
+            // 与 StartToolProgress 的 SetCursorLineBusy(true) 成对——
+            // 只占不还，之后所有逐字预览都会被永久挡在门外。
+            _renderer?.SetCursorLineBusy(false);
         }
         try { cts.Dispose(); } catch { /* 忽略 */ }
     }
@@ -1907,6 +1919,11 @@ public sealed partial class Agent
             isError = true;
         }
         sw.Stop();
+        // **立刻**收掉进度动画，别等调用方那个 finally：结果行是在本函数里打印的，
+        // 此时动画还在跑——它会继续往结果行**下方**画帧，然后才被清掉，
+        // 屏幕上就会留下「结果行 + 一串残帧」。
+        // 停在这里还有个好处：清屏与结果行都在 ConsoleLock 内，中间不会插进别的输出。
+        StopToolProgress();
         // 头尾保留截断：错误摘要常在输出末尾（dotnet test / build 的失败列表），
         // 纯头部截断会把最关键的部分丢给模型看不到
         output = TextUtil.TruncateToolOutput(output, 24_000);
