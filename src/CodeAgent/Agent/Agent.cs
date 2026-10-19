@@ -1038,6 +1038,100 @@ public sealed partial class Agent
         }
     }
 
+    /// <summary>工具执行期间的进度动画：<c>⠸ Run build … 12s</c>。</summary>
+    ///
+    /// 此前工具开始行打印完之后屏幕就**完全静默**了：模型思考时有 spinner，
+    /// 而等工具执行时反而什么都没有。一次 <c>dotnet build</c> 跑五分钟，
+    /// 用户看到的是一个不动的终端——分不清是在跑还是卡死了，
+    /// 也分不清等了多久。这正是「长任务里必须看得见」的同一条原则。
+    ///
+    /// 用**独立的**秒表与取消源，不碰 spinner 那套（_spinnerSw / _spinnerShown）：
+    /// 那套的语义是「思考时长」，被清空时会累加进 TurnThinkingSeconds。
+    /// 把工具耗时混进思考时长，回合摘要里的「思考 Xs」就成了假的。
+    private CancellationTokenSource? _toolProgressCts;
+    private int _toolProgressWidth;
+
+    /// <summary>启动工具进度动画。超过 <see cref="ToolProgressDelay"/> 才开始画：
+    /// 短工具（读文件、列目录）占绝大多数，一闪而过的动画只是闪屏噪音。</summary>
+    internal static readonly TimeSpan ToolProgressDelay = TimeSpan.FromMilliseconds(700);
+
+    /// <summary>工具进度行的文本：<c>⠸ Run build … 12s</c>。</summary>
+    ///
+    /// 按宽度收口，且**降级顺序固定**：先丢工具名（动画与秒表还在，
+    /// 用户仍知道「在跑、跑了多久」），再丢秒表，最后只剩动画帧。
+    /// 反过来先丢动画就会得到一行静止的文字——而那看起来正像卡死。
+    internal static string FormatToolProgressLine(string frame, string label, TimeSpan elapsed, int width)
+    {
+        var took = TextUtil.FormatSessionTime(elapsed);
+        var text = $"{frame} {label} … {took}";
+        if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+        // 丢工具有名字，只留秒表
+        var noLabel = $"{frame} {took}";
+        if (TextUtil.DisplayWidth(noLabel) <= width)
+            return noLabel;
+        // 连秒表都放不下：只留动画帧——它本身只有 1 列，永远不会越界
+        return TextUtil.DisplayWidth(frame) <= width ? frame : "";
+    }
+
+    private void StartToolProgress(string label)
+    {
+        if (!ShouldShowSpinner(IsOutputRedirected()))
+            return;
+        var cts = new CancellationTokenSource();
+        _toolProgressCts = cts;
+        var watch = Stopwatch.StartNew();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // 先等一段时间：短工具不该闪一下动画
+                await Task.Delay(ToolProgressDelay, cts.Token);
+                var frame = 0;
+                while (!cts.IsCancellationRequested)
+                {
+                    var f = SpinnerFrame(frame++);
+                    var columns = ConsoleColumns();
+                    var text = FormatToolProgressLine(f, label, watch.Elapsed, columns);
+                    if (text.Length == 0)
+                    {
+                        await Task.Delay(120, cts.Token);
+                        continue;
+                    }
+                    lock (ConsoleLock)
+                    {
+                        if (cts.IsCancellationRequested)
+                            break;
+                        _toolProgressWidth = TextUtil.DisplayWidth(text);
+                        Console.Write("\r" + text);
+                    }
+                    await Task.Delay(120, cts.Token);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch { /* 忽略 */ }
+        });
+    }
+
+    /// <summary>收掉工具进度动画：清行回到行首。工具结果行随后打印在同一位置。</summary>
+    private void StopToolProgress()
+    {
+        var cts = _toolProgressCts;
+        _toolProgressCts = null;
+        if (cts is null)
+            return;
+        try { cts.Cancel(); } catch { /* 忽略 */ }
+        lock (ConsoleLock)
+        {
+            if (_toolProgressWidth > 0)
+            {
+                Console.Write(SpinnerClearSequence(_toolProgressWidth));
+                _toolProgressWidth = 0;
+            }
+        }
+        try { cts.Dispose(); } catch { /* 忽略 */ }
+    }
+
     /// <summary>思考结束（首个文本到达）：把 spinner 行定格为「用时 X · ↑ tokens」统计行并换行。
     /// 用户要求思考结束后仍实时看到用时与 token，而不是 spinner 直接消失。</summary>
     private void FinalizeSpinner()
@@ -1617,9 +1711,20 @@ public sealed partial class Agent
 
         if (conflict || calls.Count <= 1)
         {
+            // 顺序路径才起进度动画：并行时多个工具各自 \r 抢同一行，
+            // 屏幕上会变成快速闪烁的乱码——比没有反馈更糟。
+            // 而顺序路径恰恰是最可能出现长工具的（确认模式 / 同路径写冲突）。
             foreach (var tc in calls)
             {
-                results.Add(await ExecuteToolCallAsync(tc, ct, run));
+                StartToolProgress(SummarizeCall(tc.Name, tc.ArgumentsJson));
+                try
+                {
+                    results.Add(await ExecuteToolCallAsync(tc, ct, run));
+                }
+                finally
+                {
+                    StopToolProgress();
+                }
                 if (_ctx.StopRequested)
                     break;
             }
