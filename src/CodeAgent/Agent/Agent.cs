@@ -1060,11 +1060,25 @@ public sealed partial class Agent
     /// 按宽度收口，且**降级顺序固定**：先丢工具名（动画与秒表还在，
     /// 用户仍知道「在跑、跑了多久」），再丢秒表，最后只剩动画帧。
     /// 反过来先丢动画就会得到一行静止的文字——而那看起来正像卡死。
-    internal static string FormatToolProgressLine(string frame, string label, TimeSpan elapsed, int width)
+    internal static string FormatToolProgressLine(
+        string frame, string label, TimeSpan elapsed, int width, string? hint = null)
     {
         var took = TextUtil.FormatSessionTime(elapsed);
-        var text = $"{frame} {label} … {took}";
+        var sep = SafeColor.Glyphs.SegmentSeparator;
+        var showHint = !string.IsNullOrEmpty(hint);
+
+        string Render() =>
+            showHint ? $"{frame} {label} … {took}{sep}{hint}" : $"{frame} {label} … {took}";
+
+        var text = Render();
         if (width <= 0 || TextUtil.DisplayWidth(text) <= width)
+            return text;
+
+        // 先丢提示：它回答的是「能不能停」，而帧与秒表回答的是「在不在跑、跑了多久」。
+        // 屏幕已经窄到放不下时，后面那个问题更急。
+        showHint = false;
+        text = Render();
+        if (TextUtil.DisplayWidth(text) <= width)
             return text;
         // 丢工具有名字，只留秒表
         var noLabel = $"{frame} {took}";
@@ -1092,7 +1106,9 @@ public sealed partial class Agent
                 {
                     var f = SpinnerFrame(frame++);
                     var columns = ConsoleColumns();
-                    var text = FormatToolProgressLine(f, label, watch.Elapsed, columns);
+                    // 与 spinner 同一条提示：工具执行同样可以被 ESC 中断，
+                    // 而用户此刻看到的是一行不动的摘要——不告诉他，他只能干等或 Ctrl+C 整轮。
+                    var text = FormatToolProgressLine(f, label, watch.Elapsed, columns, SpinnerHint(columns));
                     if (text.Length == 0)
                     {
                         await Task.Delay(120, cts.Token);

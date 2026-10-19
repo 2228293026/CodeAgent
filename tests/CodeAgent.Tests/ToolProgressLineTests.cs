@@ -80,6 +80,38 @@ public class ToolProgressLineTests
     }
 
     [Fact]
+    public void InterruptHintIsShownWhenThereIsRoom()
+    {
+        // 工具执行同样能被 ESC 中断，而用户此刻看到的是一行不动的摘要——
+        // 不告诉他，他只能干等或 Ctrl+C 整轮
+        var line = AgentClass.FormatToolProgressLine(
+            Frame, "Run build", TimeSpan.FromSeconds(12), 120, "⎋ 中断");
+        Assert.Contains("中断", line);
+    }
+
+    [Fact]
+    public void HintIsDroppedBeforeTheTimer()
+    {
+        // 提示回答「能不能停」，帧与秒表回答「在不在跑、跑了多久」。
+        // 屏幕窄到放不下时，后面那个问题更急。
+        var line = AgentClass.FormatToolProgressLine(
+            Frame, "Run a very long command name", TimeSpan.FromSeconds(125), 14, "⎋ 中断");
+        Assert.DoesNotContain("中断", line);
+    }
+
+    [Fact]
+    public void HintNeverPushesTheLineOverTheWidth()
+    {
+        for (var w = 1; w <= 120; w++)
+        {
+            var line = AgentClass.FormatToolProgressLine(
+                Frame, "Run a very long command name here", TimeSpan.FromSeconds(3721), w, "⎋ 中断");
+            Assert.True(TextUtil.DisplayWidth(line) <= w,
+                $"宽度 {w}：带提示的进度行 {TextUtil.DisplayWidth(line)} 列越界 → [{line}]");
+        }
+    }
+
+    [Fact]
     public void TheAnimationIsActuallyStartedAndStoppedAroundExecution()
     {
         // 纯函数测得再全，执行路径没起停它也没用。
