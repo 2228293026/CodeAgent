@@ -12,6 +12,18 @@ internal static class Program
     /// <summary>当前正在运行的一轮请求（供 Ctrl+C / ESC 取消）。</summary>
     private static CancellationTokenSource? _activeTurn;
 
+    /// <summary>回合进行中用户提前敲入的内容（typeahead）。
+    ///
+    /// 模型跑一轮常要几十秒，这段时间用户很自然会先把下一句敲进去。
+    /// 回合内的按键监听为了抓 ESC 会消费所有按键——此前一律丢弃，
+    /// 用户敲完一整句、回车，屏幕上**一个字都没出现过**，只能重打。
+    /// 现在攒在这里，回合结束后回填输入框。
+    ///
+    /// 只收可见字符与换行：方向键/控制键在「看不见的回填缓冲」里没有意义
+    /// （用户看不到光标，也没法确认改对了没有），丢掉反而更干净。
+    /// </summary>
+    private static readonly System.Text.StringBuilder _typeahead = new();
+
     /// <summary>回合被用户取消的哨兵返回（区别于模型回复文本：模型内容可能含"已取消"字样）。</summary>
     private const string CancelledTurnMarker = "\u001bCANCELLED_TURN";
     /// <summary>会话总时长（/stats 显示用）。
@@ -450,6 +462,10 @@ internal static class Program
             var cols = ConsoleColumns();
             // 输入框：上边框（右侧挂推理档位）+ 提示符。原地重绘时只补提示符——
             // 切换块已经把上边框画过了，再画一次会在屏幕上留下两条线。
+            // 回合中提前敲入的内容：并进草稿一起交给输入行。
+            // 放在**打开输入框之前**，用户看到的第一个画面里就已经有自己打的字，
+            // 而不是先看到空输入框、再被无声塞进来一段。
+            pendingDraft = MergeTypeahead(pendingDraft);
             var framed = inlinePrompt is null;
             var promptText = inlinePrompt ?? PromptFor(opts, agent);
             if (framed)
@@ -944,9 +960,17 @@ internal static class Program
         _activeTurn = cts;
 
         // ESC 监听：运行期间按 ESC 停止模型思考/取消本轮。
-        // 注意：ReadKey 会消费回合期间的按键（typeahead 会被吞），但用户主动按 ESC 停思考是刻意操作；
-        // stop 标志 + 等待退出，避免回合结束后吞掉输入行第一个键。
+        //
+        // 其余按键**不再丢弃**：模型跑一轮常要几十秒，这段时间用户很自然会先把下一句
+        // 敲进去。此前这里一律 `ReadKey(intercept: true)` 然后扔掉——注释里写着
+        // 「typeahead 会被吞」，等于承认了这个缺陷。用户敲完一整句、回车，屏幕上
+        // 一个字都没出现过，只能重打；更糟的是他不知道自己的输入去哪了。
+        //
+        // 现在非 ESC 的可见字符与换行进 _typeahead，回合结束后回填到输入框。
+        // 只收可见字符与换行：方向键/退格/F 键这类控制键在「看不见的回填缓冲」里
+        // 没有意义（用户看不到光标，也没法确认改对了没有），丢掉反而更干净。
         var stop = false;
+        _typeahead.Clear();
         var watcher = Task.Run(() =>
         {
             try
@@ -958,7 +982,19 @@ internal static class Program
                     {
                         var key = Console.ReadKey(intercept: true);
                         if (!stop && key.Key == ConsoleKey.Escape)
+                        {
                             cts.Cancel();
+                            continue;
+                        }
+                        if (stop)
+                            break;
+                        lock (_typeahead)
+                        {
+                            if (key.Key == ConsoleKey.Enter)
+                                _typeahead.Append('\n');
+                            else if (!char.IsControl(key.KeyChar))
+                                _typeahead.Append(key.KeyChar);
+                        }
                     }
                     Thread.Sleep(20);
                 }
@@ -985,6 +1021,36 @@ internal static class Program
             stop = true; // 让监听立即退出，避免吞掉接下来的用户输入
             try { watcher.Wait(TimeSpan.FromMilliseconds(300)); } catch { /* 忽略 */ }
         }
+    }
+
+    /// <summary>把回合中提前敲入的内容并进草稿，并清空缓冲。
+    ///
+    /// 拼接规则刻意保守：
+    /// · 缓冲为空 → 原样返回草稿（**不**产生空串，避免把 null 变成 "" 后
+    ///   输入行把「没有草稿」当成「草稿是空的」而丢掉回填）
+    /// · 已有草稿 → 换行隔开。用户先打了半句、回合中又补了半句，
+    ///   直接首尾相连会粘成一个词，换行至少保留了两次输入的边界。
+    /// </summary>
+    internal static string? MergeTypeahead(string? draft)
+    {
+        string typed;
+        lock (_typeahead)
+        {
+            if (_typeahead.Length == 0)
+                return draft;
+            typed = _typeahead.ToString().TrimEnd('\n');
+            _typeahead.Clear();
+        }
+        if (typed.Length == 0)
+            return draft;
+        return string.IsNullOrEmpty(draft) ? typed : draft + "\n" + typed;
+    }
+
+    /// <summary>仅供测试：把一段文本塞进 typeahead 缓冲，模拟「回合中提前敲入」。</summary>
+    internal static void AppendTypeaheadForTest(string text)
+    {
+        lock (_typeahead)
+            _typeahead.Append(text);
     }
 
     /// <summary>显示当前对话历史（系统提示不计入条数，内容截断）。</summary>
