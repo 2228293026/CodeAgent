@@ -80,4 +80,44 @@ public class FoldHintTests
         var text = InputLine.FoldText("a\nb", windowWidth: 120);
         Assert.DoesNotContain("展开", text);
     }
+
+    [Fact]
+    public void PrefixItselfGivesWayOnNarrowTerminals()
+    {
+        // 此前只降级「末行预览」，**前缀本身**从来没让过位：它恒为 19 列，
+        // 在 10~15 列的窗口里直接越界。而折叠提示行是折叠块的固定行高之一，
+        // 它一折行整块就多出一行，菜单锚点与光标定位随之全错——
+        // 屏幕看起来只是「粘了多行之后菜单飘了」，根因却在提示文案的宽度。
+        foreach (var w in new[] { 6, 8, 10, 12, 15, 18, 20, 24, 30, 40, 80 })
+        {
+            var text = InputLine.FoldText("a\nb\nc\nd\ne", windowWidth: w);
+            var hint = text.Split('\n')[^1];
+            Assert.True(TextUtil.DisplayWidth(hint) <= w,
+                $"宽度 {w}：折叠提示 {TextUtil.DisplayWidth(hint)} 列越界 → [{hint}]");
+        }
+    }
+
+    [Fact]
+    public void DegradedPrefixStillReportsTheLineCount()
+    {
+        // 退让的顺序是「去展开说明」→「只报行数」。行数不能丢：
+        // 它是用户判断「值不值得展开」的唯一依据。
+        foreach (var w in new[] { 8, 10, 15 })
+        {
+            var text = InputLine.FoldText("a\nb\nc\nd\ne", windowWidth: w);
+            var hint = text.Split('\n')[^1];
+            Assert.Contains("5", hint);
+        }
+    }
+
+    [Fact]
+    public void NoDanglingTailLabelWhenThereIsNoRoomForPreview()
+    {
+        // 没有预览可挂时必须**连「末行: 」一起去掉**：
+        // 留下一个光秃秃的标签会让用户以为内容渲染丢了，而事实只是预算不够。
+        var text = InputLine.FoldText("a\nb\nc\nd\n最后一行内容", windowWidth: 22);
+        var hint = text.Split('\n')[^1];
+        Assert.DoesNotContain("末行: ", hint);
+        Assert.False(hint.TrimEnd().EndsWith('·'), $"结尾不该留下孤零零的分隔符：[{hint}]");
+    }
 }

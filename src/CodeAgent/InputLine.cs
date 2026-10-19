@@ -64,6 +64,44 @@ public static class InputLine
     internal static int FoldHintPrefixWidth(int lineCount) =>
         TextUtil.DisplayWidth(FoldHintPrefix(lineCount));
 
+    /// <summary>剥掉前缀末尾的「末行: 」及其前导分隔符（有预览才留着它）。</summary>
+    internal static string StripTailLabel(string prefix)
+    {
+        const string Label = "末行: ";
+        if (!prefix.EndsWith(Label, StringComparison.Ordinal))
+            return prefix;
+        var body = prefix[..^Label.Length].TrimEnd();
+        // 分隔符也要一起去掉：`（↓ 展开） ·` 结尾比 `（↓ 展开）` 更像渲染坏了
+        if (body.EndsWith(SafeColor.Glyphs.SegmentSeparator.TrimEnd(), StringComparison.Ordinal))
+            body = body[..^SafeColor.Glyphs.SegmentSeparator.TrimEnd().Length].TrimEnd();
+        else if (body.EndsWith('-'))
+            body = body[..^1].TrimEnd();
+        return body;
+    }
+
+    /// <summary>该宽度下折叠提示能用的前缀：宽就带展开说明，窄就逐级退让。</summary>
+    ///
+    /// 此前只降级「末行预览」，**前缀本身**从来没让过位：它恒为 19 列，
+    /// 在 10~15 列的窗口里直接越界。而折叠提示行是折叠块的固定行高（3 行）之一，
+    /// 它一折行整块就变成 4 行，菜单锚点与光标定位随之全错——
+    /// 屏幕看起来只是「粘了多行之后菜单飘了」，根因却在提示文案的宽度。
+    internal static string FoldHintPrefixFit(int lineCount, int windowWidth)
+    {
+        var full = FoldHintPrefix(lineCount);
+        if (windowWidth <= 0 || TextUtil.DisplayWidth(full) <= windowWidth)
+            return full;
+        // 先退成不带「末行: 」的纯后缀形式（省掉分隔与末行标签）
+        var noTail = $"{SafeColor.Glyphs.Fold} 共 {lineCount} 行（{SafeColor.Glyphs.Unfold} 展开）";
+        if (TextUtil.DisplayWidth(noTail) <= windowWidth)
+            return noTail;
+        // 再退成只报行数：行数是「值不值得展开」的唯一依据，比展开说明重要
+        var count = $"{SafeColor.Glyphs.Fold} {lineCount} 行";
+        if (TextUtil.DisplayWidth(count) <= windowWidth)
+            return count;
+        // 极窄：只剩行数本身。连它都放不下时硬截——总比折行破坏块高好
+        return InputLine.FitToWidth(lineCount.ToString(), Math.Max(1, windowWidth));
+    }
+
     /// <summary>末行预览在该终端宽度下能拿到的列数。
     /// 宽度未知（&lt;= 0）时用固定值（不做猜测性裁剪）；剩余不足 <see cref="MinFoldTailWidth"/> 列时返回 0 ——
     /// 此时整段省略：折行的提示行会破坏折叠块的固定行高，菜单锚点随之错位。</summary>
@@ -71,7 +109,9 @@ public static class InputLine
     {
         if (windowWidth <= 0)
             return FoldTailPreviewWidth;
-        var remain = windowWidth - FoldHintPrefixWidth(lineCount);
+        // 预算要按**实际会用到的那份前缀**算：宽屏用完整前缀，窄屏用降级后的短前缀。
+        // 按完整前缀算会让窄屏上的末行预览平白少掉一大截（前缀明明已经退让了）。
+        var remain = windowWidth - TextUtil.DisplayWidth(FoldHintPrefixFit(lineCount, windowWidth));
         return remain < minTail ? 0 : Math.Min(FoldTailPreviewWidth, remain);
     }
 
@@ -90,13 +130,19 @@ public static class InputLine
         if (tail.Length == 0 && lines.Length >= 2)
             tail = lines[^2].Trim(); // 末尾空行：回看一行，避免出现空的「末行: 」
         var budget = FoldTailBudget(windowWidth, lines.Length);
-        // 提示文案与 FoldHintPrefix **同源**：两处各写一份必然漂移，
-        // 而 FoldHintPrefixWidth 正是按它算列宽的——文案一变，预算就跟着错。
-        var head = $"{SafeColor.Glyphs.Fold} 共 {lines.Length} 行（{SafeColor.Glyphs.Unfold} 展开）";
-        var sep = SafeColor.Glyphs.AsciiEnabled ? " - " : " · ";
-        var hint = budget == 0 || tail.Length == 0
-            ? head
-            : $"{head}{sep}末行: {FitToWidth(tail, budget)}";
+        // 前缀与预算**同源**：FoldTailBudget 正是按 FoldHintPrefixFit 算列宽的。
+        // 此前这里另写了一份文案，两处必然漂移——而文案一变，预算就跟着错。
+        var head = FoldHintPrefixFit(lines.Length, windowWidth);
+        // FoldHintPrefix 已把「 · 末行: 」含在里面，只需往后接预览本身——
+        // 再补一次分隔与标签就会打出「末行:  · 末行: 内容」。
+        var hasTailLabel = head.EndsWith("末行: ", StringComparison.Ordinal);
+        string hint;
+        if (hasTailLabel && budget > 0 && tail.Length > 0)
+            hint = head + FitToWidth(tail, budget);
+        else
+            // 没有预览可挂时**连标签一起去掉**：留下一个光秃秃的「末行: 」
+            // 会让用户以为内容渲染丢了，而事实是这一行预算不够。
+            hint = hasTailLabel ? StripTailLabel(head) : head;
         return string.Join('\n', lines.Take(threshold - 1)) + "\n" + hint;
     }
 
