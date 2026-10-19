@@ -332,6 +332,9 @@ internal static class Program
         }
 
         var agent = new AgentClass(config, providerInst, tools);
+        // spinner 行显示「已排队 N 字」：回合中提前敲入的内容被攒下来了，
+        // 但攒下来是**看不见的**——不回声的话用户以为按键又被吞了，于是停下等。
+        AgentClass.QueuedCharsProvider = QueuedChars;
         // 归档类输出（导出头部）要用**实际生效**的 provider/model，不是配置里写的；
         // 各导出点会再刷新一次，覆盖会话中途的 /model、/provider 切换
         agent.SetEffectiveIdentity(config.Provider, opts.Model);
@@ -1044,6 +1047,13 @@ internal static class Program
         if (typed.Length == 0)
             return draft;
         return string.IsNullOrEmpty(draft) ? typed : draft + "\n" + typed;
+    }
+
+    /// <summary>当前已排队待发的字符数（spinner 行用它回一句「我收到了」）。</summary>
+    internal static int QueuedChars()
+    {
+        lock (_typeahead)
+            return _typeahead.Length;
     }
 
     /// <summary>仅供测试：把一段文本塞进 typeahead 缓冲，模拟「回合中提前敲入」。</summary>

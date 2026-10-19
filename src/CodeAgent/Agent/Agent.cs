@@ -866,13 +866,18 @@ public sealed partial class Agent
     /// <summary>spinner 行的分段降级顺序：提示 → token → 用时。动画帧永不丢弃——
     /// 没有帧的行读起来就像卡死了，那正是用户最需要反馈的时刻。</summary>
     internal static string BuildSpinnerLine(
-        string frame, TimeSpan elapsed, long tokens, string? interruptHint, int width)
+        string frame, TimeSpan elapsed, long tokens, string? interruptHint, int width,
+        int queuedChars = 0)
     {
         var sep = SafeColor.Glyphs.SegmentSeparator;
         var tok = tokens >= 1000 ? $"{tokens / 1000.0:F1}K" : tokens.ToString();
         var showHint = !string.IsNullOrEmpty(interruptHint);
         var showTok = true;
         var showElapsed = true;
+        // 回合中提前敲入的内容会被攒下来（见 Program._typeahead），但**攒下来是看不见的**：
+        // 用户敲完一整句，屏幕上除了 spinner 毫无变化，会以为按键又被吞了，
+        // 于是停下来等——而他其实已经排上队了。这一小段就是「我收到了」的回执。
+        var showQueued = queuedChars > 0;
 
         string Render()
         {
@@ -883,6 +888,8 @@ public sealed partial class Agent
                 parts.Add($"{SafeColor.Glyphs.Up} {tok} tokens");
             if (showHint)
                 parts.Add(interruptHint!);
+            if (showQueued)
+                parts.Add($"已排队 {queuedChars} 字");
             return string.Join($"{sep} ", parts);
         }
 
@@ -891,6 +898,10 @@ public sealed partial class Agent
             return text; // 宽度未知：不猜。宁可超宽也不要凭空少一段。
         var drops = new Action[]
         {
+            // 排队回执最先让位：它是一句「我收到了」的客套，
+            // 真正确定的确认是回合结束后输入框里出现的那些字。
+            // 而提示回答「能不能停」、token/用时回答「跑了多久」——那两个更急。
+            () => showQueued = false,
             () => showHint = false,
             () => showTok = false,
             () => showElapsed = false,
@@ -910,6 +921,14 @@ public sealed partial class Agent
     /// <summary>ESC 中断提示：宽度不够时返回 null（宁可不提示，也不要把 spinner 撑出屏幕）。</summary>
     internal static string? SpinnerHint(int columns) =>
         columns >= 34 ? $"{SafeColor.Glyphs.Escape} 中断" : null;
+
+    /// <summary>回合中已排队待发的内容长度（typeahead）。
+    ///
+    /// 用可替换钩子而不是直接引用 Program：Agent 不该依赖 REPL 层的静态状态，
+    /// 那样连单元测试里 new 一个 Agent 都会牵进整个 Program。
+    /// 默认 null（无从得知 → 不计入），由 Program 启动时接上。
+    /// </summary>
+    public static Func<int>? QueuedCharsProvider { get; set; }
 
     private static int _lastGoodColumns; // 上一次成功读到的可信宽度（跨帧保留）
 
@@ -1003,9 +1022,11 @@ public sealed partial class Agent
                         // 宽度感知：spinner 是 \r 原地重写的一行，**不能折行**——
                         // 折行会把输入块撑成两行，之后每次重绘的光标定位都偏。
                         var columns = ConsoleColumns();
+                        // 排队字数每帧重取：用户可能正在打字，这个数一直在变
+                        var queued = QueuedCharsProvider?.Invoke() ?? 0;
                         var frame_text = label is null
-                            ? BuildSpinnerLine(f, _turnSw.Elapsed, total, SpinnerHint(columns), columns)
-                            : BuildSpinnerLine(f, _spinnerSw.Elapsed, total, SpinnerHint(columns), columns);
+                            ? BuildSpinnerLine(f, _turnSw.Elapsed, total, SpinnerHint(columns), columns, queued)
+                            : BuildSpinnerLine(f, _spinnerSw.Elapsed, total, SpinnerHint(columns), columns, queued);
                         if (label is not null && frame_text.Length > 0)
                             frame_text = $"{label}{SafeColor.Glyphs.SegmentSeparator}{frame_text}";
                         _spinnerLastWidth = TextUtil.DisplayWidth(frame_text);
