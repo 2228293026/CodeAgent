@@ -91,6 +91,21 @@ public class ToolProgressCursorOwnershipTests
     }
 
     [Fact]
+    public void ThePauseHappensInsideTheSameLockAsTheResultLine()
+    {
+        // 让行与写行必须连续。拆成两次加锁时，动画的 120ms 周期完全可能
+        // 正好插进两次加锁之间补一帧 \r 重写--结果行于是又接在动画文字后面，
+        // 就是「让出动画行」这段代码想修的那个毛病本身。
+        var src = ReadSource("Agent.cs");
+        var exec = MethodBody(src, "private async Task<ProviderMessage> ExecuteToolCallAsync");
+        var lockAt = exec.IndexOf("lock (ConsoleLock)", StringComparison.Ordinal);
+        var pauseAt = exec.IndexOf("PauseToolProgress()", StringComparison.Ordinal);
+        var writeAt = exec.IndexOf("Console.WriteLine(status)", StringComparison.Ordinal);
+        Assert.True(lockAt > 0 && pauseAt > lockAt, "暂停必须在结果行那次加锁之内");
+        Assert.True(writeAt > pauseAt, "先让行、再写行");
+    }
+
+    [Fact]
     public void ParallelBatchesAlsoShowOneProgressLine()
     {
         // 之前这里是彻底静默的：顺序路径有动画，并行反而没有。
