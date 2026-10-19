@@ -63,13 +63,15 @@ public class SearchRowWidthTests
         var line = InputLine.FormatInputText(Prompt, true, "很长的查询字符串", true, 0, 0, draft,
             InputLine.SearchQueryDisplayWidth, windowWidth: 40);
         // 关键保证：草稿必须**可见**——整行不被搜索前缀顶出屏幕，且被裁时带「…」标记。
-        // 这里断言的是「有内容 + 有省略号」，不是「草稿完整」：
         // 40 列下 提示符(3) + (搜索)(9) + `查询串`(18) + 命中标记(3) 已占 33 列，
-        // 草稿只剩 7 列。旧断言用 Contains(draft) 等于要求一行渲染出 49 列——那正是溢出，
-        // 只因草稿此前不受宽度约束才碰巧通过。
+        // 草稿只剩 7 列，必然被裁。
+        //
+        // 被裁的是**头部**：光标在草稿末尾，正在编辑的那一段必须留着。
+        // 此前是反的——保住头部、切掉光标所在处，于是敲过列宽之后
+        // 正在打的那个字一进去就消失，像键盘失灵。
         Assert.Contains("…", line);
-        Assert.Contains("这是一段", line);
-        Assert.DoesNotContain("草稿内容", line);
+        Assert.Contains("内容", line);
+        Assert.DoesNotContain("这是一段", line);
         Assert.True(TextUtil.DisplayWidth(line) <= 40, line);
     }
 

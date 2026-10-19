@@ -77,8 +77,13 @@ public class DraftTailWidthTests
     [Fact]
     public void TruncatedDraftIsMarked()
     {
+        // 省略号现在在**头部**：超宽时丢的是「用户已经打完的前半段」，
+        // 光标处的后半段必须留着（此前是反的——保住头部、切掉光标所在处，
+        // 于是敲过列宽之后正在打的那个字一进去就消失，像键盘失灵）。
         var line = InputLine.FormatInputText(Prompt, true, "", false, -1, 0, Draft, windowWidth: 40);
-        Assert.EndsWith("…", line);
+        Assert.Contains("…", line);
+        // 尾部必须看得见
+        Assert.Contains(Draft[^4..], line);
     }
 
     [Fact]

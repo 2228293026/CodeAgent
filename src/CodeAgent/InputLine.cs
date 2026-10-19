@@ -125,7 +125,7 @@ public static class InputLine
     /// 否则用户以为自己的输入被清空了。宽度未知时原样拼接（不裁剪）。</summary>
     internal static string FormatHistoryRow(
         string prompt, int historyIndex, int historyCount, string draft,
-        int windowWidth, int minDraft = MinHistoryDraftWidth)
+        int windowWidth, int minDraft = MinHistoryDraftWidth, int cursor = -1)
     {
         var prefix = $"{prompt} (历史 {historyIndex + 1}/{historyCount})";
         if (windowWidth <= 0)
@@ -137,7 +137,9 @@ public static class InputLine
         if (avail < minDraft)
             // 极窄到连省略号都放不下时只留标记：数字本身就是信息，宁可超宽也不谎报省略
             return avail >= SafeColor.Glyphs.EllipsisWidth ? prefix + SafeColor.Glyphs.Ellipsis : prefix;
-        return prefix + FitToWidth(draft, avail);
+        // 横向滚动而不是从尾部硬截：历史条目通常较长，用户在尾部继续编辑时
+        // 正在打的那个字不能被切掉（同 DraftTail 的理由）。
+        return prefix + FitWindowAroundCursor(draft, cursor < 0 ? draft.Length : cursor, avail);
     }
 
     /// <summary>把草稿接到已渲染的前缀后面：按整行预算裁剪，绝不把内容挤出屏幕。
@@ -147,14 +149,148 @@ public static class InputLine
     /// <b>前缀本身就超宽时仍然保留整段草稿</b>：草稿是用户正在编辑的内容，
     /// 悄悄删掉它比超宽危险得多（用户会以为输入被清空了），而且此时行宽反正
     /// 已经超了，删掉草稿也换不回预算。windowWidth &lt;= 0 = 宽度未知，原样拼接。</summary>
-    internal static string DraftTail(string prefix, string draft, int windowWidth)
+    internal static string DraftTail(string prefix, string draft, int windowWidth, int cursor = -1)
     {
         if (windowWidth <= 0)
             return prefix + draft;
         var avail = windowWidth - DisplayWidth(prefix);
         if (avail <= 0)
             return prefix + draft; // 前缀已占满：保留草稿，不静默丢弃用户输入
-        return prefix + FitToWidth(draft, avail);
+        return prefix + FitWindowAroundCursor(draft, cursor < 0 ? draft.Length : cursor, avail);
+    }
+
+    /// <summary>
+    /// 把文本按显示宽度收进预算，并**保住光标附近的内容**（输入的横向滚动）。
+    ///
+    /// 此前这里用 <see cref="FitToWidth"/>——它保住头部、切掉尾部。而正常打字时光标就在
+    /// 尾部：敲过列宽之后，用户正在打的那个字**一进去就被切掉**。屏幕上看不出任何变化，
+    /// 像键盘失灵；更糟的是它不会报错，只是安静地不显示。
+    ///
+    /// 规则与终端的 shell 一致：光标之前的尾部必须完整可见（那是用户正在编辑的地方），
+    /// 装不下时从**头部**丢内容并用省略号标出来。
+    /// </summary>
+    internal static string FitWindowAroundCursor(string s, int cursor, int maxWidth)
+    {
+        if (maxWidth <= 0)
+            return string.Empty;
+        if (DisplayWidth(s) <= maxWidth)
+            return s;
+        cursor = Math.Clamp(cursor, 0, s.Length);
+        var dots = SafeColor.Glyphs.Ellipsis;
+        var dotsW = SafeColor.Glyphs.EllipsisWidth;
+        var head = s[..cursor];
+        var tail = s[cursor..];
+
+        // 情况一：光标之前的内容放得下。保留整段头部，尾部能显示多少显示多少。
+        if (DisplayWidth(head) < maxWidth)
+        {
+            var room = maxWidth - DisplayWidth(head);
+            // 尾部还要占一个省略号的位置，否则「被截断」这件事没有任何标记
+            var tailRoom = tail.Length > 0 && dotsW <= room ? room - dotsW : room;
+            var shownTail = tail.Length == 0 ? "" : FitToWidth(tail, tailRoom);
+            if (shownTail.Length == 0)
+                return head;
+            // FitToWidth 自己会补省略号；没截断时不补
+            return head + shownTail;
+        }
+
+        // 情况二：光标之前的内容本身就超宽。从头部丢，保住光标前的**尾部**。
+        var headRoom = maxWidth - dotsW;
+        if (headRoom <= 0)
+            return FitToWidth(s, maxWidth);
+        var keptHead = TakeTailByWidth(head, headRoom);
+        var used = dotsW + DisplayWidth(keptHead);
+        var remaining = maxWidth - used;
+        var kept = dots + keptHead;
+        if (remaining > 0 && tail.Length > 0)
+        {
+            var tailRoom = dotsW <= remaining ? remaining - dotsW : remaining;
+            kept += FitToWidth(tail, tailRoom);
+        }
+        return kept;
+    }
+
+    /// <summary>
+    /// 横向滚动后，光标在可见窗口内的列与窗口的显示宽度。
+    ///
+    /// 光标定位必须和渲染**共用同一套算式**：渲染从头部丢内容、光标却按全文宽度
+    /// 往左数，两者一旦不同源，光标就会停在错的位置——而这恰恰是最难自查的一类缺陷
+    /// （看起来只是光标偏了一点，实际是整块基线算错了）。
+    /// </summary>
+    internal static (int Col, int Width) CursorInWindow(string s, int cursor, int maxWidth)
+    {
+        if (maxWidth <= 0)
+            return (0, 0);
+        var full = DisplayWidth(s);
+        if (full <= maxWidth)
+            return (DisplayWidth(s[..Math.Clamp(cursor, 0, s.Length)]), full);
+        cursor = Math.Clamp(cursor, 0, s.Length);
+        var dotsW = SafeColor.Glyphs.EllipsisWidth;
+        var head = s[..cursor];
+        var tail = s[cursor..];
+        if (DisplayWidth(head) < maxWidth)
+        {
+            var room = maxWidth - DisplayWidth(head);
+            var tailRoom = tail.Length > 0 && dotsW <= room ? room - dotsW : room;
+            var shownTail = tail.Length == 0 ? "" : FitToWidth(tail, tailRoom);
+            return (DisplayWidth(head), DisplayWidth(head) + DisplayWidth(shownTail));
+        }
+        var headRoom = maxWidth - dotsW;
+        if (headRoom <= 0)
+        {
+            // 连省略号都放不下：退化成从头截，光标按截断后的宽度算
+            var fitted = FitToWidth(s, maxWidth);
+            return (Math.Min(DisplayWidth(s[..cursor]), DisplayWidth(fitted)), DisplayWidth(fitted));
+        }
+        var keptHead = TakeTailByWidth(head, headRoom);
+        var used = dotsW + DisplayWidth(keptHead);
+        var remaining = maxWidth - used;
+        var width = used;
+        if (remaining > 0 && tail.Length > 0)
+        {
+            var tailRoom = dotsW <= remaining ? remaining - dotsW : remaining;
+            width += DisplayWidth(FitToWidth(tail, tailRoom));
+        }
+        return (used, width);
+    }
+
+    /// <summary>按显示宽度取**尾部**（从末尾往前保留）；用于输入行的横向滚动。</summary>
+    internal static string TakeTailByWidth(string s, int maxWidth)
+    {
+        if (maxWidth <= 0)
+            return string.Empty;
+        if (DisplayWidth(s) <= maxWidth)
+            return s;
+        // 从后往前按簇累积：倒着走才能保证不劈开代理对/ZWJ 序列
+        var start = s.Length;
+        var w = 0;
+        while (start > 0)
+        {
+            var prev = PrevClusterStart(s, start);
+            var (cw, _) = TextUtil.ClusterAt(s, prev);
+            if (w + cw > maxWidth)
+                break;
+            w += cw;
+            start = prev;
+        }
+        return s[start..];
+    }
+
+    /// <summary>从 <paramref name="end"/> 往前找上一个簇的起点（
+    /// 反向扫 UTF-16 单元：低代理要先跨过去，才能定位到完整的高代理）。</summary>
+    private static int PrevClusterStart(string s, int end)
+    {
+        var i = end - 1;
+        if (i > 0 && char.IsLowSurrogate(s[i]) && char.IsHighSurrogate(s[i - 1]))
+            return i - 1;
+        // ZWJ 序列 / 变体选择符：继续往前吞，避免把 emoji 拆成两半
+        while (i > 0 && (s[i - 1] == '\u200D' || s[i - 1] == '\uFE0F'))
+        {
+            i -= 2;
+            if (i > 0 && char.IsLowSurrogate(s[i]) && char.IsHighSurrogate(s[i - 1]))
+                i--;
+        }
+        return Math.Max(0, i);
     }
 
     /// <summary>
@@ -166,7 +302,8 @@ public static class InputLine
     internal static string FormatInputText(
         string prompt, bool searching, string searchQuery, bool searchHit,
         int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth, int windowWidth = 0,
-        string? placeholder = null, bool colored = true, int searchOrdinal = 0, int searchTotal = 0)
+        string? placeholder = null, bool colored = true, int searchOrdinal = 0, int searchTotal = 0,
+        int cursor = -1)
     {
         // 占位提示只在**普通态 + 空输入**时出现；搜索/浏览历史时输入框有别的含义，
         // 挂一条「试试…」只会误导。
@@ -179,13 +316,13 @@ public static class InputLine
         if (searching)
         {
             if (searchQuery.Length == 0)
-                return DraftTail($"{prompt} (搜索) ", draft, windowWidth);
+                return DraftTail($"{prompt} (搜索) ", draft, windowWidth, cursor);
             var budget = windowWidth > 0
                 ? SearchQueryBudget(windowWidth, DisplayWidth(prompt), queryWidth)
                 : queryWidth;
             // 放不下查询串时整段省略：只显示「未命中/命中」状态，草稿优先占剩余空间
             if (budget <= 0)
-                return DraftTail($"{prompt} (搜索) {(searchHit ? SafeColor.Glyphs.Hit : "未命中")} ", draft, windowWidth);
+                return DraftTail($"{prompt} (搜索) {(searchHit ? SafeColor.Glyphs.Hit : "未命中")} ", draft, windowWidth, cursor);
             var query = $"`{FitToWidth(searchQuery, budget)}`";
             // 「第 n/M 条」：只标「命中」时看不出有多个匹配、也看不出还能往前翻多少。
             // 这正是 Ctrl+R 最常被误解的地方——按了没反应，其实只是到头了。
@@ -195,11 +332,11 @@ public static class InputLine
             var mark = searchHit
                 ? $" {SafeColor.Glyphs.Hit}{ordinal}"
                 : " 未命中";
-            return DraftTail($"{prompt} (搜索){query}{mark} ", draft, windowWidth);
+            return DraftTail($"{prompt} (搜索){query}{mark} ", draft, windowWidth, cursor);
         }
         return historyIndex >= 0 && historyIndex < historyCount
-            ? FormatHistoryRow(prompt, historyIndex, historyCount, draft, windowWidth)
-            : DraftTail(prompt, draft, windowWidth);
+            ? FormatHistoryRow(prompt, historyIndex, historyCount, draft, windowWidth, cursor: cursor)
+            : DraftTail(prompt, draft, windowWidth, cursor);
     }
 
     /// <summary>命令目录（名称 + 说明），用于菜单展示与补全。</summary>
@@ -932,7 +1069,9 @@ public static class InputLine
                     SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk,
                     // 序号按「从最新往回数」算：第一次按 Ctrl+R 落在最新那条，那时显示 1/M 才直观
                     searching && searchFrom >= 0 ? HistoryMatchOrdinal(session, searchQuery.ToString(), searchFrom) : 0,
-                    searching && searchFrom >= 0 ? CountHistoryMatches(session, searchQuery.ToString()) : 0);
+                    searching && searchFrom >= 0 ? CountHistoryMatches(session, searchQuery.ToString()) : 0,
+                    // 光标位置：超宽时渲染要按它横向滚动，否则正在打的那个字会被切掉
+                    buf.Cursor);
 
             var menuOpen = false;
             var modePicker = false;

@@ -56,7 +56,11 @@ public class HistoryRowWidthTests
     {
         var line = InputLine.FormatHistoryRow(Prompt, 2, 7, "这是一段很长的草稿内容", 24);
         Assert.Contains("(历史 3/7)", line);
-        Assert.EndsWith("…", line);
+        // 省略号在头部：超宽时丢的是「已经打完的前半段」，光标处的后半段必须留着。
+        // 此前是反的——保住头部、切掉光标所在处，于是敲过列宽之后
+        // 正在打的那个字一进去就消失，像键盘失灵。
+        Assert.Contains("…", line);
+        Assert.EndsWith("内容", line);
         Assert.True(TextUtil.DisplayWidth(line) <= 24, $"实际 {TextUtil.DisplayWidth(line)}");
     }
 
