@@ -51,7 +51,13 @@ public static class InputLine
     /// 所以必须和真正拼出来的那一行用同一个前缀，否则算出的列数和实际不符。</summary>
     internal static string FoldHintPrefix(int lineCount)
     {
-        var head = $"{SafeColor.Glyphs.Fold} 共 {lineCount} 行 {SafeColor.Glyphs.Unfold} 展开";
+        // 提示里写明**按哪个键**：只写「⏷ 展开」时，用户看到一行折叠提示却不知道
+        // 怎么展开——那个图标不是按键，它只是一个装饰。多行粘贴后最常见的疑问
+        // 就是「我粘的后面那些行去哪了、怎么看」。
+        //
+        // 箭头必须走 SafeColor.Glyphs.Unfold，不能写死 `↓`：ASCII 退回模式下
+        // 它也得跟着变成 `v`，否则「ASCII 模式只出 ASCII」这条约定就漏了一个口子。
+        var head = $"{SafeColor.Glyphs.Fold} 共 {lineCount} 行（{SafeColor.Glyphs.Unfold} 展开）";
         return SafeColor.Glyphs.AsciiEnabled ? $"{head} - 末行: " : $"{head} · 末行: ";
     }
 
@@ -84,7 +90,9 @@ public static class InputLine
         if (tail.Length == 0 && lines.Length >= 2)
             tail = lines[^2].Trim(); // 末尾空行：回看一行，避免出现空的「末行: 」
         var budget = FoldTailBudget(windowWidth, lines.Length);
-        var head = $"{SafeColor.Glyphs.Fold} 共 {lines.Length} 行 {SafeColor.Glyphs.Unfold} 展开";
+        // 提示文案与 FoldHintPrefix **同源**：两处各写一份必然漂移，
+        // 而 FoldHintPrefixWidth 正是按它算列宽的——文案一变，预算就跟着错。
+        var head = $"{SafeColor.Glyphs.Fold} 共 {lines.Length} 行（{SafeColor.Glyphs.Unfold} 展开）";
         var sep = SafeColor.Glyphs.AsciiEnabled ? " - " : " · ";
         var hint = budget == 0 || tail.Length == 0
             ? head
