@@ -312,6 +312,25 @@ public static class InputLine
     internal static int FitBudget(int windowWidth) =>
         windowWidth > 0 ? Math.Max(10, windowWidth - 4) : 0;
 
+    /// <summary>输入框几何：由窗口宽度算出的三个派生值。</summary>
+    /// <param name="FrameRight">是否闭合右边框。</param>
+    /// <param name="FrameTarget">右侧竖线应落在的列（0-based）。</param>
+    /// <param name="FitBudget">文本裁剪预算。</param>
+    internal readonly record struct FrameGeometry(bool FrameRight, int FrameTarget, int FitBudget);
+
+    /// <summary>
+    /// 由窗口宽度算出输入框几何。抽成**纯函数**是为了让「窗口尺寸变了」这件事可测：
+    /// 它此前是 ReadInner 里的三个局部变量，进入输入行时算一次就再也不变——
+    /// 用户中途拖窗口，右边框就停在旧列上（变宽时右侧缺一块，变窄时补出来的空格
+    /// 把整行顶到折行）。而折行正是「敲一个字多出一行」的根因。
+    ///
+    /// 宽度未知（&lt;= 0）时**不闭合右边框**：宁可少一条边，也不拿猜出来的宽度去补框。
+    /// </summary>
+    internal static FrameGeometry ComputeFrameGeometry(int windowWidth) =>
+        windowWidth > 0
+            ? new FrameGeometry(FrameRight: true, FrameTarget: windowWidth - 1, FitBudget: FitBudget(windowWidth))
+            : new FrameGeometry(FrameRight: false, FrameTarget: 0, FitBudget: 0);
+
     /// <summary>
     /// 空输入时显示的占位提示（Claude Code 的 <c>❯ Try "how does &lt;filepath&gt; work?"</c> 同款）。
     /// 用户看不到任何"这里可以做什么"的线索，进去以后面对一个空输入框不知道该说什么。
@@ -847,6 +866,30 @@ public static class InputLine
             var frameTarget = winW - 1;
             int FrameWidth() => frameTarget;
 
+            /// 重新读一次终端宽度，并把所有**派生值**一起刷新。
+            ///
+            /// winW / fitBudget / frameTarget 此前只在进入输入行时算一次。而用户在
+            /// 输入过程中拖窗口、最大化、切分屏是**常态**——之后右边框仍停在旧列上：
+            /// 窗口变宽时右侧缺一块，变窄时补出来的空格把整行顶到折行
+            /// （而折行正是「敲一个字多出一行」的根因）。光标定位也从行尾往左数，
+            /// 一并跟着错位。
+            ///
+            /// 读不到宽度（0）时**沿用上一次的可信值**：与 TryWindowWidth 的抖动保护一致，
+            /// 绝不拿一个猜出来的宽度去补框。
+            void RefreshWidth()
+            {
+                if (!ansiOk)
+                    return;
+                var now = ResolveWindowWidth(TryWindowWidth(), winW);
+                if (now <= 0 || now == winW)
+                    return;
+                var geo = ComputeFrameGeometry(now);
+                winW = now;
+                fitBudget = geo.FitBudget;
+                frameRight = geo.FrameRight;
+                frameTarget = geo.FrameTarget;
+            }
+
             /// 从**当前行已有内容**补到框宽并落右边框；放不下就原样返回（绝不越界）。
             string FrameFiller(string lineSoFar)
             {
@@ -969,6 +1012,9 @@ public static class InputLine
 
             void ScrollInput()
             {
+                // 每次重绘前重读窗口宽度：用户拖动窗口是常态，
+                // 而边框宽度与光标定位都依赖它（详见 RefreshWidth）。
+                RefreshWidth();
                 if (ansiOk)
                 {
                     // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
