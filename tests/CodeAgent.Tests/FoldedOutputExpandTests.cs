@@ -97,6 +97,16 @@ public class FoldedOutputExpandTests
     }
 
     [Fact]
+    public void TheFailurePathKeepsItsOriginalToo()
+    {
+        // 失败路径恰恰是最需要展开的：一条 40 行的编译错误只露 8 行，
+        // 而那 32 行正是判断错在哪一行的依据。
+        // 此前只有成功路径留原件，于是最容易需要 ctrl+o 的时候它偏偏没有内容。
+        var src = ReadSource("Agent.cs");
+        Assert.Contains("if (failTotalLines > DiffUtil.CountLines(failPreview))", src);
+    }
+
+    [Fact]
     public void OnlyReallyFoldedOutputIsKept()
     {
         // 源码守卫：留原件的判定必须按**真实总行数**，而不是按预览文本的行数——

@@ -1778,8 +1778,17 @@ public sealed partial class Agent
                         {
                             // 一次调用取两个值：调两次等于把输出重读一遍
                             var (failPreview, failTotalLines, failTotalChars) = BuildToolOutputPreview(output, ct);
+                            // 调用点保持「换行后以方法名开头」的形态：
+                            // RenderWidthWiringTests 靠这一点确认宽度真的传了。
+                            // 写成 `var shown = FormatToolOutputPreview(...)` 会让守卫一个点都扫不到，
+                            // 退化成永远通过的空转检查——比没有守卫更糟（让人以为查过了）。
                             Console.WriteLine(TextUtil.IndentBlock(
                                 FormatToolOutputPreview(failPreview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: failTotalLines, trueTotalChars: failTotalChars), ToolPreviewIndent));
+                            // 失败路径**更要**留原件：一条 40 行的编译错误只露 8 行，
+                            // 而用户恰好需要看那 32 行才能判断错在哪一行。
+                            // 此前只有成功路径留，于是最容易需要 ctrl+o 的时候它偏偏没有内容。
+                            if (failTotalLines > DiffUtil.CountLines(failPreview))
+                                _lastFoldedOutput = (TextUtil.IndentBlock(output.TrimEnd(), ToolPreviewIndent), status);
                         }
                     }
                 }

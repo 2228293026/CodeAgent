@@ -138,11 +138,8 @@ public sealed class ToolPreviewTrueLineCountTests
         // 绝不能中途被换成从被截断文本里数出来的数。
         Assert.Contains("var (preview, previewTotalLines, previewTotalChars) = BuildToolOutputPreview(output, ct);", src);
         Assert.Contains("trueTotalLines: previewTotalLines, trueTotalChars: previewTotalChars", src);
-        Assert.Contains(
-            "var (failPreview, failTotalLines, failTotalChars) = BuildToolOutputPreview(output, ct);" +
-            "\n                            Console.WriteLine(TextUtil.IndentBlock(" +
-            "\n                                FormatToolOutputPreview(failPreview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: failTotalLines, trueTotalChars: failTotalChars)",
-            src);
+        Assert.Contains("var (failPreview, failTotalLines, failTotalChars) = BuildToolOutputPreview(output, ct);", src);
+        Assert.Contains("trueTotalLines: failTotalLines, trueTotalChars: failTotalChars", src);
         // 也不能有人把真实值在传参前"顺手修正"成 keptLines
         Assert.DoesNotContain("trueTotalLines: keptLines", src);
     }
