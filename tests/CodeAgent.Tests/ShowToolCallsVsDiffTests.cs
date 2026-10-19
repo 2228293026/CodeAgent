@@ -78,7 +78,10 @@ public sealed class ShowToolCallsVsDiffTests : IDisposable
         var at = src.IndexOf("var showLog = _ctx.Config.ShowToolCalls;", StringComparison.Ordinal);
         Assert.True(at > 0, "找不到 showLog 判定");
         var window = src.Substring(at, Math.Min(2000, src.Length - at));
-        var logIf = window.IndexOf("if (showLog)", StringComparison.Ordinal);
+        // 条件在「进度动画」加入后变成 `if (showLog && !progressActive)`：
+        // 这里按 showLog 前缀找，是为了让**是否嵌在 showLog 分支里**这个断言
+        // 不因条件里多一个合取项而失效。
+        var logIf = window.IndexOf("if (showLog", StringComparison.Ordinal);
         var previewIf = window.IndexOf("tc.Name is \"edit_file\" or \"write_file\"", StringComparison.Ordinal);
         Assert.True(logIf > 0 && previewIf > 0);
         // 预览的 if 必须在 showLog 那个 if 的**闭合之后**：否则它仍在块内
@@ -105,8 +108,11 @@ public sealed class ShowToolCallsVsDiffTests : IDisposable
         var src = File.ReadAllText(Find());
         var at = src.IndexOf("var startLine = ", StringComparison.Ordinal);
         Assert.True(at > 0);
-        var before = src.Substring(Math.Max(0, at - 900), Math.Min(900, src.Length));
-        Assert.Contains("if (showLog)", before);
+        var before = src.Substring(Math.Max(0, at - 1200), Math.Min(1200, src.Length));
+        // 前缀匹配而非精确匹配：条件是 `showLog && !progressActive`——
+        // 多出来的合取项只在「交互式且有动画」时让开始行让位，
+        // showToolCalls 这个开关本身的语义没有被削弱。
+        Assert.Contains("if (showLog", before);
     }
 
     [Fact]

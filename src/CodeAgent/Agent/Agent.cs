@@ -1781,7 +1781,17 @@ public sealed partial class Agent
         var summary = SummarizeCall(tc.Name, tc.ArgumentsJson);
         var showLog = _ctx.Config.ShowToolCalls;
 
-        if (showLog)
+        // 进度动画已经在显示同一句摘要（带秒表）时，这行静态开始行就是**重复**的：
+        // 屏幕上会出现
+        //   ▸ Read(a.cs) …            ← 开始行，而且这个「…」成功后仍留在滚动区
+        //   ✔ Read(a.cs) (0.1s)       ← 结果行，摘要原样再念一遍
+        // 两条一样的摘要把真正有信息量的第二行淹掉了。
+        // 更糟的是那个「…」：它写在滚动区里，擦不掉，事后看起来像还在跑。
+        //
+        // 动画只在「交互式 + 顺序执行」时起，而那时动画本身就是更好的开始提示。
+        // 重定向输出（日志）不起动画，静态开始行照旧——日志需要起止两条。
+        var progressActive = _toolProgressCts is not null;
+        if (showLog && !progressActive)
         {
             lock (ConsoleLock)
             {
