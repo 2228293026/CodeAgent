@@ -38,6 +38,42 @@ public class ToolProgressCursorOwnershipTests
     }
 
     [Fact]
+    public void ItStartsANewLineBeforeTheFirstFrame()
+    {
+        // 动画用 \r 回到行首重写，而模型最后一段常常**不带换行**（流式输出的正常形态）。
+        // 不起新行的话，第一帧的 \r 会回到模型正文的行首、把它从头覆盖掉--
+        // 用户看到的是自己的回答被一个字一个字吃掉。ShowSpinner 一开始就写了这一行，
+        // 这边漏了；这是本轮找到的最严重的一条。
+        var start = MethodBody(ReadSource("Agent.cs"), "private void StartToolProgress");
+        var nlAt = start.IndexOf("Console.WriteLine()", StringComparison.Ordinal);
+        var writeAt = start.IndexOf("Console.Write(\"\\r\"", StringComparison.Ordinal);
+        Assert.True(nlAt > 0, "动画起帧前必须先换行，否则会覆盖模型正文");
+        Assert.True(nlAt < writeAt, "换行必须排在第一次 \\r 写入之前");
+    }
+
+    [Fact]
+    public void TheNewLineHappensAfterTheDelayNotAtStartup()
+    {
+        // 放到启动处的话，700ms 内就结束的短工具会平白多出一个空行--
+        // 而那正是延迟想避免的噪音。短工具占绝大多数。
+        var start = MethodBody(ReadSource("Agent.cs"), "private void StartToolProgress");
+        var delayAt = start.IndexOf("ToolProgressDelay", StringComparison.Ordinal);
+        var nlAt = start.IndexOf("Console.WriteLine()", StringComparison.Ordinal);
+        Assert.True(delayAt > 0 && nlAt > delayAt, "换行必须等延迟之后");
+    }
+
+    [Fact]
+    public void ShortToolsNeverClaimTheCursorLine()
+    {
+        // 没过延迟的短工具从没碰过光标行，收尾时就不能交还--
+        // SetCursorLineBusy(false) 会把 **spinner 的** 占用标记顺手抹掉。
+        var src = ReadSource("Agent.cs");
+        var stop = MethodBody(src, "private void StopToolProgress");
+        Assert.Contains("_toolProgressStarted", stop);
+        Assert.Contains("if (!started)", stop);
+    }
+
+    [Fact]
     public void ItStopsBeforeTheResultLineIsPrinted()
     {
         // 结果行在 ExecuteToolCallAsync 内部打印。若等调用方的 finally 才停动画，

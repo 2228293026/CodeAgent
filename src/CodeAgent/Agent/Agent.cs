@@ -1072,6 +1072,13 @@ public sealed partial class Agent
     private CancellationTokenSource? _toolProgressCts;
     private int _toolProgressWidth;
 
+    /// <summary>动画是否真的起过行（过了延迟、写过一帧）。
+    ///
+    /// 没过延迟的短工具从没占过光标行，收尾时就不能清行、也不该去调
+    /// <c>SetCursorLineBusy(false)</c>——它会把**别人**（spinner）的占用标记顺手抹掉。
+    /// 700ms 内结束的工具占绝大多数，所以这条不是理论上的边界。</summary>
+    private bool _toolProgressStarted;
+
     /// <summary>启动工具进度动画。超过 <see cref="ToolProgressDelay"/> 才开始画：
     /// 短工具（读文件、列目录）占绝大多数，一闪而过的动画只是闪屏噪音。</summary>
     internal static readonly TimeSpan ToolProgressDelay = TimeSpan.FromMilliseconds(700);
@@ -1116,20 +1123,31 @@ public sealed partial class Agent
         var cts = new CancellationTokenSource();
         _toolProgressCts = cts;
         var watch = Stopwatch.StartNew();
-        lock (ConsoleLock)
-        {
-            // 与 spinner 同一条约定：这行动画要独占光标行原地重写，
-            // 必须先让渲染器知道，它会停掉逐字预览并擦干净。
-            // 少了这一步，模型最后一个字没带换行时，渲染器仍会往同一行写预览，
-            // 两边都用 \r 抢同一行，屏幕上会闪出两段内容的碎片。
-            _renderer?.SetCursorLineBusy(true);
-        }
         _ = Task.Run(async () =>
         {
             try
             {
                 // 先等一段时间：短工具不该闪一下动画
                 await Task.Delay(ToolProgressDelay, cts.Token);
+                lock (ConsoleLock)
+                {
+                    if (cts.IsCancellationRequested)
+                        return;
+                    // 与 spinner 同一条约定：这行动画要独占光标行原地重写，
+                    // 必须先让渲染器知道，它会停掉逐字预览并擦干净。
+                    // 少了这一步，模型最后一个字没带换行时，渲染器仍会往同一行写预览，
+                    // 两边都用 \r 抢同一行，屏幕上会闪出两段内容的碎片。
+                    _renderer?.SetCursorLineBusy(true);
+                    // 换到新行再动画：动画用 \r 回到行首重写，而模型最后一段常常**不带换行**
+                    // （流式输出的正常形态）。不起这一行的话，第一帧的 \r 会回到模型正文的
+                    // 行首、把它从头覆盖掉——用户看到的是自己的回答被一个字一个字吃掉。
+                    // ShowSpinner 一开始就写了这一行，这边漏了。
+                    //
+                    // 必须等延迟**之后**才换行：放到启动处的话，700ms 就结束的短工具
+                    // 会平白多出一个空行，而那正是延迟想避免的噪音。
+                    Console.WriteLine();
+                    _toolProgressStarted = true;
+                }
                 var frame = 0;
                 while (!cts.IsCancellationRequested)
                 {
@@ -1165,7 +1183,16 @@ public sealed partial class Agent
         _toolProgressCts = null;
         if (cts is null)
             return;
+        var started = _toolProgressStarted;
+        _toolProgressStarted = false;
         try { cts.Cancel(); } catch { /* 忽略 */ }
+        if (!started)
+        {
+            // 没过延迟：从没碰过光标行，什么都不该做。
+            // 尤其是别去 SetCursorLineBusy(false)——那会把 spinner 的占用标记顺手抹掉。
+            try { cts.Dispose(); } catch { /* 忽略 */ }
+            return;
+        }
         lock (ConsoleLock)
         {
             if (_toolProgressWidth > 0)
