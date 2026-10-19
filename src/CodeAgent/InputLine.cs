@@ -822,6 +822,40 @@ public static class InputLine
             var fitBudget = FitBudget(winW);
             string Fit(string s) => fitBudget > 0 ? FitToWidth(s, fitBudget) : s;
 
+            // —— 输入框右边框 ——
+            //
+            // 左边框已经挂在提示符里（和输入内容同行，必须参与重绘）。右边框要
+            // 「补齐到框宽再落一列竖线」—— 而光标定位是**从行尾往左数**的，
+            // 补出来的那些列属于行尾，必须一并计入偏移，否则光标会停在竖线右边。
+            //
+            // 只在**能确认终端宽度**时闭合：宽度未知时不猜，猜宽了就是折行，
+            // 而折行正是「敲一个字多出一行」的根因。留 1 列余量（部分终端写满
+            // 最后一列会提前换行）。
+            var frameRight = ansiOk && winW > 0;
+            var frameTarget = winW - 1;
+            int FrameWidth() => frameTarget;
+
+            /// 从**当前行已有内容**补到框宽并落右边框；放不下就原样返回（绝不越界）。
+            string FrameFiller(string lineSoFar)
+            {
+                if (!frameRight)
+                    return string.Empty;
+                var w = DisplayWidth(lineSoFar);
+                if (w >= FrameWidth())
+                    return string.Empty;
+                return new string(' ', FrameWidth() - w - 1) + SafeColor.Glyphs.FrameSide;
+            }
+
+            /// 整行补框（多行输入逐行补，每行都要有右竖线）。
+            string CloseFrame(string text)
+            {
+                if (!frameRight)
+                    return text;
+                if (text.IndexOf('\n') < 0)
+                    return text + FrameFiller(text);
+                return string.Join("\n", DiffUtil.SplitLines(text).Select(l => l + FrameFiller(l)));
+            }
+
             // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）。
             // 名称列宽按**实际菜单内容**定，不写死 16：短名称时不必空出十几列。
             var menuNameWidth = MenuNameWidth(modes?.Select(m => m.Name) ?? Array.Empty<string>());
@@ -925,10 +959,13 @@ public static class InputLine
                     // 折叠显示：行数 > FoldThreshold 且未展开时，只显示前 N-1 行 + 折叠提示行（减少屏幕占用）
                     var fold = !inputExpanded && SkipDirs.CountLines(buf.Text) > FoldThreshold;
                     var text = fold ? InputLine.FoldText(InputText()) : InputText();
+                    // 闭合右边框后再交给重绘：CloseFrame 只补空格与竖线，
+                    // 每行宽度变成 frameTarget（< winW），所以不会引入新的折行。
+                    var closed = CloseFrame(text);
                     // 传入真实列宽：文本敲过列宽时终端会自动折行，
                     // 而 \x1b[2K 只清一行——不把折行算进块行数，残字会留在屏幕上
                     Console.Write(BuildRedrawAnsi(
-                        text, lastInputLines, lastCursorLine, out lastInputLines, winW, DisplayWidth(promptTail)));
+                        closed, lastInputLines, lastCursorLine, out lastInputLines, winW, DisplayWidth(promptTail)));
                     PositionCursor(fold);
                     // 记录重绘后终端光标所在行（PositionCursor 已把光标放到 buf.Cursor 处，
                     // 折叠时按折叠视图行计），作为下次多行重绘的上移基点。
@@ -995,10 +1032,15 @@ public static class InputLine
                 else
                 {
                     // 光标在最后一行：从行尾左移到 cursor（单行输入或光标在末行）
-                    // 占位提示写在行尾，光标要从它**前面**停住，否则看起来像用户输入的一部分
+                    // 占位提示写在行尾，光标要从它**前面**停住，否则看起来像用户输入的一部分。
+                    //
+                    // 右边框补齐的空格 + 竖线也**都在行尾**，同样要跨过去——
+                    // 少算它们的后果是光标停在竖线右边，看起来像在框外面打字。
                     var placeholderCols = RenderedPlaceholderWidth(
                         buf.Text, searching, idx, session.Count, placeholder, fitBudget, DisplayWidth(promptTail));
-                    var offset = CursorLeftOffset(buf.Text, buf.Cursor) + placeholderCols;
+                    // 补齐段 = N 个空格 + 1 个竖线，**整段**都要跨过去（含竖线本身）
+                    var padCols = DisplayWidth(FrameFiller(InputText()));
+                    var offset = CursorLeftOffset(buf.Text, buf.Cursor) + placeholderCols + padCols;
                     if (offset > 0)
                         Console.Write($"\x1b[{offset}D");
                 }

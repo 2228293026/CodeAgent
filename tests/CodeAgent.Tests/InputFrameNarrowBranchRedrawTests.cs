@@ -45,8 +45,13 @@ public sealed class InputFrameNarrowBranchRedrawTests
         // 2) 尾行必须**是提示符本身**（可能按宽度收口），否则光标列会按边框宽度算，
         //    敲一个字符就折行。窄终端下提示符会被收口成「[code] Co…」，
         //    所以比的是"去掉省略号后是提示符的前缀"，不是"包含完整提示符"。
+        //    输入行**允许**带左侧竖线（`│ `）：它和输入内容在同一行上，
+        //    必须参与重绘，否则每敲一个字左边框就被擦掉一次。
         Assert.DoesNotContain('\n', tail);
-        Assert.StartsWith(tail.TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
+        var body = tail.StartsWith(SafeColor.Glyphs.FrameSide, StringComparison.Ordinal)
+            ? tail[(SafeColor.Glyphs.FrameSide.Length + 1)..]  // 竖线 + 1 列空格
+            : tail;
+        Assert.StartsWith(body.TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -91,8 +96,11 @@ public sealed class InputFrameNarrowBranchRedrawTests
         var lines = framed.Split('\n');
         Assert.Equal(2, lines.Length);
         Assert.StartsWith(SafeColor.Glyphs.FrameTopLeft, lines[0], StringComparison.Ordinal);
+        // 输入行带左侧竖线（属于输入行，不属于 chrome）
+        Assert.StartsWith(SafeColor.Glyphs.FrameSide, lines[1], StringComparison.Ordinal);
         // 提示符在窄屏下会被收口，只要求它是提示符的前缀
-        Assert.StartsWith(lines[1].TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
+        var body = lines[1][(SafeColor.Glyphs.FrameSide.Length + 1)..];
+        Assert.StartsWith(body.TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
     }
 
     [Fact]

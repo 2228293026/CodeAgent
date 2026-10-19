@@ -1795,7 +1795,19 @@ internal static class Program
         // 提示符**必须**按 width 收敛。此前两个分支都没做，于是提示符比终端宽时
         // 必然折行——这正是「敲一个字就多出一行」的直接成因：
         // 折行把输入块撑高，而重绘基线仍按 1 行算，之后每次按键都再错一行。
-        return lead + line + "\n" + InputLine.FitToWidth(body, width);
+        //
+        // 提示符前面挂上左侧竖线：输入行的左边框。它属于**输入行本身**而不是
+        // 「chrome」，因为它和输入内容在**同一行**上，重绘时必须一起画——
+        // 否则每敲一个字，左边框就被 \x1b[2K 擦掉一次。
+        // 先给左边框让出 2 列再收敛提示符：把「│ + 提示符」整体裁到 width 会把
+        // 提示符自己的 `> ` 切掉——那正好是「光标该停在哪」的视觉标记。
+        //
+        // 窄到放不下「竖线 + 空格」时**不挂左边框**：宁可框缺一条边，
+        // 也不能让输入行越界折行（折行会把重绘基线的行数算错）。
+        var shownPrompt = width >= 4
+            ? SafeColor.Glyphs.FrameSide + " " + InputLine.FitToWidth(body, width - 2)
+            : InputLine.FitToWidth(body, width);
+        return lead + line + "\n" + shownPrompt;
     }
 
     /// <summary>

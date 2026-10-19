@@ -45,8 +45,12 @@ public sealed class RecallConfirmLineTests
         Assert.False(confirm.StartsWith(new string(SafeColor.Glyphs.RuleChar, 1), StringComparison.Ordinal),
             $"宽度 {width}：确认行里混进了边框 → [{confirm}]");
 
-        // 3) 必须仍然带着提示符，否则用户不知道自己在确认什么
-        Assert.StartsWith(tail.TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
+        // 3) 必须仍然带着提示符，否则用户不知道自己在确认什么。
+        //    输入行现在带左侧竖线（输入行的左边框），比较时先脱掉它再比提示符。
+        var body = tail.StartsWith(SafeColor.Glyphs.FrameSide, StringComparison.Ordinal)
+            ? tail[(SafeColor.Glyphs.FrameSide.Length + 1)..]
+            : tail;
+        Assert.StartsWith(body.TrimEnd(SafeColor.Glyphs.Ellipsis), Prompt, StringComparison.Ordinal);
     }
 
     [Fact]

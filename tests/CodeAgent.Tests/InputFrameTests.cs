@@ -49,7 +49,8 @@ public class InputFrameTests
         var text = Program.BuildInputFrameTop("[code] D:\\P> ", "◈ high · /thinking", 60);
         var lines = Lines(text);
         Assert.Equal(2, lines.Length);
-        Assert.Equal("[code] D:\\P> ", lines[1]);
+        // 输入行带左侧竖线（输入行的左边框，与内容同行，必须参与重绘）
+        Assert.Equal(SafeColor.Glyphs.FrameSide + " [code] D:\\P> ", lines[1]);
         // 上边框是满宽的**圆角**框线（右侧挂了档位提示，所以不是纯规则）
         Assert.Equal(60, TextUtil.DisplayWidth(lines[0]));
         Assert.Matches("^╭─+ ◈ high · /thinking╮$", lines[0]);
@@ -132,7 +133,7 @@ public class InputFrameTests
         Assert.Equal(3, lines.Length);
         Assert.Equal(string.Empty, lines[0]);          // 空行在最上面
         Assert.StartsWith("╭", lines[1], StringComparison.Ordinal); // 然后是边框
-        Assert.Equal("[code] D:\\P> ", lines[2]);     // 提示符紧跟边框
+        Assert.Equal(SafeColor.Glyphs.FrameSide + " [code] D:\\P> ", lines[2]); // 提示符紧跟边框
     }
 
     [Fact]
