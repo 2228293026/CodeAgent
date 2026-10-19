@@ -132,10 +132,12 @@ public sealed class ToolPreviewTrueLineCountTests
         // 必须匹配**解构 + 传参连在一起**：早先只查 "trueTotalLines: previewTotalLines"，
         // 而"解构之后把 previewTotalLines 改回 8"这种变异里那句话依然存在，守卫照样绿。
         var src = System.IO.File.ReadAllText(FindAgent()).Replace("\r\n", "\n");
-        Assert.Contains(
-            "var (preview, previewTotalLines, previewTotalChars) = BuildToolOutputPreview(output, ct);" +
-            "\n                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: previewTotalLines, trueTotalChars: previewTotalChars)",
-            src);
+        // 解构与传参现在被一行 `shown = ...` 隔开（为了留原件给 ctrl+o 展开），
+        // 所以按**两段分别存在**来守，而不是要求它们紧挨着。
+        // 要守的东西没变：真实总行数必须从解构里来、必须传给 FormatToolOutputPreview，
+        // 绝不能中途被换成从被截断文本里数出来的数。
+        Assert.Contains("var (preview, previewTotalLines, previewTotalChars) = BuildToolOutputPreview(output, ct);", src);
+        Assert.Contains("trueTotalLines: previewTotalLines, trueTotalChars: previewTotalChars", src);
         Assert.Contains(
             "var (failPreview, failTotalLines, failTotalChars) = BuildToolOutputPreview(output, ct);" +
             "\n                            Console.WriteLine(TextUtil.IndentBlock(" +

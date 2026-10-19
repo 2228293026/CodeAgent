@@ -254,6 +254,11 @@ public static class InputLine
     /// 不用给 Read 加回调参数——那个签名已经有 6 个可选参数了。</summary>
     public const string ThinkingMarker = "\u001bTHINK";
 
+    /// <summary>Ctrl+O 的返回标记：展开最近一次**被折叠的工具输出**（学自 Claude Code 的
+    /// <c>ctrl+o</c>）。与 <see cref="ThinkingMarker"/> 同一套约定——输入行只回报按键，
+    /// 由 REPL 决定展开什么、打印什么。</summary>
+    public const string ExpandMarker = "\u001bEXPAND";
+
     /// <summary>上一次可信的终端宽度（读数抖动时沿用）。</summary>
     private static int _lastGoodWidth;
 
@@ -1460,6 +1465,10 @@ public static class InputLine
                     // 由 Program 负责改配置并打印确认行——输入行不碰配置。
                     case ConsoleKey.T when (key.Modifiers & ConsoleModifiers.Control) != 0:
                         return ThinkingMarker;
+                    // Ctrl+O：展开最近一次被折叠的工具输出（学自 Claude Code）。
+                    // 与 Ctrl+T 同一套约定：输入行不碰输出缓冲，只回报按键。
+                    case ConsoleKey.O when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        return ExpandMarker;
                     // Ctrl+C：先清当前行，再按才退出（见 CtrlCBehavior）。
                     // 必须在 switch 的最前面：它一旦落到默认分支，就会被当成普通字符插进输入框。
                     case ConsoleKey.C when (key.Modifiers & ConsoleModifiers.Control) != 0:

@@ -124,6 +124,30 @@ public sealed partial class Agent
     public long TurnInputTokens { get; private set; }
     public long TurnOutputTokens { get; private set; }
     public long TurnCachedTokens { get; private set; }
+
+    /// <summary>最近一次被折叠的工具输出（完整原文 + 展示用的摘要头）。
+    ///
+    /// 为什么要留着原件：折叠脚注写着「共 40 行，仅显示前 8 行」，
+    /// 剩下 32 行在屏幕上**根本不存在**——用户想看只能重新跑一遍命令，
+    /// 而那可能花几十秒、甚至改变状态（重启服务之类）。
+    /// <c>ctrl+o</c> 看到的就是这份保留的原文。
+    ///
+    /// 只留**最近一次**：留多了就得选「展开哪一个」，而输入行没有可选项的 UI；
+    /// 而用户按 ctrl+o 时的意图几乎总是「刚才那个」。</summary>
+    private (string Text, string Header)? _lastFoldedOutput;
+
+    /// <summary>最近一次被折叠输出的展示文本（供 ctrl+o），没有折叠过时为 null。</summary>
+    public string? LastFoldedOutput => _lastFoldedOutput?.Text;
+
+    /// <summary>展开最近一次被折叠的输出：返回要打印的整段文本（含头部分隔），
+    /// 没有可展开的内容时返回 null——调用方据此给出「没有折叠内容」的提示。</summary>
+    public string? ExpandLastFoldedOutput()
+    {
+        if (_lastFoldedOutput is not { } folded)
+            return null;
+        _lastFoldedOutput = null; // 展开过一次就消费掉：再按一次不该重复刷屏
+        return folded.Text;
+    }
     // 各轮起点栈（ESC 多级撤回用）：RunAsync 发送前 push 一层，UndoLastTurn pop 一层，
     // 连续 ESC 逐轮回退；历史裁剪/压缩时栈内索引同步前移
     private readonly Stack<int> _turnStarts = new();
@@ -1469,7 +1493,9 @@ public sealed partial class Agent
             var charsPart = trueTotalChars is int tc && tc > 0 ? $" / {tc:N0} 字符" : "";
             var charsGone = trueTotalChars is int tc2 ? Math.Max(0, tc2 - text.Length) : 0;
             var rowCapCharNote = charsGone > 0 ? $"，已丢弃 {charsGone:N0} 字符" : "";
-            return text + $"…（共 {totalLines:N0} 行{charsPart}，仅显示前 {keptRows:N0} 行{rowCapCharNote}）";
+            // 告诉用户还能展开：只说「仅显示前 8 行」等于宣告剩下 32 行**永远看不到了**，
+            // 而实际上按 ctrl+o 就能看。这条提示是「折叠」与「丢失」的分界线。
+            return text + $"…（共 {totalLines:N0} 行{charsPart}，仅显示前 {keptRows:N0} 行{rowCapCharNote}，ctrl+o 展开）";
         }
         var keptLines = DiffUtil.CountLines(text);
         var widthNote = widthCutLines > 0 ? $"，{widthCutLines} 行按宽度裁剪" : "";
@@ -1768,7 +1794,12 @@ public sealed partial class Agent
                     {
                         using var previewScope = SafeColor.Scope(SafeColor.Muted);
                         var (preview, previewTotalLines, previewTotalChars) = BuildToolOutputPreview(output, ct);
-                        Console.WriteLine(TextUtil.IndentBlock(FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: previewTotalLines, trueTotalChars: previewTotalChars), ToolPreviewIndent));
+                        var shown = FormatToolOutputPreview(preview, width: ToolPreviewWidth(Program.Columns()), trueTotalLines: previewTotalLines, trueTotalChars: previewTotalChars);
+                        Console.WriteLine(TextUtil.IndentBlock(shown, ToolPreviewIndent));
+                        // 真被折叠了才留原件：没折叠过时按 ctrl+o 应当说「没有可展开的内容」，
+                        // 而不是把刚刚已经在屏幕上的东西再刷一遍。
+                        if (previewTotalLines > DiffUtil.CountLines(preview))
+                            _lastFoldedOutput = (TextUtil.IndentBlock(output.TrimEnd(), ToolPreviewIndent), status);
                     }
                 }
             }

@@ -470,6 +470,21 @@ internal static class Program
                 Console.WriteLine(agent.UndoLastTurn() ?? "没有可撤回的轮次。");
                 continue;
             }
+            if (line == InputLine.ExpandMarker)
+            {
+                // Ctrl+O：展开最近一次被折叠的工具输出。
+                // 折叠脚注写着「仅显示前 8 行」，剩下那些行在屏幕上根本不存在——
+                // 不给展开口，用户只能重跑命令，而那可能花几十秒甚至改变状态。
+                var expanded = agent.ExpandLastFoldedOutput();
+                if (expanded is null)
+                    WriteNotice("没有折叠的输出可展开。");
+                else
+                {
+                    using (SafeColor.Scope(SafeColor.Muted))
+                        Console.WriteLine(expanded);
+                }
+                continue;
+            }
             if (line == InputLine.ThinkingMarker)
             {
                 // Ctrl+T：切到下一档思考强度。走 /thinking 的同一条路径（改配置 + 持久化 +
