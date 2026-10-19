@@ -80,12 +80,56 @@ public class ToolProgressCursorOwnershipTests
         // 动画会继续往结果行**下方**画帧然后被清掉，屏幕上留下「结果行 + 残帧」。
         var src = ReadSource("Agent.cs");
         var exec = MethodBody(src, "private async Task<ProviderMessage> ExecuteToolCallAsync");
-        var stopAt = exec.IndexOf("StopToolProgress()", StringComparison.Ordinal);
-        Assert.True(stopAt > 0, "工具返回后必须立刻收掉动画");
+        // 这里用的是 Pause 而不是 Stop：并行批次里整批动画要活到最后一个工具结束，
+        // 单个工具跑完只是让出当前行。
+        var stopAt = exec.IndexOf("PauseToolProgress()", StringComparison.Ordinal);
+        Assert.True(stopAt > 0, "工具返回后必须立刻让出动画行");
         // 必须排在打印结果行之前：找状态行的写入点
         var printAt = exec.IndexOf("Console.WriteLine(status)", StringComparison.Ordinal);
         Assert.True(printAt > 0);
-        Assert.True(stopAt < printAt, "动画必须在本函数打印结果行之前收掉");
+        Assert.True(stopAt < printAt, "动画行必须在本函数打印结果行之前让出来");
+    }
+
+    [Fact]
+    public void ParallelBatchesAlsoShowOneProgressLine()
+    {
+        // 之前这里是彻底静默的：顺序路径有动画，并行反而没有。
+        // 而并行恰恰是模型一次发起一堆读文件/grep 的常见形态，跑起来同样几十秒。
+        // 不给反馈的理由是「多个工具各自 \r 会抢同一行」——那条理由只否定了
+        // **每工具一条**，并没有否定**整批一条**。
+        var src = ReadSource("Agent.cs");
+        var exec = MethodBody(src, "private async Task<List<ProviderMessage>> ExecuteToolCallsAsync");
+        Assert.Contains("个工具并行", exec);
+    }
+
+    [Fact]
+    public void ParallelBatchStopsItsLineOnEveryExitPath()
+    {
+        // 并行分支抛异常 / 被取消时必须收掉，否则动画一直转下去。
+        var src = ReadSource("Agent.cs");
+        var exec = MethodBody(src, "private async Task<List<ProviderMessage>> ExecuteToolCallsAsync");
+        var whenAll = exec.IndexOf("Task.WhenAll(tasks)", StringComparison.Ordinal);
+        Assert.True(whenAll > 0);
+        var after = exec[whenAll..];
+        Assert.Contains("finally", after);
+        Assert.Contains("StopToolProgress()", after);
+    }
+
+    [Fact]
+    public void PauseOnlyClearsTheLineItOwns()
+    {
+        // Pause 不能交还光标行所有权（那是 Stop 的事）：
+        // 并行批次里交还一次，后面每个工具的结果行都会和动画抢行。
+        var src = ReadSource("Agent.cs");
+        var at = src.IndexOf("private void PauseToolProgress", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        // 只取到下一个方法声明为止：MethodBody 的固定窗口会越界到 StopToolProgress，
+        // 那里本来就有 SetCursorLineBusy(false)，断言会变成永远失败。
+        var next = src.IndexOf("private void StopToolProgress", at, StringComparison.Ordinal);
+        Assert.True(next > at);
+        var pause = src[at..next];
+        Assert.DoesNotContain("SetCursorLineBusy(false)", pause);
+        Assert.Contains("SpinnerClearSequence", pause);
     }
 
     [Fact]

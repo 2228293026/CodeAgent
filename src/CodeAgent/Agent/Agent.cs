@@ -1176,6 +1176,25 @@ public sealed partial class Agent
         });
     }
 
+    /// <summary>正式输出前让出动画行：把动画那一帧擦掉、回到行首。
+    ///
+    /// 并行批次里每个工具跑完都会打印自己的结果行，而那时动画还挂在当前行上——
+    /// 不先擦掉，结果行会接在动画文字后面，屏幕上出现
+    /// <c>⠸ 3 个工具并行 … 5s✔ Read(a.cs) (0.1s)</c> 这种东西。
+    ///
+    /// 擦完不用管恢复：动画下一帧照常 <c>\r</c> 重写，而那时光标已在结果行之后，
+    /// 动画自然往下让一格。调用方必须持 <see cref="ConsoleLock"/>（本方法内部也会取，锁可重入）。</summary>
+    private void PauseToolProgress()
+    {
+        if (_toolProgressCts is null || _toolProgressWidth == 0)
+            return;
+        lock (ConsoleLock)
+        {
+            Console.Write(SpinnerClearSequence(_toolProgressWidth));
+            _toolProgressWidth = 0;
+        }
+    }
+
     /// <summary>收掉工具进度动画：清行回到行首。工具结果行随后打印在同一位置。</summary>
     private void StopToolProgress()
     {
@@ -1808,6 +1827,13 @@ public sealed partial class Agent
             return results;
         }
 
+        // 并行批次也起一条动画，但**只有一条**：标签是「N 个工具并行执行中」。
+        //
+        // 之前这里是彻底静默的——顺序路径有动画，并行反而没有，而并行恰恰是
+        // 模型一次发起一堆读文件/grep 的常见形态，跑起来同样要几十秒。
+        // 不给反馈的理由是「多个工具各自 \r 会抢同一行」，但那条理由只否定了
+        // **每工具一条**，并没有否定**整批一条**。
+        StartToolProgress($"{calls.Count} 个工具并行");
         using var sem = new SemaphoreSlim(8);
         var tasks = calls.Select(async tc =>
         {
@@ -1832,7 +1858,15 @@ public sealed partial class Agent
                 sem.Release();
             }
         });
-        results.AddRange(await Task.WhenAll(tasks));
+        try
+        {
+            results.AddRange(await Task.WhenAll(tasks));
+        }
+        finally
+        {
+            // 与顺序路径对称：异常/取消路径也必须收掉，否则动画会一直转下去
+            StopToolProgress();
+        }
         FinishRun();
         return results;
     }
@@ -1946,11 +1980,13 @@ public sealed partial class Agent
             isError = true;
         }
         sw.Stop();
-        // **立刻**收掉进度动画，别等调用方那个 finally：结果行是在本函数里打印的，
-        // 此时动画还在跑——它会继续往结果行**下方**画帧，然后才被清掉，
-        // 屏幕上就会留下「结果行 + 一串残帧」。
-        // 停在这里还有个好处：清屏与结果行都在 ConsoleLock 内，中间不会插进别的输出。
-        StopToolProgress();
+        // **立刻**把动画行让出来，别等调用方那个 finally：结果行是在本函数里打印的，
+        // 此时动画还挂在当前行上——不让开，结果行会接在动画文字后面；
+        // 让得太晚则动画继续往结果行**下方**画帧，屏幕上留下「结果行 + 一串残帧」。
+        //
+        // 用 Pause 而不是 Stop：并行批次里整批动画要一直活到最后一个工具结束，
+        // 单个工具跑完只是让出当前行。
+        PauseToolProgress();
         // 头尾保留截断：错误摘要常在输出末尾（dotnet test / build 的失败列表），
         // 纯头部截断会把最关键的部分丢给模型看不到
         output = TextUtil.TruncateToolOutput(output, 24_000);
