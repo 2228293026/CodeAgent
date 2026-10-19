@@ -10,16 +10,22 @@ namespace CodeAgent.Tests;
 /// </summary>
 public class PromptDegradeTests
 {
+    // 终止符取自字形表：ASCII 模式下是 >，Unicode 下是 ❯。
+    // 断言里写死任何一个，另一个模式就必然红。
+    // 用**属性**而不是 static readonly 字段：后者的值在类型初始化时就定死，
+    // 之后切换 CODEAGENT_ASCII 不会生效——读到的是上一个模式留下的值。
+    private static string chev => SafeColor.Glyphs.PromptChevron;
+
     [Fact]
     public void BuildPromptText_FullFormWhenItFits()
     {
-        Assert.Equal("[code|gpt-5] proj> ", Program.BuildPromptText("code", "gpt-5", "proj", 80));
+        Assert.Equal($"[code|gpt-5] proj{chev} ", Program.BuildPromptText("code", "gpt-5", "proj", 80));
     }
 
     [Fact]
     public void BuildPromptText_UnknownWidthKeepsFullForm()
     {
-        var full = $"[code|{new string('m', 200)}] {new string('d', 80)}> ";
+        var full = $"[code|{new string('m', 200)}] {new string('d', 80)}{chev} ";
         Assert.Equal(full, Program.BuildPromptText("code", new string('m', 200), new string('d', 80), 0));
     }
 
@@ -85,7 +91,7 @@ public class PromptDegradeTests
     {
         var text = Program.BuildPromptText("code", new string('m', 100), new string('d', 100), 30);
         Assert.Contains("…", text);
-        Assert.EndsWith("> ", text);
+        Assert.EndsWith($"{SafeColor.Glyphs.PromptChevron} ", text);
     }
 
     [Fact]

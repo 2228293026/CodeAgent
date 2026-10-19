@@ -1911,7 +1911,11 @@ internal static class Program
     /// </summary>
     internal static string BuildPromptText(string mode, string model, string dir, int width)
     {
-        var full = $"[{mode}|{model}] {dir}> ";
+        // 终止符走字形表（Claude Code 同款 ❯，ASCII 退回 >）。
+        // 此前这里硬编码 "> "——于是 CODEAGENT_ASCII 能换掉几乎所有装饰，
+        // 唯独用户每分钟都在看的那一个字符换不掉。
+        var chev = SafeColor.Glyphs.PromptChevron + " ";
+        var full = $"[{mode}|{model}] {dir}{chev}";
         if (width <= 0)
             return full;
         // 正常宽度下为后续输入留出余量，这样 PromptFitsOneRow 仍能原地覆盖切换块；
@@ -1922,17 +1926,17 @@ internal static class Program
             budget = width;
         if (TextUtil.DisplayWidth(full) <= budget)
             return full;
-        var noModel = $"[{mode}] {dir}> ";
+        var noModel = $"[{mode}] {dir}{chev}";
         if (TextUtil.DisplayWidth(noModel) <= budget)
             return noModel;
         var head = $"[{mode}]";
         // "[模式] 目录…> " 里目录可用宽度。固定开销从**实际拼出来的后缀**量出来，
         // 不再写死 4 / 6 —— ASCII 退回时省略号从 1 列变 3 列，写死的数会让提示符
         // 超出预算（而提示符超宽会把整行输入顶到折行）。
-        var tail = $" {SafeColor.Glyphs.Ellipsis}> ";
+        var tail = $" {SafeColor.Glyphs.Ellipsis}{chev}";
         var room = budget - TextUtil.DisplayWidth(head) - TextUtil.DisplayWidth(tail);
         if (room > 0)
-            return $"{head} {InputLine.FitToWidth(dir, room)}{SafeColor.Glyphs.Ellipsis}> ";
+            return $"{head} {InputLine.FitToWidth(dir, room)}{SafeColor.Glyphs.Ellipsis}{chev}";
         // 模式名本身（CJK 双宽）就超宽：截短模式但**绝不去掉**——没有模式的提示符没有意义。
         //
         // 这里曾直接 `max(1, budget - 6)` 然后无脑拼 "[模式…]> "，于是两处不对：
@@ -1942,7 +1946,7 @@ internal static class Program
         //    输入顶到折行，正是这个函数要避免的事。
         // 现在改成"先试不截断的形态，放得下就用；放不下才带省略号"，
         // 截断量与省略号都按实际显示宽度算。
-        var modeTail = "> ";
+        var modeTail = chev;
         var modePlain = "[" + mode + "]" + modeTail;
         if (TextUtil.DisplayWidth(modePlain) <= budget)
             return modePlain;
