@@ -1737,6 +1737,15 @@ public static class InputLine
                         if (!menuOpen && buf.DeleteToLineEnd())
                             OnTextChanged();
                         break;
+                    // Ctrl+U：删到行首（readline 里与 Ctrl+K 是**一对**）。
+                    //
+                    // 只给 K 不给 U 是半套键盘：常用 readline/emacs 的人按 Ctrl+U 想清掉半个句子，
+                    // 得到的却是一个闪烁的 ^U（或者什么都不发生），只能改按一串 Backspace。
+                    // 同理不越过换行：没有 kill ring，删掉的换行找不回来。
+                    case ConsoleKey.U when (key.Modifiers & ConsoleModifiers.Control) != 0:
+                        if (!menuOpen && buf.DeleteToLineStart())
+                            OnTextChanged();
+                        break;
                     // Ctrl+W：删前一个单词（比 Ctrl+Backspace 更早在肌肉记忆里）。
                     // 两者走同一个方法：同一件事在两条路上给出不同结果，是最难查的那类 bug。
                     case ConsoleKey.W when (key.Modifiers & ConsoleModifiers.Control) != 0:

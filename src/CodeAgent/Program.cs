@@ -5193,7 +5193,7 @@ internal static class Program
         ("Ctrl+R", "反向搜索命令历史（再按跳更早命中，显示第 n/M 条）"),
         ("Ctrl+O", "展开最近一次被折叠的工具输出"),
         ("Ctrl+A / Ctrl+E", "跳到行首 / 行尾"),
-        ("Ctrl+K", "删到本行行尾（不越行）"),
+        ("Ctrl+K / Ctrl+U", "删到本行行尾 / 行首（不越行）"),
         ("Ctrl+W / Ctrl+Backspace", "删前一个单词"),
         ("Ctrl+Left / Ctrl+Right", "按单词移动光标"),
         ("Ctrl+L", "清屏"),

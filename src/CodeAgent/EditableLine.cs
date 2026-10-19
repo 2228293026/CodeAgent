@@ -351,6 +351,29 @@ public sealed class EditableLine
         return true;
     }
 
+    /// <summary>删到**本行**行首（Ctrl+U，与 <see cref="DeleteToLineEnd"/> 对称）。返回是否删掉了东西。</summary>
+    ///
+    /// 同样刻意不越过换行：readline 的 Ctrl+U 会把光标前的换行一起吃掉，
+    /// 把上一行接到下一行上。这里没有 kill ring，删掉的换行再也找不回来——
+    /// 用户看到的是「按了一下 Ctrl+U，两行合成一行」，比不做更意外。
+    public bool DeleteToLineStart()
+    {
+        if (Cursor <= 0)
+            return false;
+        var text = _text.ToString();
+        var start = Cursor > 0 ? text.LastIndexOf('\n', Cursor - 1) + 1 : 0;
+        if (start >= Cursor)
+            return false;
+        // 代理对保护：起点落在低代理上时，前一格的高代理属于同一码点，整对一起删
+        if (start > 0 && char.IsLowSurrogate(text[start]) && char.IsHighSurrogate(text[start - 1]))
+            start--;
+        if (start >= Cursor)
+            return false;
+        _text.Remove(start, Cursor - start);
+        Cursor = start;
+        return true;
+    }
+
     public void End() => Cursor = _text.Length;
 
     public void Clear()
