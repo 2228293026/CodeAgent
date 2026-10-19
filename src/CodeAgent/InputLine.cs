@@ -166,7 +166,7 @@ public static class InputLine
     internal static string FormatInputText(
         string prompt, bool searching, string searchQuery, bool searchHit,
         int historyIndex, int historyCount, string draft, int queryWidth = SearchQueryDisplayWidth, int windowWidth = 0,
-        string? placeholder = null, bool colored = true)
+        string? placeholder = null, bool colored = true, int searchOrdinal = 0, int searchTotal = 0)
     {
         // 占位提示只在**普通态 + 空输入**时出现；搜索/浏览历史时输入框有别的含义，
         // 挂一条「试试…」只会误导。
@@ -187,7 +187,14 @@ public static class InputLine
             if (budget <= 0)
                 return DraftTail($"{prompt} (搜索) {(searchHit ? SafeColor.Glyphs.Hit : "未命中")} ", draft, windowWidth);
             var query = $"`{FitToWidth(searchQuery, budget)}`";
-            var mark = searchHit ? $" {SafeColor.Glyphs.Hit}" : " 未命中";
+            // 「第 n/M 条」：只标「命中」时看不出有多个匹配、也看不出还能往前翻多少。
+            // 这正是 Ctrl+R 最常被误解的地方——按了没反应，其实只是到头了。
+            var ordinal = searchHit && searchTotal > 0
+                ? $" {searchOrdinal}/{searchTotal}"
+                : "";
+            var mark = searchHit
+                ? $" {SafeColor.Glyphs.Hit}{ordinal}"
+                : " 未命中";
             return DraftTail($"{prompt} (搜索){query}{mark} ", draft, windowWidth);
         }
         return historyIndex >= 0 && historyIndex < historyCount
@@ -879,7 +886,10 @@ public static class InputLine
             // 边框属于 chrome，首次绘制一次即可，不该参与重绘。
             string InputText() =>
                 FormatInputText(promptTail, searching, searchQuery.ToString(), searchFrom >= 0, idx, session.Count, buf.Text,
-                    SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk);
+                    SearchQueryDisplayWidth, fitBudget, placeholder, ansiOk,
+                    // 序号按「从最新往回数」算：第一次按 Ctrl+R 落在最新那条，那时显示 1/M 才直观
+                    searching && searchFrom >= 0 ? HistoryMatchOrdinal(session, searchQuery.ToString(), searchFrom) : 0,
+                    searching && searchFrom >= 0 ? CountHistoryMatches(session, searchQuery.ToString()) : 0);
 
             var menuOpen = false;
             var modePicker = false;
@@ -2136,6 +2146,42 @@ public static class InputLine
                 return i;
         }
         return -1;
+    }
+
+    /// <summary>历史里包含 query 的条目总数（<c>Ctrl+R</c> 的「第 n/M 条」用）。</summary>
+    internal static int CountHistoryMatches(IReadOnlyList<string> history, string query)
+    {
+        if (query.Length == 0 || history.Count == 0)
+            return 0;
+        var normalizedQuery = NormalizeCommandFilter(query);
+        var n = 0;
+        foreach (var entry in history)
+        {
+            if (NormalizeCommandFilter(entry).Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+                n++;
+        }
+        return n;
+    }
+
+    /// <summary>当前命中是「从最新往回数」的第几条（1-based）；无命中返回 0。
+    ///
+    /// 用**倒数**而不是正序：<c>Ctrl+R</c> 是从最新往旧翻的，
+    /// 用户第一次按就落在最新那条——那时显示「第 1 条」比显示「第 7 条」直观得多，
+    /// 也才能一眼看出「还能再往前翻几条」。</summary>
+    internal static int HistoryMatchOrdinal(IReadOnlyList<string> history, string query, int index)
+    {
+        if (index < 0 || index >= history.Count)
+            return 0;
+        var normalizedQuery = NormalizeCommandFilter(query);
+        if (normalizedQuery.Length == 0)
+            return 0;
+        var n = 0;
+        for (var i = history.Count - 1; i >= index; i--)
+        {
+            if (NormalizeCommandFilter(history[i]).Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+                n++;
+        }
+        return n;
     }
 
     /// <summary>输入块的显示换行数（= 显示行数 - 1，即从块末行上移到块首的行距）。
