@@ -591,8 +591,11 @@ internal static class Program
                     agent.StreamedOnLineBoundary);
                 // 本轮改了哪些文件（学自 Claude Code 的 Modified files）：不另开命令，
                 // 用户不必为了确认"它到底动没动我的文件"再敲一次 /files。
-                // 任务进度一行结论：面板一次五个任务就是五行，回合摘要里只给一行
-                if (FormatTaskProgressLine(agent.Tasks.CompletedCount, agent.Tasks.Count, ConsoleColumns()) is { Length: > 0 } taskLine)
+                // 任务进度一行结论：面板一次五个任务就是五行，回合摘要里只给一行。
+                // 带上「正在做什么」与耗时：只给 3/5 读不出在做什么，只给耗时读不出进度。
+                var inProgress = agent.Tasks.Tasks.FirstOrDefault(t => t.Status == CodeAgent.Tools.TaskStatus.InProgress);
+                if (FormatTaskProgressLine(agent.Tasks.CompletedCount, agent.Tasks.Count, ConsoleColumns(),
+                        inProgress?.Content, sw.Elapsed) is { Length: > 0 } taskLine)
                     Console.WriteLine(taskLine);
                 if (FormatChangedFilesLine(
                         NewFilesThisTurn(filesBefore, agent.Context.Undo.AllPaths())
@@ -1169,16 +1172,59 @@ internal static class Program
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>回合结束后的单行任务进度：<c>⏵⏵ 任务 2/5</c>。
+    /// <summary>回合结束后的单行任务进度：<c>🎯 重构渲染层 · ⏵ 3/5 · 1m20s</c>。
     /// 面板太占屏（一次五个任务就是五行），回合摘要里只给一行结论。</summary>
-    internal static string FormatTaskProgressLine(int done, int total, int width)
+    /// <remarks>
+    /// 这一行回答的是「现在在做什么、做到哪了、花了多久」——
+    /// 只有 <c>3/5</c> 时读不出「在做什么」（那份信息只在面板里），
+    /// 只有耗时又读不出进度。三段都留着才有意义。
+    /// 三段各自可降级（见下面的剥离顺序），任何宽度下都不越界。
+    /// </remarks>
+    internal static string FormatTaskProgressLine(int done, int total, int width, string? current = null, TimeSpan? elapsed = null)
     {
         if (total <= 0)
             return string.Empty;
-        var line = $"{SafeColor.Glyphs.HintMark}{SafeColor.Glyphs.HintMark} 任务 {done}/{total}";
-        if (width <= 0 || TextUtil.DisplayWidth(line) <= width)
-            return line;
-        return InputLine.FitToWidth(line, width);
+        var mark = SafeColor.Glyphs.GoalMark;
+        var count = $"{done}/{total}";
+        // 完成时给一个明确的结论词：光看 5/5 还要自己换算
+        var progress = done >= total ? $"{SafeColor.Glyphs.Ok} complete{SafeColor.Glyphs.SegmentSeparator}{count}" : count;
+        var took = elapsed is { TotalSeconds: >= 1 } e ? TextUtil.FormatSessionTime(e) : null;
+        var sep = SafeColor.Glyphs.SegmentSeparator;
+
+        string Render(string? name, bool showTook) => string.Join(sep, new[]
+        {
+            name is { Length: > 0 } ? $"{mark} {name}" : $"{mark} 任务",
+            progress,
+            showTook && took is not null ? took : null,
+        }.Where(s => !string.IsNullOrEmpty(s)));
+
+        // 宽度未知（<=0）：三段全给，由调用方决定
+        if (width <= 0)
+            return Render(current, true);
+
+        // 降级顺序：先丢耗时（最容易从别处推出来），再截任务名，最后连名字都不要。
+        // 与状态栏同一个思路：**只描述过去**的信息先走。
+        var text = Render(current, true);
+        if (TextUtil.DisplayWidth(text) <= width)
+            return text;
+        text = Render(current, false);
+        if (TextUtil.DisplayWidth(text) <= width)
+            return text;
+        // 名字太长就收口，但**保住进度与标记**：按剩余预算算名字可用宽度
+        if (current is { Length: > 0 })
+        {
+            var fixedWidth = TextUtil.DisplayWidth(Render(null, false)) - TextUtil.DisplayWidth($"{mark} 任务");
+            var room = width - TextUtil.DisplayWidth($"{mark} ") - fixedWidth - TextUtil.DisplayWidth(sep);
+            var name = room > 1 ? InputLine.FitToWidth(current, room) : null;
+            text = Render(name, false);
+            if (TextUtil.DisplayWidth(text) <= width)
+                return text;
+        }
+        // 连名字都放不下：只留标记 + 进度。
+        // 最后一级**必须**硬收口：极窄终端（w 只有个位数）下「🎯 999/1000」本身就超宽，
+        // 而这一行是回合摘要的一部分，超宽会把整段摘要顶乱。
+        text = Render(null, false);
+        return TextUtil.DisplayWidth(text) <= width ? text : InputLine.FitToWidth(text, width);
     }
 
     /// <summary>

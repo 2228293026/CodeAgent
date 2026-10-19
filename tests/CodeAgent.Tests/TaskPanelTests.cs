@@ -161,7 +161,9 @@ public sealed class TaskPanelTests
         var src = File.ReadAllText(Find("Program.cs"));
         var at = src.IndexOf("FormatTaskProgressLine(", StringComparison.Ordinal);
         Assert.True(at > 0, "回合摘要里没有调用 FormatTaskProgressLine");
-        var window = src.Substring(Math.Max(0, at - 200), Math.Min(400, src.Length - Math.Max(0, at - 200)));
+        // 窗口要**向前**取够：调用点现在带上了当前任务名与耗时（多行实参），
+        // Console.WriteLine 落在调用点之后近 200 列处，200 的窗口刚好卡在边上。
+        var window = src.Substring(Math.Max(0, at - 200), Math.Min(700, src.Length - Math.Max(0, at - 200)));
         Assert.Contains("Console.WriteLine", window);
     }
 

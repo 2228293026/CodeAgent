@@ -132,6 +132,12 @@ public static class SafeColor
         /// 用 1 列宽的几何符号，ASCII 退回为 <c>&gt;</c>。</summary>
         public static string PromptChevron => AsciiEnabled ? ">" : "❯";
 
+        /// <summary>任务目标标记。</summary>
+        /// ASCII 退回用 <c>*</c>：目标行整行都是 ASCII 时更整齐，
+        /// 而 <c>[goal]</c> 这种词形会把一行里最该短的地方拉长。
+        /// 注意它占 **2 列**（emoji 代理对，见 <see cref="TextUtil.DisplayWidth"/>）。</summary>
+        public static string GoalMark => AsciiEnabled ? "*" : "🎯";
+
         /// <summary>八级竖条（sparkline 用）：<c>▁▂▃▄▅▆▇█</c>。
         /// 每级都是 1 列宽，堆在一起就是一条速率直方图——不占额外行，
         /// 塞进状态栏一行里就能看出「刚才快、现在慢」。
