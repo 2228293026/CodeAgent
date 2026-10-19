@@ -2542,15 +2542,46 @@ internal static class Program
     /// 低于此值与其显示半截路径，不如整个不显示——半截路径会指向不存在的目录。</summary>
     internal const int MinStatusPathWidth = 6;
 
+    /// <summary>
+    /// 把速率采样画成一行直方图串：<c>▁▂▄▁▂▂█▆▆▅▃▅ 42.1 t/s</c>。
+    ///
+    /// 直方图与数值**一起**给：只有图看不出绝对快慢（归一化到本回合峰值，
+    /// 峰值低时满格的图也可能是 3 t/s），只有数值看不出趋势（现在是爬升还是掉速）。
+    ///
+    /// <paramref name="bars"/> 为空（还没采到）返回空串——没有数据就不占位。
+    /// width &gt; 0 时按宽度收口：先砍图再砍数值，图是趋势、数值是读数，
+    /// 两者都放不下就整个不显示（宁可没有，也不留半截误导人的数字）。
+    /// </summary>
+    internal static string FormatRateSegment(int[] bars, double tps, int width = 0)
+    {
+        if (bars.Length == 0)
+            return string.Empty;
+        var levels = SafeColor.Glyphs.SparkLevels;
+        var spark = string.Concat(bars.Select(b => levels[Math.Clamp(b, 0, levels.Length - 1)]));
+        // 速率取 1 位小数：整数位在直方图旁边已经够读，多的小数位只是噪音
+        var num = $"{tps:F1} t/s";
+        var full = $"{spark} {num}";
+        if (width <= 0 || TextUtil.DisplayWidth(full) <= width)
+            return full;
+        // 先砍数值：图还在，趋势仍可读
+        if (TextUtil.DisplayWidth(spark) <= width)
+            return spark;
+        // 图也放不下：整段不显示，绝不截成半截
+        return string.Empty;
+    }
+
     internal static string BuildStatusBar(
         string mode, string model, string cwd, string? branch,
         string turnIn, string turnOut, string ctxText, string thinkText, int width,
-        string turnCached = "")
+        string turnCached = "", string rate = "")
     {
         bool showBranch = !string.IsNullOrEmpty(branch);
         var showTurn = true;
         var showCtx = true;
         var showThink = !string.IsNullOrEmpty(thinkText);
+        // 速率段（直方图 + tps）是**纯装饰**：它回答「刚才快不快」，
+        // 而其他每一段都在回答「现在是什么状态」。空间不够时它第一个走。
+        var showRate = !string.IsNullOrEmpty(rate);
         var shownPath = string.Empty;
         // in 已**不含**命中缓存的部分（第 298 轮起）。只写「X in」会让人以为那就是
         // 整个 prompt 的大小——命中 99% 缓存时这两个数能差四个数量级。
@@ -2566,12 +2597,14 @@ internal static class Program
             if (showTurn) parts.Add($"{turnIn} in / {turnOut} out{cachedNote}");
             if (showCtx) parts.Add(ctxText);
             if (showThink) parts.Add(thinkText);
+            if (showRate) parts.Add(rate);
             return string.Join(SafeColor.Glyphs.SegmentSeparator, parts);
         }
 
         var text = Render();
-        // 第一轮：丢冷门段（思考档 {SafeColor.Glyphs.Arrow} 分支 {SafeColor.Glyphs.Arrow} 本回合 token），ctx 保留到最后
-        var drops = new Action[] { () => showThink = false, () => showBranch = false, () => showTurn = false };
+        // 第一轮：丢冷门段（速率 {SafeColor.Glyphs.Arrow} 思考档 {SafeColor.Glyphs.Arrow} 分支 {SafeColor.Glyphs.Arrow} 本回合 token），ctx 保留到最后。
+        // 速率段排第一：它是唯一一段**只描述过去**的信息。
+        var drops = new Action[] { () => showRate = false, () => showThink = false, () => showBranch = false, () => showTurn = false };
         for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
         {
             drops[i]();
@@ -2589,6 +2622,7 @@ internal static class Program
         if (showTurn) others.Add($"{turnIn} in / {turnOut} out{cachedNote}");
         if (showCtx) others.Add(ctxText);
         if (showThink) others.Add(thinkText);
+        if (showRate) others.Add(rate);
         var othersWidth = others.Sum(TextUtil.DisplayWidth) + others.Count * 3;
         var pathBudget = width - TextUtil.DisplayWidth(head) - othersWidth;
         if (pathBudget > 0)
@@ -2665,6 +2699,9 @@ internal static class Program
         var shownCwd = Environment.CurrentDirectory;
         // git 分支段（非仓库整体省略）：多仓库/多分支工作流下快速确认当前所在位置
         var branch = CachedBranch(Environment.CurrentDirectory);
+        // 速率直方图只在**本轮真采到样本**时出现：没有样本还画一条空图，
+        // 只会让人以为速率是 0。
+        var rate = FormatRateSegment(agent.RateBars(), agent.LastTokensPerSecond);
         using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,
@@ -2673,7 +2710,8 @@ internal static class Program
             // 命中率与摘要行同口径（in + cached 为分母）；为 0 时不显示这一段
             (agent.TurnInputTokens + agent.TurnCachedTokens) > 0
                 ? $"{TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens + agent.TurnCachedTokens)}%"
-                : ""));
+                : "",
+            rate));
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>

@@ -132,6 +132,18 @@ public static class SafeColor
         /// 用 1 列宽的几何符号，ASCII 退回为 <c>&gt;</c>。</summary>
         public static string PromptChevron => AsciiEnabled ? ">" : "❯";
 
+        /// <summary>八级竖条（sparkline 用）：<c>▁▂▃▄▅▆▇█</c>。
+        /// 每级都是 1 列宽，堆在一起就是一条速率直方图——不占额外行，
+        /// 塞进状态栏一行里就能看出「刚才快、现在慢」。
+        /// ASCII 退回成 <c>. : - = + * # @</c>：同样的 8 级，仍能读高低。</summary>
+        ///
+        /// 必须是**属性**而不是 static readonly 字段：字段只在类型初始化时求值一次，
+        /// 而 <see cref="AsciiEnabled"/> 读的是可替换的 <c>ReadEnv</c>（测试会换）。
+        /// 写成字段的话，ASCII 与 Unicode 两套里只有先跑到的那个能生效。
+        public static string[] SparkLevels => AsciiEnabled
+            ? [".", ":", "-", "=", "+", "*", "#", "@"]
+            : ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"];
+
         /// <summary>省略号。注意 ASCII 版是 3 个字符，会**改变显示宽度**——
         /// 调用方必须把它喂给 TextUtil.DisplayWidth 计算，不能按 1 列算。
         /// 预算相关处请直接用 <see cref="EllipsisWidth"/>，别再写死 1。</summary>

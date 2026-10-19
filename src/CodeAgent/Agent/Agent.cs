@@ -754,6 +754,68 @@ public sealed partial class Agent
     private readonly System.Diagnostics.Stopwatch _turnSw = new(); // 本回合累计用时（每轮 RunAsync 重启）
     private bool _reasoningShown; // 本轮是否已开始实时输出思考内容（首段到达时清掉 spinner）
     private long _streamTokens; // 当前调用已流式生成的 token 估算（字符数/4）
+
+    /// <summary>速率直方图的采样基准：上次采样时的 token 数与时刻。</summary>
+    private long _tpsBaseTokens;
+    private System.Diagnostics.Stopwatch _tpsBaseTime = new();
+
+    /// <summary>最近若干段的**瞬时速率**（token/秒），供状态栏画直方图。
+    /// 只留最近 <see cref="RateSamples"/> 段：直方图宽度有限，留多了也画不下，
+    /// 而且早期的低速段会让「现在到底快不快」这个读数被历史稀释。</summary>
+    private readonly List<double> _rate = new();
+
+    /// <summary>直方图保留的采样段数。取 12：与参考样式里那段 <c>▁▂▄▁▂▂█▆▆▅▃▅</c> 同长，
+    /// 12 列在 80 列终端上仍放得下。</summary>
+    internal const int RateSamples = 12;
+
+    /// <summary>本回合最后一次采样到的速率（token/秒）。0 表示还没采到。</summary>
+    public double LastTokensPerSecond => _rate.Count > 0 ? _rate[^1] : 0;
+
+    /// <summary>速率直方图的各级高度（0..7，对应 <see cref="SafeColor.Glyphs.SparkLevels"/>）。
+    ///
+    /// 归一化用的是**本回合峰值**而不是固定上限：模型速率能差两个数量级
+    /// （思考时几个 token/秒、纯输出时几十上百），按固定上限画的话，
+    /// 慢的那一半永远是空的，直方图退化成一条平线。
+    /// 只显示最近 <see cref="RateSamples"/> 段。</summary>
+    public int[] RateBars()
+    {
+        var n = Math.Min(_rate.Count, RateSamples);
+        var bars = new int[n];
+        if (n == 0)
+            return bars;
+        var peak = 0.0;
+        for (var i = _rate.Count - n; i < _rate.Count; i++)
+            peak = Math.Max(peak, _rate[i]);
+        if (peak <= 0)
+            return bars; // 全 0：没有速率可画，保持全底
+        for (var i = 0; i < n; i++)
+        {
+            var v = _rate[_rate.Count - n + i] / peak; // 0..1
+            bars[i] = Math.Clamp((int)Math.Round(v * (SafeColor.Glyphs.SparkLevels.Length - 1)), 0, SafeColor.Glyphs.SparkLevels.Length - 1);
+        }
+        return bars;
+    }
+
+    /// <summary>按当前 token 数与时刻记一段速率并推进基准。
+    ///
+    /// 间隔过短（&lt; 100ms）不记：spinner 每 120ms 一帧，但模型可能在一个帧间隔里
+    /// 吐出一大段，此时「这一段」的速率会被算成瞬时尖峰，直方图每隔一根就顶到顶。
+    /// 太短就并到下一段，读起来才是一条平滑的速率曲线。</summary>
+    private void SampleRate()
+    {
+        var elapsed = _tpsBaseTime.Elapsed.TotalSeconds;
+        if (elapsed < 0.1)
+            return;
+        var total = TurnOutputTokens + _streamTokens;
+        var delta = total - _tpsBaseTokens;
+        _tpsBaseTokens = total;
+        _tpsBaseTime.Restart();
+        if (delta < 0)
+            return; // 计数被重置（换轮）：这一段无意义，别记成负速率
+        _rate.Add(delta / elapsed);
+        if (_rate.Count > RateSamples * 2)
+            _rate.RemoveRange(0, _rate.Count - RateSamples * 2); // 只留两屏，防止长回合无限增长
+    }
     /// <summary>spinner 帧。盲文的点字（⠦⠸⠼…）在老式终端和代码页 437/850 里
     /// 是乱码，ASCII 退回时改用经典的 <c>|/-o\</c> 旋转符——同样是 1 列，
     /// 所以 <c>_spinnerLastWidth</c> 的清行计算不受影响。
@@ -881,6 +943,11 @@ public sealed partial class Agent
         _spinnerShown = true;   // 供 FinalizeSpinner 判定"确实有 spinner 可定格"
         _spinnerSw.Restart();
         _streamTokens = 0;
+        // 速率采样的起点：_tpsBase 记着「上一次采样时的 token 数」，
+        // 与时间戳一起算这一段的瞬时速率。
+        _tpsBaseTokens = 0;
+        _tpsBaseTime = Stopwatch.StartNew();
+        _rate.Clear();
         _spinnerCts = new System.Threading.CancellationTokenSource();
         var cts = _spinnerCts;
         var frame = 0;
@@ -898,6 +965,9 @@ public sealed partial class Agent
                 while (!cts.IsCancellationRequested)
                 {
                     var f = SpinnerFrame(frame++);
+                    // 每帧采一次速率：这正是直方图的数据来源。
+                    // 放在画帧**之前**，本帧画出来的就是刚采到的值。
+                    SampleRate();
                     // 本回合口径：/clear 后新对话从 0 起（会话累计在 /stats），与状态栏/回合摘要一致
                     var total = TurnInputTokens + TurnOutputTokens + _streamTokens;
                     // 取锁后再查一次取消：ClearSpinner/FinalizeSpinner 在锁内先取消再清行，
