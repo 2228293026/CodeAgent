@@ -4705,9 +4705,13 @@ internal static class Program
     /// <summary>折行后的说明块：每一行都带续行缩进。
     /// 直接 `indent + "    " + WrapDisplay(…)` 只会给**首行**加缩进，
     /// 第 2..n 行跑到行首——续行看起来像顶层输出，读者会以为这是另一条命令。
-    /// 用 <see cref="TextUtil.IndentBlock"/> 给每一行都补上前缀。</summary>
-    internal static string HelpContinuation(string description, int width) =>
-        TextUtil.IndentBlock(TextUtil.WrapDisplay(description, width), new string(' ', HelpContIndent));
+    /// 用 <see cref="TextUtil.IndentBlock"/> 给每一行都补上前缀。
+    ///
+    /// <paramref name="indent"/> 可收窄：窄终端下 6 列缩进会把内容整个挤出去
+    /// （width=6 时缩进 6 列 + 至少 1 列内容 = 7 列，越界）。缩进是排版糖，
+    /// 该让位时就得让位，调用方按当前宽度决定它有多宽。</summary>
+    internal static string HelpContinuation(string description, int width, int indent = HelpContIndent) =>
+        TextUtil.IndentBlock(TextUtil.WrapDisplay(description, Math.Max(1, width)), new string(' ', Math.Max(0, indent)));
 
     /// <summary>帮助列表渲染。
     /// 命令列按最长条目自适应；说明放不下时**整体移到下一行并缩进折行**，
@@ -4727,7 +4731,20 @@ internal static class Program
         // 此前这里错用了 inlineWidth 给续行，等于给续行预留了命令列的宽度，
         // 结果 2 + 4 + (width - 2 - commandWidth - 2) = width + 2 - commandWidth 列——
         // 只要命令列宽于 2 列（永远是），每一行折行的说明都会溢出终端。
-        var contWidth = width - HelpContIndent;
+        // 续行缩进随宽度收缩：6 列缩进在窄终端里会把内容整个挤出去。
+        // 取「宽度的一半」是经验值——留得下 2 列内容就还算看得出层级，
+        // 再窄就干脆不缩进（0），让字尽量多地留在屏幕上。
+        var contIndent = width <= 0 ? HelpContIndent
+            : width >= HelpContIndent * 2 + 2 ? HelpContIndent
+            : Math.Max(0, Math.Min(HelpContIndent, width / 2));
+        // 续行预算必须**至少 1 列**。此前直接 width - HelpContIndent，
+        // 窄终端（width <= 6）下算出来是 0 或负数，而 WrapDisplay(desc, 0) 的语义是
+        // 「不折行」——于是整段说明原样吐成一行，6 列终端上打出一行 15 列。
+        // 这里宁可每行只放一个字，也不能让「有没有折行」取决于预算正负。
+        var contWidth = Math.Max(1, width <= 0 ? 0 : width - contIndent);
+        // 连缩进都放不下时（width < 2）不挂缩进：缩进是排版糖，
+        // 为它多占 2 列会把内容挤出终端——而越界折行比没缩进难看得多。
+        var head = width >= indent.Length + 1 ? indent : string.Empty;
         var output = new StringBuilder();
         foreach (var entry in entries)
         {
@@ -4735,16 +4752,16 @@ internal static class Program
             {
                 // 命令名本身可能比终端还宽（dependency_lockfile_report = 25 列）：
                 // 必须截断，否则这一行会硬折行，把整列表的网格结构打散。
-                output.AppendLine(indent + FitColumn(entry.Command, width));
+                output.AppendLine(head + FitColumn(entry.Command, width - head.Length));
                 if (entry.Description.Length > 0)
-                    output.AppendLine(HelpContinuation(entry.Description, contWidth));
+                    output.AppendLine(HelpContinuation(entry.Description, contWidth, contIndent));
                 continue;
             }
             // 说明放不进同行就整体挪到下一行；判定用**同行**预算，折行用**续行**预算
             if (width > 0 && TextUtil.DisplayWidth(entry.Description) > inlineWidth)
             {
                 output.AppendLine(indent + FitColumn(entry.Command, width));
-                output.AppendLine(HelpContinuation(entry.Description, contWidth));
+                output.AppendLine(HelpContinuation(entry.Description, contWidth, contIndent));
                 continue;
             }
             output.AppendLine(indent + InputLine.PadToDisplayWidth(entry.Command, commandWidth + gap) + entry.Description);

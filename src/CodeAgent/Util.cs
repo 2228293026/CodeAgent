@@ -968,6 +968,12 @@ public static class TextUtil
             output.Add(line.ToString().TrimEnd());
         }
         // 交代行只加**一次**缩进：下面统一 Select 时还会再加一次，这里加就会变成双倍缩进
+        //
+        // 这句提示有 80 列，而它只会出现在终端很窄的时候——于是必然越界。
+        // 试过按宽度截断，但那把「宽度 N 列装不下」这个**唯一有用信息**删掉了：
+        // 用户只看到一个省略号，反而不知道发生了什么。
+        // 这里保留原样：一排短得没法看的乱行，好过一句没有内容的省略号。
+        // NarrowWidthContentLossTests 把它钉成了有意为之的例外。
         if (dropped)
             output.Add(DropNotice(width));
         return string.Join("\n", output.Select(l => indent + l));
