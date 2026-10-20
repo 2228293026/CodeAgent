@@ -76,8 +76,19 @@ public sealed class CancelledTurnPrintingTests
     {
         // 三个调用点（一次性、/compact、交互式回合）都应把哨兵交给 PrintResult
         // 或自己映射，绝不能有一处把哨兵直接丢给 Console.WriteLine
-        var src = File.ReadAllText(FindSource());
-        Assert.Contains("if (IsCancelledTurn(result))\n        {\n            Console.WriteLine((prefixNewline", src.Replace("\r\n", "\n"));
+        var src = File.ReadAllText(FindSource()).Replace("\r\n", "\n");
+        // 判据从「精确源码文本」改成「这个分支里出现了什么」。
+        //
+        // 原来钉的是 `Console.WriteLine((prefixNewline ...` 那串字面量，
+        // 于是任何对换行条件的改动都会让它红——而这条测试要守的是
+        // 「哨兵不许被原样打出去、不许各写一份措辞」，不是某一行的写法。
+        var at = src.IndexOf("if (IsCancelledTurn(result))", StringComparison.Ordinal);
+        Assert.True(at > 0, "没找到取消哨兵的分支");
+        var body = src[at..src.IndexOf("if (streamed)", at, StringComparison.Ordinal)];
+        Assert.Contains("FormatCancelLine", body);       // 统一措辞
+        Assert.Contains("NeedsBreakBeforeCancel", body);  // 换行交给那个纯函数判
+        // 哨兵本身不许出现在输出里：这一分支只该打「已取消。」
+        Assert.DoesNotContain("WriteLine(result", body);
         // 一次性模式那处已收敛到 PrintResult，不再各写一份措辞
         Assert.DoesNotContain("result = \"\\n\" + FormatCancelLine", src);
     }

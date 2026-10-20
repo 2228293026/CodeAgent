@@ -2898,6 +2898,14 @@ internal static class Program
         return "\n" + BuildPromptText(agent.CurrentMode.Name, model, dir, ConsoleColumns());
     }
 
+    /// <summary>取消行之前要不要先断行。</summary>
+    ///
+    /// 三种情况要断：调用方明确要求（<paramref name="prefixNewline"/>）、
+    /// 流式输出过且**停在半行**（半句话后面直接贴「⏹ 已取消。」）、
+    /// 其余不断（本来就在行首，多打一个空行是噪音）。
+    internal static bool NeedsBreakBeforeCancel(bool prefixNewline, bool streamed, bool streamedOnLineBoundary) =>
+        prefixNewline || (streamed && !streamedOnLineBoundary);
+
     /// <summary>输出最终答复：若已流式打印过则按需补换行，否则整体打印。
     /// 流式路径此前**无条件**补一个换行：模型最后一段本来就带换行时会多出一个空行，
     /// 而没带换行时又必须补——否则工具状态行/回合摘要会粘在正文同一行。</summary>
@@ -2914,7 +2922,14 @@ internal static class Program
         // 收口在这一层：以后任何新的调用点都自动安全，不必记得先映射。
         if (IsCancelledTurn(result))
         {
-            Console.WriteLine((prefixNewline ? "\n" : "") + FormatCancelLine("已取消。", ConsoleColumns()));
+            // 流式输出过、且停在半行时也要断行。
+            //
+            // 此前这条分支只看 prefixNewline：REPL 传 true 所以看不出来，
+            // 但**一次性模式传 false**——按 Ctrl+C 打断流式后，屏幕上留着半句话，
+            // 取消行直接贴上去：
+            //   我看了下这个报错，应该是配置里的路径写错了⏹ 已取消。
+            // 事后回看分不清哪半句是模型的、哪半句是系统的。
+            Console.WriteLine((NeedsBreakBeforeCancel(prefixNewline, streamed, streamedOnLineBoundary) ? "\n" : "") + FormatCancelLine("已取消。", ConsoleColumns()));
             return;
         }
         if (streamed)
