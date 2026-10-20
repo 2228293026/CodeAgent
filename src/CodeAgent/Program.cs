@@ -4487,11 +4487,11 @@ internal static class Program
                 }
                 break;
             case "/help":
-                PrintReplHelp();
+                PrintReplOnlyHelp();
                 break;
 
             case "/":
-                PrintReplHelp();
+                PrintReplOnlyHelp();
                 break;
 
             default:
@@ -5172,10 +5172,17 @@ internal static class Program
         ("-p, --provider <名>", "切换 Provider（配置中的键）"),
         ("-m, --model <模型>", "覆盖模型名"),
         ("--cwd <目录>", "切换工作目录"),
+        // --mode / --resume / --no-session 一直能被解析，却从没进过这张表：
+        // 用户按 -h 查不到自己手上的选项，只能去翻 --help 之外的文档（或者源码）。
+        // 帮助表与解析器不一致，比「少写一条说明」严重得多——
+        // 它让「有这个选项吗」这个问题在界面上无解。
+        ("--mode <名>", "以指定工作模式启动（会话级，不写回配置）"),
+        ("--resume <编号>", "按编号恢复历史会话（编号见 /resume 列表）"),
         ("--init", "生成示例配置 codeagent.json"),
         ("--setup", "交互式配置供应商并生成 codeagent.json"),
         ("--models", "列出当前 Provider 的可用模型"),
         ("--continue", "恢复本项目最近一次会话（自动落盘到 .codeagent/sessions）"),
+        ("--no-session", "本次不写会话日志（隐私敏感任务；不写回配置）"),
         ("-v, --version", "显示版本号"),
     ];
 
@@ -5219,35 +5226,87 @@ internal static class Program
         // 而补全只在输入 / 时弹出，塞一条非 / 开头的条目会污染菜单。
         Console.WriteLine("输入行:");
         Console.WriteLine(FormatHelpList(BangModeHelp, ConsoleColumns()));
-        PrintHelpTable("用法:", HelpUsageRows());
-        PrintHelpTable("参数:", HelpOptionRows());
         PrintHelpTable("快捷键:", HelpShortcutRows());
     }
+
+    /// <summary>`/help` 的完整内容：REPL 命令 + 输入行模式 + 快捷键（不含命令行参数）。</summary>
+    ///
+    /// 与 `--help` 的分工：命令行的用法与参数只在 `--help` 里出现。
+    /// `/help` 是进了 REPL 之后才敲的，那时进程早已启动，
+    /// 再讲一遍怎么启动（`codeagent "任务"`）既没用也占屏。
+    private static void PrintReplOnlyHelp()
+    {
+        PrintReplHelp();
+        PrintHelpTable("用法:", HelpUsageRows());
+        PrintHelpTable("参数:", HelpOptionRows());
+    }
+    /// <summary>说明列至少要有这么多列才值得并排；不够就改成「键一行、说明缩进在下一行」。
+    /// 20 列大约能放下十个汉字，再窄就只是把每行拆成很短的两截，反而更难读。</summary>
+    private const int MinHelpDescWidth = 20;
+
+    /// <summary>一行「键 — 说明」：放得下就一行，放不下把说明折到下方并对齐说明列。
+    ///
+    /// 续行必须与说明**首列对齐**，不能退回到缩进处：折行之后
+    /// 若和键挤在同一视觉平面，读起来会像多出来一个独立选项。
+    /// 窄到说明列放不下时退回两行式（键独占一行），而不是硬挤成一条竖线。</summary>
+    internal static string FormatHelpOption(string key, string desc, int keyWidth, int width)
+    {
+        const string Indent = "  ";
+        const string Gap = "  ";
+        var head = Indent + InputLine.PadToDisplayWidth(key, keyWidth) + Gap;
+        if (width <= 0)
+            return head + desc;
+        var headWidth = TextUtil.DisplayWidth(head);
+        if (headWidth + TextUtil.DisplayWidth(desc) <= width)
+            return head + desc;
+        var valueBudget = width - headWidth;
+        if (valueBudget >= MinHelpDescWidth)
+        {
+            // 说明折行后，续行对齐到说明首列（不是回到缩进处）
+            var body = TextUtil.WrapDisplay(desc, valueBudget);
+            return head + body.Replace("\n", "\n" + new string(' ', headWidth));
+        }
+        // 说明列太窄：键独占一行，说明缩进两格再折，别硬挤成一条竖线
+        var inner = new string(' ', Indent.Length + 2);
+        var innerBudget = Math.Max(1, width - inner.Length);
+        return Indent + InputLine.FitToWidth(key, Math.Max(1, width - Indent.Length)) + "\n" +
+               TextUtil.WrapDisplay(desc, innerBudget, inner);
+    }
+
+    /// <summary>「用法」段的一行：超宽时折行，续行缩进到前导空格 + 2，不退回顶格。</summary>
+    internal static string FormatHelpUsageLine(string line, int width)
+    {
+        if (width <= 0)
+            return line;
+        var trimmed = line.TrimStart();
+        if (trimmed.Length == 0 || TextUtil.DisplayWidth(line) <= width)
+            return line;
+        var lead = line.Length - trimmed.Length;
+        var indent = new string(' ', lead + 2);
+        var body = TextUtil.WrapDisplay(trimmed, Math.Max(1, width - indent.Length));
+        return new string(' ', lead) + body.Replace("\n", "\n" + indent);
+    }
+
     private static void PrintHelp()
     {
-        Console.WriteLine($"""
-            codeagent {InformationalVersion} — LLM 驱动的编码助手 CLI
-
-            用法:
-              codeagent [选项] ["任务描述"]     交互式 REPL（默认）；带任务则一次性执行后退出
-              codeagent --continue ["接续任务"] 恢复本项目最近一次会话
-              codeagent --resume <编号> ["任务"] 按编号恢复历史会话（编号见 /resume 列表）
-
-            选项:
-              -c, --config <路径>    指定配置文件
-              -p, --provider <名称>  使用配置中的指定供应商
-              -m, --model <模型>     覆盖本次使用的模型
-              --cwd <目录>           切换工作目录（先于 --init/--setup 生效）
-              --mode <名>            以指定工作模式启动（会话级覆盖 defaultMode，不写回配置；/mode 查看）
-              --init                 在当前目录生成示例配置 codeagent.json
-              --setup                交互式供应商配置向导（保存前自动测试连接）
-              --models               列出当前供应商的可用模型
-              --continue             恢复最近一次会话
-              --no-session           本次运行不写会话日志（隐私敏感任务；不写回配置文件）
-              -v, --version          显示版本
-              -h, --help             显示本帮助
-
-            """);
+        var width = ConsoleColumns();
+        Console.WriteLine($"codeagent {InformationalVersion} — LLM 驱动的编码助手 CLI");
+        Console.WriteLine();
+        Console.WriteLine("用法:");
+        foreach (var raw in new[]
+                 {
+                     "  codeagent [选项] [\"任务描述\"]     交互式 REPL（默认）；带任务则一次性执行后退出",
+                     "  codeagent --continue [\"接续任务\"] 恢复本项目最近一次会话",
+                     "  codeagent --resume <编号> [\"任务\"] 按编号恢复历史会话（编号见 /resume 列表）",
+                 })
+            Console.WriteLine(FormatHelpUsageLine(raw, width));
+        Console.WriteLine();
+        Console.WriteLine("选项:");
+        var rows = HelpOptionRows();
+        var keyWidth = rows.Max(r => TextUtil.DisplayWidth(r.Key));
+        foreach (var (key, desc) in rows)
+            Console.WriteLine(FormatHelpOption(key, desc, keyWidth, width));
+        Console.WriteLine();
         PrintReplHelp();
     }
 }
