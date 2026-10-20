@@ -632,20 +632,32 @@ internal static class Program
                         var pct = TextUtil.PercentOf(agent.ContextTokens, win);
                         if (config.AutoCompactPercent > 0 && pct >= config.AutoCompactPercent && !agent.LastTurnFailed)
                         {
+                            // 压缩**真的成功**才算解决了占用。失败/取消/SHORT 时上下文
+                            // 一点没变，必须落到下面那条 90% 提示上——
+                            // 否则用户正卡在 95%、自动压缩又因网络失败，屏幕上却一句警告都没有，
+                            // 他会一路撞到硬上限才发现。
+                            var compacted = false;
                             try
                             {
                                 var r = RunTurnAsync(async t =>
                                     await agent.CompactAsync(t) ? "COMPACTED" : "SHORT",
                                     preserveTypeahead: true).GetAwaiter().GetResult();
                                 if (r == "COMPACTED")
+                                {
+                                    compacted = true;
                                     Console.WriteLine(FormatConfirmLine(
                                         $"上下文已达 {pct}%（autoCompactPercent={config.AutoCompactPercent}），已自动压缩历史。",
                                         ConsoleColumns()));
+                                }
                             }
                             catch (Exception ex)
                             {
                                 WriteNotice($"自动压缩失败: {ex.Message}");
                             }
+                            if (!compacted && pct >= 90)
+                                Console.WriteLine(FormatNoticeLine(
+                                    $"上下文已用 {pct}%（{TextUtil.CompactTokenCount(agent.ContextTokens)}/{TextUtil.CompactTokenCount(win)}）：自动压缩未能降低占用，建议手动 /compact。",
+                                    ConsoleColumns()));
                         }
                         else if (pct >= 90)
                             Console.WriteLine(FormatNoticeLine(
