@@ -2160,19 +2160,22 @@ internal static class Program
     /// 复用 <see cref="FormatKeyValueLine"/> 而不是自己拼：那个函数已经处理了
     /// 按显示宽度对齐与窄屏截断，另写一份必然在某个宽度上漏出去。
     /// </summary>
-    internal static string FormatStatusPanel(IEnumerable<(string Key, string Value)> rows, int width)
+    internal static string FormatStatusPanel(IEnumerable<(string Key, string Value)> rows, int width, string title = "状态:", bool rightAlign = false)
     {
         var list = rows.ToList();
         if (list.Count == 0)
             return "（无状态信息）";
         var keyWidth = list.Max(r => TextUtil.DisplayWidth(r.Key));
         var sb = new System.Text.StringBuilder();
-        // 标题也要按宽度收敛。「状态:」写死 5 列，3 列终端上它就超宽折行——
+        // 标题也要按宽度收敛。写死 5 列的「状态:」在 3 列终端上就超宽折行——
         // 而这块面板的每一行都参与「画了几行」的计算，一行折成两行会让后续重绘全错。
         // 宁可显示成「状…」，也不能让它越界。
-        sb.AppendLine(width > 0 ? InputLine.FitToWidth("状态:", width) : "状态:");
+        //
+        // 标题与对齐做成参数是为了让 /stats 复用同一个渲染器：两块面板的结构一模一样
+        // （标题 + 键值表），各拼一份必然有一份在某个宽度上漏出去。
+        sb.AppendLine(width > 0 && title.Length > 0 ? InputLine.FitToWidth(title, width) : title);
         foreach (var row in list)
-            sb.AppendLine(FormatKeyValueLine(row.Key, row.Value, keyWidth, width));
+            sb.AppendLine(FormatKeyValueLine(row.Key, row.Value, keyWidth, width, rightAlign));
         return sb.ToString().TrimEnd();
     }
 
@@ -4437,12 +4440,12 @@ internal static class Program
                     statRows.Add(("会话时长", TextUtil.FormatSessionTime(SessionStopwatch.Elapsed)));
                     if (cost is { } c)
                         statRows.Add(("累计费用", $"≈${TextUtil.FormatCost(c)}"));
-                    var statKeyWidth = statRows.Max(r => TextUtil.DisplayWidth(r.Key));
-                    // 数值列右对齐：请求次数/输入/输出 tokens 量级不同，左对齐时位数不在同一列
-                    var statRight = ShouldRightAlignValues(statRows.Select(r => r.Value));
-                    Console.WriteLine("会话统计:");
-                    foreach (var (key, value) in statRows)
-                        Console.WriteLine(FormatKeyValueLine(key, value, statKeyWidth, ConsoleColumns(), statRight));
+                    // 数值列右对齐：请求次数/输入/输出 tokens 量级不同，左对齐时位数不在同一列。
+                    // 渲染交给 FormatStatusPanel——它与 /status 结构完全一样（标题 + 键值表），
+                    // 各拼一份必然有一份在某个宽度上漏出去（标题行就是上一轮漏掉的那处）。
+                    Console.WriteLine(FormatStatusPanel(
+                        statRows, ConsoleColumns(), "会话统计:",
+                        rightAlign: ShouldRightAlignValues(statRows.Select(r => r.Value))));
                 }
                 break;
 
