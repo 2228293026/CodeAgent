@@ -1154,6 +1154,19 @@ public sealed class ConsoleRenderer
             natural = natural.Take(keep).ToArray();
             cols = keep;
         }
+        // 极窄终端（放不下「缩进 2 + 外框 4 + 至少 3 列内容」= 9 列）时，
+        // 完整外框必然越界：每行折成两行，框线全断，读者看到的是一堆散字——
+        // 比不画框糟糕得多。此时退化成紧凑形态：不缩进、只有列间竖线、行间不画分隔。
+        //
+        // 判断必须在 FitColumnWidths **之前**：那个函数的下限是
+        // MinTableColWidth（3 列），它不会把总宽压到 budget 以下——
+        // 放不下时它只能放弃（break），于是表格按 9 列画出去、每行都越界。
+        if (budget > 0 && budget < 2 + TableFrameWidth + MinTableColWidth)
+        {
+            EmitCompactTable(rows, totalCols, budget);
+            _tableBuf.Clear();
+            return;
+        }
         var widths = FitColumnWidths(natural, budget, indent: 2 + TableFrameWidth);
         // 画完整外框：顶边 → 行 → 底边。
         // 外框不只是好看，它把「表头 / 分隔 / 数据」三段边界画了出来——
@@ -1193,6 +1206,47 @@ public sealed class ConsoleRenderer
     /// <summary>把提示压进预算：宽度未知时原样返回（不猜测折行位置）。</summary>
     private static string Note(string note, int width) =>
         width > 0 ? InputLine.FitToWidth(note, width) : note;
+
+    /// <summary>极窄终端下的紧凑表格：<c>a│b│c</c>。
+    ///
+    /// 完整外框要「缩进 2 + 左右各 2 列框线 + 至少 3 列内容」= 9 列才画得开。
+    /// 不到 9 列时按完整形态硬画，每行都会折成两行，框线全断——
+    /// 读者看到的是一堆散字，比不画框糟得多。
+    ///
+    /// 这里不画外框、不缩进、不画分隔接头，只留列间一条竖线：
+    /// 它是「哪一格属于哪一列」的最后依据，剩下的装饰一律让位给内容。
+    /// 每格内容按可用宽度**重新分配**（等分剩余空间），单格再截断。</summary>
+    private void EmitCompactTable(List<List<string>> rows, int totalCols, int budget)
+    {
+        // 分隔符本身要占列：cols 列之间有 cols-1 条竖线
+        var cols = Math.Min(totalCols, Math.Max(1, rows.Max(r => r.Count)));
+        var sep = SafeColor.Glyphs.ColumnSeparator;
+        var sepWidth = TextUtil.DisplayWidth(sep);
+        // 先按内容宽度分配，再削到放得下
+        var natural = new int[cols];
+        for (var i = 0; i < cols; i++)
+            natural[i] = 1;
+        foreach (var r in rows)
+            for (var i = 0; i < cols && i < r.Count; i++)
+                natural[i] = Math.Max(natural[i], DisplayWidth(r[i]));
+        var widths = FitColumnWidths(natural, budget, indent: 0, separatorWidth: sepWidth);
+        foreach (var r in rows)
+        {
+            var isSep = r.Count > 0 && r.All(c => SepRe.IsMatch(c));
+            if (isSep)
+                continue; // 紧凑形态没有分隔接头，跳过而不是画一条越界的线
+            var parts = new List<string>(cols);
+            for (var i = 0; i < cols; i++)
+            {
+                var text = i < r.Count ? r[i] : "";
+                parts.Add(InputLine.FitToWidth(text, widths[i]));
+            }
+            var line = string.Join(sep, parts);
+            // 兜底：分配算法理论上已保证不超，但内容里的 CJK 与省略号可能让它多出 1 列，
+            // 越界的代价（折行破版）远大于少看一个字。
+            WriteLine(TextUtil.DisplayWidth(line) <= budget ? line : InputLine.FitToWidth(line, budget));
+        }
+    }
 
     /// <summary>裁列提示：报**总数**而不是保留数。此前 `cols` 已被改写成 `keep`，
     /// 于是输出「表格共 4 列，仅显示前 4 列」——谎报一列都没丢，比不给提示更糟。
