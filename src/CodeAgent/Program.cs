@@ -4066,7 +4066,14 @@ internal static class Program
                         else
                             Console.WriteLine(FormatSectionHeaderLine(
                                 "最近的会话", "输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次", ConsoleColumns()));
-                        for (int i = 0; i < logs.Count; i++)
+                        // 列表只显示最近 10 条：编号空间是全部（见 ResumableLogs），
+                        // 但把几百条一次性刷出来会把命令历史整屏推走，
+                        // 用户还得往上翻着找自己刚才在看什么。
+                        // 没显示的那些仍然**可以按编号恢复**，所以提示里要说清楚
+                        // 「列表只列了前 10 条」，否则用户以为第 11 条不存在。
+                        const int ResumeListLimit = 10;
+                        var shown = Math.Min(logs.Count, ResumeListLimit);
+                        for (int i = 0; i < shown; i++)
                         {
                             // 文件名只是时间戳：附上相对时间、首条用户消息预览与条数，才能认出哪个会话是哪段对话
                             var (preview, count, capped) = AgentClass.SessionLogSummary(logs[i]);
@@ -4083,6 +4090,10 @@ internal static class Program
                             resumeEntries.Add(new HelpEntry($"{i + 1})", detail));
                         }
                         Console.WriteLine(FormatHelpList(resumeEntries, ConsoleColumns()));
+                        if (logs.Count > shown)
+                            Console.WriteLine(FormatHintLine(
+                                $"另有 {logs.Count - shown} 个更早的会话未列出（仍可用 /resume <编号> 恢复，编号 1-{logs.Count}）。",
+                                ConsoleColumns()));
                     }
                     break;
                 }
