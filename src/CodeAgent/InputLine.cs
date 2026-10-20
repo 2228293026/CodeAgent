@@ -778,6 +778,17 @@ public static class InputLine
         {
             ct.ThrowIfCancellationRequested();
             var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
+            // 含空格的路径**不列**：列了也选不中。
+            //
+            // 列菜单走这里，解析 @token 走 ParseMention / ParseMentionPaths——
+            // 那两处遇空格即止（刻意如此：否则 "@张三 你好" 会被当成路径）。
+            // 于是 My Docs/a.txt 会出现在菜单里，选中后输入行只得到 "@My"，
+            // 发送时展开成「未找到文件: My」，而用户无从知道问题在文件名里的空格。
+            //
+            // 从源头不给出一个选不中的选项，比事后解释更好。
+            // （真要引用这类文件，用户可以直接把路径粘进提示词。）
+            if (rel.Contains(' '))
+                continue;
             if (prefix.Length == 0)
             {
                 items.Add((rel, ""));
