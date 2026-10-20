@@ -111,7 +111,12 @@ public sealed class ClearResetsSessionTotalsTests
         {
             var i = src.IndexOf(cmd, StringComparison.Ordinal);
             Assert.True(i > 0, $"找不到 {cmd}");
-            var slice = src.Substring(i, Math.Min(1200, src.Length - i));
+            // 切到**下一个** case 为止，不能用固定 1200 字符窗口：
+            // 分支里加几行注释就会把那行调用挤出窗口，测试报「缺失」而代码其实没动——
+            // 这种失败指向的是测试自己的魔法数字，不是回归。
+            var next = src.IndexOf("case \"", i + cmd.Length, StringComparison.Ordinal);
+            var end = next > 0 ? next : src.Length;
+            var slice = src[i..end];
             Assert.True(slice.Contains("RestartSessionTimer();", StringComparison.Ordinal),
                 $"{cmd} 之后没有重启会话计时（会话时长会包含被换掉的那段）");
         }

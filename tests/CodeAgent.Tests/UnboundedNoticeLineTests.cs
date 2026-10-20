@@ -133,6 +133,42 @@ public class UnboundedNoticeLineTests
             "这些告警行还在手写标记（应走 FormatNoticeLine/WriteNotice）：\n" + string.Join("\n", offenders));
     }
 
+    [Fact]
+    public void NoUnboundedChineseOutputLine()
+    {
+        // 守卫：Program.cs 里不许再有「裸 Console.WriteLine($"中文…")」这种无宽度收口的输出。
+        //
+        // 这一族散落在 8 处（对话历史标题、当前 Provider、无效编号、撤销提示、
+        // 系统提示标题…），共性是**都不是错误也不需要标记**，于是当初没走
+        // FormatNoticeLine / FormatResultLine——但那些函数管的正是「按宽度收口」，
+        // 与是不是错误无关。结果就是窄终端上它们自己折行，把紧跟其后的
+        // 对齐列表（/history、/sessions、/undo list）整体推歪。
+        //
+        // 例外：纯 ASCII 的版本号/路径回显不受影响，所以只扫含中文的行。
+        // 另排除固定短句（「已中断」这类 3 个字的常量和版本横幅）——
+        // 它们不随用户输入变长，加宽度收口只是噪音。
+        var shortLiterals = new[] { "已中断", "LLM 驱动的编码助手 CLI" };
+        var source = File.ReadAllText(FindSource("Program.cs")).Replace("\r\n", "\n");
+        var offenders = source
+            .Split('\n')
+            .Select((line, i) => (line, i))
+            .Where(x =>
+            {
+                var t = x.line.Trim();
+                if (!t.StartsWith("Console.WriteLine($\"", StringComparison.Ordinal))
+                    return false;
+                if (t.Contains("ConsoleColumns()", StringComparison.Ordinal))
+                    return false;
+                if (shortLiterals.Any(s => t.Contains(s, StringComparison.Ordinal)))
+                    return false;
+                return t.Any(c => c >= '\u4e00' && c <= '\u9fff');
+            })
+            .Select(x => $"第 {x.i + 1} 行: {x.line.Trim()}")
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "这些输出行没有宽度收口（应走 FormatResultLine/FormatNoticeLine）：\n" + string.Join("\n", offenders));
+    }
+
     private static string FindSource(string name)
     {
         var dir = AppContext.BaseDirectory;

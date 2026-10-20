@@ -215,11 +215,11 @@ internal static class Program
             var target = Path.Combine(Environment.CurrentDirectory, "codeagent.json");
             if (File.Exists(target))
             {
-                Console.WriteLine($"codeagent.json 已存在: {target}（未覆盖——误删配置防护；删除后重跑 --init 可重新生成）");
+                Console.WriteLine(Program.FormatNoticeLine($"codeagent.json 已存在: {target}（未覆盖——误删配置防护；删除后重跑 --init 可重新生成）", Program.ConsoleColumns()));
                 return 0;
             }
             AgentConfig.WriteExample(target);
-            Console.WriteLine($"已生成示例配置: {target}");
+            Console.WriteLine(Program.FormatResultLine($"已生成示例配置: {target}", Program.ConsoleColumns()));
             Console.WriteLine(FormatResultLine("提示: 也可运行 codeagent --setup 用向导快速配置供应商。", ConsoleColumns()));
             Console.WriteLine(FormatResultLine("请填入 API Key（或设置对应环境变量），然后运行 codeagent。", ConsoleColumns()));
             return 0;
@@ -595,7 +595,7 @@ internal static class Program
                     }
                     // 60 是**显示列数**预算（这一行要占满终端宽度），所以按列截。
                     // TruncateLine 按字符切，中文会切出 120 列的一行。
-                    Console.WriteLine($"{SafeColor.Glyphs.Retry} 重试上一条请求: {InputLine.FitToWidth(agent.LastPrompt, 60)}");
+                    Console.WriteLine(FormatResultLine($"{SafeColor.Glyphs.Retry} 重试上一条请求: {InputLine.FitToWidth(agent.LastPrompt, 60)}", ConsoleColumns()));
                     line = agent.LastPrompt; // 作为普通请求重新执行
                 }
                 else
@@ -1186,10 +1186,10 @@ internal static class Program
         if (last is { } n && n < msgs.Count)
         {
             msgs = msgs[^n..];
-            Console.WriteLine($"对话历史（最近 {n} 条，共 {agent.Messages.Count(m => m.Role != MessageRole.System)} 条）:");
+            Console.WriteLine(FormatResultLine($"对话历史（最近 {n} 条，共 {agent.Messages.Count(m => m.Role != MessageRole.System)} 条）:", ConsoleColumns()));
         }
         else
-            Console.WriteLine($"对话历史（{msgs.Count} 条）:");
+            Console.WriteLine(FormatResultLine($"对话历史（{msgs.Count} 条）:", ConsoleColumns()));
         var historyWidth = ConsoleColumns();
         var rows = new List<(string Role, string Content, bool IsError)>(msgs.Count);
         foreach (var m in msgs)
@@ -3817,7 +3817,7 @@ internal static class Program
                 // 切换供应商（无需重启）：-p 只在启动时生效，会话内曾只能改配置文件
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    Console.WriteLine($"当前 Provider: {config.Provider}（/provider <名> 切换，/providers 查看全部）");
+                    Console.WriteLine(FormatResultLine($"当前 Provider: {config.Provider}（/provider <名> 切换，/providers 查看全部）", ConsoleColumns()));
                 }
                 else
                 {
@@ -3884,7 +3884,7 @@ internal static class Program
                             }
                             else
                             {
-                                Console.WriteLine($"无效编号（可选 1-{knownModels.Count}，/models 查看）");
+                                Console.WriteLine(FormatNoticeLine($"无效编号（可选 1-{knownModels.Count}，/models 查看）", ConsoleColumns()));
                                 break;
                             }
                         }
@@ -4083,7 +4083,7 @@ internal static class Program
                     {
                         var n = agent.Context.Undo.Count;
                         agent.Context.Undo.Clear();
-                        Console.WriteLine($"已清空 {n} 条撤销记录（已写入文件的修改不会被回滚）。");
+                        Console.WriteLine(FormatNoticeLine($"已清空 {n} 条撤销记录（已写入文件的修改不会被回滚）。", ConsoleColumns()));
                     }
                 }
                 else if (string.IsNullOrWhiteSpace(rest))
@@ -4099,7 +4099,7 @@ internal static class Program
                     }
                     else
                     {
-                        Console.WriteLine($"可撤销操作（编号 1 = 最近;输入编号撤销到该步,回车撤销最近一次,其他取消）:\n{list}");
+                        Console.WriteLine(FormatResultLine($"可撤销操作（编号 1 = 最近;输入编号撤销到该步,回车撤销最近一次,其他取消）:\n{list}", ConsoleColumns()));
                         var pick = Console.ReadLine()?.Trim();
                         if (int.TryParse(pick, out var sel) && sel >= 1)
                         {
@@ -4128,7 +4128,7 @@ internal static class Program
                     // /diff <N>：只看倒数第 N 条改动（1 = 最近），多条改动时免翻全量
                     var nthDiff = agent.Context.Undo.DiffAt(diffN);
                     if (nthDiff is null)
-                        Console.WriteLine($"没有第 {diffN} 条改动记录（/undo list 查看现有条数）。");
+                        Console.WriteLine(FormatNoticeLine($"没有第 {diffN} 条改动记录（/undo list 查看现有条数）。", ConsoleColumns()));
                     else
                         PrintColoredDiff(nthDiff);
                 }
@@ -4179,7 +4179,9 @@ internal static class Program
                     }
                     else
                     {
-                        Console.WriteLine($"已保存的会话（{sessions.Count} 个，新 {SafeColor.Glyphs.Arrow} 旧）:");
+                        // 标题同样要按宽度收敛——紧邻的 FormatResultLine 都传了 ConsoleColumns()，
+                        // 只有它漏了：会话名很长或终端很窄时标题自己折行，把下面的对齐列表推歪。
+                        Console.WriteLine(FormatResultLine($"已保存的会话（{sessions.Count} 个，新 {SafeColor.Glyphs.Arrow} 旧）:", ConsoleColumns()));
                         // 名称列对齐：原本 "  名称（相对时间）" 各行年龄起始位置参差
                         Console.WriteLine(FormatHelpList(
                             sessions.Select(s => new HelpEntry(s.Item1, $"（{s.Item2}）")).ToList(),
@@ -4332,7 +4334,7 @@ internal static class Program
                                 WriteNotice($"跳过快照 {name}: {ex.Message}");
                             }
                         }
-                        Console.WriteLine($"共处理 {ok} 个会话。");
+                        Console.WriteLine(FormatResultLine($"共处理 {ok} 个会话。", ConsoleColumns()));
                         break;
                     }
                     if (arg.Length > 0 && agent.SessionExists(arg))
@@ -4566,7 +4568,7 @@ internal static class Program
                         // 只回显**开头一点**当预览，所以整行要留在终端宽度内：按显示列数截。
                         // 另注意旧写法的 `…` 是多余的——FitToWidth 自己会补省略号，
                         // 拼上第二个只会让人以为预览被截了两刀。
-                        Console.WriteLine($"已复制最近一条回复（{InputLine.FitToWidth(lastReply.Content!, 40)}）到剪贴板。");
+                        Console.WriteLine(FormatResultLine($"已复制最近一条回复（{InputLine.FitToWidth(lastReply.Content!, 40)}）到剪贴板。", ConsoleColumns()));
                     else
                         // 失败分支走统一告警渲染：手写 ⚠ 前缀既没有宽度处理
                         // （长的那句提示在窄终端会折行），也容易和 FormatNoticeLine 的标记重复。
@@ -4588,7 +4590,7 @@ internal static class Program
                             ? $"code（{injected}）"
                             : "code（配置的 systemPrompt）"
                         : $"模式 {agent.CurrentMode.Name}";
-                    Console.WriteLine($"系统提示（来源: {source}；{p.Length:N0} 字符，截断显示 2000）:");
+                    Console.WriteLine(FormatResultLine($"系统提示（来源: {source}；{p.Length:N0} 字符，截断显示 2000）:", ConsoleColumns()));
                     Console.WriteLine(TextUtil.Truncate(p, 2000));
                 }
                 break;
