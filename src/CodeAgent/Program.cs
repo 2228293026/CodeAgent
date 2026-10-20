@@ -4557,11 +4557,16 @@ internal static class Program
 
             case "/prompt":
                 {
-                    // 查看当前生效的系统提示（模式提示 + ADOFAI 注入等叠加后的实际值）
+                    // 查看当前生效的系统提示（模式提示 + 规则文件 + ADOFAI 注入等叠加后的实际值）
                     var p = agent.CurrentSystemPrompt;
+                    // 会话级注入是两个来源叠加的（项目规则文件 + ADOFAI），
+                    // 只说 ADOFAI 会让用户以为规则文件没生效——而它明明就在下面显示着。
+                    var injected = RuleFile(Environment.CurrentDirectory) is not null
+                        ? "含项目规则文件与会话级运行时注入（如 ADOFAI 上下文）"
+                        : "含会话级运行时注入（如 ADOFAI 上下文）";
                     var source = agent.CurrentMode.Name.Equals("code", StringComparison.OrdinalIgnoreCase)
                         ? config.SessionOnlySystemPrompt is not null
-                            ? "code（含会话级运行时注入，如 ADOFAI 上下文）"
+                            ? $"code（{injected}）"
                             : "code（配置的 systemPrompt）"
                         : $"模式 {agent.CurrentMode.Name}";
                     Console.WriteLine($"系统提示（来源: {source}；{p.Length:N0} 字符，截断显示 2000）:");
