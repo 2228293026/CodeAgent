@@ -1042,11 +1042,28 @@ public sealed partial class Agent
                         var columns = ConsoleColumns();
                         // 排队字数每帧重取：用户可能正在打字，这个数一直在变
                         var queued = QueuedCharsProvider?.Invoke() ?? 0;
+                        // label 必须在**裁剪之前**算进预算。
+                        //
+                        // 原来是先按整个终端宽度裁剪、再把 label 拼到前面：
+                        // BuildSpinnerLine 以为自己独占 columns 列，于是把提示/token/用时
+                        // 一个不少地留着，拼上 13 个汉字的 label（26 列）之后整行溢出。
+                        // 而 spinner 是 \r 原地重写的一行，**一折行就会留下擦不掉的残字**，
+                        // 输入块也会被撑成两行、之后每次重绘的光标定位都偏——
+                        // 上面 1040 行那段注释说的正是这件事。
+                        var head = label is null ? "" : $"{label}{SafeColor.Glyphs.SegmentSeparator}";
+                        var innerWidth = columns > 0
+                            ? Math.Max(1, columns - TextUtil.DisplayWidth(head))
+                            : columns; // 宽度未知：不猜，保持原行为
                         var frame_text = label is null
-                            ? BuildSpinnerLine(f, _turnSw.Elapsed, total, SpinnerHint(columns), columns, queued)
-                            : BuildSpinnerLine(f, _spinnerSw.Elapsed, total, SpinnerHint(columns), columns, queued);
+                            ? BuildSpinnerLine(f, _turnSw.Elapsed, total, SpinnerHint(columns), innerWidth, queued)
+                            : BuildSpinnerLine(f, _spinnerSw.Elapsed, total, SpinnerHint(columns), innerWidth, queued);
                         if (label is not null && frame_text.Length > 0)
-                            frame_text = $"{label}{SafeColor.Glyphs.SegmentSeparator}{frame_text}";
+                            frame_text = head + frame_text;
+                        // 极端情况：label 自己就比终端宽（窄终端 + 长中文提示）。
+                        // 此时宁可**把 label 截断**也不能让它把行撑破——
+                        // 折行的代价是残字和后续所有重绘错位，而截断只是少看几个字。
+                        if (columns > 0 && TextUtil.DisplayWidth(frame_text) > columns)
+                            frame_text = TextUtil.TakeDisplayWidth(frame_text, columns);
                         _spinnerLastWidth = TextUtil.DisplayWidth(frame_text);
                         Console.Write("\r" + frame_text);
                     }
