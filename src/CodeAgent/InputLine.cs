@@ -1885,6 +1885,7 @@ public static class InputLine
                                 if (searchFrom >= 0)
                                 {
                                     SetBuf(session, buf, searchFrom);
+                                    idx = searchFrom; // idx 是「在第几条」的唯一真相，必须跟着
                                     inputExpanded = false;
                                 }
                                 RedrawInput();
@@ -2255,6 +2256,14 @@ public static class InputLine
                             searching = true;
                             searchQuery.Clear();
                             searchFrom = -1;
+                            // 留住正在编辑的草稿：命中后 SetBuf 会把 buf 整个覆写，
+                            // 此时那半句已经没有任何地方存放。
+                            //
+                            // 与 ↑/↓ 浏览历史同一条规矩（`if (draft is null)`）：
+                            // 已经在浏览历史时 draft 里存的是「浏览之前」的草稿，
+                            // 不能被当前 buf（某条历史）覆盖。
+                            if (draft is null)
+                                draft = buf.Text;
                             RedrawInput();
                         }
                         else
@@ -2264,6 +2273,10 @@ public static class InputLine
                             {
                                 searchFrom = next;
                                 SetBuf(session, buf, next);
+                                // idx 必须跟着走：它是「当前在第几条历史」的唯一真相，
+                                // 而 SetBuf 只换内容。两者脱节后 ↓ 会以为还在底部、
+                                // 直接跳过「回到底部恢复草稿」那一支——原草稿再也找不回来。
+                                idx = next;
                                 inputExpanded = false;
                                 RedrawInput();
                             }
@@ -2291,6 +2304,7 @@ public static class InputLine
                                 if (searchFrom >= 0)
                                 {
                                     SetBuf(session, buf, searchFrom);
+                                    idx = searchFrom; // 同上：不跟就会丢掉「回到底部恢复草稿」
                                     inputExpanded = false;
                                 }
                                 RedrawInput();
