@@ -2608,11 +2608,19 @@ internal static class Program
         return t.Length >= 1 && t[0] == BangPrefix && t[1..].Trim().Length == 0;
     }
 
-    /// <summary>裸叹号的用法提示（纯渲染，好测）。</summary>
+    /// <summary>裸叹号的用法提示（纯渲染，好测）。
+    ///
+    /// body **不许**自带标记：<see cref="FormatNoticeLine"/> 会加。
+    /// 此前这里手写了 ⚠，于是行首变成「⚠ ⚠ 叹号后面…」——
+    /// 双标记看起来像渲染出错，用户第一反应是「这程序是不是坏了」，
+    /// 而不是去读提示内容。
+    ///
+    /// 宽度为 0 时也必须走 FormatNoticeLine：它已经处理了「未知宽度不截断」，
+    /// 手写的 else 分支反而把标记漏掉了。</summary>
     internal static string FormatBareBangHint(int width = 0)
     {
-        var body = $"{SafeColor.Glyphs.Warn} 叹号后面要接 shell 命令，例如：! dotnet build、! git status。只想输入叹号请直接用中文表述。";
-        return width > 0 ? FormatNoticeLine(body, width) : body;
+        var body = "叹号后面要接 shell 命令，例如：! dotnet build、! git status。只想输入叹号请直接用中文表述。";
+        return FormatNoticeLine(body, width);
     }
 
     /// <summary>这一行是不是"只敲了一个 @"（<c>@</c> 或 <c>@   </c>）。
@@ -2628,11 +2636,11 @@ internal static class Program
         return t.Length >= 1 && t[0] == '@' && t[1..].Trim().Length == 0;
     }
 
-    /// <summary>裸 @ 的用法提示（纯渲染，好测）。</summary>
+    /// <summary>裸 @ 的用法提示（纯渲染，好测）。body 同理**不许**自带标记，见 FormatBareBangHint。</summary>
     internal static string FormatBareAtHint(int width = 0)
     {
-        var body = $"{SafeColor.Glyphs.Warn} @ 后面要接工作区里的文件或目录路径，例如：@src/Program.cs。Tab 可在列表里选。";
-        return width > 0 ? FormatNoticeLine(body, width) : body;
+        var body = "@ 后面要接工作区里的文件或目录路径，例如：@src/Program.cs。Tab 可在列表里选。";
+        return FormatNoticeLine(body, width);
     }
 
     /// <summary>bash 模式的执行行：<c>! ls -la</c>，命令过长时按宽度收敛。
@@ -3683,7 +3691,12 @@ internal static class Program
         // 真的离所有取值都很远时，剔完就空了，也就自然不打这一行。
         var usable = near.Where(n => !string.Equals(n, given.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
         if (usable.Length > 0)
-            lines.Add(width > 0 ? FormatNoticeLine($"  你是不是想: {string.Join("、", usable)}", width) : $"  你是不是想: {string.Join("、", usable)}");
+        {
+            // 字面量只写一遍：写两遍的版本在改文案时必然只改一处，
+            // 于是宽/窄终端下显示成两句话。这行本来就短，抽取没有额外代价。
+            var hint = $"  你是不是想: {string.Join("、", usable)}";
+            lines.Add(width > 0 ? FormatNoticeLine(hint, width) : hint);
+        }
         return lines;
     }
     private static bool HandleCommand(
