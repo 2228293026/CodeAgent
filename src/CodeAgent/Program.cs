@@ -263,6 +263,31 @@ internal static class Program
             return 0;
         }
 
+        // 规则文件（AGENTS.md / CLAUDE.md / .cursorrules）的内容注入系统提示。
+        //
+        // 这里修的是一个**名不副实**的缺陷：横幅一直打印「已加载 AGENTS.md: 路径」，
+        // 而 RuleFile 只返回路径——全项目没有任何一处读过它的内容。
+        // 用户按约定把项目规则写进 AGENTS.md，模型却完全看不到，
+        // 比「不支持这个功能」更糟：用户会以为规则生效了，只是模型不听话。
+        //
+        // 注入位置与会话级字段：不写 config.SystemPrompt，否则任何一条
+        // 会保存配置的命令（/model、/thinking、/access）都会把整个 AGENTS.md
+        // 永久复制进用户的 codeagent.json。
+        var ruleFile = RuleFile(Environment.CurrentDirectory);
+        if (ruleFile is not null)
+        {
+            var rules = ReadRuleFile(ruleFile);
+            if (rules is { Length: > 0 })
+            {
+                var basePrompt = config.SessionOnlySystemPrompt ?? config.SystemPrompt;
+                config.SessionOnlySystemPrompt =
+                    basePrompt
+                    + $"\n\n[项目规则文件 {Path.GetFileName(ruleFile)}]\n"
+                    + rules
+                    + $"\n[/项目规则文件 {Path.GetFileName(ruleFile)}]";
+            }
+        }
+
         // ADOFAI mod 项目自动适配：检测到项目特征（Info.json 入口声明或 Assembly-CSharp.dll 引用）时，
         // 注入专属开发上下文（系统提示）与 moddev/harmony/assetbundle 工作模式。
         // 仅当用户未自定义 systemPrompt 时追加知识；用户自定义的 modes 同名项优先保留。
@@ -274,7 +299,11 @@ internal static class Program
             {
                 // 只写入会话级字段：/model、/thinking、/access 等命令会保存整个 config，
                 // 直接改 SystemPrompt 会把注入的 mod 上下文永久写进用户的 codeagent.json
-                var injected = config.SystemPrompt + "\n\n" + AdofaiContext.ExtraSystemPrompt;
+                // 基串取 SessionOnlySystemPrompt：规则文件（AGENTS.md）已注入在那里，
+                // 直接写 config.SystemPrompt 会把它整个覆盖掉——
+                // 一个 mod 项目里同时写了 AGENTS.md 时，项目规则会静默失效。
+                var adofaiBase = config.SessionOnlySystemPrompt ?? config.SystemPrompt;
+                var injected = adofaiBase + "\n\n" + AdofaiContext.ExtraSystemPrompt;
                 // 知识库文件存在时给出明确路径，Agent 开发前先 read_file 阅读
                 var knowledge = AdofaiContext.FindKnowledgeBase(Environment.CurrentDirectory);
                 if (knowledge is not null)
@@ -3465,6 +3494,33 @@ internal static class Program
     {
         var len = width <= 0 ? BannerRuleWidth : Math.Clamp(width, 1, BannerRuleWidth);
         return new string(SafeColor.Glyphs.RuleChar, len);
+    }
+
+    /// <summary>读取规则文件内容并做安全收口；读不到（权限/编码）时返回 null 而非抛异常。
+    ///
+    /// 两个必须收口的量：
+    ///   · **总长**：有人把整份 API 文档贴进 AGENTS.md，几十万字符会直接吃掉整个窗口，
+    ///     于是「帮我看个 bug」都还没说就没上下文了。截断但保留头尾，与 stdin 同一取舍。
+    ///   · **编码**：默认 UTF-8 读，遇到 BOM 或坏字节不要整个失败——
+    ///     规则文件读不到只该少一段上下文，不该让程序起不来。
+    /// </summary>
+    internal const int MaxRuleFileChars = 30_000;
+
+    internal static string? ReadRuleFile(string path)
+    {
+        try
+        {
+            var text = File.ReadAllText(path).Trim();
+            if (text.Length == 0)
+                return null;
+            if (text.Length <= MaxRuleFileChars)
+                return text;
+            var kept = TextUtil.TruncateHeadTail(text, MaxRuleFileChars);
+            return kept + $"\n\n[规则文件共 {text.Length:N0} 字符，已保留头尾共 {kept.Length:N0} 字符]\n";
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (ArgumentException) { return null; }
     }
 
     /// <summary>向上找规则文件：<c>AGENTS.md</c> 优先，其次 <c>CLAUDE.md</c>、<c>.cursorrules</c>。
