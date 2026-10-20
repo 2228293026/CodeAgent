@@ -667,7 +667,21 @@ public static class InputLine
         var head = num + PadToDisplayWidth(FitToWidth(name, nameBudget), nameBudget) + " ";
         var remain = budget - DisplayWidth(head);
         if (remain < MinMenuDescWidth)
-            return head.TrimEnd() + " " + SafeColor.Glyphs.Ellipsis;
+        {
+            // 省略号只在**真的放得下**时才加。
+            //
+            // 此前无条件写 `head.TrimEnd() + " " + 省略号`：head 含尾部空格已经占满
+            // budget（remain = 0），拼接后是 budget + 1 列——每一条窄终端菜单都多出一列，
+            // 折行后块高算错，菜单一帧帧往下爬。
+            //
+            // 省略号的作用是提示「后面还有内容」；放不下它时，head 本身已经被截断过，
+            // 那个「…」在名称列里已经出现过一次，不差这一处。
+            var trimmed = head.TrimEnd();
+            var withMark = trimmed + " " + SafeColor.Glyphs.Ellipsis;
+            return DisplayWidth(withMark) <= budget
+                ? withMark
+                : InputLine.FitToWidth(trimmed, budget);
+        }
         return head + FitToWidth(desc, remain);
     }
 
@@ -855,7 +869,7 @@ public static class InputLine
     /// 被丢掉的那部分此前**一个字都没提**。用户翻到列表底部，看到的就是"全部"，
     /// 于是认定某个文件不存在——它其实在，只是排在第 201 名之后。
     ///
-    /// 列表里有滚动的 <c>... (+N more)</c>，但那是**窗口**滚过去的，不是被丢掉��，
+    /// 列表里有滚动的 <c>... (+N more)</c>，但那是**窗口**滚过去的，不是被丢掉的，
     /// 两回事：用户看到 <c>(+N more)</c> 就以为还有更多可滚动，实际已经到底了。
     ///
     /// 说实话比省三个字符重要：这里报一个假的"全部"会让用户去找不存在的问题。</summary>
