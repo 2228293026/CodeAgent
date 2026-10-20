@@ -1263,9 +1263,24 @@ public sealed class ConsoleRenderer
         // \| 是表格内的字面竖线；连续反斜杠按奇偶判定：奇数转义，偶数后的 | 仍为分隔符。
         var cells = new List<string>();
         var sb = new StringBuilder();
+        // 行内代码里的 | 是**内容**，不是列分隔符（Markdown 规范：代码段按字面处理）。
+        //
+        // 切分发生在行内代码解析之前，此时还没人知道这一段在反引号里——
+        // 所以这里自己数一遍。漏了的表现：用户写 `` `a | b` `` 想要一格，
+        // 得到两格，而错位没有任何提示。
+        var inCode = false;
         for (int i = 0; i < s.Length; i++)
         {
-            if (s[i] == '|' && IsEscapedPipe(s, i))
+            if (s[i] == '`' && !IsEscapedPipe(s, i))
+            {
+                inCode = !inCode; // 开/闭成对翻转；未闭合时到行尾自然失效
+                sb.Append(s[i]);
+            }
+            else if (s[i] == '|' && inCode)
+            {
+                sb.Append('|'); // 代码段内的竖线：原样保留
+            }
+            else if (s[i] == '|' && IsEscapedPipe(s, i))
             {
                 if (sb.Length > 0 && sb[^1] == '\\') sb.Length--; // 消费一个转义反斜杠
                 sb.Append('|');
