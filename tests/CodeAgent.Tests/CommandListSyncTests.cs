@@ -64,7 +64,7 @@ public sealed class CommandListSyncTests
         {
             "/help", "/clear", "/compact", "/cls", "/model", "/provider", "/copy",
             "/prompt", "/files", "/config", "/session", "/setup", "/undo", "/diff",
-            "/save", "/load", "/export", "/stats", "/status", "/context", "/retry", "/tools",
+            "/save", "/load", "/export", "/stats", "/status", "/context", "/init", "/retry", "/tools",
             "/providers", "/models", "/diag", "/history", "/resume", "/find",
             "/thinking", "/shell", "/mode", "/access", "/exit", "/quit",
         })
