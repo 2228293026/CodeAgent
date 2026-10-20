@@ -343,6 +343,10 @@ internal static class Program
         // 的旧 system 提示换成当前模式的提示词
         if (continueLast || resumeIndex > 0)
         {
+            // 取用下标只需要前 resumeIndex 条，但**不能**拿这同一个截断列表去报上限：
+            // max 正是用户给的编号，于是 logs.Count 至多等于它，提示成了循环论证——
+            // `--resume 99` 在有 3 个日志的机器上提示「可用 1-99」，照着再敲还是 99。
+            // 越界时另行全量扫描（见下），只在错误路径上付代价。
             var logs = RecentSessionLogs(config, Math.Max(resumeIndex, 1));
             string? target = null;
             if (resumeIndex > 0)
@@ -350,7 +354,11 @@ internal static class Program
                 if (resumeIndex <= logs.Count)
                     target = logs[resumeIndex - 1];
                 else
-                    Console.WriteLine($"{SafeColor.Glyphs.Warn} --resume 编号超出范围（可用 1-{logs.Count}）。");
+                {
+                    // 越界时 logs 已被 max 截断，报真实总数得再数一次（仅在出错路径上付代价）
+                    var actual = RecentSessionLogs(config, int.MaxValue).Count;
+                    Console.WriteLine($"{SafeColor.Glyphs.Warn} --resume 编号超出范围（可用 1-{actual}）。");
+                }
             }
             else if (logs.Count > 0)
                 target = logs[0];
