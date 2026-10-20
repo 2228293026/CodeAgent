@@ -82,7 +82,7 @@ internal static class Program
         return sha.Length > 7 ? sha[..7] : sha;
     }
 
-    /// <summary>把控制台输出编码设为 UTF-8，让 `── {SafeColor.Glyphs.Ok} ⚠ ⏵ …` 这些 UI 字符正确显示。
+    /// <summary>把控制台输出编码设为 UTF-8，让 `── ✓ ⚠ ⏵ …` 这些 UI 字符正确显示。
     ///
     /// 这一步**绝不能抛**：它发生在 Main 的第一行，抛出去就是「启动即崩」，
     /// 屏幕上什么都看不到、也没有任何提示。而设置编码在若干环境下确实会抛：
@@ -574,7 +574,7 @@ internal static class Program
                     if (suppress)
                     {
                         switchBlockActive = true;
-                        // 空行并清整行：覆盖路径下新提示符可能比旧的短（[explain|…]{SafeColor.Glyphs.Arrow}[doc|…]），清掉行尾残字符
+                        // 空行并清整行：覆盖路径下新提示符可能比旧的短（[explain|…]→[doc|…]），清掉行尾残字符
                         Console.Write(ansiOk ? "\r\n\x1b[2K" : "\n");
                         inlinePrompt = PromptFor(opts, agent).TrimStart('\n');
                     }
@@ -1221,8 +1221,8 @@ internal static class Program
     internal static int HistoryTagWidth(IEnumerable<string> tags) =>
         tags.Select(t => TextUtil.DisplayWidth(t)).DefaultIfEmpty(0).Max();
 
-    /// <summary>回合摘要的可丢段优先级：费用 {SafeColor.Glyphs.Arrow} 缓存比例 {SafeColor.Glyphs.Arrow} 思考耗时 {SafeColor.Glyphs.Arrow} 本回合 token 明细。
-    /// 固定段保留「{SafeColor.Glyphs.Ok} 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
+    /// <summary>回合摘要的可丢段优先级：费用 → 缓存比例 → 思考耗时 → 本回合 token 明细。
+    /// 固定段保留「✓ 完成 + 轮数 + 工具调用数 + 总耗时」——这四项是回合结论的核心。
     /// 可丢段丢完仍超宽时先**脱掉装饰外框**（纯装饰，省 13 列），最后才硬截。</summary>
     /// <summary>任务清单面板（学自 Claude Code 的 TodoWrite 面板）：每个任务独占一行。
     /// 空清单返回空串——不打印"暂无任务"，那是一行没信息量的噪音。</summary>
@@ -1466,9 +1466,9 @@ internal static class Program
             showFrame = false;
             text = Render();
         }
-        // 连核心段都放不下时按语义再丢：工具次数 {SafeColor.Glyphs.Arrow} 耗时 {SafeColor.Glyphs.Arrow} 轮数。
+        // 连核心段都放不下时按语义再丢：工具次数 → 耗时 → 轮数。
         // 绝不让 FitToWidth 把 12.3s 切成「12.…」——半个数字看起来像个完整但不同的值，
-        // 比干脆不显示更容易误导。丢到只剩「{SafeColor.Glyphs.Ok} 完成」后它几乎在任何终端都放得下。
+        // 比干脆不显示更容易误导。丢到只剩「✓ 完成」后它几乎在任何终端都放得下。
         var coreDrops = new Action[]
         {
             () => showCalls = false,
@@ -1621,7 +1621,7 @@ internal static class Program
             Console.WriteLine(hint);
     }
     /// <summary>
-    /// 配置写回路径：-c 显式路径 {SafeColor.Glyphs.Arrow} 实际加载的来源文件（可能是 ~/.codeagent/config.json）{SafeColor.Glyphs.Arrow} 默认当前目录。
+    /// 配置写回路径：-c 显式路径 → 实际加载的来源文件（可能是 ~/.codeagent/config.json）→ 默认当前目录。
     /// 忽略来源文件时，从主目录配置启动的 /model 会把半份配置写进 cwd 的新 codeagent.json，配置被一分为二。
     /// </summary>
     internal static string ConfigSavePath(string? configPath, AgentConfig config) =>
@@ -1629,7 +1629,7 @@ internal static class Program
         : !string.IsNullOrWhiteSpace(config.SourceFile) ? config.SourceFile
         : "codeagent.json";
 
-    /// <summary>已保存的命名会话（新 {SafeColor.Glyphs.Arrow} 旧，附相对时间）。/load 无参数列表用。</summary>
+    /// <summary>已保存的命名会话（新 → 旧，附相对时间）。/load 无参数列表用。</summary>
     internal static IReadOnlyList<(string Name, string Age)> SavedSessions(string sessionDir)
     {
         try
@@ -1839,7 +1839,7 @@ internal static class Program
     /// ②文件标题/文件头行按**尾部保留**缩短路径：硬截尾部会让人误以为是另一个文件；
     /// ③`+`/`-` 内容行必须带 `…` 标记：被截掉的 +行看起来就是"新增了这么多"，
     ///   用户会以为 diff 本来就这么短。
-    /// ①再窄一档时按 <c>@@ -a,b +c,d @@</c> {SafeColor.Glyphs.Arrow} <c>@@ -a,b +c,d</c> {SafeColor.Glyphs.Arrow} <c>@@</c> 逐级退让，
+    /// ①再窄一档时按 <c>@@ -a,b +c,d @@</c> → <c>@@ -a,b +c,d</c> → <c>@@</c> 逐级退让，
     /// 始终保住 hunk 标记：一旦被裁成 `-12,7…`，行号范围就整个丢了，
     /// 而行号正是这里唯一不可替代的信息。</summary>
     internal static string FormatDiffLine(string line, int width)
@@ -2041,7 +2041,7 @@ internal static class Program
         // 模式名本身（CJK 双宽）就超宽：截短模式但**绝不去掉**——没有模式的提示符没有意义。
         //
         // 这里曾直接 `max(1, budget - 6)` 然后无脑拼 "[模式…]> "，于是两处不对：
-        // ① 固定开销写死 6，ASCII 退回（省略号 1 列 {SafeColor.Glyphs.Arrow} 3 列）后就不准了；
+        // ① 固定开销写死 6，ASCII 退回（省略号 1 列 → 3 列）后就不准了；
         // ② 预算只剩几列时，"至少留 1 列给模式名"这个下限反而让**整体超宽**
         //    （实测 width=12 时提示符 6 列 > 预算 4 列）——而提示符超宽会把整行
         //    输入顶到折行，正是这个函数要避免的事。
@@ -2156,7 +2156,7 @@ internal static class Program
     internal static string FormatConfirmLine(string body, int width = 0, string? marker = null) =>
         FormatNoticeLine(body, width, marker ?? SafeColor.Glyphs.OkCheck);
 
-    /// <summary>取消提示行：`{SafeColor.Glyphs.Stop} 正文`。
+    /// <summary>取消提示行：`⏹ 正文`。
     /// 与 ✔（成功）、⚠（错误）构成三类可一眼分辨的结局标记。
     /// 此前取消提示散落各处且形态不一（有的带 ⏹、有的什么都不带），
     /// 用户扫读时无法用统一规则找出「这一轮发生了什么」。</summary>
@@ -2659,7 +2659,7 @@ internal static class Program
 
     /// <summary>
     /// 组装状态栏并在窄终端下按优先级丢段，保证输出永远不超过 <paramref name="width"/> 列。
-    /// 固定段：⏵ 模式 · 模型 · 目录；可丢段（由低到高）：思考强度 {SafeColor.Glyphs.Arrow} 本回合 token {SafeColor.Glyphs.Arrow} 上下文 {SafeColor.Glyphs.Arrow} git 分支。
+    /// 固定段：⏵ 模式 · 模型 · 目录；可丢段（由低到高）：思考强度 → 本回合 token → 上下文 → git 分支。
     /// 全部丢完仍超宽时按显示宽度硬截断（CJK/emoji 占 2 列）。
     /// </summary>
     /// <summary>路径按显示宽度缩短：保留**末尾**分段（路径最有信息量的是末段），
@@ -2670,7 +2670,7 @@ internal static class Program
         if (budget <= 0 || TextUtil.DisplayWidth(path) <= budget)
             return path;
         var separator = path.Contains('\\', StringComparison.Ordinal) && !path.Contains('/', StringComparison.Ordinal) ? '\\' : '/';
-        // 省略号宽度随 ASCII 变化（1 列 {SafeColor.Glyphs.Arrow} 3 列），下面所有预算都用实测值，不写死 1
+        // 省略号宽度随 ASCII 变化（1 列 → 3 列），下面所有预算都用实测值，不写死 1
         var dots = SafeColor.Glyphs.Ellipsis;
         var ellipsis = dots + separator;
         var segments = path.Split(separator);
@@ -2699,8 +2699,8 @@ internal static class Program
 
     /// <summary>
     /// 状态栏分段降级顺序。优先级由「现在最需要知道什么」决定：
-    /// 模式/模型在行首（永不丢）{SafeColor.Glyphs.Arrow} ctx 百分比（离上限还有多远，最该盯）{SafeColor.Glyphs.Arrow} 本回合 token（花了多少）
-    /// {SafeColor.Glyphs.Arrow} 目录（自带缩_shortening阶梯_，其次）{SafeColor.Glyphs.Arrow} 分支/思考档（冷门设置）。
+    /// 模式/模型在行首（永不丢）→ ctx 百分比（离上限还有多远，最该盯）→ 本回合 token（花了多少）
+    /// → 目录（自带缩_shortening阶梯_，其次）→ 分支/思考档（冷门设置）。
     /// 此前把 ctx 排在目录缩短**之前**丢，于是长路径场景下最有操作价值的
     /// 「上下文用了多少」先消失，剩下一堆静态信息。
     /// </summary>
@@ -2768,7 +2768,7 @@ internal static class Program
         }
 
         var text = Render();
-        // 第一轮：丢冷门段（速率 {SafeColor.Glyphs.Arrow} 思考档 {SafeColor.Glyphs.Arrow} 分支 {SafeColor.Glyphs.Arrow} 本回合 token），ctx 保留到最后。
+        // 第一轮：丢冷门段（速率 → 思考档 → 分支 → 本回合 token），ctx 保留到最后。
         // 速率段排第一：它是唯一一段**只描述过去**的信息。
         var drops = new Action[] { () => showRate = false, () => showThink = false, () => showBranch = false, () => showTurn = false };
         for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
@@ -2844,7 +2844,7 @@ internal static class Program
             var done = t?.IsCompletedSuccessfully == true
                 && string.Equals(opts.Model, reasoningProbe?.Model, StringComparison.OrdinalIgnoreCase);
             var efforts = t?.IsCompletedSuccessfully == true ? t.Result : null;
-            // 探测完成且模型未变：显示实际生效档（无支持 {SafeColor.Glyphs.Arrow} off，与 /thinking 的说明一致）；
+            // 探测完成且模型未变：显示实际生效档（无支持 → off，与 /thinking 的说明一致）；
             // 探测中或已换模型（结果作废）：仍只显示 auto
             think = done ? $"think:auto{SafeColor.Glyphs.Arrow}{(efforts is { Count: > 0 } ? efforts[^1] : "off")}" : "think:auto";
         }
@@ -3939,7 +3939,7 @@ internal static class Program
             case "/load":
                 if (string.IsNullOrWhiteSpace(rest))
                 {
-                    // 无参数：列出已保存的命名会话（按保存时间新{SafeColor.Glyphs.Arrow}旧，附相对时间）
+                    // 无参数：列出已保存的命名会话（按保存时间新→旧，附相对时间）
                     var sessions = SavedSessions(Path.Combine(Environment.CurrentDirectory, config.SessionDir));
                     if (sessions.Count == 0)
                     {
@@ -4580,7 +4580,7 @@ internal static class Program
         return idx < 0 ? (line.ToLowerInvariant(), "") : (line[..idx].ToLowerInvariant(), line[(idx + 1)..]);
     }
 
-    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 {SafeColor.Glyphs.Left}。
+    /// <summary>模式列表文本（/mode 无参数用）：当前模式标 ←。
     /// 与 /help、/tools 共用同一宽度自适应渲染器——模式说明是中文，窄终端同样需要折行。
     ///
     /// 每行附**该模式可用工具数**（<paramref name="toolCounts"/> 为空则不附）：
