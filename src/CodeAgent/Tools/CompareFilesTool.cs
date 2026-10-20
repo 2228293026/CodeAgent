@@ -52,10 +52,10 @@ public sealed class CompareFilesTool : ITool
         }
 
         if (string.Equals(leftText, rightText, StringComparison.Ordinal))
-            return $"文件内容相同: {leftPath} ↔ {rightPath}" +
+            return $"文件内容相同: {leftPath} {SafeColor.Glyphs.Left}{SafeColor.Glyphs.Arrow} {rightPath}" +
                    (ignoreWhitespace || ignoreBlankLines ? "（已应用忽略规则）" : "");
 
-        var label = $"{leftPath} → {rightPath}";
+        var label = $"{leftPath} {SafeColor.Glyphs.Arrow} {rightPath}";
         var diff = DiffUtil.Unified(leftText, rightText, label, ct);
         var maxLines = Math.Clamp(ToolArgs.GetInt(args, "max_lines", DefaultOutputLines), 3, MaxOutputLines);
         var lines = diff.Replace("\r\n", "\n").Split('\n');

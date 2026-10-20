@@ -61,7 +61,7 @@ public sealed class WorkflowHygieneReportTool : ITool
             var graph = ParseJobGraph(text);
             totalJobs += graph.Count;
             foreach (var cycle in FindCycles(graph))
-                issues.Add(("依赖环", name, $"{string.Join(" → ", cycle)}（GitHub 会拒绝运行整个工作流）"));
+                issues.Add(("依赖环", name, $"{string.Join($" {SafeColor.Glyphs.Arrow} ", cycle)}（GitHub 会拒绝运行整个工作流）"));
             foreach (var (job, missing) in FindMissingNeeds(graph))
                 issues.Add(("依赖不存在的 job", name, $"{job} 依赖了未定义的 {missing}"));
             var hasCron = Regex.IsMatch(text, @"(?m)^\s*-\s*cron\s*:");
@@ -87,7 +87,7 @@ public sealed class WorkflowHygieneReportTool : ITool
         if (scheduleOnly.Count == 0)
             output.AppendLine("没有「只靠 schedule 触发」的工作流（推代码都会跑）");
         else
-            output.AppendLine($"⚠ 只靠 cron 触发、推送不触发的工作流: {string.Join(", ", scheduleOnly)}");
+            output.AppendLine($"{SafeColor.Glyphs.Warn} 只靠 cron 触发、推送不触发的工作流: {string.Join(", ", scheduleOnly)}");
         return output.ToString().TrimEnd();
     }
 

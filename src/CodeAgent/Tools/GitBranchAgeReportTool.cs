@@ -69,7 +69,7 @@ public sealed class GitBranchAgeReportTool : ITool
         foreach (var branch in branches.Take(maxResults))
         {
             var days = (int)(now - branch.When).TotalDays;
-            var mark = days > staleDays ? " ⚠陈旧" : string.Empty;
+            var mark = days > staleDays ? $" {SafeColor.Glyphs.Warn}陈旧" : string.Empty;
             var head = branch.Name == currentName ? " *" : string.Empty;
             output.AppendLine($"  {branch.When:yyyy-MM-dd} {days,5} 天前 {branch.Sha,-8} {branch.Name}{head}{mark}");
         }

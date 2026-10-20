@@ -74,7 +74,7 @@ public sealed class CodeStyleReportTool : ITool
             + (totalDecls > 0 ? $"（var 占比 {varDecls * 100.0 / totalDecls:0.#}%）" : ""));
         output.AppendLine($"  大括号: K&R（行尾）{kr:N0} / Allman（独占行）{allman:N0}");
         if (kr > 0 && allman > 0)
-            output.AppendLine("  ⚠ 两种大括号风格混用：同一仓库内应统一，便于扫读");
+            output.AppendLine($"  {SafeColor.Glyphs.Warn} 两种大括号风格混用：同一仓库内应统一，便于扫读");
         output.AppendLine($"  缺文件头注释: {missingHeader:N0} 个");
         foreach (var sample in samples)
             output.AppendLine($"    {sample}");

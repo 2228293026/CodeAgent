@@ -71,7 +71,7 @@ public sealed class GitignoreRuleReportTool : ITool
         }
         var output = new StringBuilder();
         output.AppendLine($"Gitignore 规则报告: {patterns.Count} 条规则，{tracked.Count} 个已跟踪文件");
-        Report(output, "被忽略规则命中却仍被追踪", ignoredButTracked.Select(x => $"{x.File} ← {x.Rule}"), maxResults,
+        Report(output, "被忽略规则命中却仍被追踪", ignoredButTracked.Select(x => $"{x.File} {SafeColor.Glyphs.Left} {x.Rule}"), maxResults,
             "这些文件需要 git rm --cached 后 .gitignore 才会生效");
         Report(output, "永不可能生效的否定规则", deadNegations, maxResults, "前缀规则缺失或顺序有误");
         if (ignoredButTracked.Count == 0 && deadNegations.Count == 0)

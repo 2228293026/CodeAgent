@@ -84,11 +84,13 @@ public sealed class GitRemoteSyncReportTool : ITool
                 output.AppendLine($"  {row.Branch} → {row.Upstream}：无法比较{mark}");
                 continue;
             }
-            var state = row.Ahead > 0 && row.Behind > 0 ? "⚠双向分歧"
-                : row.Ahead > 0 ? "↑待推送"
-                : row.Behind > 0 ? "↓待拉取"
-                : "✓ 同步";
-            output.AppendLine($"  {row.Branch} → {row.Upstream}：领先 {row.Ahead} / 落后 {row.Behind} {state}{mark}");
+            // 字形一律走 SafeColor.Glyphs：这些行会出现在工具输出预览里（用户直接看得到），
+            // 写死的话 CODEAGENT_ASCII=1 时终端会吐出一串方块。
+            var state = row.Ahead > 0 && row.Behind > 0 ? $"{SafeColor.Glyphs.Warn}双向分歧"
+                : row.Ahead > 0 ? $"{SafeColor.Glyphs.Up}待推送"
+                : row.Behind > 0 ? $"{SafeColor.Glyphs.TokensOut}待拉取"
+                : $"{SafeColor.Glyphs.Ok} 同步";
+            output.AppendLine($"  {row.Branch} {SafeColor.Glyphs.Arrow} {row.Upstream}：领先 {row.Ahead} / 落后 {row.Behind} {state}{mark}");
         }
         if (rows.Count > maxResults)
             output.AppendLine($"…（另有 {rows.Count - maxResults} 个分支未显示）");

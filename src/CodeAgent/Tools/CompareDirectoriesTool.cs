@@ -58,7 +58,7 @@ public sealed class CompareDirectoriesTool : ITool
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         var compared = Math.Min(common.Count, maxFiles);
         var output = new StringBuilder();
-        output.AppendLine($"目录比较: {leftPath} ↔ {rightPath}");
+        output.AppendLine($"目录比较: {leftPath} {SafeColor.Glyphs.Left}{SafeColor.Glyphs.Arrow} {rightPath}");
         output.AppendLine($"扫描文件: 左 {leftFiles.Count:N0}，右 {rightFiles.Count:N0}；仅左 {onlyLeft.Count:N0}，仅右 {onlyRight.Count:N0}，公共 {common.Count:N0}");
         if (common.Count > compared)
             output.AppendLine($"达到 max_files={maxFiles} 上限，仅比较前 {compared} 个公共文件");

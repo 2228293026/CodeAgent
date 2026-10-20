@@ -1617,6 +1617,32 @@ public sealed partial class Agent
         return $"{ShortenToolName(name, room)}{placeholder}";
     }
 
+    /// <summary>工具输出里的装饰字形 → ASCII 退回落款。
+    ///
+    /// 工具是**独立作者**：60 多个工具各自往输出里写箭头、警告符、对勾。
+    /// 指望它们全走 <c>SafeColor.Glyphs</c> 是不现实的——实测扫出 8 个文件，
+    /// 逐行守卫加上去之后又冒出十几个。逐个改是打地鼠，改完还会再长。
+    ///
+    /// 正确的口子在**显示边界**：工具输出变成屏幕文字只经过这里，
+    /// 在这里统一降级，覆盖率就是 100%，而且新增工具自动受保护。
+    /// </summary>
+    private static readonly (string Glyph, string Ascii)[] ToolGlyphFallbacks =
+    [
+        ("\u2192", "->"), ("\u2190", "<-"), ("\u2194", "<->"), ("\u2191", "^"), ("\u2193", "v"),
+        ("\u26A0", "!"), ("\u2713", "v"), ("\u2714", "v"), ("\u2757", "!"), ("\u25CF", "*"),
+        ("\u00B7", "-"), ("\u2026", "..."), ("\u23F7", "+"), ("\u25B8", ">"), ("\u276F", ">"),
+    ];
+
+    /// <summary>ASCII 模式下把工具输出里的装饰字形换成 ASCII；Unicode 模式下原样返回。</summary>
+    internal static string DegradeToolGlyphs(string text)
+    {
+        if (string.IsNullOrEmpty(text) || !SafeColor.Glyphs.AsciiEnabled)
+            return text;
+        foreach (var (glyph, ascii) in ToolGlyphFallbacks)
+            text = text.Replace(glyph, ascii, StringComparison.Ordinal);
+        return text;
+    }
+
     /// <summary>工具输出预览截断：超预算时补省略号并注明原始长度，便于判断是否需要展开。
     /// 按**行**边界截断：切在半行上会让人以为那就是完整的一行。
     /// 注明保留/总行数：5000 行编译输出只说"共 8,000 字符"完全无法判断丢了多少。
@@ -1628,6 +1654,10 @@ public sealed partial class Agent
     {
         if (maxChars <= 0)
             return string.Empty;
+        // 字形降级必须在**所有**截断/计宽之前：降级会改变字符数与显示宽度
+        // （箭头 1 列变 `->` 2 列，省略号 1 列变 `...` 3 列）。先截后降级的话，
+        // 按原宽裁好的行会在降级后重新溢出，脚注里的字符数也会对不上。
+        text = DegradeToolGlyphs(text);
         // 总数必须**在截断前**记下来：截断后再数，两边都是同一个数，
         // 提示会变成「共 8 行，已保留 8 行」——谎报什么都没丢。
         // trueTotalLines / trueTotalChars 用于**上游已经截过**的情况

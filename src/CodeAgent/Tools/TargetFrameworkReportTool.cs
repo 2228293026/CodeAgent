@@ -94,13 +94,13 @@ public sealed class TargetFrameworkReportTool : ITool
             output.AppendLine($"多目标框架项目: {multi.Count}");
         if (eol.Count > 0)
         {
-            output.AppendLine("⚠ 已停止支持(EOL)的目标框架（建议升级）:");
+            output.AppendLine($"{SafeColor.Glyphs.Warn} 已停止支持(EOL)的目标框架（建议升级）:");
             foreach (var group in eol)
                 output.AppendLine($"  {group.Key}（{group.Count()} 个项目）");
         }
         if (preview.Count > 0)
         {
-            output.AppendLine("⚠ 预览版目标框架（不宜用于生产）:");
+            output.AppendLine($"{SafeColor.Glyphs.Warn} 预览版目标框架（不宜用于生产）:");
             foreach (var group in preview)
                 output.AppendLine($"  {group.Key}（{group.Count()} 个项目）");
         }
