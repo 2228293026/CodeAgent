@@ -273,19 +273,20 @@ internal static class Program
         // 注入位置与会话级字段：不写 config.SystemPrompt，否则任何一条
         // 会保存配置的命令（/model、/thinking、/access）都会把整个 AGENTS.md
         // 永久复制进用户的 codeagent.json。
-        var ruleFile = RuleFile(Environment.CurrentDirectory);
-        if (ruleFile is not null)
+        //
+        // 只读一次：这次读取的结论同时决定横幅怎么报、/prompt 怎么说。
+        // 此前三处各判一次「文件存在吗」，于是空文件、读不动的文件全被报成
+        // 「已加载 AGENTS.md」——用户以为规则生效了，模型一个字都没看到。
+        var ruleState = LoadRuleFileState(Environment.CurrentDirectory);
+        StartupRuleFile = ruleState;
+        if (ruleState.Inject)
         {
-            var rules = ReadRuleFile(ruleFile);
-            if (rules is { Length: > 0 })
-            {
-                var basePrompt = config.SessionOnlySystemPrompt ?? config.SystemPrompt;
-                config.SessionOnlySystemPrompt =
-                    basePrompt
-                    + $"\n\n[项目规则文件 {Path.GetFileName(ruleFile)}]\n"
-                    + rules
-                    + $"\n[/项目规则文件 {Path.GetFileName(ruleFile)}]";
-            }
+            var basePrompt = config.SessionOnlySystemPrompt ?? config.SystemPrompt;
+            config.SessionOnlySystemPrompt =
+                basePrompt
+                + $"\n\n[项目规则文件 {ruleState.FileName}]\n"
+                + ruleState.Content
+                + $"\n[/项目规则文件 {ruleState.FileName}]";
         }
 
         // ADOFAI mod 项目自动适配：检测到项目特征（Info.json 入口声明或 Assembly-CSharp.dll 引用）时，
@@ -3482,13 +3483,17 @@ internal static class Program
             BannerRow("会话日志", agent.SessionPath);
         if (config.SourceFile is not null)
             BannerRow("配置文件", config.SourceFile);
-        // 规则文件与工作区：值得知道但不值得各占一行键值表
-        var notice = new List<string>();
-        var agentsFile = RuleFile(Environment.CurrentDirectory);
-        if (agentsFile is not null)
-            notice.Add($"已加载 {Path.GetFileName(agentsFile)}: {agentsFile}");
-        if (notice.Count > 0)
-            Console.WriteLine(BuildBannerNotice(string.Join("; ", notice), width));
+        // 规则文件：只说**实际发生了什么**——已加载 / 空文件 / 读取失败。
+        //
+        // 三种结局都必须分开报。此前这里只判断「文件存在吗」，于是空文件、
+        // 读不动的文件（权限、被占用）也被打成「已加载 AGENTS.md」：
+        // 用户以为规则生效了，模型一个字都没看到，最后只怪模型不听话。
+        //
+        // 用 StartupRuleFile 而不是就地重探：横幅与系统提示必须同源，
+        // 各读一次就可能出现「横幅说加载了、提示里却没有」的自相矛盾。
+        var ruleNotice = BuildRuleFileNotice(StartupRuleFile);
+        if (ruleNotice is not null)
+            Console.WriteLine(BuildBannerNotice(ruleNotice, width));
         Console.WriteLine(FormatHintLine("输入 /help 查看命令；直接输入任务描述即可开始。", width));
         Console.WriteLine(BuildBannerRule(width));
     }
@@ -3517,32 +3522,117 @@ internal static class Program
     /// </summary>
     internal const int MaxRuleFileChars = 30_000;
 
-    internal static string? ReadRuleFile(string path)
+    /// <summary>规则文件候选名单，按优先级排序。
+    ///
+    /// **只有这一份**：探测、注释、提示文案若各写一遍，改一处漏一处就会出现
+    /// 「说认三种、实际只认一种」——用户放了 <c>.cursorrules</c> 却毫无反应。
+    /// </summary>
+    internal static readonly string[] RuleFileNames = { "AGENTS.md", "CLAUDE.md", ".cursorrules" };
+
+    /// <summary>规则文件的四种结局。只有 <see cref="RuleFileStatus.Loaded"/> 是真的进了系统提示。
+    ///
+    /// 区分它们本身就是修缺陷：「文件存在吗」这一个问题答不了「规则生效了吗」。
+    /// 空文件和读不动的文件都存在，都曾被报成「已加载」，而模型一个字都没看到。
+    /// </summary>
+    internal enum RuleFileStatus
+    {
+        /// <summary>当前目录下三份候选都不存在。</summary>
+        Missing,
+
+        /// <summary>读到了非空内容，且已注入系统提示。</summary>
+        Loaded,
+
+        /// <summary>文件在，但只有空白——没有规则可注入。</summary>
+        Empty,
+
+        /// <summary>文件在，但读不动（权限、被占用、路径异常）。</summary>
+        Unreadable,
+    }
+
+    /// <summary>一次规则文件探测的完整结论：注入、横幅、<c>/prompt</c> 都读同一份，不各判一次。</summary>
+    internal sealed record RuleFileState(string? Path, RuleFileStatus Status, string? Content)
+    {
+        /// <summary>没有规则文件时的结论，用作 <see cref="StartupRuleFile"/> 的初值。</summary>
+        public static RuleFileState Missing { get; } = new(null, RuleFileStatus.Missing, null);
+
+        /// <summary>文件名（不含目录）：注入分隔标记与提示文案都用它。
+        /// 没有文件时是 <c>null</c> 而不是空串——空串会拼出「已加载 : 」这种半句话。</summary>
+        public string? FileName => Path is null ? null : System.IO.Path.GetFileName(Path);
+
+        /// <summary>真该注入吗：读到了非空内容才算数。存在但不空不读得动都不算。</summary>
+        public bool Inject => Status == RuleFileStatus.Loaded && Content is { Length: > 0 };
+    }
+
+    /// <summary>启动时探测到的规则文件结论，供横幅与 <c>/prompt</c> 共用。
+    ///
+    /// 存下来而不是让两边各读一次：一是避免结论漂移（横幅说加载了、
+    /// <c>/prompt</c> 说不含），二是免得每敲一次 <c>/prompt</c> 就重读 3 万字符。
+    /// </summary>
+    internal static RuleFileState StartupRuleFile { get; set; } = RuleFileState.Missing;
+
+    /// <summary>读取规则文件并区分「读到内容」「空文件」「读不动」三种结局。
+    ///
+    /// 返回值和状态分开而不是共用一个 null：<c>null</c> 既能是「空文件」
+    /// 也能是「读失败」，而这两件事对用户要说的话完全不同——
+    /// 一个该去补内容，一个该去查权限。
+    /// </summary>
+    internal static (string? Content, RuleFileStatus Status) ReadRuleFileOutcome(string path)
     {
         try
         {
             var text = File.ReadAllText(path).Trim();
             if (text.Length == 0)
-                return null;
+                return (null, RuleFileStatus.Empty);
             if (text.Length <= MaxRuleFileChars)
-                return text;
+                return (text, RuleFileStatus.Loaded);
             var kept = TextUtil.TruncateHeadTail(text, MaxRuleFileChars);
-            return kept + $"\n\n[规则文件共 {text.Length:N0} 字符，已保留头尾共 {kept.Length:N0} 字符]\n";
+            return (kept + $"\n\n[规则文件共 {text.Length:N0} 字符，已保留头尾共 {kept.Length:N0} 字符]\n",
+                RuleFileStatus.Loaded);
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
-        catch (ArgumentException) { return null; }
+        catch (IOException) { return (null, RuleFileStatus.Unreadable); }
+        catch (UnauthorizedAccessException) { return (null, RuleFileStatus.Unreadable); }
+        catch (ArgumentException) { return (null, RuleFileStatus.Unreadable); }
     }
 
-    /// <summary>向上找规则文件：<c>AGENTS.md</c> 优先，其次 <c>CLAUDE.md</c>、<c>.cursorrules</c>。
+    /// <summary>只要内容、不要状态的薄包装：空文件与读不到都返回 null。</summary>
+    internal static string? ReadRuleFile(string path) => ReadRuleFileOutcome(path).Content;
+
+    /// <summary>探测并读取 <paramref name="dir"/> 下的规则文件，把四种结局压成一个值。</summary>
+    internal static RuleFileState LoadRuleFileState(string dir)
+    {
+        var path = RuleFile(dir);
+        if (path is null)
+            return RuleFileState.Missing;
+        var (content, status) = ReadRuleFileOutcome(path);
+        return new RuleFileState(path, status, content);
+    }
+
+    /// <summary>横幅上关于规则文件的那一句话——必须与**实际是否注入**一致。
+    ///
+    /// 三态文案各有各的用处：<c>Empty</c> 告诉用户「文件在但你没写东西」，
+    /// <c>Unreadable</c> 告诉用户「文件在但我读不到」——只报「已加载」时，
+    /// 这两种情况都会让用户以为规则生效了，只是模型不听话。
+    /// </summary>
+    internal static string? BuildRuleFileNotice(RuleFileState state) => state.Status switch
+    {
+        RuleFileStatus.Loaded => $"已加载 {state.FileName}: {state.Path}",
+        RuleFileStatus.Empty => $"{state.FileName} 是空文件，未注入任何规则: {state.Path}",
+        RuleFileStatus.Unreadable => $"{state.FileName} 读取失败，规则未生效: {state.Path}",
+        _ => null,
+    };
+
+    /// <summary>找当前目录下的规则文件：<c>AGENTS.md</c> 优先，其次 <c>CLAUDE.md</c>、<c>.cursorrules</c>。
     /// 只在当前目录找，不逐级上溯——启动时明确告诉用户**哪一份**规则在起作用，
     /// 免得改了上级目录的文件却在当前目录没生效。</summary>
     internal static string? RuleFile(string dir)
     {
-        foreach (var name in new[] { "AGENTS.md", "CLAUDE.md", ".cursorrules" })
+        foreach (var name in RuleFileNames)
         {
             var path = Path.Combine(dir, name);
-            if (File.Exists(path))
+            // 也认同名**目录**：只看 File.Exists 会把它当成「没这份规则」静默跳过。
+            // 可它恰恰是用户必须知道的一件事——以为规则在那儿，其实一个字都没生效。
+            // 选中后由 ReadRuleFileOutcome 如实报成读取失败。
+            if (File.Exists(path) || Directory.Exists(path))
                 return path;
         }
         return null;
@@ -4620,7 +4710,10 @@ internal static class Program
                     var p = agent.CurrentSystemPrompt;
                     // 会话级注入是两个来源叠加的（项目规则文件 + ADOFAI），
                     // 只说 ADOFAI 会让用户以为规则文件没生效——而它明明就在下面显示着。
-                    var injected = RuleFile(Environment.CurrentDirectory) is not null
+                    //
+                    // 判 Inject 而不是判文件存在：空文件/读不动的文件没有内容进入提示，
+                    // 说「含项目规则文件」就是在撒谎——这正是本次要修的缺陷本身。
+                    var injected = StartupRuleFile.Inject
                         ? "含项目规则文件与会话级运行时注入（如 ADOFAI 上下文）"
                         : "含会话级运行时注入（如 ADOFAI 上下文）";
                     var source = agent.CurrentMode.Name.Equals("code", StringComparison.OrdinalIgnoreCase)
