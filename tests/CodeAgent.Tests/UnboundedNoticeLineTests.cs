@@ -111,26 +111,48 @@ public class UnboundedNoticeLineTests
     [Fact]
     public void NoHandWrittenWarnPrefixOutsideTheNoticeRenderer()
     {
-        // 守卫：Program.cs 里不许再有 `$"{SafeColor.Glyphs.Warn} 正文…"` 这种手写告警行。
+        // 守卫：**整个源码树**里不许再有 `$"{SafeColor.Glyphs.Warn} 正文…"` 这种手写告警行。
         //
-        // 这一族散落在 20 多处，每处都自己拼标记：
+        // 第一版只扫 Program.cs，于是 Agent.cs 里三处（max_tokens 截断、请求重试、
+        // 历史已压缩）全漏了——它们的形态一模一样，只是住得远一点。
+        // 守卫的覆盖面必须和「这一族可能出现的地方」一致，否则它给出的绿灯是假的。
+        //
+        // 这一族的问题：每处自己拼标记，于是
         //   · 没有宽度收口，长提示在窄终端折行，把后续输出推歪；
         //   · 和 FormatNoticeLine 的标记重复（裸叹号提示曾显示成「⚠ ⚠ …」）；
         //   · 改文案时得挨个改，改漏一处就两种说法并存。
         //
         // 唯一合法的写法是 FormatNoticeLine(...) / WriteNotice(...)，它们统一管标记与宽度。
         // 用正则扫而不是逐条锚定：这一族会随功能增加而变长，
-        // 逐条列表永远落后于实际（上一轮就是这样漏掉 /copy 失败分支的）。
-        var source = File.ReadAllText(FindSource("Program.cs")).Replace("\r\n", "\n");
-        var offenders = source
-            .Split('\n')
-            .Select((line, i) => (line, i))
-            .Where(x => x.line.Contains("$\"{SafeColor.Glyphs.Warn} ", StringComparison.Ordinal)
-                        && x.line.Contains("Console.WriteLine", StringComparison.Ordinal))
-            .Select(x => $"第 {x.i + 1} 行: {x.line.Trim()}")
-            .ToList();
+        // 逐条列表永远落后于实际。
+        var offenders = new List<string>();
+        foreach (var file in SourceFiles())
+        {
+            var text = File.ReadAllText(file).Replace("\r\n", "\n");
+            var lines = text.Split('\n');
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Contains("$\"{SafeColor.Glyphs.Warn} ", StringComparison.Ordinal)
+                    && lines[i].Contains("Console.WriteLine", StringComparison.Ordinal))
+                    offenders.Add($"{Path.GetFileName(file)} 第 {i + 1} 行: {lines[i].Trim()}");
+            }
+        }
         Assert.True(offenders.Count == 0,
             "这些告警行还在手写标记（应走 FormatNoticeLine/WriteNotice）：\n" + string.Join("\n", offenders));
+    }
+
+    /// <summary>源码树下所有 .cs 文件（守卫要覆盖整个树，不能只看 Program.cs）。</summary>
+    private static IEnumerable<string> SourceFiles()
+    {
+        var dir = AppContext.BaseDirectory;
+        for (var i = 0; i < 8 && dir.Length > 1; i++)
+        {
+            var candidate = Path.Combine(dir, "src", "CodeAgent");
+            if (Directory.Exists(candidate))
+                return Directory.EnumerateFiles(candidate, "*.cs", SearchOption.AllDirectories).ToList();
+            dir = Path.GetDirectoryName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) ?? dir;
+        }
+        throw new DirectoryNotFoundException("src/CodeAgent");
     }
 
     [Fact]

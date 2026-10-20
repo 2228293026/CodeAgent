@@ -484,7 +484,12 @@ public sealed partial class Agent
                 lock (ConsoleLock)
                 {
                     using var scope = SafeColor.Scope(SafeColor.Warning);
-                    Console.WriteLine($"{SafeColor.Glyphs.Warn} 输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens");
+                    // 走统一告警渲染：这行 60+ 列（拼上 truncatedTools 更长），
+                    // 窄终端上手写输出会折行，把紧随其后的正文推歪。
+                    // FormatNoticeLine 管的就是标记 + 宽度，与「是不是错误」无关。
+                    Console.WriteLine(CodeAgent.Program.FormatNoticeLine(
+                        $"输出被 max_tokens 截断（{resp.FinishReason}）：回复可能不完整{truncatedTools}，可在配置调大 maxTokens",
+                        CodeAgent.Program.ConsoleColumnsForNotice()));
                 }
             }
             if (resp.InputTokens is int inTok)
@@ -721,7 +726,11 @@ public sealed partial class Agent
                 // 已流式输出过正文或思考内容（暗色）都不重试：重跑会重复打印此前已显示的内容
                 var delay = 2 * (attempt + 1);
                 ClearSpinner();
-                Console.WriteLine($"{SafeColor.Glyphs.Warn} 请求失败（{DescribeFailure(ex)}），{delay}s 后重试…");
+                // DescribeFailure 会把整个异常消息拼进来（可能带长 URL 与嵌套异常），
+                // 手写输出在窄终端上会折成十几行，把重试等待期间的界面搅乱。
+                Console.WriteLine(CodeAgent.Program.FormatNoticeLine(
+                    $"请求失败（{DescribeFailure(ex)}），{delay}s 后重试…",
+                    CodeAgent.Program.ConsoleColumnsForNotice()));
                 await Task.Delay(TimeSpan.FromSeconds(delay), ct);
             }
         }
@@ -2394,7 +2403,7 @@ public sealed partial class Agent
                 LogMessage(m);
             LastInputTokens = 0; // 压缩后上下文大幅缩小：旧 prompt_tokens 过期，ctx 退回估算
             LastCachedTokens = 0; // 配对清零：上一轮的缓存数属于被压缩掉的那份历史
-            Console.WriteLine($"{SafeColor.Glyphs.Ok} 历史已压缩，继续执行。");
+            Console.WriteLine(CodeAgent.Program.FormatConfirmLine("历史已压缩，继续执行。", CodeAgent.Program.ConsoleColumnsForNotice()));
             return true;
         }
         catch (OperationCanceledException)
