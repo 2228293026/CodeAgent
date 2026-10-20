@@ -5203,6 +5203,10 @@ internal static class Program
         ("--continue", "恢复本项目最近一次会话（自动落盘到 .codeagent/sessions）"),
         ("--no-session", "本次不写会话日志（隐私敏感任务；不写回配置）"),
         ("-v, --version", "显示版本号"),
+        // -h / --help 此前被排除在表外，理由写的是「元选项不必列出」——
+        // 可 -v / --version 同样是元选项，它就在表里。
+        // 一个查帮助的人翻开帮助却发现「查帮助」本身不在选项里，这不合理。
+        ("-h, --help", "显示本帮助并退出（交互模式下用 /help）"),
     ];
 
     internal static (string Key, string Desc)[] HelpShortcutRows() =>

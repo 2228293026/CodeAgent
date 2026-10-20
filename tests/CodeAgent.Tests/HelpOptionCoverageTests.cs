@@ -35,9 +35,10 @@ public class HelpOptionCoverageTests
     {
         var rows = CodeAgent.Program.HelpOptionRows();
         var documented = rows.Select(r => r.Key).ToArray();
-        // --help 自身不必列在表里（这是元选项），但 --resume / --mode / --no-session 都该有
+        // **不排除 --help**。此前这里写着「元选项不必列在表里」，
+        // 而 -v/--version 同样是元选项却列着——两边口径不一致，
+        // 结果是「查帮助」这个选项本身不在帮助里。
         var missing = ParsedOptions()
-            .Where(o => o != "--help")
             .Where(o => !documented.Any(d => d.Contains(o, StringComparison.Ordinal)))
             .ToArray();
         Assert.True(missing.Length == 0,
