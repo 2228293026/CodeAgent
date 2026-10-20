@@ -739,13 +739,18 @@ internal static class Program
 
     /// <summary>/resume 列表与 /export &lt;编号&gt; 共用的日志列表：排除当前会话自己的日志。
     /// 两处必须同源——/export 曾直接用未过滤的 RecentSessionLogs，当前会话日志挤占 1 号
-    /// 时 /export 1 与 /resume 1 会指向不同文件。</summary>
-    internal static List<string> ResumableLogs(AgentClass agent, AgentConfig config)
+    /// 时 /export 1 与 /resume 1 会指向不同文件。
+    ///
+    /// <para>默认取**全部**，不沿用 RecentSessionLogs 的 10 条默认值。那个 10 是给
+    /// 启动时列表用的展示上限，拿来做编号空间就变成了硬墙：第 11 条以前的会话
+    /// 既列不出来也编号不到，`/resume 11` 还会报「可用 1-10」——
+    /// 告诉用户一个他明明有的会话不存在。展示条数由渲染处自己收口。</para></summary>
+    internal static List<string> ResumableLogs(AgentClass agent, AgentConfig config, int max = int.MaxValue)
     {
         var pathComparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        return RecentSessionLogs(config)
+        return RecentSessionLogs(config, max)
             .Where(p => !string.Equals(p, agent.SessionPath, pathComparison))
             .ToList();
     }
