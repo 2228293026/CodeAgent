@@ -2112,7 +2112,8 @@ internal static class Program
     internal static List<(string Key, string Value)> BuildStatusRows(
         string mode, string model, string provider, string cwd, string? branch,
         long contextTokens, int contextWindow, int turns, int toolCalls,
-        TimeSpan sessionTime, string version, string build)
+        TimeSpan sessionTime, string version, string build,
+        int changedFiles = 0, int taskDone = 0, int taskTotal = 0)
     {
         var rows = new List<(string Key, string Value)>
         {
@@ -2126,6 +2127,15 @@ internal static class Program
             ? $"{TextUtil.CompactTokenCount(contextTokens)}/{TextUtil.CompactTokenCount(contextWindow)} ({TextUtil.PercentOf(contextTokens, contextWindow)}%)"
             : TextUtil.CompactTokenCount(contextTokens)));
         rows.Add(("会话", $"{turns} 轮{SafeColor.Glyphs.SegmentSeparator}{toolCalls} 次工具调用{SafeColor.Glyphs.SegmentSeparator}{TextUtil.FormatSessionTime(sessionTime)}"));
+        // 改动面：总览少了它，用户想知道「这轮动了哪些文件」就得再敲一次 /files。
+        // 只报**数量**——路径列表留给 /files：总览是拿来一眼扫的，
+        // 塞进 20 条路径会把面板撑成一屏。
+        if (changedFiles > 0)
+            rows.Add(("改动", $"{changedFiles} 个文件（/files 查看）"));
+        // 任务进度同理：/tasks 有完整清单，这里只报「完成/总数」，
+        // 让用户知道模型还有没有事没做完。
+        if (taskTotal > 0)
+            rows.Add(("任务", $"{taskDone}/{taskTotal} 完成（/tasks 查看）"));
         rows.Add(("构建", build.Length > 0 ? $"{version}+{build}" : version));
         return rows;
     }
@@ -4130,7 +4140,10 @@ internal static class Program
                         GitInfo.CurrentBranch(Environment.CurrentDirectory),
                         agent.ContextTokens, sWin,
                         agent.TurnRounds, agent.TurnToolCalls,
-                        SessionStopwatch.Elapsed, InformationalVersion, BuildCommit);
+                        SessionStopwatch.Elapsed, InformationalVersion, BuildCommit,
+                        changedFiles: agent.Context.Undo.AllPaths().Count,
+                        taskDone: agent.Tasks.CompletedCount,
+                        taskTotal: agent.Tasks.Tasks.Count);
                     Console.WriteLine(FormatStatusPanel(sRows, ConsoleColumns()));
                     if (FormatContextAdvice(agent.ContextTokens, sWin, config.AutoCompactPercent) is { } advice)
                         Console.WriteLine(FormatHintLine(advice, ConsoleColumns()));
