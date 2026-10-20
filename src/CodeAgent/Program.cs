@@ -635,7 +635,8 @@ internal static class Program
                             try
                             {
                                 var r = RunTurnAsync(async t =>
-                                    await agent.CompactAsync(t) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult();
+                                    await agent.CompactAsync(t) ? "COMPACTED" : "SHORT",
+                                    preserveTypeahead: true).GetAwaiter().GetResult();
                                 if (r == "COMPACTED")
                                     Console.WriteLine(FormatConfirmLine(
                                         $"上下文已达 {pct}%（autoCompactPercent={config.AutoCompactPercent}），已自动压缩历史。",
@@ -957,7 +958,14 @@ internal static class Program
     /// 执行一轮请求：支持 Ctrl+C 与 ESC 优雅取消。
     /// 运行中取消返回提示文本而不是崩溃；空闲时 Ctrl+C 仍为默认退出。
     /// </summary>
-    private static async Task<string> RunTurnAsync(Func<CancellationToken, Task<string>> action)
+    /// <param name="preserveTypeahead">保留用户在本回合期间提前敲入的内容。
+    ///
+    /// 正常的「用户输入 → 跑一轮」路径要清（新建回合，缓冲里不该有上一回合的残留）。
+    /// 但**回合结束后紧接着再跑一次**的操作（自动压缩、/compact）不能清：
+    /// 那些内容要等下一轮循环顶部的 <see cref="MergeTypeahead"/> 才被取走，
+    /// 这里清掉等于把用户等了几十秒打的字直接丢掉——而下次触发自动压缩取决于
+    /// 上下文占用，用户完全无法预判「这次等待特别长，所以我的输入没了」。</param>
+    private static async Task<string> RunTurnAsync(Func<CancellationToken, Task<string>> action, bool preserveTypeahead = false)
     {
         using var cts = new CancellationTokenSource();
         _activeTurn = cts;
@@ -973,7 +981,10 @@ internal static class Program
         // 只收可见字符与换行：方向键/退格/F 键这类控制键在「看不见的回填缓冲」里
         // 没有意义（用户看不到光标，也没法确认改对了没有），丢掉反而更干净。
         var stop = false;
-        _typeahead.Clear();
+        // preserveTypeahead：回合后续操作（自动压缩 / /compact）不得丢掉用户提前敲入的内容，
+        // 那些字要等下一轮循环顶部的 MergeTypeahead 取走。
+        if (!preserveTypeahead)
+            _typeahead.Clear();
         var watcher = Task.Run(() =>
         {
             try
@@ -3537,7 +3548,8 @@ internal static class Program
                     try
                     {
                         result = RunTurnAsync(async t =>
-                            await agent.CompactAsync(t, string.IsNullOrWhiteSpace(rest) ? null : rest.Trim()) ? "COMPACTED" : "SHORT").GetAwaiter().GetResult(); // HandleCommand 同步上下文（rest = 压缩保留重点）
+                            await agent.CompactAsync(t, string.IsNullOrWhiteSpace(rest) ? null : rest.Trim()) ? "COMPACTED" : "SHORT",
+                            preserveTypeahead: true).GetAwaiter().GetResult(); // HandleCommand 同步上下文（rest = 压缩保留重点）
                     }
                     catch (Exception ex)
                     {
