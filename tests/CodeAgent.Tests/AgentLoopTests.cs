@@ -356,6 +356,10 @@ public class AgentLoopTests : IDisposable
         var result = await agent.RunAsync("一直调用工具", CancellationToken.None);
 
         Assert.Contains("最大工具调用轮数", result); // 达到上限给出提示
+        // 提示里要带上**实际数值**。默认 0 = 不限制，能走到这里说明用户自己设过上限，
+        // 而他未必记得设成了多少（可能是几个月前的配置，也可能在某个 profile 里）。
+        // 只报配置项名字等于让人再去翻文件对数字。
+        Assert.Contains("3", result);
         Assert.True(agent.ProviderCalls <= 4, $"不应超过上限太多（实际调用 {agent.ProviderCalls} 次）");
         Assert.True(agent.LastTurnFailed, "达到轮数上限应标记为失败（REPL 显示 ⚠、一次性模式退出码非 0）");
     }

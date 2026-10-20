@@ -572,7 +572,10 @@ public sealed partial class Agent
 
         // 达到轮数上限说明任务未完成：标记失败，REPL 显示 ⚠、一次性模式退出码非 0
         LastTurnFailed = true;
-        return $"{SafeColor.Glyphs.Warn} 达到最大工具调用轮数（MaxToolIterations），任务可能未完成。";
+        // 把**实际数值**写出来。默认 0 = 不限制，所以能走到这里说明用户自己设过上限——
+        // 而他未必记得设成了多少（可能是几个月前的配置，也可能在某个 profile 里）。
+        // 一句「（MaxToolIterations）」只是报出配置项的名字，人还得再去翻文件对数字。
+        return $"{SafeColor.Glyphs.Warn} 达到最大工具调用轮数 {_ctx.Config.MaxToolIterations}（配置项 max_tool_iterations，0 = 不限制），任务可能未完成。";
     }
 
     private async Task<ProviderResponse> CallProviderAsync(CancellationToken ct)
