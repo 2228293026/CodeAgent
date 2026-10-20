@@ -487,4 +487,23 @@ public class AgentEdgeTests : IDisposable
         await Assert.ThrowsAsync<ProviderException>(() => agent.RunAsync("x", CancellationToken.None));
         Assert.Equal(1, provider.StreamCalls); // 只调用一次：没有自动重试
     }
+
+    [Fact]
+    public async Task StreamFailsAfterReasoning_ClosesTheReasoningLine()
+    {
+        // 思考文本是裸写的、末尾不带换行。异常逃出去后调用方一定会打一行错误说明，
+        // 那行就贴在暗色思考的末尾——分不清哪句是模型想的、哪句是系统说的。
+        //
+        // 收尾做在 Agent 层而不是各调用点：REPL 手工加过 "\n" 前缀，
+        // 一次性模式没加。两处各写一份，必然漏一个。
+        //
+        // 断言用 _reasoningShown（catch 里断行后复位）：它若仍为 true，
+        // 说明那行没被封口——下一个输出会接在它后面。
+        var provider = new ReasoningThenFailProvider();
+        var agent = MakeAgent(provider);
+        await Assert.ThrowsAsync<ProviderException>(() => agent.RunAsync("x", CancellationToken.None));
+        var field = typeof(AgentClass).GetField("_reasoningShown",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        Assert.False((bool)field.GetValue(agent)!, "思考行没封口，下一条输出会粘在它后面");
+    }
 }

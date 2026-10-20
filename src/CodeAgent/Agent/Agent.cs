@@ -684,6 +684,21 @@ public sealed partial class Agent
         catch
         {
             ClearSpinner();
+            // 思考文本是裸写的、末尾不带换行。异常逃出去之后，调用方一定会打一行
+            // 错误说明（REPL 的 `catch (ProviderException)`、一次性模式的
+            // `WriteStartupNotice`），那行就贴在暗色思考的末尾：
+            //   我看看这个报错…⚠ 请求失败（429）
+            // 分不清哪句是模型想的、哪句是系统说的。
+            //
+            // 收在**这一层**而不是各调用点：REPL 那边手工加过一个 "\n" 前缀，
+            // 一次性模式没加——两处各写一份，必然漏一个。
+            // 只断行、不补空行：思考已经显示过了，用户看到的是一行完整的记录。
+            if (_reasoningShown)
+            {
+                lock (ConsoleLock)
+                    Console.WriteLine();
+                _reasoningShown = false;
+            }
             throw;
         }
     }
