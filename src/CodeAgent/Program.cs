@@ -3568,12 +3568,15 @@ internal static class Program
                         WriteNotice($"压缩失败: {ex.Message}");
                         break;
                     }
+                    // 三条结局走同一套格式函数。此前 SHORT / 成功用的是裸字符串拼接：
+                    // 窄终端下不折行、标记与正文之间没有统一间距，
+                    // 和紧挨着的「已取消压缩」那一行摆在一起时明显不是一套。
                     if (IsCancelledTurn(result))
                         Console.WriteLine(FormatCancelLine("已取消压缩（历史未变动）。", ConsoleColumns()));
                     else if (result == "SHORT")
-                        Console.WriteLine($"{SafeColor.Glyphs.Warn} 当前对话过短，无需压缩。");
+                        Console.WriteLine(FormatNoticeLine("当前对话过短，无需压缩。", ConsoleColumns()));
                     else
-                        Console.WriteLine($"{SafeColor.Glyphs.Ok} 历史已压缩。");
+                        Console.WriteLine(FormatConfirmLine("历史已压缩。", ConsoleColumns()));
                 }
                 break;
 
