@@ -24,6 +24,150 @@ public static class ProjectInit
     /// <summary>生成结果：文件内容 + 探测到的要点（供命令行回显「检测到什么」）。</summary>
     public sealed record Result(string Content, IReadOnlyList<string> Findings);
 
+    /// <summary>草稿要写的文件名。
+    ///
+    /// 它必须与运行时读规则文件的**第一优先级**是同一个名字：
+    /// 若 <c>/init</c> 写 <c>AGENTS.md</c>、运行时却先读别的，用户会得到
+    /// 「生成成功、但下次启动一点用都没有」——最难查的那种缺陷。
+    /// 所以这里只有一个常量，并由测试断言 <c>Program.RuleFileNames[0]</c> 与它相等。
+    /// </summary>
+    public const string TargetFileName = "AGENTS.md";
+
+    /// <summary>落盘前的三种局面。
+    ///
+    /// 「文件存在吗」这一个问题答不了「写下去会发生什么」：
+    /// AGENTS.md 不存在**不等于**可以安全生成。
+    /// </summary>
+    public enum TargetState
+    {
+        /// <summary>一个规则文件都没有：写下去只会新增，不会盖住任何东西。</summary>
+        Create,
+
+        /// <summary>AGENTS.md 已经在（文件**或目录**）：不能写。
+        /// 目录同名时 <c>WriteAllText</c> 会抛 <c>UnauthorizedAccessException</c>，
+        /// 所以判定必须用 File.Exists **或** Directory.Exists。</summary>
+        Exists,
+
+        /// <summary>AGENTS.md 不存在，但 <c>CLAUDE.md</c> / <c>.cursorrules</c> 在。
+        ///
+        /// 这是最危险的一种：新建的 AGENTS.md 排在名单第一位，会把它整个盖住——
+        /// 用户原有的规则**一个字都读不到**，而屏幕上写着「已生成」。
+        /// 文件没坏、程序没报错，只是规则静默失效了。</summary>
+        Shadow,
+    }
+
+    /// <summary>一次 <c>/init</c> 落盘判定的完整结论。
+    ///
+    /// 把「该不该写」与「为什么」一起算出来，调用方只负责显示：
+    /// 若让调用方自己拼原因，文案就会跟着实现各改各的，最后说的和做的对不上。</summary>
+    /// <param name="State">三种局面。</param>
+    /// <param name="Target">草稿的完整路径（已 <c>Create</c> 时就是要写的那个文件）。</param>
+    /// <param name="Candidates">判定所依据的规则文件名单，按优先级排序。</param>
+    /// <param name="Existing">
+    /// 挡路的文件，按名单顺序：
+    /// <c>Exists</c> 时是 <see cref="TargetFileName"/> 自己；
+    /// <c>Shadow</c> 时是会被它盖住的那几份。
+    /// </param>
+    public sealed record TargetPlan(
+        TargetState State,
+        string Target,
+        IReadOnlyList<string> Candidates,
+        IReadOnlyList<string> Existing)
+    {
+        /// <summary>挡路的那一个（用于文案）；没有挡路的返回 <c>null</c> 而不是空串。</summary>
+        public string? Blocking => Existing.Count > 0 ? Existing[0] : null;
+
+        /// <summary>能不能直接写。只有这一种局面允许落盘。</summary>
+        public bool CanWrite => State == TargetState.Create;
+    }
+
+    /// <summary>
+    /// 判断在 <paramref name="root"/> 下写 <see cref="TargetFileName"/> 会发生什么。纯逻辑：只读文件系统，不写。
+    ///
+    /// 名单由调用方传入（<c>Program.RuleFileNames</c>），这里**不自己维护一份**：
+    /// 两处各写一份名单，改一处漏一处就会出现「/init 认为安全、运行时却另有优先级」的漂移。
+    /// </summary>
+    public static TargetPlan EvaluateTarget(string root, IReadOnlyList<string> ruleFileNames)
+    {
+        if (string.IsNullOrWhiteSpace(root))
+            throw new ArgumentException("root 不能为空", nameof(root));
+
+        var candidates = ruleFileNames is { Count: > 0 } ? ruleFileNames : new[] { TargetFileName };
+        var target = Path.Combine(root, TargetFileName);
+
+        // 同名目录也算「已存在」：WriteAllText 到目录会抛异常，
+        // 而只判 File.Exists 的话这里会放行、然后在写入时崩给用户看。
+        if (File.Exists(target) || Directory.Exists(target))
+            return new TargetPlan(TargetState.Exists, target, candidates, new[] { TargetFileName });
+
+        // 名单里排在目标**之后**的才算会被遮蔽；排在前面的比它优先，不受影响。
+        // 名单里找不到目标时按「它排第一」处理（宁可拒绝，不要静默盖掉别人的规则）。
+        var targetIndex = 0;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            if (string.Equals(candidates[i], TargetFileName, StringComparison.Ordinal))
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        var shadowed = new List<string>();
+        for (var i = targetIndex + 1; i < candidates.Count; i++)
+        {
+            var name = candidates[i];
+            var path = Path.Combine(root, name);
+            if (File.Exists(path) || Directory.Exists(path))
+                shadowed.Add(name);
+        }
+
+        return shadowed.Count > 0
+            ? new TargetPlan(TargetState.Shadow, target, candidates, shadowed)
+            : new TargetPlan(TargetState.Create, target, candidates, Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// 把判定结论翻成给人看的话：第一行是**结论**（走 notice 样式），其余是**解释与出路**（走 hint 样式）。
+    ///
+    /// 拒绝文案有一条硬约束：只说「新文件会盖住它」，**不许**说旧文件「读不到 / 是空的」。
+    /// 旧文件可能写得好好的、正在生效；说它坏了，用户就会去修一个根本没坏的东西。
+    /// </summary>
+    public static IReadOnlyList<string> ExplainTarget(TargetPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var lines = new List<string>();
+        switch (plan.State)
+        {
+            case TargetState.Create:
+                lines.Add($"未发现任何规则文件，可以安全生成 {TargetFileName}。");
+                break;
+
+            case TargetState.Exists:
+                // 这句文案是对外承诺，逐字保留：它解释了「为什么没生成」，
+                // 也给出唯一出路——否则用户只会以为 /init 坏了。
+                lines.Add($"{TargetFileName} 已存在（{plan.Target}），未覆盖。想重新生成请先移走或删除它。");
+                if (Directory.Exists(plan.Target))
+                    lines.Add($"注意：{plan.Target} 是个目录，不是文件。先确认里面有什么，别直接删。");
+                else
+                    lines.Add("草稿只是起点，你的判断才是这份文件的价值——要合并就往现有文件里手工补，不要靠重新生成。");
+                break;
+
+            case TargetState.Shadow:
+                {
+                    var names = string.Join("、", plan.Existing);
+                    var order = string.Join(" > ", plan.Candidates);
+                    lines.Add($"未生成 {TargetFileName}：新建的 {TargetFileName} 会把 {names} 整个盖住，你现有的规则一个字都读不到。");
+                    lines.Add($"规则文件按优先级只取第一个存在的（{order}），所以 {names} 现在就在生效，不需要改名。");
+                    lines.Add($"确实想换成 {TargetFileName}：先把 {names} 的内容复制进新文件，再删除旧文件，最后重跑 /init；保留 {names} 也完全没问题。");
+                    break;
+                }
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(plan), plan.State, "未知的目标状态");
+        }
+        return lines;
+    }
+
     /// <summary>扫描 <paramref name="root"/> 并生成草稿。纯逻辑：不写文件、不抛异常。</summary>
     public static Result Generate(string root)
     {

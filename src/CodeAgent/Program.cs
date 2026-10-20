@@ -4494,16 +4494,26 @@ internal static class Program
                     // 但此前**没有任何生成它的途径**——用户只能从零手写，
                     // 而「该写什么」正是模板存在的意义。
                     var initRoot = Environment.CurrentDirectory;
-                    var target = Path.Combine(initRoot, "AGENTS.md");
                     // 绝不覆盖：手写的规则文件里有用户自己的判断，
                     // 一次误覆盖的代价远高于「少生成一次」。
-                    if (File.Exists(target))
+                    //
+                    // 但「不覆盖」只是底线，不够。AGENTS.md 不存在**不等于**可以安全生成：
+                    // 它排在规则文件名单第一位，一旦被建出来，同目录的 CLAUDE.md /
+                    // .cursorrules 会立刻被它整个盖住——命令没报错、文件没丢，
+                    // 用户的规则却一个字都读不到了。所以判定交给 EvaluateTarget，
+                    // 名单也从 RuleFileNames 传进去，与运行时读规则的是同一份。
+                    var plan = ProjectInit.EvaluateTarget(initRoot, RuleFileNames);
+                    if (!plan.CanWrite)
                     {
-                        Console.WriteLine(FormatNoticeLine(
-                            $"AGENTS.md 已存在（{target}），未覆盖。想重新生成请先移走或删除它。",
-                            ConsoleColumns()));
+                        var explain = ProjectInit.ExplainTarget(plan);
+                        // 首行是结论，用 notice；其余是原因与出路，用 hint。
+                        if (explain.Count > 0)
+                            Console.WriteLine(FormatNoticeLine(explain[0], ConsoleColumns()));
+                        for (var i = 1; i < explain.Count; i++)
+                            Console.WriteLine(FormatHintLine(explain[i], ConsoleColumns()));
                         return true;
                     }
+                    var target = plan.Target;
                     var draft = ProjectInit.Generate(initRoot);
                     try
                     {
@@ -4511,10 +4521,12 @@ internal static class Program
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
-                        Console.WriteLine(FormatNoticeLine($"写入 AGENTS.md 失败: {ex.Message}", ConsoleColumns()));
+                        Console.WriteLine(FormatNoticeLine(
+                            $"写入 {ProjectInit.TargetFileName} 失败: {ex.Message}", ConsoleColumns()));
                         return true;
                     }
-                    Console.WriteLine(FormatConfirmLine($"已生成 AGENTS.md: {target}", ConsoleColumns()));
+                    Console.WriteLine(FormatConfirmLine(
+                        $"已生成 {ProjectInit.TargetFileName}: {target}", ConsoleColumns()));
                     // 回显「检测到什么」，否则用户无法判断草稿是否靠谱——
                     // 一份没有任何解释的模板，用户要么全信要么全删。
                     foreach (var finding in draft.Findings)
@@ -5548,7 +5560,7 @@ internal static class Program
         new("/todos", "任务清单（/tasks 的别名）"),
         new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         new("/context", "按类别拆解上下文占用（系统提示/工具定义/历史消息）"),
-        new("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在则不覆盖）"),
+        new("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),

@@ -126,6 +126,151 @@ public class ProjectInitTests : IDisposable
         Assert.NotEmpty(result.Findings);
     }
 
+    // ── 落盘前的三态判定 ─────────────────────────────────────────────
+    //
+    // 「文件存在吗」这一个问题答不了「写下去会发生什么」。
+    // 下面这些用例守的是**最坏那种缺陷**：命令报「已生成」，
+    // 用户的规则却一个字都读不到——屏幕和实际状态不一致，而且没有任何报错。
+
+    [Fact]
+    public void TargetNameIsTheFirstRuleFileTheRuntimeReads()
+    {
+        // 两个名字一旦漂移，/init 写的东西下次启动根本不生效。
+        // 用户看到「生成成功」，然后发现模型完全不知道那些规则——最难查的那种缺陷。
+        Assert.Equal(ProjectInit.TargetFileName, Program.RuleFileNames[0]);
+    }
+
+    [Fact]
+    public void EmptyDirectoryIsSafeToWrite()
+    {
+        var plan = ProjectInit.EvaluateTarget(_root, Program.RuleFileNames);
+        Assert.Equal(ProjectInit.TargetState.Create, plan.State);
+        Assert.True(plan.CanWrite);
+        Assert.Null(plan.Blocking);
+        Assert.Equal(Path.Combine(_root, ProjectInit.TargetFileName), plan.Target);
+    }
+
+    [Fact]
+    public void ExistingTargetFileBlocksTheWrite()
+    {
+        var path = Touch(ProjectInit.TargetFileName, "# 我自己写的规则\n");
+        var plan = ProjectInit.EvaluateTarget(_root, Program.RuleFileNames);
+        Assert.Equal(ProjectInit.TargetState.Exists, plan.State);
+        Assert.False(plan.CanWrite);
+        Assert.Equal(ProjectInit.TargetFileName, plan.Blocking);
+        // 判定必须是纯的：评估一遍不能把用户的内容改掉。
+        Assert.Equal("# 我自己写的规则\n", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void DirectoryWithTheTargetNameAlsoBlocksTheWrite()
+    {
+        // 只判 File.Exists 会在这里放行，然后在 WriteAllText 时抛
+        // UnauthorizedAccessException——用户得到的是崩溃，而不是一句解释。
+        Directory.CreateDirectory(Path.Combine(_root, ProjectInit.TargetFileName));
+        var plan = ProjectInit.EvaluateTarget(_root, Program.RuleFileNames);
+        Assert.Equal(ProjectInit.TargetState.Exists, plan.State);
+        Assert.False(plan.CanWrite);
+
+        // 同名的东西是目录不是文件：文案必须说出来，否则用户会照着
+        // 「移走或删除这个文件」去删一个目录，或者反过来以为自己删错了。
+        var text = string.Join("\n", ProjectInit.ExplainTarget(plan));
+        Assert.Contains("目录", text);
+    }
+
+    [Theory]
+    [InlineData("CLAUDE.md")]
+    [InlineData(".cursorrules")]
+    public void LowerPriorityRuleFileIsNotSilentlyShadowed(string existing)
+    {
+        // 新建的 AGENTS.md 排在名单第一位，会把这些整个盖住。
+        // 文件没坏、程序没报错，规则却静默失效了。
+        Touch(existing, "重要规则\n");
+        var plan = ProjectInit.EvaluateTarget(_root, Program.RuleFileNames);
+        Assert.Equal(ProjectInit.TargetState.Shadow, plan.State);
+        Assert.False(plan.CanWrite);
+        Assert.Equal(existing, plan.Blocking);
+        Assert.False(File.Exists(Path.Combine(_root, ProjectInit.TargetFileName)),
+            "判定阶段不许落盘");
+    }
+
+    [Fact]
+    public void HigherPriorityRuleFileDoesNotCountAsShadowed()
+    {
+        // 只被排在目标**之后**的规则文件才叫「被遮蔽」。
+        // 排在前面的比目标优先，写下去影响不到它——这里用倒序名单把这条规则钉住。
+        Touch("CLAUDE.md", "优先级更高\n");
+        var plan = ProjectInit.EvaluateTarget(_root, new[] { "CLAUDE.md", ProjectInit.TargetFileName });
+        Assert.Equal(ProjectInit.TargetState.Create, plan.State);
+        Assert.True(plan.CanWrite);
+    }
+
+    [Fact]
+    public void ShadowReportsEveryBlockedFileInListOrder()
+    {
+        Touch("CLAUDE.md", "x\n");
+        Touch(".cursorrules", "y\n");
+        var plan = ProjectInit.EvaluateTarget(_root, Program.RuleFileNames);
+        Assert.Equal(ProjectInit.TargetState.Shadow, plan.State);
+        Assert.Equal(Program.RuleFileNames.Skip(1).ToArray(), plan.Existing.ToArray());
+    }
+
+    [Fact]
+    public void EveryStateExplainsItselfAndNeverBlamesAHealthyFile()
+    {
+        // 三种局面各造一个目录，逐个走一遍：名字里写着 EveryState，
+        // 就别只测其中一种——漏掉的那种恰恰是用户最可能撞上的。
+        var create = Path.Combine(_root, "create");
+        var exists = Path.Combine(_root, "exists");
+        var shadow = Path.Combine(_root, "shadow");
+        Directory.CreateDirectory(create);
+        Directory.CreateDirectory(exists);
+        Directory.CreateDirectory(shadow);
+        File.WriteAllText(Path.Combine(exists, ProjectInit.TargetFileName), "已有内容\n");
+        File.WriteAllText(Path.Combine(shadow, "CLAUDE.md"), "有效规则\n");
+
+        var plans = new[]
+        {
+            ProjectInit.EvaluateTarget(create, Program.RuleFileNames),
+            ProjectInit.EvaluateTarget(exists, Program.RuleFileNames),
+            ProjectInit.EvaluateTarget(shadow, Program.RuleFileNames),
+        };
+
+        Assert.Equal(
+            new[] { ProjectInit.TargetState.Create, ProjectInit.TargetState.Exists, ProjectInit.TargetState.Shadow },
+            plans.Select(p => p.State).ToArray());
+
+        foreach (var plan in plans)
+        {
+            var lines = ProjectInit.ExplainTarget(plan);
+            Assert.NotEmpty(lines);
+            Assert.False(string.IsNullOrWhiteSpace(lines[0]), "首行必须是结论");
+            foreach (var line in lines)
+                Assert.False(string.IsNullOrWhiteSpace(line), $"{plan.State} 输出了空行");
+        }
+
+        // 拒绝文案有一条硬约束：只说「新文件会盖住它」，
+        // 不许说旧文件「读不到 / 是空的」——旧文件可能写得好好的、正在生效，
+        // 说它坏了，用户就会去修一个根本没坏的东西。
+        var shadowPlan = plans[2];
+        var text = string.Join("\n", ProjectInit.ExplainTarget(shadowPlan));
+        Assert.Contains("盖住", text);
+        Assert.DoesNotContain("是空的", text);
+        Assert.DoesNotContain("读取失败", text);
+        Assert.DoesNotContain("坏了", text);
+    }
+
+    [Fact]
+    public void ExistingTargetExplanationGivesAWayOut()
+    {
+        Touch(ProjectInit.TargetFileName, "已有内容\n");
+        var text = string.Join("\n", ProjectInit.ExplainTarget(
+            ProjectInit.EvaluateTarget(_root, Program.RuleFileNames)));
+        // 只说「没生成」不够：用户会以为 /init 坏了。必须给出唯一出路。
+        Assert.Contains("未覆盖", text);
+        Assert.Contains("删除", text);
+    }
+
     [Fact]
     public void GeneratedFileIsValidForTheExistingRuleReader()
     {

@@ -420,7 +420,7 @@ public static class InputLine
         ("/todos", "任务清单（/tasks 的别名）"),
         ("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         ("/context", "按类别拆解上下文占用"),
-        ("/init", "扫描本项目并生成 AGENTS.md 草稿"),
+        ("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具（可带关键字过滤）"),
         ("/providers", "列出已配置的 Provider"),
