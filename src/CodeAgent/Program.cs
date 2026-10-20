@@ -3089,6 +3089,12 @@ internal static class Program
             return;
         }
         Console.WriteLine(FormatHelpList(rows, ConsoleColumns()));
+        // 没过滤时给一行用法提示：231 个工具一口气列完，用户不知道**可以收窄**。
+        // 与 /model 末尾那句「提示: /model <编号> 可直接切换」同一位置、同一句式——
+        // 两个命令列的都是「可用的东西」，收尾提示不该一个有、一个没有。
+        // 已经过滤过就不再教：那时用户显然知道怎么用。
+        if (string.IsNullOrWhiteSpace(filter) && rows.Count > 20)
+            Console.WriteLine(FormatHintLine("提示: /tools <关键字> 可按名称或说明过滤", ConsoleColumns()));
     }
     private static async Task PrintModelsAsync(IAgentProvider provider, string? currentModel, string? filter = null)
     {
