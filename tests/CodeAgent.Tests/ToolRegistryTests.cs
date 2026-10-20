@@ -50,13 +50,30 @@ public class ToolRegistryTests : IDisposable
     }
 
     [Fact]
-    public async Task ExecuteAsync_UnknownTool_ThrowsWithAvailableList()
+    public async Task ExecuteAsync_UnknownTool_ThrowsWithANearMissHint()
     {
         var registry = ToolRegistry.CreateDefault();
         var ex = await Assert.ThrowsAsync<ToolException>(() =>
             registry.ExecuteAsync("no_such_tool", "{}", MakeContext(_dir), CancellationToken.None));
         Assert.Contains("未知工具", ex.Message);
-        Assert.Contains("read_file", ex.Message); // 错误信息应列出可用工具
+        // 断言从「列出全部可用工具」改成「给出相近候选或去处」。
+        //
+        // 旧断言要求消息里出现 read_file——那等于要求把 231 个工具名全拼上
+        // （约 4600 字符）。模型编造一个工具名就收到一整段占满上下文的回复，
+        // 而那串名字里没有任何一个是它要找的。
+        // "no_such_tool" 与哪个工具都不相近，所以这里只该给去处。
+        Assert.True(ex.Message.Contains("/tools") || ex.Message.Contains("相近的"),
+            $"既没候选也没出路：{ex.Message}");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_NearMissTool_SuggestsTheRealName()
+    {
+        // 拼错一个字母时必须给出正确名字：这才是这条错误存在的意义
+        var registry = ToolRegistry.CreateDefault();
+        var ex = await Assert.ThrowsAsync<ToolException>(() =>
+            registry.ExecuteAsync("read_fil", "{}", MakeContext(_dir), CancellationToken.None));
+        Assert.Contains("read_file", ex.Message);
     }
 
     [Fact]

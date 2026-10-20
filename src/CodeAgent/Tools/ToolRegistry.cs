@@ -386,7 +386,19 @@ public sealed class ToolRegistry
     {
         ct.ThrowIfCancellationRequested();
         if (!_tools.TryGetValue(name, out var tool))
-            throw new ToolException($"未知工具: {name}（可用: {string.Join(", ", _tools.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))}）");
+        {
+            // 只给**最接近的几个**，不列全部工具名。
+            //
+            // 此前这条错误会把 231 个工具名全拼上，约 4600 字符——模型编造一个工具名
+            // 就收到一整段占满上下文的回复，而那串名字里没有任何一个是它要找的：
+            // 它需要的是「我想的那个叫什么」，不是「总共有哪些」。
+            // 拼写相近的候选才真正解决问题（同 /mode、/shell 的 `相近的: ...` 提示）。
+            var near = CodeAgent.Program.SuggestValues(name, _tools.Keys, 3);
+            var hint = near.Length > 0
+                ? $"，相近的: {string.Join("、", near)}"
+                : "（/tools 可列出全部）";
+            throw new ToolException($"未知工具: {name}{hint}");
+        }
 
         JsonObject? args;
         try
