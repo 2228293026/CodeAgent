@@ -2138,7 +2138,10 @@ internal static class Program
             return "（无状态信息）";
         var keyWidth = list.Max(r => TextUtil.DisplayWidth(r.Key));
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine("状态:");
+        // 标题也要按宽度收敛。「状态:」写死 5 列，3 列终端上它就超宽折行——
+        // 而这块面板的每一行都参与「画了几行」的计算，一行折成两行会让后续重绘全错。
+        // 宁可显示成「状…」，也不能让它越界。
+        sb.AppendLine(width > 0 ? InputLine.FitToWidth("状态:", width) : "状态:");
         foreach (var row in list)
             sb.AppendLine(FormatKeyValueLine(row.Key, row.Value, keyWidth, width));
         return sb.ToString().TrimEnd();
