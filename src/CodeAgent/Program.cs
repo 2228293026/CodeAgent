@@ -2195,6 +2195,98 @@ internal static class Program
         return null;
     }
 
+    /// <summary>上下文占用的一个分类：名称 + 估算 token 数。</summary>
+    internal readonly record struct ContextSlice(string Label, long Tokens);
+
+    /// <summary>
+    /// <c>/context</c> 面板（学自 Claude Code）：把「上下文被谁占满了」拆开。
+    ///
+    /// 与既有命令的分工：<c>/status</c> 给的是「已用 X / Y」，只有**一个总数**。
+    /// 而用户看到 ctx 80% 时真正想知道的是「哪一块能砍」——
+    /// 系统提示是固定的砍不动，工具定义也是固定的，真正能砍的是历史消息。
+    /// 总数回答不了这个问题，分类明细才能。
+    ///
+    /// 占比用**窗口**算而不是用「已用」算：用户要判断的是「还有多少物理空间」，
+    /// 分母换成已用会让 5% 占用下的小项显示成 40%，反而更迷惑。
+    ///
+    /// 顺序刻意按「用户能动的程度」排：历史消息最后（能 /compact），
+    /// 固定开销在前。这样一眼扫下来，最后一行就是可操作项。
+    /// </summary>
+    /// <param name="window">上下文窗口；≤0 时不显示占比（不猜分母）。</param>
+    internal static string FormatContextPanel(
+        IEnumerable<ContextSlice> slices, long total, int window, int width = 0)
+    {
+        var list = slices.Where(s => s.Tokens >= 0).ToList();
+        var sb = new System.Text.StringBuilder();
+        // 面板**每一行**都要受宽度约束，不只是明细行。
+        // 标题（31 列）和合计说明（51 列）都比典型明细行长，
+        // 漏掉它们等于「明细收窄了、整块却还是溢出」——折行后列对应关系照样打散。
+        string FitLine(string s) => width > 0 ? InputLine.FitToWidth(s, width) : s;
+        sb.AppendLine(FitLine(window > 0
+            ? $"上下文占用：{TextUtil.CompactTokenCount(total)}/{TextUtil.CompactTokenCount(window)}（{TextUtil.PercentOf(total, window)}%）"
+            : $"上下文占用：{TextUtil.CompactTokenCount(total)}（窗口未知）"));
+        if (list.Count == 0)
+        {
+            sb.Append(FitLine("（无明细）"));
+            return sb.ToString();
+        }
+        // 名称列按实际最长对齐：分类名长短不一（「系统提示」vs「工具定义」），
+        // 用固定宽度会在换语言时错位。
+        var labelWidth = list.Max(s => TextUtil.DisplayWidth(s.Label));
+        foreach (var slice in list)
+        {
+            var pct = window > 0 ? TextUtil.PercentOf(slice.Tokens, window) : -1;
+            var share = pct >= 0 ? $"{pct,3}%" : "  ?";
+            var amount = TextUtil.CompactTokenCount(slice.Tokens);
+            var line = $"  {InputLine.PadToDisplayWidth(slice.Label, labelWidth)}  {share}  {amount}";
+            // 面板整体受宽度约束：一行超宽折行会把「哪一列是什么」彻底打散
+            sb.AppendLine(width > 0 ? InputLine.FitToWidth(line, width) : line);
+        }
+        // 合计行：分类之和与状态栏的 ctx 可能不一致（口径差），
+        // 明写出来比让用户自己发现两个数对不上好。
+        var sum = list.Sum(s => s.Tokens);
+        if (sum != total)
+            sb.AppendLine(FitLine($"  （合计 {TextUtil.CompactTokenCount(sum)}，与状态栏 {TextUtil.CompactTokenCount(total)} 的差值为未归类部分）"));
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>从 Agent 取实际数据组装 <c>/context</c> 的分类明细。
+    ///
+    /// 口径与 <see cref="CodeAgent.Agent.Agent.ContextTokens"/> 一致地用
+    /// <see cref="TextUtil.EstimateTokens"/>：那是状态栏已经在用的估算，
+    /// 两处口径不同会让面板与状态栏显示两个数，用户不知道该信哪个。
+    ///
+    /// 历史消息只数非 system 的部分：system 已经在「系统提示」里算过，
+    /// 再算一次就是重复计数——分类相加会超过总数。
+    /// </summary>
+    internal static List<ContextSlice> BuildContextSlices(AgentClass agent, long contextTokens)
+    {
+        var system = TextUtil.EstimateTokens(agent.CurrentSystemPrompt);
+        // 工具定义：名字 + 说明 + 参数模式都要进请求，只数名字会严重低估
+        long tools = 0;
+        var specs = agent.ToolsForMode();
+        foreach (var spec in specs)
+        {
+            tools += TextUtil.EstimateTokens(spec.Name);
+            tools += TextUtil.EstimateTokens(spec.Description ?? "");
+            // Parameters 是 JsonNode：ToJsonString() 得到的就是实际进请求的形态（含键名与括号），
+            // 比只数字段名准得多——工具定义里参数模式通常比说明还长。
+            if (spec.Parameters is { } p)
+                tools += TextUtil.EstimateTokens(p.ToJsonString());
+        }
+        // 历史：直接取总数减固定开销，而不是再遍历一遍消息。
+        // 两个理由：① ContextTokens 可能来自服务端真实 prompt_tokens（含缓存），
+        // 逐条估算对不上那个数；② 「可操作项」= 总数 - 固定项，这个定义天然自洽，
+        // 用户看到「历史 12.3k」就真的是砍掉能省下的量。
+        var history = Math.Max(0, contextTokens - system - tools);
+        return
+        [
+            new("系统提示", system),
+            new($"工具定义（{specs.Count} 个）", tools),
+            new("历史消息", history),
+        ];
+    }
+
     /// <summary>
     /// 确认行（模式/权限/模型/provider 切换成功）：`✔ 正文`，与工具结果的成功标记约定一致。
     /// 与告警行共用同一宽度预算——切换确认常附带完整保存路径（可很长），
@@ -4218,6 +4310,18 @@ internal static class Program
                         Console.WriteLine(FormatHintLine(advice, ConsoleColumns()));
                     return true;
                 }
+            case "/context":
+                {
+                    // 上下文明细（学自 Claude Code）：/status 只给一个总数，
+                    // 而 ctx 到 80% 时用户真正想知道的是「哪一块能砍」。
+                    var cWin = EffectiveContextWindow(config, opts, ctxProbe);
+                    var slices = BuildContextSlices(agent, agent.ContextTokens);
+                    Console.WriteLine(FormatContextPanel(slices, agent.ContextTokens, cWin, ConsoleColumns()));
+                    if (FormatContextAdvice(agent.ContextTokens, cWin, config.AutoCompactPercent) is { } cAdvice)
+                        Console.WriteLine(FormatHintLine(cAdvice, ConsoleColumns()));
+                    return true;
+                }
+
             // /todos：Claude Code 叫这个名字。用户照着习惯敲 /todos 却得到"未知命令"，
             // 是纯摩擦——两个名字指同一件事，就该都能敲。（工具名仍叫 update_tasks：
             // 它本来就叫 tasks，改成 TodoWrite 反倒对不上 /tasks。）
@@ -5230,6 +5334,7 @@ internal static class Program
         new("/tasks", "显示当前任务清单（模型进度）"),
         new("/todos", "任务清单（/tasks 的别名）"),
         new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
+        new("/context", "按类别拆解上下文占用（系统提示/工具定义/历史消息）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),
