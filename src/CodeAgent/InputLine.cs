@@ -489,6 +489,26 @@ public static class InputLine
         return resolved;
     }
 
+    /// <summary>读取终端行数；失败或读数不可信时返回 0 = 未知。
+    ///
+    /// 下限取 <see cref="MinPlausibleHeight"/>：终端最小化/拖拽时 WindowHeight 会抖到 1~2 行，
+    /// 那是「现在读不到」而不是「屏幕真的只有 2 行」——拿它去封顶会把展开态整个禁掉。
+    /// 抖动时返回 0（不猜），下游按「未知」处理。
+    ///
+    /// 没有沿用宽度那套 _lastGoodWidth：宽度只影响**排版**，沿用旧值最多是折行位置慢一拍；
+    /// 高度决定**能不能上移**，沿用旧值会让「窗口被缩小」这类真实变化看不见，
+    /// 于是仍按旧高度上移、照样越界。宁可返回未知。</summary>
+    private static int TryWindowHeight()
+    {
+        int measured;
+        try { measured = Console.WindowHeight; }
+        catch { return 0; }
+        return measured >= MinPlausibleHeight ? measured : 0;
+    }
+
+    /// <summary>可信的最小终端行数：低于此值视为读不到（终端最小化/拖拽抖动）。</summary>
+    internal const int MinPlausibleHeight = 4;
+
     /// <summary>ANSI 原地渲染的最低终端宽度：低于此值退回滚动式，避免换行破坏 ANSI 行号计算。</summary>
     internal const int AnsiMinWidth = 30;
 
@@ -2024,7 +2044,15 @@ public static class InputLine
                             // 正在浏览历史时（idx < session.Count）↓ 一律前进历史，即使条目是多行文本
                             if (!inputExpanded && SkipDirs.CountLines(buf.Text) > 3)
                             {
-                                inputExpanded = true; // 折叠中按 ↓：先展开（显示全部行），光标保持当前行
+                                // 折叠中按 ↓：展开（显示全部行），光标保持当前行。
+                                //
+                                // 但**放不下就不展开**：展开后块高就是全部行数，
+                                // 而重绘靠 \x1b[NA 从块末上移到块首——终端不会越过顶行，
+                                // 200 行粘贴在 24 行终端里上移 200 行会停在顶行，
+                                // 块首到不了，旧内容残留、新内容叠上去。
+                                // 不展开时照样能在行间移动与编辑，只是不同时显示全部行。
+                                if (CanExpand(1 + CountNewlines(buf.Text), TryWindowHeight()))
+                                    inputExpanded = true;
                             }
                             else if (!buf.MoveLinePreservingColumn(up: false))
                             {
@@ -2476,6 +2504,18 @@ public static class InputLine
         }
         return n;
     }
+
+    /// <summary>展开态能不能放得下：块高（行数）必须 ≤ 终端行数 - 1。
+    ///
+    /// ANSI 原地重绘靠 <c>\x1b[NA</c> 从块末上移到块首，而**终端不会越过顶行**：
+    /// N 大于屏幕剩余行数时上移会停在顶行，块首到不了，旧内容残留、新内容叠上去。
+    /// 粘贴 200 行再按 ↓ 展开就是这条路——屏幕越用越乱。
+    ///
+    /// 少一行是给光标定位留的余量：块首恰在第 0 行时再上移一位就出界。
+    /// <paramref name="terminalRows"/> ≤ 0（读不到高度）时返回 true：
+    /// 不猜，交给终端软滚动——猜一个小值会让读不到 WindowHeight 的环境永远展不开。</summary>
+    internal static bool CanExpand(int lines, int terminalRows) =>
+        terminalRows <= 0 || lines <= terminalRows - 1;
 
     /// <summary>输入块的显示换行数（= 显示行数 - 1，即从块末行上移到块首的行距）。
     /// 折叠视图（未展开且 &gt;3 行）只显示「前 2 行 + 折叠提示行」共 3 行，显示换行数是 2——
