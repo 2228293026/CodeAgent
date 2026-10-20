@@ -472,16 +472,53 @@ public static class TextUtil
     /// 「é」（e + 组合尖音符）算成 2 列（实际 1 列）——表格列、状态栏、提示符
     /// 全部按多算出来的宽度补空格，越排越歪，最终溢出行宽。
     /// 终端对齐/截断共用（InputLine、ConsoleRenderer 曾各自实现一份）。</summary>
+    /// <para>ANSI 转义序列（颜色码）**不占列**：<c>\x1b[36mabc\x1b[0m</c> 是 3 列不是 12 列。
+    /// 目前没有真实调用点会传着色串进来（查过 223 处），但这是颗雷——
+    /// 任何一处将来把 <c>SafeColor.Scope</c> 包出来的串递进来，对齐就静默偏几列，
+    /// 而这类问题不报错、只是「看起来不太对」，排查成本极高。</para></summary>
     public static int DisplayWidth(string s)
     {
         int w = 0;
         for (int i = 0; i < s.Length; i++)
         {
+            // 转义序列整段跳过：拆开算会把 ESC、'['、'3'、'6'、'm' 各算一列
+            var skip = AnsiSequenceLength(s, i);
+            if (skip > 0)
+            {
+                i += skip - 1;
+                continue;
+            }
             var (width, chars) = ClusterAt(s, i);
             w += width;
             i += chars - 1;
         }
         return w;
+    }
+
+    /// <summary>若 <paramref name="i"/> 处是 ANSI 转义序列的起点，返回它的长度（含 ESC），否则 0。
+    ///
+    /// 只认 CSI（<c>ESC [ … 终止字节</c>）这一族——终端里出现的颜色/光标控制全属于它。
+    /// 不认识的 ESC 后续字符一律当**长度 1** 消耗（只吃掉 ESC 本身），
+    /// 而不是当普通可见字符：ESC 在屏幕上本来就什么都不显示。
+    /// 这样即使遇到未支持的序列，也只是宽度少数一列，不会把整行算错。</summary>
+    internal static int AnsiSequenceLength(string s, int i)
+    {
+        if (i >= s.Length || s[i] != '\u001b')
+            return 0;
+        // ESC 后面没有东西：单独一个 ESC 也按零宽处理（吃掉 1 个字符）
+        if (i + 1 >= s.Length)
+            return 1;
+        if (s[i + 1] != '[')
+            return 1; // 非 CSI（如 ESC c 复位）：只吞 ESC，避免误吃可见字符
+        // CSI：ESC [ 参数… 终止字节（0x40–0x7E）
+        for (var j = i + 2; j < s.Length; j++)
+        {
+            if (s[j] is >= '@' and <= '~')
+                return j - i + 1;
+        }
+        // 序列没写完（流式截断的中间态）：把剩下的都当序列，
+        // 否则参数会被当正文计宽——而且这些字符本来也不显示
+        return s.Length - i;
     }
 
     /// <summary>从 <paramref name="start"/> 起取一个显示簇，返回（占用的列数, 消耗的字符数）。
@@ -833,6 +870,14 @@ public static class TextUtil
         var i = 0;
         while (i < s.Length)
         {
+            // 转义序列整段走：按字符切会把 ESC[36m 劈成两半，
+            // 截断结果喂给终端就是半个颜色码——后半段整片变色。
+            var ansi = AnsiSequenceLength(s, i);
+            if (ansi > 0)
+            {
+                i += ansi;
+                continue; // 零宽：不动 used
+            }
             var step = char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]) ? 2 : 1;
             var w = DisplayWidth(s.Substring(i, step));
             if (used + w > width)
