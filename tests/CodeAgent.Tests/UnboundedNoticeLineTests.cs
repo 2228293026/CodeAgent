@@ -108,6 +108,31 @@ public class UnboundedNoticeLineTests
         }
     }
 
+    [Fact]
+    public void NoHandWrittenWarnPrefixOutsideTheNoticeRenderer()
+    {
+        // 守卫：Program.cs 里不许再有 `$"{SafeColor.Glyphs.Warn} 正文…"` 这种手写告警行。
+        //
+        // 这一族散落在 20 多处，每处都自己拼标记：
+        //   · 没有宽度收口，长提示在窄终端折行，把后续输出推歪；
+        //   · 和 FormatNoticeLine 的标记重复（裸叹号提示曾显示成「⚠ ⚠ …」）；
+        //   · 改文案时得挨个改，改漏一处就两种说法并存。
+        //
+        // 唯一合法的写法是 FormatNoticeLine(...) / WriteNotice(...)，它们统一管标记与宽度。
+        // 用正则扫而不是逐条锚定：这一族会随功能增加而变长，
+        // 逐条列表永远落后于实际（上一轮就是这样漏掉 /copy 失败分支的）。
+        var source = File.ReadAllText(FindSource("Program.cs")).Replace("\r\n", "\n");
+        var offenders = source
+            .Split('\n')
+            .Select((line, i) => (line, i))
+            .Where(x => x.line.Contains("$\"{SafeColor.Glyphs.Warn} ", StringComparison.Ordinal)
+                        && x.line.Contains("Console.WriteLine", StringComparison.Ordinal))
+            .Select(x => $"第 {x.i + 1} 行: {x.line.Trim()}")
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "这些告警行还在手写标记（应走 FormatNoticeLine/WriteNotice）：\n" + string.Join("\n", offenders));
+    }
+
     private static string FindSource(string name)
     {
         var dir = AppContext.BaseDirectory;

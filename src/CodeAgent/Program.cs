@@ -386,7 +386,7 @@ internal static class Program
                 {
                     // 越界时 logs 已被 max 截断，报真实总数得再数一次（仅在出错路径上付代价）
                     var actual = RecentSessionLogs(config, int.MaxValue).Count;
-                    Console.WriteLine($"{SafeColor.Glyphs.Warn} --resume 编号超出范围（可用 1-{actual}）。");
+                    Console.WriteLine(Program.FormatNoticeLine($"--resume 编号超出范围（可用 1-{actual}）。", Program.ConsoleColumns()));
                 }
             }
             else if (logs.Count > 0)
@@ -399,7 +399,7 @@ internal static class Program
                 Console.WriteLine(FormatConfirmLine($"已恢复会话: {Path.GetFileName(target)}", ConsoleColumns(), SafeColor.Glyphs.Retry));
             }
             else
-                Console.WriteLine($"{SafeColor.Glyphs.Warn} 会话日志无法恢复（文件可能损坏）。");
+                Console.WriteLine(FormatNoticeLine("会话日志无法恢复（文件可能损坏）。", ConsoleColumns()));
         }
         // 应用工作模式：--mode <名> 会话级覆盖（不落盘），否则用配置的 defaultMode（如 "debug"）
         var modeName = modeOverride ?? config.DefaultMode;
@@ -4222,14 +4222,14 @@ internal static class Program
                             PrintConversation(agent, 20);
                         }
                         else
-                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 会话日志无法恢复（文件可能损坏）。");
+                            Console.WriteLine(FormatNoticeLine("会话日志无法恢复（文件可能损坏）。", ConsoleColumns()));
                     }
                     else
                     {
                         // 数字越界时明确指出范围（静默回退到列表曾让人以为编号生效了）
                         var resumeEntries = new List<HelpEntry>(logs.Count);
                         if (int.TryParse(rest.Trim(), out _))
-                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 编号超出范围（可用 1-{logs.Count}）。最近的会话:");
+                            Console.WriteLine(FormatNoticeLine($"编号超出范围（可用 1-{logs.Count}）。最近的会话:", ConsoleColumns()));
                         else
                             Console.WriteLine(FormatSectionHeaderLine(
                                 "最近的会话", "输入 /resume <编号> 恢复，--continue 启动时自动恢复最近一次", ConsoleColumns()));
@@ -4300,7 +4300,7 @@ internal static class Program
                         var logs = ResumableLogs(agent, config);
                         if (logs.Count == 0 && !Directory.Exists(Path.Combine(Environment.CurrentDirectory, config.SessionDir)))
                         {
-                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 没有历史会话日志可导出。");
+                            Console.WriteLine(FormatNoticeLine("没有历史会话日志可导出。", ConsoleColumns()));
                             break;
                         }
                         var ok = 0;
@@ -4342,12 +4342,12 @@ internal static class Program
                         var logs = ResumableLogs(agent, config);
                         if (logs.Count == 0)
                         {
-                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 没有历史会话日志可导出（先正常对话过一次，或 /save <名> 后 /export <名>）。");
+                            Console.WriteLine(FormatNoticeLine("没有历史会话日志可导出（先正常对话过一次，或 /save <名> 后 /export <名>）。", ConsoleColumns()));
                             break;
                         }
                         if (eidx > logs.Count)
                         {
-                            Console.WriteLine($"{SafeColor.Glyphs.Warn} 编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。");
+                            Console.WriteLine(FormatNoticeLine($"编号超出范围（可用 1-{logs.Count}，/resume 查看列表）。", ConsoleColumns()));
                             break;
                         }
                         agent.SetEffectiveIdentity(config.Provider, opts.Model); // 同上：/model 切换后要记切换后的
@@ -4562,12 +4562,15 @@ internal static class Program
                         break;
                     }
                     var ok = TryCopyToClipboardAsync(lastReply.Content!).GetAwaiter().GetResult(); // HandleCommand 同步上下文
-                    Console.WriteLine(ok
+                    if (ok)
                         // 只回显**开头一点**当预览，所以整行要留在终端宽度内：按显示列数截。
                         // 另注意旧写法的 `…` 是多余的——FitToWidth 自己会补省略号，
                         // 拼上第二个只会让人以为预览被截了两刀。
-                        ? $"已复制最近一条回复（{InputLine.FitToWidth(lastReply.Content!, 40)}）到剪贴板。"
-                        : $"{SafeColor.Glyphs.Warn} 无法访问剪贴板（需要 clip.exe / pbcopy / xclip）。");
+                        Console.WriteLine($"已复制最近一条回复（{InputLine.FitToWidth(lastReply.Content!, 40)}）到剪贴板。");
+                    else
+                        // 失败分支走统一告警渲染：手写 ⚠ 前缀既没有宽度处理
+                        // （长的那句提示在窄终端会折行），也容易和 FormatNoticeLine 的标记重复。
+                        Console.WriteLine(FormatNoticeLine("无法访问剪贴板（需要 clip.exe / pbcopy / xclip）。", ConsoleColumns()));
                 }
                 break;
 
