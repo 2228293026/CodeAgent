@@ -16,6 +16,17 @@ public sealed class ConsoleRenderer
     private const int MaxCodeLangChars = 24; // 标注本身的长度上限：再长就不是语言名了
     private bool _skipCodeIntro; // 围栏起始行的语言标注（如 ```cs 的 cs）应丢弃
 
+    /// <summary>当前代码块**开**围栏的反引号个数（不在代码块里时为 3 = 默认）。</summary>
+    ///
+    /// Markdown 允许用更长的围栏去包住更短的：要教别人怎么写三反引号代码块，
+    /// 就得用四个反引号当外层——否则内层那三个会提前把外层关掉。
+    /// 模型经常这么答（"这样写：````markdown ... ````"）。
+    ///
+    /// 此前只认到第 3 个反引号：外层第 4 个被当成语言标注（得到 `` `markdown ``），
+    /// 内层的 ``` 又把代码块提前关了，剩下的内容被当正文重新排版。
+    /// </summary>
+    private int _fenceLen = 3;
+
     /// <summary>终端列数（0 = 未知）。列表项/块引用按此宽度折行并加悬挂缩进；
     /// 未知时保持原样，交回终端软换行。</summary>
     private int _width;
@@ -327,7 +338,8 @@ public sealed class ConsoleRenderer
                 ClearPreview();
                 _line.Clear(); // 不输出围栏分隔符本身（``` 是 Markdown 语法，不是内容）
                 _inCode = true;
-                _tickRun = 0;
+                _fenceLen = 3; // 后续反引号继续累加（```` 会把第 4 个也算进分隔符）
+                _tickRun = 3;
                 _skipCodeIntro = true; // 丢弃本行剩余的语言标注（```cs）
                 return;
             }
@@ -384,8 +396,25 @@ public sealed class ConsoleRenderer
             if (ch == '\n')
             {
                 _skipCodeIntro = false;
+                // 反引号计数必须在这里归零。
+                //
+                // 开围栏时把它留在 3（那样 ````markdown 的第 4 个还能被算进 _fenceLen）。
+                // 但这一行的 \n 若不清零，下一行的收尾 ``` 会从 3 继续涨到 4、5、6，
+                // 永远不等于 _fenceLen——空代码块 `` ```\n``` `` 于是关不掉，
+                // 整段回复都被当成代码。
+                _tickRun = 0;
                 // 语言标注到此收齐：边界先画出来，后面的代码行才有地方落
                 EmitCodeHeader();
+                return;
+            }
+            // 开围栏那一行里，语言标注**之前**还有反引号时它们属于分隔符：
+            // ````markdown 的第 4 个反引号不该变成语言标注里的一个字符（那样得到
+            // "`markdown"，还会让内层的 ``` 提前关掉外层）。
+            //
+            // _codeLang 为空 = 还没开始收语言标注，此时的反引号只可能是分隔符。
+            if (ch == '`' && _codeLang.Length == 0)
+            {
+                _fenceLen++;
                 return;
             }
             // 语言标注此前被直接丢弃——读者只能靠猜。现在留下来单独成行。
@@ -398,11 +427,17 @@ public sealed class ConsoleRenderer
         if (ch == '`')
         {
             _tickRun++;
-            if (_tickRun == 3)
+            // 收尾围栏的长度必须**等于**开围栏（Markdown 规范允许更长，但流式
+            // 逐字符处理时等到 "更长" 再关就等于永远关不掉——先按恰好相等收）。
+            //
+            // 关键是**不能写死 3**：```` 开出来、里面又放 ``` 时，内层那三个
+            // 是内容而不是收尾。原来写死 3，内层一来就把外层关掉，
+            // 剩下的部分被当成正文重新排版。
+            if (_tickRun == _fenceLen)
             {
-                // 围栏结束：移除末尾属于分隔符的两个反引号（避免 ``` 泄漏进代码内容）
-                if (_code.Length >= 2)
-                    _code.Length -= 2;
+                // 移除前面已追加的 (_fenceLen - 1) 个反引号：它们属于分隔符，不是内容
+                if (_code.Length >= _fenceLen - 1)
+                    _code.Length -= _fenceLen - 1;
                 EmitCodeHeader();      // 空代码块（```\n``` ）：边界一次都还没画过
                 EmitCodeLine(_code.ToString());
                 EmitCodeFooter();
@@ -411,8 +446,10 @@ public sealed class ConsoleRenderer
                 _code.Clear();
                 _inCode = false;
                 _tickRun = 0;
+                _fenceLen = 3;
                 return;
             }
+            // 还没凑够收尾长度：是代码内容（```` 块里的 ``` 就走这里）
             _code.Append(ch);
             return;
         }
