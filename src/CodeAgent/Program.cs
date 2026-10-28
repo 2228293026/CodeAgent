@@ -5067,6 +5067,14 @@ internal static class Program
                     WriteNotice(string.IsNullOrWhiteSpace(picked.Body) ? "该风格正文为空，等同于 default。" : "风格正文已注入系统提示，后续回合生效。");
                 }
                 break;
+            case "/doctor":
+                {
+                    var probe = ProbeForDoctor(config, opts, configPath);
+                    foreach (var doctorLine in Doctor.FormatReport(Doctor.Run(config, probe), ConsoleColumns()))
+                        Console.WriteLine(doctorLine);
+                }
+                break;
+
             case "/hooks":
                 {
                     // 钩子是「配了不生效」的高危区：非法时机/空命令在加载时已被警告，
@@ -5831,6 +5839,96 @@ internal static class Program
         return lines;
     }
 
+    /// <summary>/doctor 的探针采集：磁盘与进程探测只在这里做一次，判定规则仍是纯函数。</summary>
+    internal static DoctorProbe ProbeForDoctor(AgentConfig config, ProviderOptions opts, string? configPath)
+    {
+        var cwd = Environment.CurrentDirectory;
+        var configFile = config.SourceFile ?? configPath ?? Path.Combine(cwd, "codeagent.json");
+        var commands = LoadCustomCommands(notify: false);
+        var styles = OutputStyles.Load(cwd);
+        var ruleState = LoadRuleFileState(cwd);
+        var statusState = StatusLineStates.Off;
+        var statusText = string.Empty;
+        if (!string.IsNullOrWhiteSpace(config.StatusLine))
+        {
+            statusText = StatusLine.SegmentAsync(config, "(doctor)", opts.Model, cwd, CachedBranch(cwd))
+                .GetAwaiter().GetResult();
+            statusState = statusText.Length > 0 ? StatusLineStates.Ok : StatusLineStates.Empty;
+        }
+        return new DoctorProbe
+        {
+            ConfigPath = configFile,
+            WorkspacePath = cwd,
+            ConfigFileExists = File.Exists(configFile),
+            ProviderKeyPresent = ProviderKeyLooksPresent(opts),
+            WorkspaceWritable = CanWriteIn(cwd),
+            SessionDirWritable = CanWriteIn(Path.IsPathRooted(config.SessionDir) ? config.SessionDir : Path.Combine(cwd, config.SessionDir)),
+            ShellName = Tools.ShellRunner.AutoShell(),
+            GitAvailable = GitLooksAvailable(),
+            GitBranch = CachedBranch(cwd),
+            CodeAgentIgnored = !NeedsGitignoreHint(cwd),
+            RuleFileSummary = ruleState.FileName is null ? string.Empty : $"{ruleState.FileName}（{ruleState.Status}）",
+            CustomCommandCount = commands.Commands.Count,
+            CustomCommandProblems = commands.Problems,
+            StyleNames = styles.Styles.Select(s => s.Name).ToList(),
+            HookCount = config.Hooks.Count,
+            StatusLineState = statusState,
+            StatusLineText = statusText,
+        };
+    }
+
+    /// <summary>在目录里真写一个临时文件再删掉：权限问题只有真写才知道。</summary>
+    internal static bool CanWriteIn(string dir)
+    {
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var probe = Path.Combine(dir, $".codeagent-doctor-{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(probe, "probe");
+            File.Delete(probe);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>密钥是否存在（启发式）：apiKey → apiKeyEnv → 两个最常见的环境变量名。</summary>
+    internal static bool ProviderKeyLooksPresent(ProviderOptions opts)
+    {
+        if (!string.IsNullOrWhiteSpace(opts.ApiKey))
+            return true;
+        if (!string.IsNullOrWhiteSpace(opts.ApiKeyEnv)
+            && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(opts.ApiKeyEnv)))
+            return true;
+        return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OPENAI_API_KEY"))
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
+    }
+
+    /// <summary>git 是否可用：直接起 git --version，不经 shell（没 shell 时也能问出来）。</summary>
+    internal static bool GitLooksAvailable()
+    {
+        try
+        {
+            using var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("git", "--version")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (proc is null)
+                return false;
+            proc.WaitForExit(2000);
+            return proc.HasExited && proc.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal static readonly HelpEntry[] ReplCommands =
     [
         new("/help", "显示本帮助"),
@@ -5860,6 +5958,7 @@ internal static class Program
         new("/vim [on|off]", "切换输入行的 vim 键位（Esc 退出插入，h/l/w/b 移动，x/dd/dw 删除，u 撤销）"),
         new("/hooks", "列出工具钩子（preToolUse/postToolUse，退出码 2 否决）"),
         new("/output-style [名字]", "列出/切换输出风格（内置 default/explanatory/learning，或自定义 .md）"),
+        new("/doctor", "自检：配置/密钥/工作区/git/命令/风格/钩子/状态栏一次问清"),
         new("/statusline [命令|off]", "设置/查看状态栏外部命令（stdout 首行作为状态栏末段）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),

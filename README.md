@@ -187,7 +187,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/provider [名]` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume [编号]` `/find <关键字>` `/export [名/编号/all]` `/copy` `/prompt` `/files` `/stats` `/tasks` `/retry` `/tools` `/providers` `/models [关键字]` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/commands [reload]` `/vim [on|off]` `/hooks` `/output-style [名字]` `/statusline [命令|off]` `/exit` `/quit`。
+REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/provider [名]` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume [编号]` `/find <关键字>` `/export [名/编号/all]` `/copy` `/prompt` `/files` `/stats` `/tasks` `/retry` `/tools` `/providers` `/models [关键字]` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/commands [reload]` `/vim [on|off]` `/hooks` `/output-style [名字]` `/statusline [命令|off]` `/doctor` `/exit` `/quit`。
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 
@@ -215,6 +215,8 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 **输出风格**：`/output-style` 列出、`/output-style <名字>` 切换并写入配置。内置 `default`（不追加任何内容）、`explanatory`（讲清楚为什么）、`learning`（边做边教）；自定义风格放进 `.codeagent/output-styles/*.md`（项目级）或 `~/.codeagent/output-styles/*.md`（用户级），文件名即风格名，可选 front matter 写 `description`。风格正文**追加**在系统提示末尾而不是替换它——替换会把工具用法和项目规则一起挤掉；`default` 与内置名不允许被文件覆盖，否则用户以为没配风格，行为却已经变了。
 
 **状态栏外部命令**：`/statusline <命令>` 让自己的脚本参与状态栏——stdout 的**首行**整理成一段接在状态栏末尾（去 ANSI、折叠空白、最长 120 字符），`/statusline` 空参查看当前输出，`/statusline off` 关闭。脚本经 `config.shell` 在工作区根执行，载荷（`mode`/`model`/`cwd`/`branch`）以 JSON 经 **stdin** 传入，超时默认 2 秒（`statusLineTimeoutSeconds`）。三条约束：命令超时或失败时状态栏照常出（片段为空，不抛错）；空间不够时这一段**第一个**被丢掉，不会把 `ctx`/目录挤没；改完 `/statusline` 会立刻跑一次并回显，避免「配了不知道有没有用」。
+
+**自检 `/doctor`**：一次问清「配了但没生效」——配置文件来源与警告、Provider 密钥是否找得到、工作区与会话目录是否可写、shell 是否可用、git 是否可用与 `.codeagent/` 是否已被忽略、规则文件、自定义命令（含坏模板条数）、输出风格是否真的存在、钩子条数、状态栏命令是否配了却没输出、vim 是否开启。每项给出**级别 + 现场细节**，非 Ok 的项必须带可操作建议：只说「有问题」不说「怎么办」的自检等于没做。
 
 会话管理：`/save <名>` 把当前对话保存为命名快照（`.codeagent/sessions/`），`/load <名>` 恢复；`/export [名]` 把当前（或指定）会话导出为 Markdown 记录；`/stats` 显示本轮 token 用量；`/tasks` 显示模型当前的任务清单（长任务进度）；`/retry` 重新执行上一条请求。
 
