@@ -54,10 +54,13 @@ public class HooksTests : IDisposable
         public string Description => "测试用假工具";
         public JsonObject Parameters => new();
 
+        /// <summary>返回值可配置：超大结果用来验证「载荷很大时钩子不会把自己卡死」。</summary>
+        public string Payload { get; set; } = "工具结果";
+
         public Task<string> ExecuteAsync(JsonObject? args, AgentContext ctx, CancellationToken ct)
         {
             Calls++;
-            return Task.FromResult("工具结果");
+            return Task.FromResult(Payload);
         }
     }
 
@@ -226,5 +229,59 @@ public class HooksTests : IDisposable
 
         Assert.Equal(1, calls);
         Assert.Equal("工具结果", result);
+    }
+
+    [Fact]
+    public async Task HugeToolResultDoesNotStallTheHook()
+    {
+        // 钩子脚本不读 stdin（`exit 0` 就是）会立刻退出。若同步写 200KB 载荷，
+        // 就会撞上破管道：异常被当成「钩子无法执行」，工具结果前多出一段假错误。
+        // 实测反证：把写 stdin 改回同步后，这条断言 200000 会变成 200045（多出的正是那段提示）。
+        var ctx = Ctx(Hook("postToolUse", "*", "exit 0"));
+        var registry = new ToolRegistry();
+        var tool = new CountingTool { Payload = new string('x', 200_000) };
+        registry.Register(tool);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await registry.ExecuteAsync("probe", "{}", ctx, CancellationToken.None);
+        sw.Stop();
+
+        Assert.Equal(200_000, result.Length);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(15), $"钩子把工具调用卡住了：{sw.Elapsed}");
+    }
+
+    [Fact]
+    public async Task HugeToolArgumentsDoNotStallThePreHook()
+    {
+        var ctx = Ctx(Hook("preToolUse", "*", "exit 0"));
+        var registry = new ToolRegistry();
+        var tool = new CountingTool();
+        registry.Register(tool);
+        var argsJson = new JsonObject { ["content"] = new string('z', 200_000) }.ToJsonString();
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = await registry.ExecuteAsync("probe", argsJson, ctx, CancellationToken.None);
+        sw.Stop();
+
+        Assert.Equal("工具结果", result);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(15), $"钩子把工具调用卡住了：{sw.Elapsed}");
+    }
+
+    [Fact]
+    public void PayloadTruncatesLongStringsWithoutTouchingTheToolArguments()
+    {
+        var big = new string('y', Hooks.MaxPayloadStringChars + 5);
+        var args = new JsonObject
+        {
+            ["content"] = big,
+            ["nested"] = new JsonObject { ["text"] = big },
+        };
+
+        var payload = JsonNode.Parse(Hooks.BuildPayload(HookEvent.PreToolUse, "write_file", args, null, "/w"))!.AsObject();
+
+        Assert.EndsWith("…（已截断）", payload["arguments"]!["content"]!.GetValue<string>());
+        Assert.EndsWith("…（已截断）", payload["arguments"]!["nested"]!["text"]!.GetValue<string>());
+        // 截断只发生在副本上：工具自己拿到的参数必须还是完整的，否则钩子会把要写的内容改坏
+        Assert.Equal(big, args["content"]!.GetValue<string>());
     }
 }

@@ -130,19 +130,31 @@ public static class ShellRunner
         using var proc = new Process { StartInfo = psi };
         proc.Start();
 
-        if (stdin is not null)
-        {
-            // 先写 stdin 再读输出：子进程可能不读 stdin 就输出，先读输出会和写 stdin 互锁。
-            // 写失败（进程已退出/关闭管道）不算错误——钩子退出码才是结论。
-            try
+        // stdin 必须在**后台**写：钩子脚本完全可能不读 stdin（`exit 0` 就是），
+        // 而载荷里的工具参数可能带整段文件内容——一旦超过管道缓冲（Windows 约 4KB），
+        // 同步写会卡到超时，表现为「配了钩子之后每次写大文件都卡 30 秒」。
+        // 先起一个写任务，随后照常读输出、等退出；写不完或写失败都只当没写。
+        // stdin 必须在**后台**写，不能同步写完再读输出。两种真实故障：
+        //   · 钩子脚本不读 stdin（`exit 0` 就是）立刻退出：同步写 200KB 会撞上破管道，
+        //     异常被当成「钩子无法执行」，工具结果前面多出一段假错误；
+        //   · 脚本活着但不读 stdin（如 `sleep 5`）：载荷超过管道缓冲（Windows 约 4KB）时
+        //     同步写会一直堵到超时，表现为「配了钩子之后每次调用都卡 30 秒」。
+        // 先起一个写任务，随后照常读输出、等退出；写不完或写失败都只当没写。
+        var stdinTask = stdin is null
+            ? null
+            : Task.Run(async () =>
             {
-                await proc.StandardInput.WriteAsync(stdin.AsMemory(), ct);
-                await proc.StandardInput.FlushAsync(ct);
-                proc.StandardInput.Close();
-            }
-            catch (IOException) { /* 子进程提前退出：忽略 */ }
-            catch (ObjectDisposedException) { /* 同上 */ }
-        }
+                try
+                {
+                    await proc.StandardInput.WriteAsync(stdin.AsMemory());
+                    await proc.StandardInput.FlushAsync();
+                    proc.StandardInput.Close();
+                }
+                catch
+                {
+                    // 子进程不读 stdin 或已退出：这里没有「失败」可言，结论由退出码给。
+                }
+            });
 
         var stdout = ReadWithCap(proc.StandardOutput, 200_000, ct);
         var stderr = ReadWithCap(proc.StandardError, 100_000, ct);
@@ -162,6 +174,14 @@ public static class ShellRunner
             // 用户取消：必须杀树，否则钩子脚本会脱管继续跑
             try { proc.Kill(entireProcessTree: true); } catch { /* 进程可能刚好退出 */ }
             throw;
+        }
+
+        // 子进程已退出：给它一点时间把 stdin 那口气咽下去（管道缓冲里剩下的字节），
+        // 但绝不为它多等——进程都结束了，写不进去也不影响结论。
+        if (stdinTask is not null)
+        {
+            try { await Task.WhenAny(stdinTask, Task.Delay(200, CancellationToken.None)); }
+            catch { /* 写任务的失败与本次执行无关 */ }
         }
 
         return new CapturedRun(proc.ExitCode, (await stdout).TrimEnd(), (await stderr).TrimEnd(), TimedOut: false);

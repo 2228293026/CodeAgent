@@ -85,21 +85,65 @@ public static class Hooks
         return list;
     }
 
+    /// <summary>单个字符串进载荷的上限。钩子要判断的是「这次写哪个文件、写得对不对」，
+    /// 不是把整段文件内容搬一遍——一个 write_file 的 content 动辄几百 KB，
+    /// 每调用一次工具就搬一遍纯属浪费，也让管道缓冲成为隐患。</summary>
+    public const int MaxPayloadStringChars = 10_000;
+
+    private const string TruncationMark = "…（已截断）";
+
     /// <summary>构造传给钩子的 JSON 载荷。result 为 null 表示「工具还没跑」（pre 阶段）。</summary>
     public static string BuildPayload(HookEvent ev, string toolName, JsonObject? args, string? result, string cwd)
     {
+        // 深拷贝一份再截断：把工具自己的 JsonObject 交给序列化，之后任何就地修改都会影响工具，
+        // 而截断**必须只发生在副本上**——截了工具的参数就等于把它要写的内容改坏了。
+        var argsCopy = args?.DeepClone() as JsonObject ?? new JsonObject();
+        TruncateStrings(argsCopy);
         var payload = new JsonObject
         {
             ["event"] = ev == HookEvent.PreToolUse ? EventNames[0] : EventNames[1],
             ["tool"] = toolName,
-            // 参数原样透传：钩子要看的是「这次到底要写哪个文件」。
-            // 深拷贝一份——把工具自己的 JsonObject 交给序列化，之后任何就地修改都会影响工具。
-            ["arguments"] = args?.DeepClone() ?? new JsonObject(),
+            ["arguments"] = argsCopy,
             ["cwd"] = cwd,
         };
         if (result is not null)
-            payload["result"] = result;
+            payload["result"] = result.Length > MaxPayloadStringChars
+                ? result[..MaxPayloadStringChars] + TruncationMark
+                : result;
         return payload.ToJsonString();
+    }
+
+    /// <summary>把超长的字符串值就地截断（递归处理嵌套对象/数组）。</summary>
+    private static void TruncateStrings(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var key in obj.Select(kv => kv.Key).ToList())
+                {
+                    if (obj[key] is JsonValue v)
+                    {
+                        if (v.TryGetValue<string>(out var s) && s.Length > MaxPayloadStringChars)
+                            obj[key] = s[..MaxPayloadStringChars] + TruncationMark;
+                        continue;
+                    }
+                    TruncateStrings(obj[key]);
+                }
+                break;
+
+            case JsonArray arr:
+                for (var i = 0; i < arr.Count; i++)
+                {
+                    if (arr[i] is JsonValue v)
+                    {
+                        if (v.TryGetValue<string>(out var s) && s.Length > MaxPayloadStringChars)
+                            arr[i] = s[..MaxPayloadStringChars] + TruncationMark;
+                        continue;
+                    }
+                    TruncateStrings(arr[i]);
+                }
+                break;
+        }
     }
 
     /// <summary>跑一遍某个时机的全部匹配钩子，按配置顺序，收集结果（不在这里做「拦不拦」的决策）。</summary>
