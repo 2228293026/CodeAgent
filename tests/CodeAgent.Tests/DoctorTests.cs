@@ -155,6 +155,29 @@ public sealed class DoctorTests
         }
     }
 
+    [Fact]
+    public void ProbeForDoctorSeesCustomCommandsInTheGivenDirectory()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ca_doctor_probe_" + Guid.NewGuid().ToString("N"));
+        var commands = Path.Combine(dir, ".codeagent", "commands");
+        Directory.CreateDirectory(commands);
+        try
+        {
+            File.WriteAllText(Path.Combine(commands, "hello.md"), "打个招呼\n");
+            var probe = Program.ProbeForDoctor(new AgentConfig(), new ProviderOptions { ApiKey = "x" }, null, dir);
+            Assert.Equal(1, probe.CustomCommandCount);
+            Assert.Equal(dir, probe.WorkspacePath);
+            Assert.Contains(OutputStyles.DefaultName, probe.StyleNames);
+            Assert.Equal(0, probe.HookCount);
+            Assert.Equal(StatusLineStates.Off, probe.StatusLineState);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+
     private static DoctorCheck Check(IReadOnlyList<DoctorCheck> checks, string name) =>
         checks.Single(c => c.Name == name);
 }

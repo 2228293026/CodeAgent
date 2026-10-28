@@ -3837,12 +3837,12 @@ internal static class Program
     /// 任何异常都收成一条「问题」而不是抛出去：一串坏模板不该让 REPL 起不来。
     /// <paramref name="notify"/> 决定是否把被跳过的文件打给人看——
     /// 静默跳过一个用户刚写的命令，是他反复改文件名却始终不生效的典型来源。</summary>
-    internal static CustomCommands.Result LoadCustomCommands(bool notify)
+    internal static CustomCommands.Result LoadCustomCommands(bool notify, string? cwd = null)
     {
         CustomCommands.Result loaded;
         try
         {
-            loaded = CustomCommands.Load(Environment.CurrentDirectory);
+            loaded = CustomCommands.Load(cwd ?? Environment.CurrentDirectory);
         }
         catch (Exception ex)
         {
@@ -5840,11 +5840,11 @@ internal static class Program
     }
 
     /// <summary>/doctor 的探针采集：磁盘与进程探测只在这里做一次，判定规则仍是纯函数。</summary>
-    internal static DoctorProbe ProbeForDoctor(AgentConfig config, ProviderOptions opts, string? configPath)
+    internal static DoctorProbe ProbeForDoctor(AgentConfig config, ProviderOptions opts, string? configPath, string? cwd = null)
     {
-        var cwd = Environment.CurrentDirectory;
+        cwd ??= Environment.CurrentDirectory;
         var configFile = config.SourceFile ?? configPath ?? Path.Combine(cwd, "codeagent.json");
-        var commands = LoadCustomCommands(notify: false);
+        var commands = LoadCustomCommands(notify: false, cwd: cwd);
         var styles = OutputStyles.Load(cwd);
         var ruleState = LoadRuleFileState(cwd);
         var statusState = StatusLineStates.Off;
