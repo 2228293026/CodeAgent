@@ -4990,9 +4990,10 @@ internal static class Program
                         Console.WriteLine(FormatSectionHeaderLine("工具钩子", $"共 {defs.Count} 条会执行", ConsoleColumns()));
                         foreach (var hook in defs)
                         {
-                            var ev = hook.Event == HookEvent.PreToolUse ? "preToolUse " : "postToolUse";
+                            var ev = hook.Event == HookEvent.PreToolUse ? Hooks.EventNames[0] : Hooks.EventNames[1];
+                            // 事件名两行要竖向对齐：不做宽度填充的话 postToolUse 那一行的工具名会往右缩。
                             Console.WriteLine(FormatResultLine(
-                                $"{ev} {hook.Matcher} {SafeColor.Glyphs.Arrow} {hook.Command}（超时 {hook.TimeoutSeconds}s）",
+                                $"{ev,-11} {hook.Matcher} {SafeColor.Glyphs.Arrow} {hook.Command}（超时 {hook.TimeoutSeconds}s）",
                                 ConsoleColumns()));
                         }
                         Console.WriteLine(FormatHintLine(
