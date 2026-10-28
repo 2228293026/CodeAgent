@@ -3084,15 +3084,9 @@ internal static class Program
         var rate = FormatRateSegment(agent.RateBars(), agent.LastTokensPerSecond);
         // 外部状态栏段（/statusline）：同步等（每轮一次），超时/失败都退化成空段，
         // 绝不让用户脚本拖死界面——BuildStatusBar 里它也是第一个被裁掉的段。
-        var extra = string.IsNullOrWhiteSpace(config.StatusLine)
-            ? string.Empty
-            : StatusLine.RunAsync(
-                config.StatusLine,
-                string.IsNullOrWhiteSpace(config.Shell) ? CodeAgent.Tools.ShellRunner.AutoShell() : config.Shell,
-                shownCwd,
-                config.StatusLineTimeoutSeconds,
-                StatusLine.BuildPayload(agent.CurrentMode.Name, opts.Model, shownCwd, branch))
-              .GetAwaiter().GetResult();
+        var extra = StatusLine
+            .SegmentAsync(config, agent.CurrentMode.Name, opts.Model, shownCwd, branch)
+            .GetAwaiter().GetResult();
         using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,

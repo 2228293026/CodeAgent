@@ -121,6 +121,17 @@ public sealed class StatusLineTests
         Assert.Contains(lines, l => l.Contains("/statusline"));
     }
 
+    [Fact]
+    public async Task SegmentAsyncFollowsTheConfiguration()
+    {
+        // 守的是「配置了到底有没有显示」：PrintStatusBar 只负责把它塞进状态栏。
+        var off = new AgentConfig { StatusLine = "" };
+        Assert.Equal(string.Empty, await StatusLine.SegmentAsync(off, "code", "m", ".", null));
+
+        var on = new AgentConfig { StatusLine = "echo ok", Shell = Shell(), StatusLineTimeoutSeconds = 5 };
+        Assert.Equal("ok", await StatusLine.SegmentAsync(on, "code", "m", ".", null));
+    }
+
     private static string Shell() =>
         OperatingSystem.IsWindows() ? "cmd" : "bash";
 }

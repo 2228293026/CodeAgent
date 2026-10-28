@@ -59,6 +59,16 @@ public static class StatusLine
         return text[..Math.Max(1, maxChars - 1)] + "…";
     }
 
+    /// <summary>按配置取一段可直接放上状态栏的文字：未配置返回空串；命令超时或失败也返回空串
+    /// （状态栏照常出，绝不让用户脚本拖死界面）。抽成方法是为了能直接测「配置了到底有没有显示」。</summary>
+    internal static async Task<string> SegmentAsync(AgentConfig config, string mode, string model, string cwd, string? branch)
+    {
+        if (string.IsNullOrWhiteSpace(config.StatusLine))
+            return string.Empty;
+        var shell = string.IsNullOrWhiteSpace(config.Shell) ? ShellRunner.AutoShell() : config.Shell;
+        return await RunAsync(config.StatusLine, shell, cwd, config.StatusLineTimeoutSeconds, BuildPayload(mode, model, cwd, branch)).ConfigureAwait(false);
+    }
+
     /// <summary>构造给脚本的 JSON 载荷（经 stdin 传入）。字段名与状态栏段一致，便于脚本直接 echo。</summary>
     public static string BuildPayload(string mode, string model, string cwd, string? branch)
     {
