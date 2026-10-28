@@ -268,8 +268,7 @@ public sealed partial class Agent
     public void SetMode(AgentMode mode)
     {
         CurrentMode = mode;
-        if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
-            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(mode) };
+        RefreshSystemPrompt();
         // 自定义模式的工具名打错（不在注册表）时，ToolsForMode 会静默丢弃——
         // 轻则少工具，重则整个模式无工具可用。提示而非沉默（脚本/重定向输出时不刷屏）
         if (mode.AllowedTools is { } allowed)
@@ -283,9 +282,19 @@ public sealed partial class Agent
         }
     }
     /// <summary>code 模式使用配置的自定义 systemPrompt（会话级注入优先——见 AgentConfig.SessionOnlySystemPrompt）；
-    /// 其他模式用模式自身的提示词。</summary>
+    /// 其他模式用模式自身的提示词。输出风格片段对所有模式统一**追加**在末尾（见 AgentConfig.SessionOnlyStylePrompt）。</summary>
     private string EffectivePrompt(AgentMode mode) =>
-        mode.Name == "code" ? (_config.SessionOnlySystemPrompt ?? _config.SystemPrompt) : mode.SystemPrompt;
+        OutputStyles.Append(
+            mode.Name == "code" ? (_config.SessionOnlySystemPrompt ?? _config.SystemPrompt) : mode.SystemPrompt,
+            _config.SessionOnlyStylePrompt);
+
+    /// <summary>系统提示相关字段（输出风格等）在运行时变了之后，把已下发的第一条 system 消息换成新值。
+    /// 只改这一条：历史里其他消息不动，否则等于重开会话。</summary>
+    public void RefreshSystemPrompt()
+    {
+        if (_messages.Count > 0 && _messages[0].Role == MessageRole.System)
+            _messages[0] = new ProviderMessage { Role = MessageRole.System, Content = EffectivePrompt(CurrentMode) };
+    }
 
     /// <summary>撤回最后一轮：移除最后一条用户消息及其回复，恢复发送前状态（ESC 撤回）。
     /// 连续调用逐轮回退（多级撤回），无轮可撤时返回 null。</summary>

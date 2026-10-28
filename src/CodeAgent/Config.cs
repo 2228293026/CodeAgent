@@ -122,6 +122,10 @@ public sealed class AgentConfig
     /// <summary>Markdown 导出目录（相对工作目录，/export 用）。</summary>
     public string ExportDir { get; set; } = ".codeagent/exports";
 
+    /// <summary>输出风格名（default / explanatory / learning，或 .codeagent/output-styles 下的文件名）。
+    /// 风格片段**追加**到系统提示末尾，不替换默认提示。未知名字会在启动时明确警告并回退 default。</summary>
+    public string OutputStyle { get; set; } = OutputStyles.DefaultName;
+
     /// <summary>是否流式输出模型回复（逐字打印，默认开启）。</summary>
     public bool StreamOutput { get; set; } = true;
 
@@ -394,6 +398,12 @@ public sealed class AgentConfig
     [JsonIgnore]
     public string? PersistedProvider { get; set; }
 
+    /// <summary>会话级输出风格片段（由入口按 OutputStyle 解析后写入）。
+    /// 与 SessionOnlySystemPrompt 同理：绝不参与序列化——任何一条保存配置的命令
+    /// 都不该把风格正文固化成用户的 codeagent.json。</summary>
+    [JsonIgnore]
+    public string? SessionOnlyStylePrompt { get; set; }
+
     /// <summary>加载时的非致命警告（未知配置项、非法枚举回退等），由入口打印提示。
     /// 手写 JSON 的拼写错误此前会被静默忽略——「配了但不生效」且无任何线索。</summary>
     [JsonIgnore]
@@ -415,7 +425,7 @@ public sealed class AgentConfig
         "commandTimeoutSeconds", "shell", "saveSessions", "maxSessionLogs", "sessionDir",
         "exportDir", "streamOutput", "showToolCalls", "renderMarkdown", "tuiAnsi", "vimMode",
         "thinkingEffort", "defaultMode", "fileAccess", "readOnlyDirs", "modes", "systemPrompt",
-        "autoCompactPercent", "hooks",
+        "autoCompactPercent", "hooks", "outputStyle",
     };
     private static readonly HashSet<string> KnownHookKeys = new(StringComparer.OrdinalIgnoreCase)
     {

@@ -316,6 +316,19 @@ internal static class Program
                     config.Modes.Add(m);
         }
 
+        // 输出风格：把选定风格正文注入会话级字段（不写回配置），与规则文件同属系统提示。
+        var styleLibrary = OutputStyles.Load(Environment.CurrentDirectory);
+        foreach (var p in styleLibrary.Problems)
+            WriteStartupNotice($"输出风格: {p}");
+        var activeStyle = OutputStyles.Find(styleLibrary, config.OutputStyle);
+        if (activeStyle is null)
+            WriteStartupNotice($"未知输出风格「{config.OutputStyle}」（可用: {string.Join("、", styleLibrary.Styles.Select(s => s.Name))}），本次按 default 运行。");
+        else
+        {
+            config.OutputStyle = activeStyle.Name;
+            config.SessionOnlyStylePrompt = activeStyle.Body;
+        }
+
         // 命令行/环境变量覆盖：provider 与 model。
         // 环境变量同时接受 CODEAGENT_* 与历史拼写 CODEGENT_*（后者像笔误，按自然名设置曾静默无效），
         // CODEAGENT_* 优先
@@ -4973,6 +4986,39 @@ internal static class Program
                     }
                 }
                 break;
+            case "/output-style":
+                {
+                    var library = OutputStyles.Load(Environment.CurrentDirectory);
+                    var arg = rest.Trim();
+                    if (arg.Length == 0 || arg.Equals("list", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var styleLine in FormatOutputStyleList(library, config.OutputStyle, ConsoleColumns()))
+                            Console.WriteLine(styleLine);
+                        break;
+                    }
+                    var picked = OutputStyles.Find(library, arg);
+                    if (picked is null)
+                    {
+                        foreach (var badLine in FormatInvalidValueLines("无效的输出风格", arg, library.Styles.Select(s => s.Name), ConsoleColumns()))
+                            WriteNotice(badLine);
+                        break;
+                    }
+                    config.OutputStyle = picked.Name;
+                    config.SessionOnlyStylePrompt = picked.Body;
+                    agent.RefreshSystemPrompt();
+                    try
+                    {
+                        var styleSavePath = ConfigSavePath(configPath, config);
+                        SaveConfig(config, styleSavePath);
+                        Console.WriteLine(FormatConfirmLine(FormatSettingSavedLine("输出风格已设为", picked.Name, styleSavePath, ConsoleColumns()), ConsoleColumns()));
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteNotice($"输出风格已设为 {picked.Name}（保存配置失败: {ex.Message}）");
+                    }
+                    WriteNotice(string.IsNullOrWhiteSpace(picked.Body) ? "该风格正文为空，等同于 default。" : "风格正文已注入系统提示，后续回合生效。");
+                }
+                break;
             case "/hooks":
                 {
                     // 钩子是「配了不生效」的高危区：非法时机/空命令在加载时已被警告，
@@ -5702,6 +5748,21 @@ internal static class Program
     }
 
     /// <summary>REPL 命令清单（结构化，供 /help 按终端宽度渲染）。</summary>
+    /// <summary>/output-style 的风格清单：一行一个，「*」标当前项，标明内置/自定义。
+    /// 抽成纯函数是为了能断言「当前项确实被标出来」——只测 Console 输出做不到。</summary>
+    internal static IReadOnlyList<string> FormatOutputStyleList(OutputStyles.Result library, string current, int width = 0)
+    {
+        var lines = new List<string> { FormatSectionHeaderLine("输出风格", $"当前: {current}", width) };
+        foreach (var style in library.Styles)
+        {
+            var mark = style.Name.Equals(current, StringComparison.OrdinalIgnoreCase) ? "*" : " ";
+            var origin = style.IsBuiltin ? "内置" : "自定义";
+            lines.Add(FormatResultLine($"{mark} {style.Name}（{origin}）{SafeColor.Glyphs.Arrow} {style.Description}", width));
+        }
+        lines.Add(FormatHintLine("切换: /output-style <名字>；自定义风格放 .codeagent/output-styles/*.md 或 ~/.codeagent/output-styles/*.md", width));
+        return lines;
+    }
+
     internal static readonly HelpEntry[] ReplCommands =
     [
         new("/help", "显示本帮助"),
@@ -5730,6 +5791,7 @@ internal static class Program
         new("/commands [reload]", "列出/重载自定义命令（.codeagent/commands/**/*.md，展开成提示词）"),
         new("/vim [on|off]", "切换输入行的 vim 键位（Esc 退出插入，h/l/w/b 移动，x/dd/dw 删除，u 撤销）"),
         new("/hooks", "列出工具钩子（preToolUse/postToolUse，退出码 2 否决）"),
+        new("/output-style [名字]", "列出/切换输出风格（内置 default/explanatory/learning，或自定义 .md）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),

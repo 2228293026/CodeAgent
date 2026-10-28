@@ -75,7 +75,7 @@ public sealed class SectionHeaderLineTests
         // 顺手确认这一处确实走了统一收口，而不是又手写一行 Console.WriteLine。
         // 名字里不写死数字，否则改一次计数就要连测试名一起撒谎。
         var code = StripComments(File.ReadAllText(FindSource()));
-        Assert.Equal(5, Occurrences(code, "FormatSectionHeaderLine(")); // 定义 + /resume + /providers + /commands + /hooks
+        Assert.Equal(6, Occurrences(code, "FormatSectionHeaderLine(")); // 定义 + /resume + /providers + /commands + /hooks + /output-style
         Assert.DoesNotContain("Console.WriteLine(\"最近的会话（输入 /resume", code);
         Assert.DoesNotContain("Console.WriteLine($\"已配置的 Provider（当前:", code);
         Assert.True(Occurrences(code, "FormatHintLine(") >= 2, "两处提示行应走 FormatHintLine");
