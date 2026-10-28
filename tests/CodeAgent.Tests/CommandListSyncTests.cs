@@ -66,7 +66,7 @@ public sealed class CommandListSyncTests
             "/prompt", "/files", "/config", "/session", "/setup", "/undo", "/diff",
             "/save", "/load", "/export", "/stats", "/status", "/context", "/init", "/retry", "/tools",
             "/providers", "/models", "/diag", "/history", "/resume", "/find",
-            "/thinking", "/shell", "/mode", "/access", "/exit", "/quit",
+            "/thinking", "/shell", "/mode", "/access", "/commands", "/vim", "/exit", "/quit",
         })
         {
             Assert.True(HelpNames().Contains(cmd), $"{cmd} 不在 /help 清单里");

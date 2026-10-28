@@ -187,7 +187,7 @@ codeagent> /clear
 codeagent> /exit
 ```
 
-REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/provider [名]` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume [编号]` `/find <关键字>` `/export [名/编号/all]` `/copy` `/prompt` `/files` `/stats` `/tasks` `/retry` `/tools` `/providers` `/models [关键字]` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/commands [reload]` `/exit` `/quit`。
+REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/provider [名]` `/config` `/session` `/setup` `/undo` `/diff [N]` `/save` `/load` `/resume [编号]` `/find <关键字>` `/export [名/编号/all]` `/copy` `/prompt` `/files` `/stats` `/tasks` `/retry` `/tools` `/providers` `/models [关键字]` `/history [N]` `/thinking` `/shell` `/mode` `/access` `/diag` `/commands [reload]` `/vim [on|off]` `/exit` `/quit`。
 
 工作模式：`/mode` 查看，`/mode plan` 切换。内置 8 种：`code`（默认全功能）、`plan` / `explain` / `review`（只读，自动隐藏并拦截写工具）、`debug` / `refactor` / `test` / `doc`（全功能专用）。还可在 `codeagent.json` 的 `modes` 列表定义**自定义模式**（系统提示 + 工具范围）。
 
@@ -196,6 +196,8 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 `/diff` 显示最近一次修改的 diff（基于撤销快照与当前文件内容对比），方便审查 agent 的改动。
 
 **自定义命令**：把 Markdown 模板放进 `.codeagent/commands/`（项目级）或 `~/.codeagent/commands/`（用户级，所有项目可用），文件名就是命令名，子目录用 `:` 连接（`db/migrate.md` → `/db:migrate`）。正文即提示词，支持 `$ARGUMENTS`（整串实参）、`$1`…`$9`（按空白切分，认成对的引号）、`$$`（字面 `$`）；可选 front matter 写 `description` 与 `argument-hint`。敲 `/` 就会出现在补全菜单里，`/commands` 列出已加载的命令、`/commands reload` 改完模板无需重启。同名时项目级盖住用户级；与内置命令重名、名字含空格、正文为空、超过 256 KB 的文件会被跳过并说明原因——不会静默失效。
+
+**vim 键位**：`/vim` 切换（也接受 `/vim on` / `/vim off`，会写进配置）。开启后提示符末尾多出 `[I]` / `[N]` 标记当前模式；按 Esc 从插入切到普通。普通模式下 `h l w b e 0 ^ $ gg G` 移动、`x dd dw db de D` 删除、`cw cc C` 修改、`u` 撤销、`i a A I` 回到插入，支持数字前缀（`3l`、`2dd`）。方向键、Tab 补全、`Ctrl+R` 搜索在普通模式下照常可用。注意：vim 开启时 Esc 不再是「清空输入 / 撤回上一条消息」，它专职退出插入模式。
 
 会话管理：`/save <名>` 把当前对话保存为命名快照（`.codeagent/sessions/`），`/load <名>` 恢复；`/export [名]` 把当前（或指定）会话导出为 Markdown 记录；`/stats` 显示本轮 token 用量；`/tasks` 显示模型当前的任务清单（长任务进度）；`/retry` 重新执行上一条请求。
 

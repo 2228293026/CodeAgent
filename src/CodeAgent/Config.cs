@@ -113,6 +113,10 @@ public sealed class AgentConfig
     /// <summary>是否用 ANSI 转义做菜单原地渲染（过滤在基础列表上原地更新、方向键高亮移动）；Windows Terminal 等支持 ANSI 的终端默认开启，老式终端设 false 用滚动式。</summary>
     public bool TuiAnsi { get; set; } = true;
 
+    /// <summary>输入行是否用 vim 键位（/vim 切换，默认关闭）。
+    /// 开启后 Esc 从插入模式切到普通模式，普通模式下按键是命令（h/l/w/b/x/dd/u…）而不再落字。</summary>
+    public bool VimMode { get; set; }
+
     /// <summary>模型思考强度（reasoning effort）：off / low / medium / high / auto，默认 off（不启用）。
     /// auto 不指定强度，由模型/供应商按自身默认行为思考。</summary>
     public string ThinkingEffort { get; set; } = "off";

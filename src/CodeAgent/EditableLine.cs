@@ -390,5 +390,22 @@ public sealed class EditableLine
         Cursor = _text.Length;
     }
 
+    /// <summary>整体设置文本**并把光标放到指定位置**（vim 编辑用）。
+    ///
+    /// <see cref="Replace"/> 只能把光标留在末尾，而 vim 的一次动作（<c>dw</c>、<c>dd</c>）
+    /// 会同时改文本和光标——分两步做（先 Replace 再想办法挪光标）既缺接口又容易忘掉一半。
+    /// 光标越界收敛到 [0, Length]；落在代理对中间时退到该码点起点，
+    /// 否则下一次插入会把一个 emoji 从中间劈开。
+    /// </summary>
+    public void Reset(string text, int cursor)
+    {
+        _text.Clear();
+        _text.Append(text);
+        var at = Math.Clamp(cursor, 0, _text.Length);
+        if (at > 0 && at < _text.Length && char.IsLowSurrogate(_text[at]) && char.IsHighSurrogate(_text[at - 1]))
+            at--;
+        Cursor = at;
+    }
+
     public override string ToString() => _text.ToString();
 }

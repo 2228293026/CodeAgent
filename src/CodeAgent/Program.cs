@@ -517,7 +517,7 @@ internal static class Program
             var promptText = inlinePrompt ?? PromptFor(opts, agent);
             if (framed)
                 promptText = BuildInputFrameTop(promptText, InputModeHint(config.ThinkingEffort), cols);
-            var line = await InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft, InputLine.DefaultPlaceholder, Environment.CurrentDirectory);
+            var line = await InputLine.Read(promptText, modeTuples, config.TuiAnsi, pendingDraft, InputLine.DefaultPlaceholder, Environment.CurrentDirectory, config.VimMode);
             inlinePrompt = null;
             // 下边框把刚输入的这一行封进框里。EOF 不画：没有用户输入就没有框可封。
             if (line is not null)
@@ -2450,6 +2450,9 @@ internal static class Program
     /// <summary>命令 shell 取值（含 auto）：<c>/shell</c> 的展示、可选列表与候选提示共用同一份，
     /// 此前三处各写一份字面量，改选项时必有一处漏掉——而漏掉的那处会让"可选"与实际可设值对不上。</summary>
     internal static readonly string[] ShellNames = ["cmd", "powershell", "pwsh", "bash", "sh", "auto"];
+
+    /// <summary><c>/vim</c> 的取值：展示的「可选」、校验与候选提示共用同一份。</summary>
+    internal static readonly string[] VimValues = ["on", "off"];
 
     /// <summary>文件访问权限档位（<c>/access</c>）。同样收口，避免展示与校验分叉。</summary>
     internal static readonly string[] FileAccessModes = ["strict", "whitelist", "full"];
@@ -4970,6 +4973,42 @@ internal static class Program
                     }
                 }
                 break;
+            case "/vim":
+                {
+                    // 学自 Claude Code 的 /vim：输入行切成 vim 键位。
+                    // 不带参数即切换（Claude Code 也这样），带 on/off 便于写进配置说明与脚本。
+                    var arg = rest.Trim();
+                    bool? want = arg.Length == 0
+                        ? !config.VimMode
+                        : arg.Equals("on", StringComparison.OrdinalIgnoreCase) || arg.Equals("true", StringComparison.OrdinalIgnoreCase)
+                            ? true
+                            : arg.Equals("off", StringComparison.OrdinalIgnoreCase) || arg.Equals("false", StringComparison.OrdinalIgnoreCase)
+                                ? false
+                                : null;
+                    if (want is null)
+                    {
+                        foreach (var l in FormatInvalidValueLines("无效值", rest, VimValues, ConsoleColumns()))
+                            WriteNotice(l);
+                        break;
+                    }
+                    config.VimMode = want.Value;
+                    var onOff = want.Value ? "开启" : "关闭";
+                    try
+                    {
+                        var savePath = ConfigSavePath(configPath, config);
+                        SaveConfig(config, savePath);
+                        Console.WriteLine(FormatConfirmLine(
+                            FormatSettingSavedLine("vim 模式已设为", onOff, savePath, ConsoleColumns()), ConsoleColumns()));
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteNotice($"vim 模式已设为 {onOff}（保存配置失败: {ex.Message}）");
+                    }
+                    if (want.Value)
+                        WriteNotice("Esc 退出插入模式；普通模式下 h/l/w/b 移动、x/dd/dw/D 删除、cw/cc/C 修改、u 撤销、i/a/A/I 回到插入");
+                }
+                break;
+
             case "/commands":
                 {
                     // reload 是重扫；不带参数只看当前清单（顺手列出被跳过的文件，
@@ -5659,6 +5698,7 @@ internal static class Program
         new("/context", "按类别拆解上下文占用（系统提示/工具定义/历史消息）"),
         new("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
         new("/commands [reload]", "列出/重载自定义命令（.codeagent/commands/**/*.md，展开成提示词）"),
+        new("/vim [on|off]", "切换输入行的 vim 键位（Esc 退出插入，h/l/w/b 移动，x/dd/dw 删除，u 撤销）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),

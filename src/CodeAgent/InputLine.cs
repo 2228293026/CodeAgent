@@ -422,6 +422,7 @@ public static class InputLine
         ("/context", "按类别拆解上下文占用"),
         ("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
         ("/commands", "列出/重载自定义命令（.codeagent/commands/*.md）"),
+        ("/vim", "切换 vim 键位（Esc 退出插入模式，普通模式下按键是命令）"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具（可带关键字过滤）"),
         ("/providers", "列出已配置的 Provider"),
@@ -1053,8 +1054,9 @@ public static class InputLine
     public static async Task<string?> Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null)
         => await Read(prompt, modes, ansi, initial, DefaultPlaceholder);
 
-    /// <summary>读取一行输入。placeholder 为 null/空串时不显示占位提示。mentionRoot 非空时启用 @ 文件引用。</summary>
-    public static async Task<string?> Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null, string? mentionRoot = null)
+    /// <summary>读取一行输入。placeholder 为 null/空串时不显示占位提示。mentionRoot 非空时启用 @ 文件引用。
+    /// <paramref name="vim"/> 开启 vim 普通模式（<c>/vim</c>）：Esc 从插入切到普通，普通模式下按键是命令。</summary>
+    public static async Task<string?> Read(string prompt, IReadOnlyList<(string Name, string Desc)>? modes = null, bool ansi = true, string? initial = null, string? placeholder = null, string? mentionRoot = null, bool vim = false)
     {
         var root = mentionRoot ?? string.Empty;
         if (Console.IsInputRedirected)
@@ -1085,7 +1087,11 @@ public static class InputLine
         // 走 Program.BuildInputTextTail 这个**唯一**的切法：这里内联展开过同样的
         // "最后一个 \n 之后"逻辑，两份切法迟早会走偏一份，而走偏的后果正是
         // 「边框混进重绘块 → 敲一个字多一行」。
-        var promptTail = Program.BuildInputTextTail(promptPlain);
+        // vim 模式标记挂在提示符末尾。没有标记就没法用——vim 里点错一次就删掉半行，
+        // 「我现在到底在哪个模式」必须一眼可见，不能靠回想刚才按了几个键。
+        var vimSession = vim ? new VimSession() : null;
+        var promptTailBase = Program.BuildInputTextTail(promptPlain);
+        var promptTail = vimSession is null ? promptTailBase : promptTailBase + VimModeMark(vimSession.Mode);
         var searching = false;      // Ctrl+R 反向搜索模式：输入进 query，输入行显示命中的历史条目
         var searchQuery = new StringBuilder();
         var searchFrom = -1;        // 当前命中的 session 下标（-1 = 无命中）
@@ -1225,7 +1231,9 @@ public static class InputLine
             // 表头要靠它说清"一共这么多、只列了这么多"——否则被丢掉的文件像是根本不存在。
             var mentionTotal = 0;
 
-            Console.Write(prompt);
+            // 首帧要**带上 vim 标记**：重绘用的是 promptTail（含标记），
+            // 若这里直接打 prompt（Program 拼的，没有标记），第一次按键就会把整行右移 4 列。
+            Console.Write(vimSession is null ? prompt : prompt[..^promptTailBase.Length] + promptTail);
             // 提示符可能占多行（BuildInputFrameTop 返回「上边框 + 提示符」）。但**边框是 chrome，
             // 不属于重绘块**：它只画一次，之后 InputText() 只重画提示符的最后一行。
             //   · lastInputLines 必须是「提示符最后一行 + 输入文本各行」的行数，
@@ -1786,6 +1794,22 @@ public static class InputLine
                 if (menuOpen && !modePicker && !SlashLike(buf.ToString()))
                     CloseMenu();
 
+                // vim 普通模式：可打印键是**命令**，不能落进输入框（敲 h 不能打出 h）。
+                // 其余键（方向键 / Tab / Enter / Ctrl 组合）继续走下面的既有逻辑——
+                // 普通模式下仍要能用 ↑↓ 翻历史、Ctrl+R 搜索，不必先切回插入模式。
+                if (vimSession is { Mode: VimInputMode.Normal } && IsVimPrintable(key))
+                {
+                    var vimResult = vimSession.Feed(buf.Text, buf.Cursor, key.KeyChar);
+                    if (vimResult.Changed)
+                        buf.Reset(vimResult.Text, vimResult.Cursor);
+                    var leftNormal = vimResult.Mode != VimInputMode.Normal;
+                    if (leftNormal)
+                        promptTail = promptTailBase + VimModeMark(vimSession.Mode);
+                    if (vimResult.Changed || leftNormal)
+                        OnTextChanged();
+                    continue;
+                }
+
                 switch (key.Key)
                 {
                     // Ctrl+T：切换思考强度（学自 Claude Code）。走 ThinkingMarker 回报给调用方，
@@ -2255,6 +2279,21 @@ public static class InputLine
                             RedrawInput();
                             break;
                         }
+                        // vim 开启时 Esc 只切模式，不再兼任「清空输入 / 撤回消息」：
+                        // 插入模式下按 Esc 是最高频的动作，若它顺手清掉草稿，vim 就没法用了。
+                        // 代价是这两项在 vim 下要靠别的方式（Ctrl+U 清行、关掉 vim 再撤回），
+                        // 这是「打开 vim」这个明确选择的一部分。
+                        if (vimSession is not null)
+                        {
+                            var vimEscape = vimSession.Escape(buf.Text, buf.Cursor);
+                            if (vimEscape.Changed)
+                                buf.Reset(vimEscape.Text, vimEscape.Cursor);
+                            promptTail = promptTailBase + VimModeMark(vimSession.Mode);
+                            if (menuOpen)
+                                CloseMenu();
+                            RedrawInput();
+                            break;
+                        }
                         if (menuOpen)
                         {
                             CloseMenu();
@@ -2413,6 +2452,17 @@ public static class InputLine
     }
 
     /// <summary>快捷键判定：Alt+键 或 Ctrl+Shift+键（部分终端会吞 Alt，提供 Ctrl+Shift 兜底）。</summary>
+    /// <summary>提示符末尾的 vim 模式标记。两种模式都是 4 列宽，
+    /// 宽度不随模式变——否则切换模式就会改变这一行的折行位置，
+    /// 而重绘是靠「上移 N 行」定位的，行数一变就把上一轮内容盖掉或留下残影。</summary>
+    internal static string VimModeMark(VimInputMode mode) =>
+        mode == VimInputMode.Normal ? "[N] " : "[I] ";
+
+    /// <summary>该键是不是「普通模式下该当命令吃掉的可打印字符」。
+    /// 排除 Ctrl/Alt 组合：Ctrl+R 搜索、Alt+M 模式菜单、Ctrl+C 退出都要照常可用。</summary>
+    private static bool IsVimPrintable(ConsoleKeyInfo key) =>
+        key.KeyChar >= ' ' && (key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt)) == 0;
+
     private static bool IsShortcut(ConsoleKeyInfo key)
     {
         var m = key.Modifiers;
