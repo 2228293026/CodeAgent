@@ -156,9 +156,10 @@ public class CustomCommandsTests : IDisposable
         // 两边都断言真实行为——不 Skip（基线要求 0 跳过），也不假装测过。
         var first = ProjectFile("dup.md", "甲\n");
         var second = ProjectFile("DUP.md", "乙\n");
-        var caseSensitive = !string.Equals(first, second, StringComparison.OrdinalIgnoreCase)
-                            && File.ReadAllText(first) == "甲\n"
-                            && File.ReadAllText(second) == "乙\n";
+        // 探测方式只能是**读内容**：忽略大小写比较路径在两个平台上结论相同（都"相等"），
+        // 据此判断永远得不出文件系统是否区分大小写。而在不敏感的文件系统上，
+        // 第二次写入会覆盖第一份，于是 first 读出来是"乙"。
+        var caseSensitive = File.ReadAllText(first) == "甲\n" && File.ReadAllText(second) == "乙\n";
 
         var loaded = Load();
 
