@@ -210,7 +210,7 @@ REPL 命令：`/help` `/clear` `/compact` `/cls` `/model [名称|编号]` `/prov
 }
 ```
 
-`matcher` 是 `*`（全部工具）或精确工具名（不分大小写）。命令经 `config.shell` 在**工作区根**执行；事件与工具名走环境变量 `CODEAGENT_HOOK_EVENT`、`CODEAGENT_HOOK_TOOL`，完整载荷（`event`/`tool`/`arguments`/`cwd`，post 阶段另有 `result`）以 JSON 经 **stdin** 传入。退出码语义：`0` 通过；`2` **否决**——pre 阶段工具不再执行，post 阶段把 stderr 作为反馈交给模型；其它非 0 视为钩子自身出错，**不拦**工具但会在结果前附一行说明（不静默）。`/hooks` 列出当前真正会执行的钩子。
+`matcher` 是 `*`（全部工具）或精确工具名（不分大小写）。命令经 `config.shell` 在**工作区根**执行；事件与工具名走环境变量 `CODEAGENT_HOOK_EVENT`、`CODEAGENT_HOOK_TOOL`，完整载荷（`event`/`tool`/`arguments`/`cwd`，post 阶段另有 `result`）以 JSON 经 **stdin** 传入。退出码语义：`0` 通过；`2` **否决**——pre 阶段工具不再执行，post 阶段把 stderr 作为反馈交给模型；其它非 0 视为钩子自身出错，**不拦**工具但会在结果前附一行说明（不静默）。`/hooks` 列出当前真正会执行的钩子；`/hooks check <工具名>` 回答「这次调用到底会命中哪些钩子」（matcher 只认 `*` 或精确名，`write` 不会命中 `write_file`）。
 
 **输出风格**：`/output-style` 列出、`/output-style <名字>` 切换并写入配置。内置 `default`（不追加任何内容）、`explanatory`（讲清楚为什么）、`learning`（边做边教）；自定义风格放进 `.codeagent/output-styles/*.md`（项目级）或 `~/.codeagent/output-styles/*.md`（用户级），文件名即风格名，可选 front matter 写 `description`。风格正文**追加**在系统提示末尾而不是替换它——替换会把工具用法和项目规则一起挤掉；`default` 与内置名不允许被文件覆盖，否则用户以为没配风格，行为却已经变了。
 

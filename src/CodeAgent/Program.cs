@@ -5080,6 +5080,19 @@ internal static class Program
                     // 钩子是「配了不生效」的高危区：非法时机/空命令在加载时已被警告，
                     // 这里只列**真正会执行**的，让用户能一眼确认自己那条进来了没有。
                     var defs = Hooks.Parse(config.Hooks);
+                    // /hooks check <工具名>：配错 matcher（write 想命中 write_file）时钩子静默不执行，
+                    // 这一条子命令就是让「到底会不会命中」变成可见结论。
+                    var hooksArg = rest.Trim();
+                    if (hooksArg.StartsWith("check", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var targetTool = hooksArg["check".Length..].Trim();
+                        if (targetTool.Length == 0)
+                            WriteNotice("用法: /hooks check <工具名>，例如 /hooks check write_file");
+                        else
+                            foreach (var matchLine in HookMatchReport.Format(defs, targetTool, ConsoleColumns()))
+                                Console.WriteLine(matchLine);
+                        break;
+                    }
                     if (defs.Count == 0)
                     {
                         Console.WriteLine(FormatResultLine("当前没有工具钩子。", ConsoleColumns()));
