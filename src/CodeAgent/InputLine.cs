@@ -425,6 +425,7 @@ public static class InputLine
         ("/vim", "切换 vim 键位（Esc 退出插入模式，普通模式下按键是命令）"),
         ("/hooks", "列出工具钩子（preToolUse/postToolUse）"),
         ("/output-style", "列出/切换输出风格（.codeagent/output-styles/*.md）"),
+        ("/statusline", "设置/查看状态栏外部命令（stdout 首行作为状态栏末段）"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具（可带关键字过滤）"),
         ("/providers", "列出已配置的 Provider"),

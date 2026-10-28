@@ -126,6 +126,12 @@ public sealed class AgentConfig
     /// 风格片段**追加**到系统提示末尾，不替换默认提示。未知名字会在启动时明确警告并回退 default。</summary>
     public string OutputStyle { get; set; } = OutputStyles.DefaultName;
 
+    /// <summary>状态栏外部命令（/statusline）：脚本 stdout 作为状态栏末段。空 = 不启用。</summary>
+    public string StatusLine { get; set; } = "";
+
+    /// <summary>状态栏命令超时秒数：状态栏每轮都要画，超时即放弃（不能卡住界面）。</summary>
+    public int StatusLineTimeoutSeconds { get; set; } = CodeAgent.StatusLine.DefaultTimeoutSeconds;
+
     /// <summary>是否流式输出模型回复（逐字打印，默认开启）。</summary>
     public bool StreamOutput { get; set; } = true;
 
@@ -425,7 +431,7 @@ public sealed class AgentConfig
         "commandTimeoutSeconds", "shell", "saveSessions", "maxSessionLogs", "sessionDir",
         "exportDir", "streamOutput", "showToolCalls", "renderMarkdown", "tuiAnsi", "vimMode",
         "thinkingEffort", "defaultMode", "fileAccess", "readOnlyDirs", "modes", "systemPrompt",
-        "autoCompactPercent", "hooks", "outputStyle",
+        "autoCompactPercent", "hooks", "outputStyle", "statusLine", "statusLineTimeoutSeconds",
     };
     private static readonly HashSet<string> KnownHookKeys = new(StringComparer.OrdinalIgnoreCase)
     {

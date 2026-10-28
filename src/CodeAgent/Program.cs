@@ -517,7 +517,7 @@ internal static class Program
         while (true)
         {
             if (!skipStatusBar)
-                PrintStatusBar(opts, agent, config.ThinkingEffort, EffectiveContextWindow(), reasoningProbe);
+                PrintStatusBar(opts, agent, config.ThinkingEffort, EffectiveContextWindow(), reasoningProbe, config);
             skipStatusBar = false;
             var cols = ConsoleColumns();
             // 输入框：上边框（右侧挂推理档位）+ 提示符。原地重绘时只补提示符——
@@ -2948,9 +2948,12 @@ internal static class Program
     internal static string BuildStatusBar(
         string mode, string model, string cwd, string? branch,
         string turnIn, string turnOut, string ctxText, string thinkText, int width,
-        string turnCached = "", string rate = "")
+        string turnCached = "", string rate = "", string extra = "")
     {
         bool showBranch = !string.IsNullOrEmpty(branch);
+        // 外部命令段（/statusline）：用户脚本的输出。它是**纯装饰**，
+        // 空间不够时第一个被丢——不能为了它把 ctx 与路径挤掉。
+        var showExtra = !string.IsNullOrEmpty(extra);
         var showTurn = true;
         var showCtx = true;
         var showThink = !string.IsNullOrEmpty(thinkText);
@@ -2973,13 +2976,14 @@ internal static class Program
             if (showCtx) parts.Add(ctxText);
             if (showThink) parts.Add(thinkText);
             if (showRate) parts.Add(rate);
+            if (showExtra) parts.Add(extra);
             return string.Join(SafeColor.Glyphs.SegmentSeparator, parts);
         }
 
         var text = Render();
         // 第一轮：丢冷门段（速率 → 思考档 → 分支 → 本回合 token），ctx 保留到最后。
         // 速率段排第一：它是唯一一段**只描述过去**的信息。
-        var drops = new Action[] { () => showRate = false, () => showThink = false, () => showBranch = false, () => showTurn = false };
+        var drops = new Action[] { () => showExtra = false, () => showRate = false, () => showThink = false, () => showBranch = false, () => showTurn = false };
         for (var i = 0; width > 0 && TextUtil.DisplayWidth(text) > width && i < drops.Length; i++)
         {
             drops[i]();
@@ -2998,6 +3002,7 @@ internal static class Program
         if (showCtx) others.Add(ctxText);
         if (showThink) others.Add(thinkText);
         if (showRate) others.Add(rate);
+        if (showExtra) others.Add(extra);
         var othersWidth = others.Sum(TextUtil.DisplayWidth) + others.Count * 3;
         var pathBudget = width - TextUtil.DisplayWidth(head) - othersWidth;
         if (pathBudget > 0)
@@ -3043,7 +3048,7 @@ internal static class Program
     }
 
     /// <summary>状态栏：模式 · 模型 · 目录 · 本回合 token · 上下文规模（百分比）· 思考强度（每轮提示符前显示）——灰色。</summary>
-    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow, ReasoningProbeState? reasoningProbe)
+    private static void PrintStatusBar(ProviderOptions opts, AgentClass agent, string thinkingEffort, int contextWindow, ReasoningProbeState? reasoningProbe, AgentConfig config)
     {
         // auto：探测完成后显示实际生效档位（最高可用档），探测中显示 auto
         string think;
@@ -3077,6 +3082,17 @@ internal static class Program
         // 速率直方图只在**本轮真采到样本**时出现：没有样本还画一条空图，
         // 只会让人以为速率是 0。
         var rate = FormatRateSegment(agent.RateBars(), agent.LastTokensPerSecond);
+        // 外部状态栏段（/statusline）：同步等（每轮一次），超时/失败都退化成空段，
+        // 绝不让用户脚本拖死界面——BuildStatusBar 里它也是第一个被裁掉的段。
+        var extra = string.IsNullOrWhiteSpace(config.StatusLine)
+            ? string.Empty
+            : StatusLine.RunAsync(
+                config.StatusLine,
+                string.IsNullOrWhiteSpace(config.Shell) ? CodeAgent.Tools.ShellRunner.AutoShell() : config.Shell,
+                shownCwd,
+                config.StatusLineTimeoutSeconds,
+                StatusLine.BuildPayload(agent.CurrentMode.Name, opts.Model, shownCwd, branch))
+              .GetAwaiter().GetResult();
         using var scope = SafeColor.Scope(SafeColor.Muted);
         Console.WriteLine(BuildStatusBar(
             agent.CurrentMode.Name, opts.Model, shownCwd, branch,
@@ -3086,7 +3102,8 @@ internal static class Program
             (agent.TurnInputTokens + agent.TurnCachedTokens) > 0
                 ? $"{TextUtil.PercentOf(agent.TurnCachedTokens, agent.TurnInputTokens + agent.TurnCachedTokens)}%"
                 : "",
-            rate));
+            rate,
+            extra));
     }
 
     /// <summary>构建提示符：[模式|模型短名] 目录名> </summary>
@@ -4986,6 +5003,43 @@ internal static class Program
                     }
                 }
                 break;
+            case "/statusline":
+                {
+                    var arg = rest.Trim();
+                    if (arg.Length > 0 && !arg.Equals("reload", StringComparison.OrdinalIgnoreCase))
+                    {
+                        config.StatusLine = arg.Equals("off", StringComparison.OrdinalIgnoreCase)
+                            || arg.Equals("clear", StringComparison.OrdinalIgnoreCase)
+                            || arg.Equals("none", StringComparison.OrdinalIgnoreCase)
+                            ? string.Empty
+                            : arg;
+                        try
+                        {
+                            var savePath = ConfigSavePath(configPath, config);
+                            SaveConfig(config, savePath);
+                            Console.WriteLine(FormatConfirmLine(
+                                FormatSettingSavedLine("状态栏命令已设为", config.StatusLine.Length == 0 ? "（关闭）" : config.StatusLine, savePath, ConsoleColumns()),
+                                ConsoleColumns()));
+                        }
+                        catch (Exception ex)
+                        {
+                            WriteNotice($"状态栏命令已更新（保存配置失败: {ex.Message}）");
+                        }
+                    }
+                    // 每次 /statusline 都**立刻跑一次**并回显：配了不生效是最难查的失败。
+                    var segment = string.IsNullOrWhiteSpace(config.StatusLine)
+                        ? string.Empty
+                        : StatusLine.RunAsync(
+                            config.StatusLine,
+                            string.IsNullOrWhiteSpace(config.Shell) ? CodeAgent.Tools.ShellRunner.AutoShell() : config.Shell,
+                            Environment.CurrentDirectory,
+                            config.StatusLineTimeoutSeconds,
+                            StatusLine.BuildPayload(agent.CurrentMode.Name, opts.Model, Environment.CurrentDirectory, CachedBranch(Environment.CurrentDirectory)))
+                          .GetAwaiter().GetResult();
+                    foreach (var statusLine in FormatStatusLineReport(config.StatusLine, segment, ConsoleColumns()))
+                        Console.WriteLine(statusLine);
+                }
+                break;
             case "/output-style":
                 {
                     var library = OutputStyles.Load(Environment.CurrentDirectory);
@@ -5763,6 +5817,26 @@ internal static class Program
         return lines;
     }
 
+    /// <summary>/statusline 的报告：当前命令 + 这次真实跑出来的片段。
+    /// 抽成纯函数才能断言「没有输出时必须给出排查提示」——只测 Console 输出做不到。</summary>
+    internal static IReadOnlyList<string> FormatStatusLineReport(string command, string segment, int width = 0)
+    {
+        var lines = new List<string>
+        {
+            FormatSectionHeaderLine("状态栏外部命令", command.Length == 0 ? "未启用" : "已启用", width),
+        };
+        if (command.Length == 0)
+        {
+            lines.Add(FormatHintLine("用 /statusline <shell 命令> 启用：stdout 首行作为状态栏末段；/statusline off 关闭", width));
+            return lines;
+        }
+        lines.Add(FormatResultLine(command, width));
+        lines.Add(segment.Length > 0
+            ? FormatConfirmLine($"本次输出: {segment}", width)
+            : FormatHintLine("本次没有输出（命令失败、超时或打印为空）——先手动执行同一条命令排查", width));
+        return lines;
+    }
+
     internal static readonly HelpEntry[] ReplCommands =
     [
         new("/help", "显示本帮助"),
@@ -5792,6 +5866,7 @@ internal static class Program
         new("/vim [on|off]", "切换输入行的 vim 键位（Esc 退出插入，h/l/w/b 移动，x/dd/dw 删除，u 撤销）"),
         new("/hooks", "列出工具钩子（preToolUse/postToolUse，退出码 2 否决）"),
         new("/output-style [名字]", "列出/切换输出风格（内置 default/explanatory/learning，或自定义 .md）"),
+        new("/statusline [命令|off]", "设置/查看状态栏外部命令（stdout 首行作为状态栏末段）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),
