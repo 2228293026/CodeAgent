@@ -71,7 +71,7 @@ public sealed class SectionHeaderLineTests
     {
         // 只测纯函数会漏掉"这四处压根没用它"——那正是原来溢出的原因
         var code = StripComments(File.ReadAllText(FindSource()));
-        Assert.Equal(3, Occurrences(code, "FormatSectionHeaderLine(")); // 定义 + /resume + /providers
+        Assert.Equal(4, Occurrences(code, "FormatSectionHeaderLine(")); // 定义 + /resume + /providers + /commands
         Assert.DoesNotContain("Console.WriteLine(\"最近的会话（输入 /resume", code);
         Assert.DoesNotContain("Console.WriteLine($\"已配置的 Provider（当前:", code);
         Assert.True(Occurrences(code, "FormatHintLine(") >= 2, "两处提示行应走 FormatHintLine");

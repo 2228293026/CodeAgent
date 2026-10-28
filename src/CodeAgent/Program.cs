@@ -458,6 +458,12 @@ internal static class Program
         PrintBanner(config, opts, agent);
         var modeTuples = Modes.Build(config).Select(m => (m.Name, m.Description)).ToList();
 
+        // 自定义斜杠命令（学自 Claude Code 的 custom slash commands）：
+        // .codeagent/commands/**/*.md 展开成提示词。启动时载入一次，
+        // /commands reload 可重新扫描（改完模板不必重启）。
+        var customCommands = LoadCustomCommands(notify: true);
+        InputLine.SetExtraCommands(CustomCommands.MenuEntries(customCommands.Commands));
+
         // 后台探测一次模型上下文窗口（OpenRouter 风格 /models 元数据）：失败静默、不阻塞启动，
         // 完成后状态栏即可用（优先级：contextWindow 配置 > 内置模型表 > 此探测）
         var ctxProbe = new ContextProbeState
@@ -587,7 +593,12 @@ internal static class Program
             }
             if (line.StartsWith('/'))
             {
-                if (line.Equals("/retry", StringComparison.OrdinalIgnoreCase))
+                // 自定义命令优先于内置 switch：命中就展开成普通提示词往下走。
+                // 放在 /retry 之前是因为两者互斥——展开后的文本不该再被当成命令解析，
+                // 而 /retry 分支会把 line 改写成上一条请求、继续落到发送路径。
+                if (TryExpandCustomCommand(line, customCommandSet, out var expandedLine))
+                    line = expandedLine;
+                else if (line.Equals("/retry", StringComparison.OrdinalIgnoreCase))
                 {
                     if (agent.LastPrompt is null)
                     {
@@ -3789,6 +3800,62 @@ internal static class Program
         }
         return lines;
     }
+    /// <summary>当前会话已载入的自定义命令。放静态字段：<c>/commands</c> 在
+    /// <see cref="HandleCommand"/> 里重载时拿不到 REPL 的局部变量，
+    /// 而这两处必须看**同一份**清单——否则 /commands reload 之后，
+    /// 菜单里是新命令、执行时却还按旧的查，用户改完模板仍调不到。</summary>
+    private static CustomCommands.Result customCommandSet = new([], []);
+
+    /// <summary>重新扫描 <c>.codeagent/commands</c>（项目级 + 用户级）。
+    /// 任何异常都收成一条「问题」而不是抛出去：一串坏模板不该让 REPL 起不来。
+    /// <paramref name="notify"/> 决定是否把被跳过的文件打给人看——
+    /// 静默跳过一个用户刚写的命令，是他反复改文件名却始终不生效的典型来源。</summary>
+    internal static CustomCommands.Result LoadCustomCommands(bool notify)
+    {
+        CustomCommands.Result loaded;
+        try
+        {
+            loaded = CustomCommands.Load(Environment.CurrentDirectory);
+        }
+        catch (Exception ex)
+        {
+            loaded = new CustomCommands.Result([], [$"自定义命令加载失败: {ex.Message}"]);
+        }
+        customCommandSet = loaded;
+        if (notify)
+            foreach (var problem in loaded.Problems)
+                WriteNotice($"自定义命令: {problem}");
+        return loaded;
+    }
+
+    /// <summary>命中自定义命令时把模板展开成提示词。
+    /// 内置命令一律返回 false（<see cref="CustomCommands.Load"/> 已按保留名跳过它们，
+    /// 这里再依赖一次这个不变量，避免一个 Markdown 文件劫持 /help）。
+    /// 展开结果走**普通输入**那条路径：与 /retry 回填同一机制，不必复制一份发送逻辑。
+    ///
+    /// <paramref name="set"/> 显式传入而不是直接读静态字段：这样「敲了什么 → 变成什么」
+    /// 是可单测的纯映射，不必为了测它去改进程级状态或切换工作目录。</summary>
+    internal static bool TryExpandCustomCommand(string line, CustomCommands.Result set, out string expanded)
+    {
+        expanded = line;
+        if (!line.StartsWith('/'))
+            return false;
+        var (cmd, rest) = SplitCommand(line);
+        var name = cmd.TrimStart('/');
+        if (name.Length == 0)
+            return false;
+        var command = CustomCommands.Find(set, name);
+        if (command is null)
+            return false;
+        expanded = CustomCommands.Expand(command, rest);
+        // 回声一行：模板展开是**静默**的，不打出来的话用户看不出
+        // 「自己敲的 /db:migrate 究竟变成了什么」，模板写错时更无从下手。
+        var source = command.IsProject ? "项目级" : "用户级";
+        Console.WriteLine(FormatHintLine(
+            $"已展开自定义命令: {cmd}（{source}: {command.SourcePath}）", ConsoleColumns()));
+        return true;
+    }
+
     private static bool HandleCommand(
         string line,
         AgentConfig config,
@@ -4903,6 +4970,36 @@ internal static class Program
                     }
                 }
                 break;
+            case "/commands":
+                {
+                    // reload 是重扫；不带参数只看当前清单（顺手列出被跳过的文件，
+                    // 那正是用户来敲这条命令的原因）。
+                    var reload = rest.Trim().Equals("reload", StringComparison.OrdinalIgnoreCase);
+                    var set = reload ? LoadCustomCommands(notify: true) : customCommandSet;
+                    if (reload)
+                        InputLine.SetExtraCommands(CustomCommands.MenuEntries(set.Commands));
+
+                    if (set.Commands.Count == 0)
+                    {
+                        Console.WriteLine(FormatResultLine("当前没有自定义命令。", ConsoleColumns()));
+                        Console.WriteLine(FormatHintLine(
+                            $"把 Markdown 放进 {CustomCommands.ProjectDirectory(Environment.CurrentDirectory)} 即可，例如 hello.md {SafeColor.Glyphs.Arrow} /hello",
+                            ConsoleColumns()));
+                    }
+                    else
+                    {
+                        Console.WriteLine(FormatSectionHeaderLine(
+                            "自定义命令", $"共 {set.Commands.Count} 条，/commands reload 重新扫描", ConsoleColumns()));
+                        Console.WriteLine(FormatHelpList(
+                            set.Commands
+                                .Select(c => new HelpEntry("/" + c.Name,
+                                    c.Description + (c.IsProject ? "" : "（用户级）")))
+                                .ToList(),
+                            ConsoleColumns()));
+                    }
+                }
+                break;
+
             case "/help":
                 PrintReplOnlyHelp();
                 break;
@@ -5561,6 +5658,7 @@ internal static class Program
         new("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         new("/context", "按类别拆解上下文占用（系统提示/工具定义/历史消息）"),
         new("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
+        new("/commands [reload]", "列出/重载自定义命令（.codeagent/commands/**/*.md，展开成提示词）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),

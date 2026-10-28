@@ -421,6 +421,7 @@ public static class InputLine
         ("/status", "显示当前会话状态（模式/模型/上下文/构建）"),
         ("/context", "按类别拆解上下文占用"),
         ("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
+        ("/commands", "列出/重载自定义命令（.codeagent/commands/*.md）"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具（可带关键字过滤）"),
         ("/providers", "列出已配置的 Provider"),
@@ -434,6 +435,34 @@ public static class InputLine
         ("/exit", "退出（同 /quit）"),
         ("/quit", "退出"),
     ];
+
+    /// <summary>自定义斜杠命令的槽位（来自 <c>.codeagent/commands/*.md</c>）。
+    /// 与 <see cref="Commands"/> 分开存：上面那张表是**内置**清单，
+    /// 内置命令的同步测试（/help 与补全必须一一对应）以它为基准；
+    /// 把用户文件混进去会让那条测试随工作目录里有没有 .md 而红绿闪烁。</summary>
+    private static (string Name, string Desc)[] extraCommands = [];
+
+    /// <summary>当前已加载的自定义命令（菜单形状，名字含前导斜杠）。</summary>
+    public static (string Name, string Desc)[] ExtraCommands => extraCommands;
+
+    /// <summary>菜单与补全实际使用的完整清单：内置在前、自定义在后。
+    /// 顺序不是随意的——用户敲 <c>/</c> 时想先看到内置命令，
+    /// 自定义命令是「自定义的补充」，排在内置之后才符合心智。
+    /// 合并结果**缓存**在 <see cref="allCommands"/>：这个属性在每次按键的重绘与
+    /// 补全里都会被读到，`[.. Commands, .. extraCommands]` 那样现拼一份数组，
+    /// 敲一个字符就白白分配一次（菜单开着时还要再读几遍）。只在
+    /// <see cref="SetExtraCommands"/> 里重建。</summary>
+    public static (string Name, string Desc)[] AllCommands => allCommands;
+
+    private static (string Name, string Desc)[] allCommands = Commands;
+
+    /// <summary>载入自定义命令（Program 在启动时与 /commands 重载时调用）。
+    /// 传 null 或空表即清空——重载后文件被删掉的情形必须能真的消失。</summary>
+    public static void SetExtraCommands(IReadOnlyList<(string Name, string Desc)>? entries)
+    {
+        extraCommands = entries is null || entries.Count == 0 ? [] : [.. entries];
+        allCommands = extraCommands.Length == 0 ? Commands : [.. Commands, .. extraCommands];
+    }
 
     private static readonly HistoryStore History = new(Path.Combine(Environment.CurrentDirectory, ".codeagent", "history.txt"));
     private const int MenuMaxRows = 9; // 与 header 的 "1-9 run" 及数字键上限一致
@@ -1151,7 +1180,9 @@ public static class InputLine
 
             // 菜单行用名称列优先的裁剪（整行 Fit 会破坏名称列对齐，描述列整体错位）。
             // 名称列宽按**实际菜单内容**定，不写死 16：短名称时不必空出十几列。
-            var menuNameWidth = MenuNameWidth(modes?.Select(m => m.Name) ?? Array.Empty<string>());
+            // picker 模式用 modes，否则用完整命令清单（含自定义命令）——
+            // 只量内置名字的话，/db:migrate 这种长自定义名会被裁掉尾巴。
+            var menuNameWidth = MenuNameWidth((modes ?? AllCommands).Select(m => m.Name));
             string FitMenu(string name, string desc, bool mode, int row) =>
                 fitBudget > 0
                     ? FitMenuLine(name, desc, fitBudget, mode, row, menuNameWidth)
@@ -1556,7 +1587,7 @@ public static class InputLine
                 }
                 else
                 {
-                    var src = modePicker ? modes ?? [] : Commands;
+                    var src = modePicker ? modes ?? [] : AllCommands;
                     newItems = src
                         .Where(m => m.Name.StartsWith(NormalizeCommandFilter(buf.Text), StringComparison.OrdinalIgnoreCase))
                         .ToList();
@@ -1608,7 +1639,7 @@ public static class InputLine
                 // 命令菜单按满高预留（过滤从全量开始），之后高度只在空态边界变
                 if (ansiOk)
                 {
-                    var initial = picker ? (modes?.Count ?? 0) : Commands.Length;
+                    var initial = picker ? (modes?.Count ?? 0) : AllCommands.Length;
                     ResizeMenuSpace(BlockRows(initial));
                 }
                 if (picker)
