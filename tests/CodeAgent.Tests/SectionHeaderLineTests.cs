@@ -67,11 +67,15 @@ public sealed class SectionHeaderLineTests
     }
 
     [Fact]
-    public void AllFourCallSitesAreRouted()
+    public void EverySectionHeaderCallSiteIsRouted()
     {
-        // 只测纯函数会漏掉"这四处压根没用它"——那正是原来溢出的原因
+        // 只测纯函数会漏掉"这些地方压根没用它"——那正是原来溢出的原因。
+        //
+        // 计数是**刻意的绊线**：新增一处区块标题就得来这里把它加一，
+        // 顺手确认这一处确实走了统一收口，而不是又手写一行 Console.WriteLine。
+        // 名字里不写死数字，否则改一次计数就要连测试名一起撒谎。
         var code = StripComments(File.ReadAllText(FindSource()));
-        Assert.Equal(4, Occurrences(code, "FormatSectionHeaderLine(")); // 定义 + /resume + /providers + /commands
+        Assert.Equal(5, Occurrences(code, "FormatSectionHeaderLine(")); // 定义 + /resume + /providers + /commands + /hooks
         Assert.DoesNotContain("Console.WriteLine(\"最近的会话（输入 /resume", code);
         Assert.DoesNotContain("Console.WriteLine($\"已配置的 Provider（当前:", code);
         Assert.True(Occurrences(code, "FormatHintLine(") >= 2, "两处提示行应走 FormatHintLine");

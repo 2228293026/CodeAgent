@@ -423,6 +423,7 @@ public static class InputLine
         ("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
         ("/commands", "列出/重载自定义命令（.codeagent/commands/*.md）"),
         ("/vim", "切换 vim 键位（Esc 退出插入模式，普通模式下按键是命令）"),
+        ("/hooks", "列出工具钩子（preToolUse/postToolUse）"),
         ("/retry", "重新执行上一条请求"),
         ("/tools", "列出可用工具（可带关键字过滤）"),
         ("/providers", "列出已配置的 Provider"),

@@ -50,6 +50,27 @@ public sealed class AgentModeConfig
     public List<string>? Tools { get; set; }
 }
 
+/// <summary>钩子定义（codeagent.json 的 hooks 列表项）：在工具执行前后跑一条命令。
+///
+/// 学自 Claude Code 的 hooks。它填的是「用户想插手工具执行」这个缺口：
+/// 此前只有内置的权限模式（strict/whitelist/full）这一档粗粒度开关，
+/// 想加「禁止写 .env」「跑完 gofmt 再返回结果」这类项目自己的规矩，无处可放。
+/// </summary>
+public sealed class HookConfig
+{
+    /// <summary>触发时机：preToolUse / postToolUse。</summary>
+    public string Event { get; set; } = "";
+
+    /// <summary>工具名匹配：*（全部）或精确名（不分大小写）。</summary>
+    public string Matcher { get; set; } = "*";
+
+    /// <summary>要执行的命令（经 config.shell 执行，工作目录是工作区）。</summary>
+    public string Command { get; set; } = "";
+
+    /// <summary>超时秒数（1-300）。钩子卡住等于把工具调用一起卡住，必须有上限。</summary>
+    public int TimeoutSeconds { get; set; } = 30;
+}
+
 /// <summary>全局配置，对应 codeagent.json。</summary>
 public sealed class AgentConfig
 {
@@ -143,6 +164,9 @@ public sealed class AgentConfig
 
     /// <summary>自定义工作模式列表（/mode 可切换，配合内置模式）。</summary>
     public List<AgentModeConfig> Modes { get; set; } = new();
+
+    /// <summary>工具钩子：在工具执行前后跑用户命令（见 <see cref="HookConfig"/>）。</summary>
+    public List<HookConfig> Hooks { get; set; } = new();
 
     /// <summary>系统提示词。</summary>
     public string SystemPrompt { get; set; } = DefaultSystemPrompt;
@@ -281,6 +305,22 @@ public sealed class AgentConfig
                         .ToList();
                 }
             }
+            // 钩子归一化 + 体检：非法时机/空命令会让该项**不执行**，必须说出来——
+            // 否则用户配了钩子、工具却照原样跑，只会怀疑「这功能是假的」。
+            cfg.Hooks ??= new List<HookConfig>();
+            cfg.Hooks.RemoveAll(h => h is null);
+            for (var i = 0; i < cfg.Hooks.Count; i++)
+            {
+                var hook = cfg.Hooks[i];
+                hook.Event = (hook.Event ?? "").Trim();
+                hook.Matcher = string.IsNullOrWhiteSpace(hook.Matcher) ? "*" : hook.Matcher.Trim();
+                hook.Command = (hook.Command ?? "").Trim();
+                hook.TimeoutSeconds = Math.Clamp(hook.TimeoutSeconds, 1, 300);
+                if (CodeAgent.Hooks.ParseEvent(hook.Event) is null)
+                    cfg.Warnings.Add($"hooks[{i}].event='{hook.Event}' 不是有效时机（preToolUse/postToolUse）——该钩子不会执行。");
+                else if (hook.Command.Length == 0)
+                    cfg.Warnings.Add($"hooks[{i}] 缺少 command——该钩子不会执行。");
+            }
             cfg.Provider = string.IsNullOrWhiteSpace(cfg.Provider) ? "openai" : cfg.Provider.Trim();
             cfg.Shell = cfg.Shell?.Trim() ?? "";
             cfg.SessionDir = string.IsNullOrWhiteSpace(cfg.SessionDir) ? ".codeagent/sessions" : cfg.SessionDir.Trim();
@@ -373,9 +413,13 @@ public sealed class AgentConfig
         "provider", "providers", "maxToolIterations", "maxHistoryChars", "contextWindow",
         "pricePerMillionInput", "pricePerMillionOutput", "allowCommands", "confirmCommands",
         "commandTimeoutSeconds", "shell", "saveSessions", "maxSessionLogs", "sessionDir",
-        "exportDir", "streamOutput", "showToolCalls", "renderMarkdown", "tuiAnsi",
+        "exportDir", "streamOutput", "showToolCalls", "renderMarkdown", "tuiAnsi", "vimMode",
         "thinkingEffort", "defaultMode", "fileAccess", "readOnlyDirs", "modes", "systemPrompt",
-        "autoCompactPercent",
+        "autoCompactPercent", "hooks",
+    };
+    private static readonly HashSet<string> KnownHookKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "event", "matcher", "command", "timeoutSeconds",
     };
     private static readonly HashSet<string> KnownProviderKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -466,6 +510,13 @@ public sealed class AgentConfig
                     foreach (var key in mobj.Select(kv => kv.Key))
                         if (!KnownModeKeys.Contains(key))
                             warnings.Add($"自定义模式[{i}] 存在未知配置项 '{key}'（可能是拼写错误，该配置不会生效）。");
+
+        if (obj["hooks"] is JsonArray hooks)
+            for (int i = 0; i < hooks.Count; i++)
+                if (hooks[i] is JsonObject hobj)
+                    foreach (var key in hobj.Select(kv => kv.Key))
+                        if (!KnownHookKeys.Contains(key))
+                            warnings.Add($"hooks[{i}] 存在未知配置项 '{key}'（可能是拼写错误，该配置不会生效）。");
 
         return warnings;
     }

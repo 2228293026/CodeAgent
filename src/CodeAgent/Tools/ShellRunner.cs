@@ -7,6 +7,9 @@ namespace CodeAgent.Tools;
 /// <summary>共享的 shell 命令执行器：shell 选择、进程启动、超时、输出截断。</summary>
 public static class ShellRunner
 {
+    /// <summary>捕获式执行的结果（见 <see cref="CaptureAsync"/>）。</summary>
+    internal readonly record struct CapturedRun(int ExitCode, string StdOut, string StdErr, bool TimedOut);
+
     /// <summary>主线程正在做控制台输入（如 y/N 确认）时置 true：
     /// 回合期间的 ESC 监视线程会吞掉所有按键，不置闩用户输入的 y/n 会被抢走。</summary>
     internal static volatile bool ConsoleInputBusy;
@@ -91,6 +94,77 @@ public static class ShellRunner
         if (errText.Length > 0)
             sb.AppendLine(errText);
         return (proc.ExitCode, sb.ToString().TrimEnd());
+    }
+
+    /// <summary>
+    /// 捕获式执行：把 stdin 写进子进程标准输入，并**分开**返回 stdout / stderr。
+    ///
+    /// 给钩子用（preToolUse/postToolUse）：钩子的契约是「退出码决定拦不拦、stderr 说明原因」，
+    /// 而 RunAsync 把两者拼成一段给人看的文本，退出码之外的信号全丢了。
+    /// 进程启动/超时/杀树仍复用同一套实现——两处各写一份 spawn 逻辑，迟早有一份忘了杀进程树。
+    /// </summary>
+    internal static async Task<CapturedRun> CaptureAsync(
+        string shell, string command, string cwd, int timeoutSeconds, string? stdin,
+        IReadOnlyDictionary<string, string>? env, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var (fileName, args) = BuildShellCommand(shell, command);
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = cwd,
+            UseShellExecute = false,
+            RedirectStandardInput = stdin is not null,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+            CreateNoWindow = true,
+        };
+        foreach (var a in args)
+            psi.ArgumentList.Add(a);
+        if (env is not null)
+            foreach (var kv in env)
+                psi.Environment[kv.Key] = kv.Value;
+
+        using var proc = new Process { StartInfo = psi };
+        proc.Start();
+
+        if (stdin is not null)
+        {
+            // 先写 stdin 再读输出：子进程可能不读 stdin 就输出，先读输出会和写 stdin 互锁。
+            // 写失败（进程已退出/关闭管道）不算错误——钩子退出码才是结论。
+            try
+            {
+                await proc.StandardInput.WriteAsync(stdin.AsMemory(), ct);
+                await proc.StandardInput.FlushAsync(ct);
+                proc.StandardInput.Close();
+            }
+            catch (IOException) { /* 子进程提前退出：忽略 */ }
+            catch (ObjectDisposedException) { /* 同上 */ }
+        }
+
+        var stdout = ReadWithCap(proc.StandardOutput, 200_000, ct);
+        var stderr = ReadWithCap(proc.StandardError, 100_000, ct);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        try
+        {
+            await proc.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { /* 尽力而为 */ }
+            return new CapturedRun(124, await stdout, await stderr, TimedOut: true);
+        }
+        catch (OperationCanceledException)
+        {
+            // 用户取消：必须杀树，否则钩子脚本会脱管继续跑
+            try { proc.Kill(entireProcessTree: true); } catch { /* 进程可能刚好退出 */ }
+            throw;
+        }
+
+        return new CapturedRun(proc.ExitCode, (await stdout).TrimEnd(), (await stderr).TrimEnd(), TimedOut: false);
     }
 
     /// <summary>Windows 下自动检测：优先 Git Bash，没有则用 PowerShell（Windows 必有）。</summary>

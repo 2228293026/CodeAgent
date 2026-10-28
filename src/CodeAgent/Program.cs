@@ -4973,6 +4973,35 @@ internal static class Program
                     }
                 }
                 break;
+            case "/hooks":
+                {
+                    // 钩子是「配了不生效」的高危区：非法时机/空命令在加载时已被警告，
+                    // 这里只列**真正会执行**的，让用户能一眼确认自己那条进来了没有。
+                    var defs = Hooks.Parse(config.Hooks);
+                    if (defs.Count == 0)
+                    {
+                        Console.WriteLine(FormatResultLine("当前没有工具钩子。", ConsoleColumns()));
+                        Console.WriteLine(FormatHintLine(
+                            "在 codeagent.json 加 hooks: [{\"event\":\"preToolUse\",\"matcher\":\"write_file\",\"command\":\"...\"}]；退出码 2 = 否决",
+                            ConsoleColumns()));
+                    }
+                    else
+                    {
+                        Console.WriteLine(FormatSectionHeaderLine("工具钩子", $"共 {defs.Count} 条会执行", ConsoleColumns()));
+                        foreach (var hook in defs)
+                        {
+                            var ev = hook.Event == HookEvent.PreToolUse ? "preToolUse " : "postToolUse";
+                            Console.WriteLine(FormatResultLine(
+                                $"{ev} {hook.Matcher} {SafeColor.Glyphs.Arrow} {hook.Command}（超时 {hook.TimeoutSeconds}s）",
+                                ConsoleColumns()));
+                        }
+                        Console.WriteLine(FormatHintLine(
+                            $"载荷经 stdin 传 JSON；另有 {Hooks.EventEnvVar} / {Hooks.ToolEnvVar}；退出码 2 = 否决（stderr 为原因）",
+                            ConsoleColumns()));
+                    }
+                }
+                break;
+
             case "/vim":
                 {
                     // 学自 Claude Code 的 /vim：输入行切成 vim 键位。
@@ -5699,6 +5728,7 @@ internal static class Program
         new("/init", "扫描本项目并生成 AGENTS.md 草稿（已存在或会盖住别的规则文件时不写）"),
         new("/commands [reload]", "列出/重载自定义命令（.codeagent/commands/**/*.md，展开成提示词）"),
         new("/vim [on|off]", "切换输入行的 vim 键位（Esc 退出插入，h/l/w/b 移动，x/dd/dw 删除，u 撤销）"),
+        new("/hooks", "列出工具钩子（preToolUse/postToolUse，退出码 2 否决）"),
         new("/retry", "重新执行上一条请求"),
         new("/tools", "列出可用工具（可带关键字过滤）"),
         new("/providers", "显示已配置的 Provider"),

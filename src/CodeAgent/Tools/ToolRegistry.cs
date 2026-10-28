@@ -414,7 +414,45 @@ public sealed class ToolRegistry
             throw new ToolException($"工具参数不是合法 JSON: {TextUtil.Truncate(argsJson, 200)}");
         }
 
-        return await tool.ExecuteAsync(args, ctx, ct);
+        // 钩子挂在**唯一出口**上：231 个工具里任何一个漏挂都是一条静默绕过路径。
+        // 解析放在调用点（配置只有几条），不做缓存——缓存要跟着配置变更失效，
+        // 而 /config 允许运行时改配置，多一份失效逻辑就多一处「改了不生效」。
+        var hooks = Hooks.Parse(ctx.Config.Hooks);
+        var preNotes = new List<string>();
+        if (hooks.Count > 0)
+        {
+            var pre = await Hooks.RunAsync(HookEvent.PreToolUse, name, args, null, ctx, ct);
+            var veto = pre.FirstOrDefault(r => r.Blocks);
+            if (veto is not null)
+            {
+                // 否决：工具**不执行**，原因回给模型（它会换个做法或向用户解释）。
+                return $"[preToolUse 钩子拦截了 {name}]\n{veto.Reason}";
+            }
+            // 非 0 也非 2：钩子自己出错。不拦工具，但必须说出来——
+            // 静默吞掉的后果是「配了钩子却一直没生效」，而用户会以为是我们的 bug。
+            foreach (var failed in pre.Where(r => r.ExitCode != 0))
+                preNotes.Add($"[preToolUse 钩子退出码 {failed.ExitCode}，已忽略并继续: {failed.Reason}]");
+        }
+
+        var output = await tool.ExecuteAsync(args, ctx, ct);
+
+        if (hooks.Count == 0)
+            return preNotes.Count == 0 ? output : string.Join('\n', preNotes) + "\n" + output;
+
+        var postNotes = new List<string>();
+        var post = await Hooks.RunAsync(HookEvent.PostToolUse, name, args, output, ctx, ct);
+        foreach (var run in post)
+        {
+            // 退出码 2：钩子要求把它的 stderr 作为反馈交给模型（Claude Code 的约定）。
+            if (run.Blocks)
+                postNotes.Add($"[postToolUse 钩子反馈]\n{run.Reason}");
+            else if (run.ExitCode != 0)
+                postNotes.Add($"[postToolUse 钩子退出码 {run.ExitCode}，已忽略: {run.Reason}]");
+        }
+
+        if (preNotes.Count == 0 && postNotes.Count == 0)
+            return output;
+        return string.Join('\n', preNotes.Concat(postNotes)) + "\n" + output;
     }
 
     /// <summary>按配置组装默认工具集。</summary>
